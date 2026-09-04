@@ -1,6 +1,7 @@
 "use client";
 
-import type { DragEvent } from "react";
+import { useState, type DragEvent } from "react";
+import { X } from "lucide-react";
 import { slotsFor } from "@/lib/formations";
 import { cn } from "@/lib/utils";
 
@@ -43,6 +44,10 @@ export function PitchBoard({
   lineupStatus,
   onPlayerClick,
   onSlotDrop,
+  onSlotClick,
+  onClearSlot,
+  placingPlayerId,
+  placingSide,
   locked,
   compact,
 }: {
@@ -65,12 +70,27 @@ export function PitchBoard({
     slotId: string;
     playerId: string;
   }) => void;
+  /** Click-to-place: tap a formation slot while placing */
+  onSlotClick?: (args: {
+    side: "home" | "away";
+    slotId: string;
+    occupantId?: string | null;
+  }) => void;
+  /** Remove occupant from XI (× button) */
+  onClearSlot?: (args: {
+    side: "home" | "away";
+    slotId: string;
+    playerId: string;
+  }) => void;
+  placingPlayerId?: string | null;
+  placingSide?: "home" | "away" | null;
   locked?: boolean;
   compact?: boolean;
 }) {
   const homeSlots = slotsFor(homeFormation);
   const awaySlots = slotsFor(awayFormation);
   const badge = lineupBadgeLabel(lineupStatus);
+  const [dragOverSlot, setDragOverSlot] = useState<string | null>(null);
 
   function placeLandscape(
     players: PitchPlayer[],
@@ -102,11 +122,17 @@ export function PitchBoard({
   const homePlaced = placeLandscape(homePlayers, homeSlots, "home");
   const awayPlaced = placeLandscape(awayPlayers, awaySlots, "away");
   const all = [...homePlaced, ...awayPlaced];
+  const placing = Boolean(placingPlayerId && !locked);
 
-  function handleDragOver(e: DragEvent) {
+  function handleDragOver(e: DragEvent, key: string) {
     if (locked || !onSlotDrop) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
+    setDragOverSlot(key);
+  }
+
+  function handleDragLeave(key: string) {
+    setDragOverSlot((cur) => (cur === key ? null : cur));
   }
 
   function handleDrop(
@@ -117,9 +143,12 @@ export function PitchBoard({
     if (locked || !onSlotDrop) return;
     e.preventDefault();
     e.stopPropagation();
+    setDragOverSlot(null);
     let payload: { playerId?: string; side?: string } = {};
     try {
-      payload = JSON.parse(e.dataTransfer.getData("application/pitchline-player") || "{}");
+      payload = JSON.parse(
+        e.dataTransfer.getData("application/pitchline-player") || "{}"
+      );
     } catch {
       payload = {};
     }
@@ -134,7 +163,8 @@ export function PitchBoard({
     <div
       className={cn(
         "relative w-full overflow-hidden rounded-xl border border-emerald-900/40 shadow-inner",
-        compact ? "h-full" : ""
+        compact ? "h-full" : "",
+        placing && "ring-2 ring-sky-400/70"
       )}
     >
       <div
@@ -185,34 +215,113 @@ export function PitchBoard({
 
         {all.map(({ slot, player, x, y, side }) => {
           const color = side === "home" ? homeColor : awayColor;
+          const key = `${side}-${slot.id}`;
+          const isDragOver = dragOverSlot === key;
+          const sideOk = !placingSide || placingSide === side;
+          const highlightPlace = placing && sideOk;
+          const isPlacingHere =
+            placing && player?.id === placingPlayerId;
+
           return (
             <div
-              key={`${side}-${slot.id}`}
+              key={key}
               className={cn(
                 "absolute z-10 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center",
                 !locked && onSlotDrop ? "drop-target" : ""
               )}
               style={{ left: `${x}%`, top: `${y}%` }}
-              onDragOver={handleDragOver}
-              onDrop={(e) => handleDrop(e, side, slot.id)}
             >
+              {/* Invisible ~46px hit target for drag + click */}
+              <div
+                className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-[6px] h-11 w-11 sm:h-12 sm:w-12 rounded-full z-0"
+                style={{ touchAction: "manipulation" }}
+                onDragOver={(e) => handleDragOver(e, key)}
+                onDragLeave={() => handleDragLeave(key)}
+                onDrop={(e) => handleDrop(e, side, slot.id)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (placing && onSlotClick && !locked) {
+                    if (!sideOk) return;
+                    onSlotClick({
+                      side,
+                      slotId: slot.id,
+                      occupantId: player?.id ?? null,
+                    });
+                    return;
+                  }
+                  if (player) onPlayerClick?.(player);
+                }}
+                onContextMenu={(e) => {
+                  if (locked || !player || !onClearSlot) return;
+                  e.preventDefault();
+                  onClearSlot({
+                    side,
+                    slotId: slot.id,
+                    playerId: player.id,
+                  });
+                }}
+                onDoubleClick={(e) => {
+                  if (locked || !onClearSlot) return;
+                  e.preventDefault();
+                  if (player) {
+                    onClearSlot({
+                      side,
+                      slotId: slot.id,
+                      playerId: player.id,
+                    });
+                  }
+                }}
+              />
+
+              {/* Ghost ring on dragover / placing mode */}
+              {(isDragOver || highlightPlace) && (
+                <div
+                  className={cn(
+                    "pointer-events-none absolute left-1/2 top-0 -translate-x-1/2 -translate-y-[6px] h-11 w-11 sm:h-12 sm:w-12 rounded-full border-2 z-[1]",
+                    isDragOver
+                      ? "border-sky-300 bg-sky-400/25 shadow-[0_0_12px_rgba(56,189,248,0.55)]"
+                      : "border-white/50 border-dashed bg-white/10"
+                  )}
+                />
+              )}
+
               <button
                 type="button"
                 title={
                   player
-                    ? `${player.name} · click for notes`
+                    ? placing
+                      ? isPlacingHere
+                        ? `Clear ${player.name} from XI`
+                        : `Place here (swap ${player.name})`
+                      : `${player.name} · click notes · right-click remove`
                     : locked
                       ? slot.label
-                      : `Drop player → ${slot.label}`
+                      : placing
+                        ? `Tap to place · ${slot.label}`
+                        : `Drop / tap slot · ${slot.label}`
                 }
                 className={cn(
-                  "flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-full text-[9px] sm:text-[10px] font-bold text-white shadow-lg ring-2",
+                  "relative z-[2] flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-full text-[9px] sm:text-[10px] font-bold text-white shadow-lg ring-2",
                   player
                     ? "ring-white/60 cursor-pointer hover:ring-teal-300"
-                    : "ring-white/25 border border-dashed border-white/40 bg-black/25"
+                    : "ring-white/25 border border-dashed border-white/40 bg-black/25",
+                  isPlacingHere && "ring-amber-300 ring-offset-1 ring-offset-transparent",
+                  highlightPlace && !player && "ring-sky-200/80"
                 )}
                 style={player ? { backgroundColor: color } : undefined}
-                onClick={() => player && onPlayerClick?.(player)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (placing && onSlotClick && !locked) {
+                    if (!sideOk) return;
+                    onSlotClick({
+                      side,
+                      slotId: slot.id,
+                      occupantId: player?.id ?? null,
+                    });
+                    return;
+                  }
+                  if (player) onPlayerClick?.(player);
+                }}
                 draggable={Boolean(player && !locked && onSlotDrop)}
                 onDragStart={(e) => {
                   if (!player || locked) return;
@@ -226,7 +335,26 @@ export function PitchBoard({
               >
                 {player ? player.shirtNumber : slot.label}
               </button>
-              <span className="mt-0.5 max-w-[56px] truncate rounded bg-black/55 px-1 text-[8px] sm:text-[9px] text-white font-medium leading-tight">
+
+              {player && !locked && onClearSlot && (
+                <button
+                  type="button"
+                  aria-label={`Remove ${player.name} from XI`}
+                  className="absolute -right-2 -top-1 z-[3] flex h-4 w-4 items-center justify-center rounded-full bg-slate-900/85 text-white hover:bg-rose-600 shadow"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onClearSlot({
+                      side,
+                      slotId: slot.id,
+                      playerId: player.id,
+                    });
+                  }}
+                >
+                  <X className="h-2.5 w-2.5" />
+                </button>
+              )}
+
+              <span className="relative z-[2] mt-0.5 max-w-[56px] truncate rounded bg-black/55 px-1 text-[8px] sm:text-[9px] text-white font-medium leading-tight">
                 {player
                   ? `${player.isCaptain ? "© " : ""}${player.name.split(" ").slice(-1)[0]}`
                   : slot.label}

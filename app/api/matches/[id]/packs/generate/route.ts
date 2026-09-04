@@ -8,6 +8,77 @@ import {
 } from "@/lib/pack-templates";
 import { broadcastLabelFor } from "@/lib/competitions";
 import { formatKickoff } from "@/lib/utils";
+import {
+  emptyDistributed,
+  extractClubSections,
+  extractPlayerHooks,
+  extractPlayerSections,
+  type DistributedCounts,
+} from "@/lib/pack-distribute";
+
+async function upsertEntityNote(args: {
+  matchId: string;
+  userId: string;
+  title: string;
+  body: string;
+  category: string;
+  entityType: string;
+  entityId: string;
+  pinned?: boolean;
+}) {
+  const existing = await prisma.note.findFirst({
+    where: {
+      matchId: args.matchId,
+      entityType: args.entityType,
+      entityId: args.entityId,
+      category: args.category,
+    },
+  });
+  if (existing) {
+    await prisma.note.update({
+      where: { id: existing.id },
+      data: {
+        title: args.title,
+        body: args.body,
+        pinned: args.pinned ?? existing.pinned,
+      },
+    });
+  } else {
+    await prisma.note.create({
+      data: {
+        matchId: args.matchId,
+        userId: args.userId,
+        title: args.title,
+        body: args.body,
+        category: args.category,
+        entityType: args.entityType,
+        entityId: args.entityId,
+        pinned: args.pinned ?? false,
+      },
+    });
+  }
+}
+
+function parseOptionalSources(raw: unknown): { urls: string[]; notes: string } {
+  const urls: string[] = [];
+  let notes = "";
+  if (!raw || typeof raw !== "object") return { urls, notes };
+  const o = raw as { urls?: unknown; notes?: unknown; text?: unknown };
+  if (Array.isArray(o.urls)) {
+    for (const u of o.urls) {
+      const s = String(u || "").trim();
+      if (s && /^https?:\/\//i.test(s)) urls.push(s);
+    }
+  }
+  if (typeof o.urls === "string") {
+    for (const line of o.urls.split(/\n+/)) {
+      const s = line.trim();
+      if (s && /^https?:\/\//i.test(s)) urls.push(s);
+    }
+  }
+  notes = String(o.notes || o.text || "").trim();
+  return { urls: [...new Set(urls)].slice(0, 20), notes: notes.slice(0, 8000) };
+}
 
 export async function POST(
   req: Request,
@@ -21,6 +92,7 @@ export async function POST(
   if (!templateKey) {
     return NextResponse.json({ error: "templateKey required" }, { status: 400 });
   }
+  const userSources = parseOptionalSources(body.sources);
 
   const match = await prisma.match.findUnique({
     where: { id },
@@ -31,6 +103,7 @@ export async function POST(
       venue: true,
       notes: true,
       officials: { include: { official: true } },
+      injuries: { include: { player: true, club: true } },
     },
   });
   if (!match) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -50,13 +123,56 @@ export async function POST(
     };
   }
 
-  const homeXi = match.homeClub.players
+  const homePlayers = match.homeClub.players;
+  const awayPlayers = match.awayClub.players;
+  const homeXi = homePlayers
     .filter((p) => p.isStarter)
-    .map((p) => `#${p.shirtNumber} ${p.name}`);
-  const awayXi = match.awayClub.players
+    .map((p) => `#${p.shirtNumber} ${p.name}${p.position ? ` (${p.position})` : ""}`);
+  const awayXi = awayPlayers
     .filter((p) => p.isStarter)
-    .map((p) => `#${p.shirtNumber} ${p.name}`);
+    .map((p) => `#${p.shirtNumber} ${p.name}${p.position ? ` (${p.position})` : ""}`);
+  const homeSquad = homePlayers.map(
+    (p) => `#${p.shirtNumber} ${p.name}${p.position ? ` · ${p.position}` : ""}`
+  );
+  const awaySquad = awayPlayers.map(
+    (p) => `#${p.shirtNumber} ${p.name}${p.position ? ` · ${p.position}` : ""}`
+  );
   const referee = match.officials.find((o) => o.role === "Referee")?.official.name;
+
+  const injuryLines = match.injuries.map((inj) => {
+    const who = inj.player?.name || "Unknown";
+    const club = inj.club?.name || "";
+    const detail = [inj.status, inj.injuryType, inj.notes, inj.expectedReturn ? `return ${inj.expectedReturn}` : null]
+      .filter(Boolean)
+      .join(" · ");
+    return `${who}${club ? ` (${club})` : ""} — ${detail || "injury"}`;
+  });
+
+  const allPlayers = [
+    ...homePlayers.map((p) => ({ id: p.id, name: p.name })),
+    ...awayPlayers.map((p) => ({ id: p.id, name: p.name })),
+  ];
+
+  let predictionsBlock = match.predictionsAdvice || "";
+  if (match.predictionsJson) {
+    try {
+      const pj = JSON.parse(match.predictionsJson) as {
+        advice?: string;
+        percent?: { home?: number; draw?: number; away?: number };
+        winner?: { name?: string };
+      };
+      const bits = [
+        pj.advice,
+        pj.percent
+          ? `Home ${pj.percent.home ?? "?"} / Draw ${pj.percent.draw ?? "?"} / Away ${pj.percent.away ?? "?"}%`
+          : null,
+        pj.winner?.name ? `Lean: ${pj.winner.name}` : null,
+      ].filter(Boolean);
+      if (bits.length) predictionsBlock = bits.join(" · ");
+    } catch {
+      /* keep advice */
+    }
+  }
 
   const ctx = buildMatchContextPrompt({
     home: match.homeClub.name,
@@ -74,9 +190,43 @@ export async function POST(
     notes: match.notes.map((n) => `${n.title}: ${n.body}`),
   });
 
-  const result = await generateWithGemini(
+  const deepResearchBlock = [
+    "=== DEEP RESEARCH CONTEXT (auto — from match desk / API-Football) ===",
+    `Fixture ID: ${match.apiFootballFixtureId ?? "unlinked"}`,
+    `H2H: ${match.h2hSummary || "Unknown"}`,
+    `Predictions: ${predictionsBlock || "Unknown"}`,
+    `Injuries (${injuryLines.length}):`,
+    ...(injuryLines.length ? injuryLines.map((l) => `- ${l}`) : ["- None listed"]),
+    `HOME SQUAD (${homeSquad.length}): ${homeSquad.join("; ") || "TBC"}`,
+    `AWAY SQUAD (${awaySquad.length}): ${awaySquad.join("; ") || "TBC"}`,
+    "",
+    "Use Google Search grounding to deepen: recent form, team news, tactical notes, player storylines, competition stakes.",
+    "Do NOT invent stats — prefer grounded search + the structured context above. Mark unknowns clearly.",
+  ].join("\n");
+
+  const sourcesBlock =
+    userSources.urls.length || userSources.notes
+      ? [
+          "",
+          "=== OPTIONAL USER STEERING SOURCES (append — do not require) ===",
+          ...userSources.urls.map((u) => `URL: ${u}`),
+          userSources.notes ? `Notes:\n${userSources.notes}` : "",
+          "Weigh these alongside search grounding when relevant.",
+        ]
+          .filter(Boolean)
+          .join("\n")
+      : "";
+
+  const systemPrompt = [
     "You are Pitchline, a football commentary prep assistant.",
-    `${template.prompt}\n\nMATCH CONTEXT:\n${ctx}`
+    "You have Google Search grounding enabled — search for current, accurate match intel automatically.",
+    "Replicate the depth of a Gemini Notebook deep-research brief: scannable headings, actionable on-air lines, no invented numbers.",
+  ].join(" ");
+
+  const result = await generateWithGemini(
+    systemPrompt,
+    `${template.prompt}\n\nMATCH CONTEXT:\n${ctx}\n\n${deepResearchBlock}${sourcesBlock}`,
+    { googleSearch: true, maxOutputTokens: 8192 }
   );
 
   const section = await prisma.packSection.upsert({
@@ -95,7 +245,8 @@ export async function POST(
     },
   });
 
-  // Persist useful outputs into Scripts / Notes / Hooks
+  const distributed: DistributedCounts = emptyDistributed();
+
   if (!result.stub) {
     if (templateKey === "intro" || templateKey === "lineup") {
       const timing = templateKey === "lineup" ? "kickoff" : "pre-match";
@@ -119,7 +270,9 @@ export async function POST(
           },
         });
       }
+      distributed.scripts += 1;
     }
+
     if (templateKey === "hooks") {
       await prisma.note.create({
         data: {
@@ -133,32 +286,95 @@ export async function POST(
           pinned: true,
         },
       });
-    }
-    if (templateKey === "research" || templateKey === "referee") {
-      await prisma.note.create({
-        data: {
+      distributed.matchNotes += 1;
+
+      const playerHooks = extractPlayerHooks(result.text, allPlayers);
+      for (const ph of playerHooks) {
+        await upsertEntityNote({
           matchId: id,
           userId: session.id,
-          title: template.title,
-          body: result.text,
-          category: templateKey === "referee" ? "Match" : "Match",
-          entityType: "match",
-          entityId: id,
-        },
-      });
+          title: ph.title,
+          body: ph.body,
+          category: "Hook",
+          entityType: "player",
+          entityId: ph.player.id,
+        });
+        distributed.playerNotes += 1;
+      }
     }
+
+    if (templateKey === "referee") {
+      await upsertEntityNote({
+        matchId: id,
+        userId: session.id,
+        title: "Referee",
+        body: result.text,
+        category: "Match",
+        entityType: "match",
+        entityId: id,
+      });
+      distributed.matchNotes += 1;
+    }
+
+    if (templateKey === "research") {
+      await upsertEntityNote({
+        matchId: id,
+        userId: session.id,
+        title: template.title,
+        body: result.text,
+        category: "Match",
+        entityType: "match",
+        entityId: id,
+      });
+      distributed.matchNotes += 1;
+
+      const clubSecs = extractClubSections(
+        result.text,
+        { id: match.homeClub.id, name: match.homeClub.name },
+        { id: match.awayClub.id, name: match.awayClub.name }
+      );
+      for (const cs of clubSecs) {
+        await upsertEntityNote({
+          matchId: id,
+          userId: session.id,
+          title: cs.title,
+          body: cs.body,
+          category: "Club",
+          entityType: "club",
+          entityId: cs.clubId,
+        });
+        distributed.clubNotes += 1;
+      }
+    }
+
     if (templateKey === "profiles") {
-      await prisma.note.create({
-        data: {
+      const playerSecs = extractPlayerSections(result.text, allPlayers);
+      for (const ps of playerSecs) {
+        await upsertEntityNote({
           matchId: id,
           userId: session.id,
-          title: "Player profiles pack",
-          body: result.text,
+          title: ps.title,
+          body: ps.body,
           category: "Bio",
-          entityType: "match",
-          entityId: id,
-        },
-      });
+          entityType: "player",
+          entityId: ps.player.id,
+        });
+        distributed.playerNotes += 1;
+      }
+      if (playerSecs.length < 3) {
+        await prisma.note.create({
+          data: {
+            matchId: id,
+            userId: session.id,
+            title: "Player profiles pack",
+            body: result.text,
+            category: "Bio",
+            entityType: "match",
+            entityId: id,
+          },
+        });
+        distributed.matchNotes += 1;
+      }
     }
   }
 
@@ -167,5 +383,8 @@ export async function POST(
     stub: result.stub,
     gemini: isGeminiConfigured(),
     model: result.model,
+    grounded: Boolean(result.grounded),
+    searchQueries: result.searchQueries || [],
+    distributed,
   });
 }

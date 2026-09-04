@@ -38,9 +38,9 @@ function lineupHint(status: string) {
     return "Official lineups from API-Football — board is locked.";
   }
   if (status === "predicted") {
-    return "Your personal predicted XI (drag squad → pitch to rearrange). Official will override when published.";
+    return "Your personal predicted XI (click squad → tap slot, or drag). Official will override when published.";
   }
-  return "Official lineups usually drop 20–60 min before KO — showing Expected (last XI). Drag to set your predicted XI.";
+  return "Official lineups usually drop 20–60 min before KO — showing Expected (last XI). Click a squad player, then tap a pitch slot.";
 }
 
 export function MatchDesk({
@@ -106,6 +106,7 @@ export function MatchDesk({
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<SquadPlayer | null>(null);
+  const [placing, setPlacing] = useState<SquadPlayer | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [configured, setConfigured] = useState<boolean | null>(null);
@@ -133,6 +134,27 @@ export function MatchDesk({
       })),
     ];
   }, [homePlayers, awayPlayers, homeName, awayName, notes]);
+
+  // Keep placing pointer fresh after refresh
+  useEffect(() => {
+    if (!placing) return;
+    const fresh = squad.find((p) => p.id === placing.id);
+    if (fresh) setPlacing(fresh);
+    else setPlacing(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [squad]);
+
+  useEffect(() => {
+    if (!placing) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setPlacing(null);
+        setMsg(null);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [placing]);
 
   const starterCount =
     homePlayers.filter((p) => p.isStarter || p.onPitch).length +
@@ -177,7 +199,6 @@ export function MatchDesk({
       .catch(() => setConfigured(false));
   }, []);
 
-  // Auto-sync when feed stale (>15 min) or never
   useEffect(() => {
     if (!configured || !apiFootballFixtureId) return;
     const staleMs = 15 * 60 * 1000;
@@ -188,26 +209,15 @@ export function MatchDesk({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [configured, apiFootballFixtureId]);
 
-  // Live poll
   useEffect(() => {
     if (!configured || !apiFootballFixtureId || status !== "Live") return;
     const t = setInterval(() => sync(true), 45_000);
     return () => clearInterval(t);
   }, [configured, apiFootballFixtureId, status, sync]);
 
-  async function onSlotDrop(args: {
-    side: "home" | "away";
-    slotId: string;
-    playerId: string;
-  }) {
+  async function lineupAction(body: Record<string, unknown>) {
     if (locked) {
       setMsg("Official lineups locked");
-      return;
-    }
-    const player = squad.find((p) => p.id === args.playerId);
-    if (!player) return;
-    if (player.side !== args.side) {
-      setMsg("Players can only be placed on their own team half.");
       return;
     }
     setBusy(true);
@@ -215,15 +225,11 @@ export function MatchDesk({
       const res = await fetch(`/api/matches/${matchId}/lineup`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "place",
-          playerId: args.playerId,
-          formationSlot: args.slotId,
-        }),
+        body: JSON.stringify(body),
       });
       const json = await res.json();
       if (!res.ok) {
-        setMsg(json.error || "Could not place player");
+        setMsg(json.error || "Lineup update failed");
       } else {
         setMsg(null);
         router.refresh();
@@ -233,10 +239,84 @@ export function MatchDesk({
     }
   }
 
+  async function onSlotDrop(args: {
+    side: "home" | "away";
+    slotId: string;
+    playerId: string;
+  }) {
+    const player = squad.find((p) => p.id === args.playerId);
+    if (!player) return;
+    if (player.side !== args.side) {
+      setMsg("Players can only be placed on their own team half.");
+      return;
+    }
+    await lineupAction({
+      action: "place",
+      playerId: args.playerId,
+      formationSlot: args.slotId,
+    });
+    setPlacing(null);
+  }
+
+  async function onSlotClick(args: {
+    side: "home" | "away";
+    slotId: string;
+    occupantId?: string | null;
+  }) {
+    if (!placing || locked) return;
+    if (placing.side !== args.side) {
+      setMsg("Players can only be placed on their own team half.");
+      return;
+    }
+    // Same player on their current / occupied slot → clear
+    if (
+      args.occupantId &&
+      (args.occupantId === placing.id ||
+        (placing.formationSlot === args.slotId &&
+          (placing.isStarter || placing.onPitch)))
+    ) {
+      await lineupAction({ action: "clear", playerId: placing.id });
+      setPlacing(null);
+      return;
+    }
+    // Occupied → place (API vacates previous occupant = swap semantics)
+    await lineupAction({
+      action: "place",
+      playerId: placing.id,
+      formationSlot: args.slotId,
+    });
+    setPlacing(null);
+  }
+
+  async function onClearSlot(args: {
+    side: "home" | "away";
+    slotId: string;
+    playerId: string;
+  }) {
+    await lineupAction({ action: "clear", playerId: args.playerId });
+    if (placing?.id === args.playerId) setPlacing(null);
+  }
+
+  function onSquadClick(p: SquadPlayer) {
+    if (locked) {
+      setSelected(p);
+      return;
+    }
+    // Click another squad player switches placing selection
+    setPlacing(p);
+    setSelected(null);
+  }
+
   const playerNotes = useMemo(() => {
     if (!selected) return notes;
     return notes.filter((n) => n.entityId === selected.id);
   }, [notes, selected]);
+
+  const placingOnXi = Boolean(
+    placing &&
+      placing.formationSlot &&
+      (placing.isStarter || placing.onPitch)
+  );
 
   return (
     <div className="h-[calc(100dvh-7.5rem)] max-h-[100dvh] min-h-[420px] grid grid-rows-[auto_auto_1fr] gap-2 overflow-hidden">
@@ -333,6 +413,39 @@ export function MatchDesk({
         {msg && <span className="text-slate-500 truncate">{msg}</span>}
       </div>
 
+      {/* Placing banner */}
+      {placing && !locked && (
+        <div className="shrink-0 flex flex-wrap items-center gap-2 rounded-lg border border-sky-300 bg-sky-50 dark:bg-sky-950/50 dark:border-sky-800 px-3 py-1.5 text-xs">
+          <span className="font-semibold text-sky-900 dark:text-sky-100">
+            Tap a pitch slot for {placing.name}
+            <span className="font-normal text-sky-700 dark:text-sky-300">
+              {" "}
+              · Esc cancel
+            </span>
+          </span>
+          {placingOnXi && (
+            <button
+              type="button"
+              className="rounded-md bg-rose-600 hover:bg-rose-500 text-white px-2 py-0.5 text-[10px] font-semibold"
+              onClick={() =>
+                lineupAction({ action: "clear", playerId: placing.id }).then(
+                  () => setPlacing(null)
+                )
+              }
+            >
+              Remove from XI
+            </button>
+          )}
+          <button
+            type="button"
+            className="ml-auto text-sky-700 dark:text-sky-300 hover:underline"
+            onClick={() => setPlacing(null)}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+
       {/* Main grid: pitch + squad */}
       <div className="min-h-0 grid grid-cols-1 lg:grid-cols-[1fr_240px] gap-2 overflow-hidden">
         <section className="min-h-0 flex flex-col gap-1.5 overflow-hidden">
@@ -341,8 +454,8 @@ export function MatchDesk({
             {starterCount === 0 && (
               <span className="text-amber-600">
                 {" "}
-                Empty pitch — Sync squads / last XI, then drag players onto
-                slots.
+                Empty pitch — Sync squads / last XI, then click a player and tap
+                a slot.
               </span>
             )}
           </p>
@@ -361,10 +474,15 @@ export function MatchDesk({
               referee={referee}
               lineupStatus={lineupStatus}
               onPlayerClick={(p) => {
+                if (placing) return; // placing mode handles slot clicks
                 const full = squad.find((s) => s.id === p.id);
                 if (full) setSelected(full);
               }}
               onSlotDrop={locked ? undefined : onSlotDrop}
+              onSlotClick={locked ? undefined : onSlotClick}
+              onClearSlot={locked ? undefined : onClearSlot}
+              placingPlayerId={placing?.id}
+              placingSide={placing?.side}
               locked={locked}
               compact
             />
@@ -380,7 +498,13 @@ export function MatchDesk({
             awayColor={awayColor}
             locked={locked}
             selectedId={selected?.id}
-            onPlayerClick={(p) => setSelected(p)}
+            placingId={placing?.id}
+            onPlayerClick={onSquadClick}
+            onRemoveFromXi={(p) =>
+              lineupAction({ action: "clear", playerId: p.id }).then(() => {
+                if (placing?.id === p.id) setPlacing(null);
+              })
+            }
           />
         </aside>
       </div>

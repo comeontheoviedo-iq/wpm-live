@@ -19,7 +19,9 @@ export function SquadRail({
   awayColor,
   locked,
   selectedId,
+  placingId,
   onPlayerClick,
+  onRemoveFromXi,
 }: {
   players: SquadPlayer[];
   homeName: string;
@@ -28,7 +30,9 @@ export function SquadRail({
   awayColor: string;
   locked?: boolean;
   selectedId?: string | null;
+  placingId?: string | null;
   onPlayerClick?: (p: SquadPlayer) => void;
+  onRemoveFromXi?: (p: SquadPlayer) => void;
 }) {
   const [q, setQ] = useState("");
   const [side, setSide] = useState<"all" | "home" | "away">("all");
@@ -55,7 +59,9 @@ export function SquadRail({
             Squad
           </div>
           {!locked && (
-            <div className="text-[9px] text-slate-400">Drag onto pitch</div>
+            <div className="text-[9px] text-slate-400">
+              Click to place · drag OK
+            </div>
           )}
         </div>
         <div className="relative">
@@ -101,6 +107,7 @@ export function SquadRail({
         {filtered.map((p) => {
           const onXi = Boolean(p.formationSlot && (p.isStarter || p.onPitch));
           const color = p.side === "home" ? homeColor : awayColor;
+          const isPlacing = placingId === p.id;
           return (
             <div
               key={p.id}
@@ -120,13 +127,17 @@ export function SquadRail({
               onClick={() => onPlayerClick?.(p)}
               className={cn(
                 "flex items-center gap-2 rounded-lg px-1.5 py-1 text-xs cursor-pointer border border-transparent hover:bg-slate-50 dark:hover:bg-slate-900",
-                selectedId === p.id && "border-teal-400 bg-teal-50/80 dark:bg-teal-950/40",
+                (selectedId === p.id || isPlacing) &&
+                  "border-teal-400 bg-teal-50/80 dark:bg-teal-950/40",
+                isPlacing && "ring-1 ring-sky-400",
                 !locked && "active:cursor-grabbing"
               )}
               title={
                 locked
                   ? "Official XI locked — open notes"
-                  : "Drag to pitch slot · click for notes"
+                  : isPlacing
+                    ? "Placing — tap a pitch slot"
+                    : "Click to place on pitch · drag also works"
               }
             >
               <span
@@ -147,6 +158,18 @@ export function SquadRail({
                 <span className="text-[8px] font-bold uppercase text-teal-600 shrink-0">
                   XI
                 </span>
+              )}
+              {isPlacing && onXi && !locked && onRemoveFromXi && (
+                <button
+                  type="button"
+                  className="text-[9px] font-semibold text-rose-600 hover:underline shrink-0"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRemoveFromXi(p);
+                  }}
+                >
+                  Remove
+                </button>
               )}
             </div>
           );

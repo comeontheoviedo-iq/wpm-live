@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Sparkles, AlertTriangle, Wand2 } from "lucide-react";
+import { Sparkles, AlertTriangle, Wand2, ChevronDown, ChevronUp } from "lucide-react";
 
 type Template = {
   key: string;
@@ -20,6 +20,41 @@ type Section = {
   status: string;
 };
 
+type Distributed = {
+  scripts: number;
+  playerNotes: number;
+  clubNotes: number;
+  matchNotes: number;
+};
+
+function sumDistributed(parts: Distributed[]): Distributed {
+  return parts.reduce(
+    (a, b) => ({
+      scripts: a.scripts + (b?.scripts || 0),
+      playerNotes: a.playerNotes + (b?.playerNotes || 0),
+      clubNotes: a.clubNotes + (b?.clubNotes || 0),
+      matchNotes: a.matchNotes + (b?.matchNotes || 0),
+    }),
+    { scripts: 0, playerNotes: 0, clubNotes: 0, matchNotes: 0 }
+  );
+}
+
+function formatDistributed(d: Distributed) {
+  const bits = [
+    d.scripts ? `${d.scripts} script${d.scripts === 1 ? "" : "s"}` : null,
+    d.playerNotes
+      ? `${d.playerNotes} player note${d.playerNotes === 1 ? "" : "s"}`
+      : null,
+    d.clubNotes
+      ? `${d.clubNotes} club note${d.clubNotes === 1 ? "" : "s"}`
+      : null,
+    d.matchNotes
+      ? `${d.matchNotes} match note${d.matchNotes === 1 ? "" : "s"}`
+      : null,
+  ].filter(Boolean);
+  return bits.length ? bits.join(" · ") : "pack section only";
+}
+
 export function PacksClient({ matchId }: { matchId: string }) {
   const router = useRouter();
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -30,6 +65,22 @@ export function PacksClient({ matchId }: { matchId: string }) {
   const [packBusy, setPackBusy] = useState(false);
   const [draft, setDraft] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
+  const [lastDistributed, setLastDistributed] = useState<Distributed | null>(
+    null
+  );
+  const [sourcesOpen, setSourcesOpen] = useState(false);
+  const [sourceUrls, setSourceUrls] = useState("");
+  const [sourceNotes, setSourceNotes] = useState("");
+
+  const sourcesPayload = useMemo(() => {
+    const urls = sourceUrls
+      .split(/\n+/)
+      .map((u) => u.trim())
+      .filter((u) => /^https?:\/\//i.test(u));
+    const notes = sourceNotes.trim();
+    if (!urls.length && !notes) return undefined;
+    return { urls, notes };
+  }, [sourceUrls, sourceNotes]);
 
   async function load() {
     const res = await fetch(`/api/matches/${matchId}/packs`);
@@ -61,7 +112,10 @@ export function PacksClient({ matchId }: { matchId: string }) {
     const res = await fetch(`/api/matches/${matchId}/packs/generate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ templateKey }),
+      body: JSON.stringify({
+        templateKey,
+        ...(sourcesPayload ? { sources: sourcesPayload } : {}),
+      }),
     });
     const json = await res.json();
     if (!res.ok) throw new Error(json.error || "Generate failed");
@@ -78,10 +132,22 @@ export function PacksClient({ matchId }: { matchId: string }) {
         const others = prev.filter((s) => s.templateKey !== active);
         return [json.section, ...others];
       });
+      const d = (json.distributed || {
+        scripts: 0,
+        playerNotes: 0,
+        clubNotes: 0,
+        matchNotes: 0,
+      }) as Distributed;
+      setLastDistributed(d);
+      const ground = json.grounded
+        ? " · Google Search grounded"
+        : json.stub
+          ? ""
+          : " · deep research from match context";
       setMsg(
         json.stub
           ? "Stub placeholder — connect GEMINI_API_KEY to generate for real."
-          : "Generated and saved into Scripts / Notes where applicable."
+          : `Generated · distributed: ${formatDistributed(d)}${ground}`
       );
       router.refresh();
     } catch (e) {
@@ -98,20 +164,26 @@ export function PacksClient({ matchId }: { matchId: string }) {
     const available = keys.filter((k) => templates.some((t) => t.key === k));
     const runKeys = available.length ? available : ["research"];
     let stub = false;
+    let grounded = false;
+    const dists: Distributed[] = [];
     try {
       for (const key of runKeys) {
         const json = await generateOne(key);
         stub = stub || Boolean(json.stub);
+        grounded = grounded || Boolean(json.grounded);
+        if (json.distributed) dists.push(json.distributed);
         setSections((prev) => {
           const others = prev.filter((s) => s.templateKey !== key);
           return [json.section, ...others];
         });
         if (key === active) setDraft(json.section.content);
       }
+      const total = sumDistributed(dists);
+      setLastDistributed(total);
       setMsg(
         stub
-          ? `Pack placeholders saved (${runKeys.length} sections). Set GEMINI_API_KEY for live copy.`
-          : `Research pack ready — ${runKeys.length} sections generated into Packs / Scripts / Notes.`
+          ? `Pack placeholders saved (${runKeys.length} sections). Set GEMINI_API_KEY for live deep research.`
+          : `Research pack ready — ${runKeys.length} sections · distributed: ${formatDistributed(total)}${grounded ? " · Google Search grounded" : ""}`
       );
       router.refresh();
     } catch (e) {
@@ -149,6 +221,7 @@ export function PacksClient({ matchId }: { matchId: string }) {
 
   const current = templates.find((t) => t.key === active);
   const researchDone = sections.some((s) => s.templateKey === "research");
+  const hasSources = Boolean(sourcesPayload);
 
   return (
     <div className="space-y-4">
@@ -156,7 +229,9 @@ export function PacksClient({ matchId }: { matchId: string }) {
         <div>
           <h2 className="text-xl font-bold">Broadcast packs</h2>
           <p className="text-sm text-slate-500">
-            One-click research pack or section-by-section Gemini generation.
+            Generate research pack fills Scripts, player notes, and match notes.
+            Deep research runs automatically. Add sources only if you want to
+            steer it.
           </p>
         </div>
         <Button
@@ -167,7 +242,7 @@ export function PacksClient({ matchId }: { matchId: string }) {
         >
           <Wand2 className="h-3.5 w-3.5 mr-1" />
           {packBusy
-            ? "Generating pack…"
+            ? "Deep researching…"
             : researchDone
               ? "Regenerate research pack"
               : "Generate research pack"}
@@ -181,10 +256,69 @@ export function PacksClient({ matchId }: { matchId: string }) {
             <div className="font-semibold">Gemini not connected</div>
             <p className="text-xs mt-0.5">
               Set <code className="font-mono">GEMINI_API_KEY</code> in .env to
-              generate live copy. Without it, each section returns a structured
-              placeholder you can still edit and save.
+              run deep research with Google Search grounding. Without it, each
+              section returns a structured placeholder you can still edit and
+              save.
             </p>
           </div>
+        </div>
+      )}
+
+      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 overflow-hidden">
+        <button
+          type="button"
+          className="w-full flex items-center justify-between gap-2 px-3 py-2.5 text-left text-sm"
+          onClick={() => setSourcesOpen((o) => !o)}
+        >
+          <div>
+            <div className="font-semibold">
+              Enhance with sources{" "}
+              <span className="font-normal text-slate-500">(optional)</span>
+            </div>
+            <div className="text-[11px] text-slate-500">
+              Deep research already uses match context, API-Football
+              squads/injuries/predictions/H2H, and Gemini Google Search. Paste
+              URLs or notes only to steer.
+              {hasSources ? " · Sources attached for next generate." : ""}
+            </div>
+          </div>
+          {sourcesOpen ? (
+            <ChevronUp className="h-4 w-4 shrink-0 text-slate-400" />
+          ) : (
+            <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
+          )}
+        </button>
+        {sourcesOpen && (
+          <div className="border-t border-slate-100 dark:border-slate-800 px-3 py-3 space-y-2">
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">
+              URLs (one per line)
+              <textarea
+                className="mt-1 w-full min-h-[72px] rounded-lg border border-slate-200 dark:border-slate-700 bg-transparent px-2 py-1.5 text-xs font-mono"
+                placeholder="https://…"
+                value={sourceUrls}
+                onChange={(e) => setSourceUrls(e.target.value)}
+              />
+            </label>
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">
+              Extra notes
+              <textarea
+                className="mt-1 w-full min-h-[72px] rounded-lg border border-slate-200 dark:border-slate-700 bg-transparent px-2 py-1.5 text-xs"
+                placeholder="Anything you want Gemini to weigh…"
+                value={sourceNotes}
+                onChange={(e) => setSourceNotes(e.target.value)}
+              />
+            </label>
+            <p className="text-[10px] text-slate-400">
+              Empty is fine — Generate never waits on sources.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {lastDistributed && (
+        <div className="rounded-lg border border-violet-200 dark:border-violet-900 bg-violet-50/80 dark:bg-violet-950/30 px-3 py-2 text-xs text-violet-900 dark:text-violet-100">
+          <span className="font-semibold">Last distribution: </span>
+          {formatDistributed(lastDistributed)}
         </div>
       )}
 
@@ -221,7 +355,12 @@ export function PacksClient({ matchId }: { matchId: string }) {
               </p>
             </div>
             <div className="flex gap-2">
-              <Button size="sm" variant="outline" disabled={busy || packBusy} onClick={save}>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy || packBusy}
+                onClick={save}
+              >
                 Save edit
               </Button>
               <Button size="sm" disabled={busy || packBusy} onClick={generate}>

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppHeader } from "@/components/layout/app-header";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { useTheme } from "@/components/theme-provider";
 import {
   User,
@@ -11,10 +12,11 @@ import {
   CreditCard,
   ClipboardList,
   Mic2,
+  Plug,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type Tab = "profile" | "appearance" | "templates" | "subscription";
+type Tab = "profile" | "appearance" | "templates" | "integrations" | "subscription";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -25,6 +27,11 @@ export default function SettingsPage() {
     email: string;
     avatarInitials: string;
   } | null>(null);
+  const [apiFootball, setApiFootball] = useState(false);
+  const [gemini, setGemini] = useState(false);
+  const [integrationsHint, setIntegrationsHint] = useState<string | null>(null);
+  const [statusMsg, setStatusMsg] = useState<string | null>(null);
+  const [statusPending, setStatusPending] = useState(false);
 
   useEffect(() => {
     fetch("/api/auth/me")
@@ -34,7 +41,30 @@ export default function SettingsPage() {
       })
       .then((d) => setUser(d.user))
       .catch(() => router.push("/login"));
+    fetch("/api/integrations")
+      .then((r) => r.json())
+      .then((j) => {
+        setApiFootball(Boolean(j.apiFootball));
+        setGemini(Boolean(j.gemini));
+        if (j.hint) setIntegrationsHint(String(j.hint));
+      })
+      .catch(() => undefined);
   }, [router]);
+
+  async function testApiFootball() {
+    setStatusPending(true);
+    setStatusMsg(null);
+    try {
+      const res = await fetch("/api/football/status");
+      const json = await res.json();
+      setApiFootball(Boolean(json.configured));
+      setStatusMsg(json.message || (json.ok ? "Connection OK" : "Connection failed"));
+    } catch (e) {
+      setStatusMsg(e instanceof Error ? e.message : "Connection test failed");
+    } finally {
+      setStatusPending(false);
+    }
+  }
 
   if (!user) {
     return (
@@ -55,6 +85,11 @@ export default function SettingsPage() {
       id: "templates",
       label: "Templates",
       icon: <Mic2 className="h-4 w-4" />,
+    },
+    {
+      id: "integrations",
+      label: "Integrations",
+      icon: <Plug className="h-4 w-4" />,
     },
     {
       id: "subscription",
@@ -169,6 +204,61 @@ export default function SettingsPage() {
                     Shortcuts on the live desk: G goal, Y yellow, R red, S sub, C
                     corner, V VAR, H half-time, F full-time.
                   </p>
+                </CardBody>
+              </Card>
+            )}
+            {tab === "integrations" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Plug className="h-4 w-4" /> Integrations
+                  </CardTitle>
+                </CardHeader>
+                <CardBody className="space-y-4 text-sm">
+                  <p className="text-slate-500">
+                    Optional keys live in <code className="font-mono">.env</code> /{" "}
+                    <code className="font-mono">.env.local</code>. Exact names:{" "}
+                    <code className="font-mono">API_FOOTBALL_KEY</code>,{" "}
+                    <code className="font-mono">GEMINI_API_KEY</code>. Restart the
+                    Next.js server after edits. Status:{" "}
+                    <code className="font-mono">/api/integrations</code>.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <span
+                      className={
+                        apiFootball
+                          ? "rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200 px-2.5 py-1 text-xs font-medium"
+                          : "rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 px-2.5 py-1 text-xs font-medium"
+                      }
+                    >
+                      API-Football {apiFootball ? "configured" : "not configured"}
+                    </span>
+                    <span
+                      className={
+                        gemini
+                          ? "rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200 px-2.5 py-1 text-xs font-medium"
+                          : "rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 px-2.5 py-1 text-xs font-medium"
+                      }
+                    >
+                      Gemini {gemini ? "configured" : "not configured"}
+                    </span>
+                  </div>
+                  {integrationsHint && (
+                    <p className="text-xs text-slate-500">{integrationsHint}</p>
+                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={statusPending}
+                    onClick={testApiFootball}
+                  >
+                    {statusPending ? "Testing…" : "Test API-Football connection"}
+                  </Button>
+                  {statusMsg && (
+                    <p className="text-xs text-slate-600 dark:text-slate-300 whitespace-pre-wrap">
+                      {statusMsg}
+                    </p>
+                  )}
                 </CardBody>
               </Card>
             )}

@@ -6,6 +6,7 @@ import { AppHeader } from "@/components/layout/app-header";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PRIORITY_COMPETITIONS } from "@/lib/competitions";
+import { todayDateInput } from "@/lib/season";
 
 type Club = { id: string; name: string; shortName: string; badgeEmoji: string };
 type AfFixture = {
@@ -16,6 +17,8 @@ type AfFixture = {
     away: { id: number; name: string };
   };
 };
+
+const LIGUE_1_ID = 61;
 
 export default function NewMatchDayPage() {
   const router = useRouter();
@@ -34,11 +37,14 @@ export default function NewMatchDayPage() {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [afConfigured, setAfConfigured] = useState(false);
-  const [importDate, setImportDate] = useState("");
-  const [importLeagueId, setImportLeagueId] = useState<number | "">("");
+  const [integrationsHint, setIntegrationsHint] = useState<string | null>(null);
+  const [importDate, setImportDate] = useState(() => todayDateInput("Europe/London"));
+  const [importLeagueId, setImportLeagueId] = useState<number | "">(LIGUE_1_ID);
   const [fixtures, setFixtures] = useState<AfFixture[]>([]);
   const [selectedFixture, setSelectedFixture] = useState<AfFixture | null>(null);
   const [importMsg, setImportMsg] = useState<string | null>(null);
+  const [statusMsg, setStatusMsg] = useState<string | null>(null);
+  const [statusPending, setStatusPending] = useState(false);
 
   const effectiveCompetition = customCompetition.trim() || competition;
 
@@ -50,7 +56,10 @@ export default function NewMatchDayPage() {
       });
     fetch("/api/integrations")
       .then((r) => r.json())
-      .then((j) => setAfConfigured(Boolean(j.apiFootball)));
+      .then((j) => {
+        setAfConfigured(Boolean(j.apiFootball));
+        if (j.hint) setIntegrationsHint(String(j.hint));
+      });
     loadClubs("");
   }, []);
 
@@ -92,30 +101,68 @@ export default function NewMatchDayPage() {
     throw new Error("Could not create club");
   }
 
+  async function testConnection() {
+    setStatusPending(true);
+    setStatusMsg(null);
+    try {
+      const res = await fetch("/api/football/status");
+      const json = await res.json();
+      setAfConfigured(Boolean(json.configured));
+      setStatusMsg(json.message || (json.ok ? "Connection OK" : "Connection failed"));
+    } catch (e) {
+      setStatusMsg(e instanceof Error ? e.message : "Connection test failed");
+    } finally {
+      setStatusPending(false);
+    }
+  }
+
   async function searchFixtures() {
     setImportMsg(null);
     if (!importDate) {
       setImportMsg("Pick a date");
       return;
     }
+    // Free-plan safe: date-only request (no season). Filter by league client-side.
     const params = new URLSearchParams({ date: importDate });
-    if (importLeagueId) params.set("league", String(importLeagueId));
-    const leagueMeta = PRIORITY_COMPETITIONS.find(
-      (c) => c.apiFootballLeagueId === importLeagueId
-    );
-    if (importLeagueId) {
-      params.set("season", String(new Date(importDate).getFullYear()));
-    }
-    void leagueMeta;
     const res = await fetch(`/api/football/fixtures?${params}`);
     const json = await res.json();
     if (!json.configured) {
-      setImportMsg(json.message || "API key missing");
+      setImportMsg(json.message || json.error || "API key missing");
       setFixtures([]);
       return;
     }
-    setFixtures(json.fixtures || []);
-    if (!(json.fixtures || []).length) setImportMsg("No fixtures found");
+    let list: AfFixture[] = json.fixtures || [];
+    if (importLeagueId) {
+      list = list.filter((fx) => fx.league?.id === importLeagueId);
+    }
+    setFixtures(list);
+    if (json.planSeasonBlocked || json.code === "plan_season") {
+      setImportMsg(
+        json.message ||
+          json.error ||
+          "Free plan cannot access this season — upgrade to Pro for current league+season, or search by date only."
+      );
+      return;
+    }
+    if (!list.length) {
+      const base =
+        json.message ||
+        json.error ||
+        "No fixtures found — check key / date (Free plan: date-only works; current seasons need Pro).";
+      setImportMsg(
+        importLeagueId
+          ? `${base} (no matches for selected league after date-wide search)`
+          : base
+      );
+    } else if (json.message) {
+      setImportMsg(json.message);
+    } else if (importLeagueId) {
+      setImportMsg(
+        `Showing ${list.length} fixture(s) for selected league (date-only search).`
+      );
+    } else {
+      setImportMsg(null);
+    }
   }
 
   async function applyFixture(fx: AfFixture) {
@@ -174,68 +221,96 @@ export default function NewMatchDayPage() {
           </p>
         </div>
 
-        {afConfigured && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Import from API-Football</CardTitle>
-            </CardHeader>
-            <CardBody className="space-y-3">
-              <div className="grid sm:grid-cols-3 gap-2">
-                <input
-                  type="date"
-                  className="rounded-lg border border-slate-200 dark:border-slate-700 bg-transparent px-2 py-2 text-sm"
-                  value={importDate}
-                  onChange={(e) => setImportDate(e.target.value)}
-                />
-                <select
-                  className="rounded-lg border border-slate-200 dark:border-slate-700 bg-transparent px-2 py-2 text-sm"
-                  value={importLeagueId}
-                  onChange={(e) =>
-                    setImportLeagueId(e.target.value ? Number(e.target.value) : "")
-                  }
+        <Card>
+          <CardHeader>
+            <CardTitle>Import from API-Football</CardTitle>
+          </CardHeader>
+          <CardBody className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span
+                className={
+                  afConfigured
+                    ? "rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200 px-2 py-0.5 font-medium"
+                    : "rounded-full bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-100 px-2 py-0.5 font-medium"
+                }
+              >
+                {afConfigured ? "API-Football configured" : "API-Football not configured"}
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={statusPending}
+                onClick={testConnection}
+              >
+                {statusPending ? "Testing…" : "Test connection"}
+              </Button>
+            </div>
+            {statusMsg && (
+              <p className="text-xs text-slate-600 dark:text-slate-300">{statusMsg}</p>
+            )}
+            {integrationsHint && !afConfigured && (
+              <p className="text-xs text-amber-700 dark:text-amber-300">{integrationsHint}</p>
+            )}
+            {!afConfigured && (
+              <div className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-sm text-amber-900 dark:text-amber-100">
+                Set <code className="font-mono">API_FOOTBALL_KEY</code> in .env /
+                .env.local and restart the Next.js server. You can still create a
+                desk manually below.
+              </div>
+            )}
+            <div className="grid sm:grid-cols-3 gap-2">
+              <input
+                type="date"
+                className="rounded-lg border border-slate-200 dark:border-slate-700 bg-transparent px-2 py-2 text-sm"
+                value={importDate}
+                onChange={(e) => setImportDate(e.target.value)}
+              />
+              <select
+                className="rounded-lg border border-slate-200 dark:border-slate-700 bg-transparent px-2 py-2 text-sm"
+                value={importLeagueId}
+                onChange={(e) =>
+                  setImportLeagueId(e.target.value ? Number(e.target.value) : "")
+                }
+              >
+                <option value="">Any / all leagues</option>
+                {PRIORITY_COMPETITIONS.filter((c) => c.apiFootballLeagueId).map(
+                  (c) => (
+                    <option key={c.id} value={c.apiFootballLeagueId}>
+                      {c.name}
+                    </option>
+                  )
+                )}
+              </select>
+              <Button type="button" onClick={searchFixtures}>
+                Search fixtures
+              </Button>
+            </div>
+            {importMsg && (
+              <p className="text-xs text-amber-700 dark:text-amber-300">{importMsg}</p>
+            )}
+            <div className="max-h-48 overflow-y-auto space-y-1">
+              {fixtures.map((fx) => (
+                <button
+                  key={fx.fixture.id}
+                  type="button"
+                  onClick={() => applyFixture(fx)}
+                  className="w-full text-left rounded-lg border border-slate-100 dark:border-slate-800 px-3 py-2 text-sm hover:border-teal-400"
                 >
-                  <option value="">Any / all leagues</option>
-                  {PRIORITY_COMPETITIONS.filter((c) => c.apiFootballLeagueId).map(
-                    (c) => (
-                      <option key={c.id} value={c.apiFootballLeagueId}>
-                        {c.name}
-                      </option>
-                    )
-                  )}
-                </select>
-                <Button type="button" onClick={searchFixtures}>
-                  Search fixtures
-                </Button>
-              </div>
-              {importMsg && (
-                <p className="text-xs text-amber-700 dark:text-amber-300">{importMsg}</p>
-              )}
-              <div className="max-h-48 overflow-y-auto space-y-1">
-                {fixtures.map((fx) => (
-                  <button
-                    key={fx.fixture.id}
-                    type="button"
-                    onClick={() => applyFixture(fx)}
-                    className="w-full text-left rounded-lg border border-slate-100 dark:border-slate-800 px-3 py-2 text-sm hover:border-teal-400"
-                  >
-                    <div className="font-medium">
-                      {fx.teams.home.name} vs {fx.teams.away.name}
-                    </div>
-                    <div className="text-xs text-slate-500">
-                      {fx.league.name} · {new Date(fx.fixture.date).toLocaleString("en-GB", { timeZone: "Europe/London" })} · #{fx.fixture.id}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </CardBody>
-          </Card>
-        )}
-
-        {!afConfigured && (
-          <div className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-sm text-amber-900 dark:text-amber-100">
-            API-Football import unavailable — set <code className="font-mono">API_FOOTBALL_KEY</code> in .env. You can still create a desk manually.
-          </div>
-        )}
+                  <div className="font-medium">
+                    {fx.teams.home.name} vs {fx.teams.away.name}
+                  </div>
+                  <div className="text-xs text-slate-500">
+                    {fx.league.name} ·{" "}
+                    {new Date(fx.fixture.date).toLocaleString("en-GB", {
+                      timeZone: "Europe/London",
+                    })}{" "}
+                    · #{fx.fixture.id}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </CardBody>
+        </Card>
 
         <Card>
           <CardHeader>
@@ -326,9 +401,7 @@ export default function NewMatchDayPage() {
                 onChange={(e) => setTitle(e.target.value)}
               />
             </label>
-            {error && (
-              <p className="text-sm text-rose-600">{error}</p>
-            )}
+            {error && <p className="text-sm text-rose-600">{error}</p>}
             <Button
               disabled={pending || !homeClubId || !awayClubId || !kickoff}
               onClick={createDesk}

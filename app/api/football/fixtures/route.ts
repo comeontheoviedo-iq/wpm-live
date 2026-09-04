@@ -3,8 +3,9 @@ import { getSession } from "@/lib/auth";
 import {
   ApiFootballError,
   isApiFootballConfigured,
-  searchFixtures,
+  searchFixturesSmart,
 } from "@/lib/api-football";
+import { europeanSeasonYear } from "@/lib/season";
 
 export async function GET(req: Request) {
   const session = await getSession();
@@ -16,7 +17,7 @@ export async function GET(req: Request) {
         configured: false,
         fixtures: [],
         message:
-          "API_FOOTBALL_KEY is not set. Add it to .env to import fixtures from API-Football.",
+          "API_FOOTBALL_KEY is not set. Add it to .env / .env.local and restart the Next.js server.",
       },
       { status: 200 }
     );
@@ -25,24 +26,81 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const date = searchParams.get("date") || undefined;
   const league = searchParams.get("league");
-  const season = searchParams.get("season");
+  const seasonParam = searchParams.get("season");
   const team = searchParams.get("team");
   const id = searchParams.get("id");
 
+  // Season hint only for smart fallback; primary path is date-only (Free-plan safe).
+  const season =
+    seasonParam && seasonParam.trim()
+      ? Number(seasonParam)
+      : league && date
+        ? europeanSeasonYear(date)
+        : undefined;
+
   try {
-    const fixtures = await searchFixtures({
+    const result = await searchFixturesSmart({
       date,
       league: league ? Number(league) : undefined,
-      season: season ? Number(season) : undefined,
+      season: Number.isFinite(season as number) ? (season as number) : undefined,
       team: team ? Number(team) : undefined,
       id: id ? Number(id) : undefined,
     });
-    return NextResponse.json({ configured: true, fixtures });
+
+    if (result.planSeasonBlocked) {
+      return NextResponse.json(
+        {
+          configured: true,
+          fixtures: [],
+          seasonUsed: result.seasonUsed,
+          triedSeasons: result.triedSeasons,
+          strategy: result.strategy,
+          planSeasonBlocked: true,
+          code: "plan_season",
+          message: result.message,
+          error: result.message,
+        },
+        { status: 200 }
+      );
+    }
+
+    let message = result.message;
+    if (!message && result.fixtures.length === 0) {
+      message = [
+        "No fixtures — check key / date / season",
+        date ? `date=${date}` : null,
+        league ? `league=${league}` : null,
+        result.triedSeasons?.length
+          ? `seasonTried=${result.triedSeasons.join(",")}`
+          : null,
+        result.strategy ? `strategy=${result.strategy}` : null,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+    }
+
+    return NextResponse.json({
+      configured: true,
+      fixtures: result.fixtures,
+      seasonUsed: result.seasonUsed,
+      triedSeasons: result.triedSeasons,
+      strategy: result.strategy,
+      message,
+    });
   } catch (e) {
     const err = e as ApiFootballError;
+    const planSeason = err.code === "plan_season";
     return NextResponse.json(
-      { configured: true, error: err.message || "Lookup failed", fixtures: [] },
-      { status: err.status || 502 }
+      {
+        configured: true,
+        error: err.message || "Lookup failed",
+        code: err.code,
+        fixtures: [],
+        message: err.message || "Lookup failed",
+        planSeasonBlocked: planSeason || undefined,
+      },
+      // Never opaque 502 for Free-plan season caps
+      { status: planSeason ? 200 : err.status || 502 }
     );
   }
 }

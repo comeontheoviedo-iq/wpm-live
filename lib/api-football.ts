@@ -1,10 +1,12 @@
 /**
- * API-Football (api-sports) client.
+ * API-Football (api-sports) client — server-side only.
  * Base: https://v3.football.api-sports.io
  * Auth header: x-apisports-key
+ * Never call from the browser with the raw key; use /api/football/* proxies.
  */
 
 import { getApiFootballKey } from "./env";
+import { europeanSeasonYear, seasonCandidates } from "./season";
 
 const BASE = "https://v3.football.api-sports.io";
 
@@ -58,20 +60,49 @@ export type AfEvent = {
   comments: string | null;
 };
 
+export type AfStatus = {
+  account?: { firstname?: string; lastname?: string };
+  subscription?: { plan?: string; end?: string; active?: boolean };
+  requests?: {
+    current?: number;
+    limit_day?: number;
+  };
+};
+
 type CacheEntry = { at: number; data: unknown };
 const cache = new Map<string, CacheEntry>();
 const DEFAULT_TTL_MS = 30_000;
+const RATE_LIMIT_TTL_MS = 60_000;
 
 export class ApiFootballError extends Error {
   status: number;
-  constructor(message: string, status = 500) {
+  code?: string;
+  constructor(message: string, status = 500, code?: string) {
     super(message);
     this.status = status;
+    this.code = code;
   }
 }
 
 export function isApiFootballConfigured() {
   return Boolean(getApiFootballKey());
+}
+
+function formatApiErrors(errors: unknown): string {
+  if (!errors) return "Unknown API-Football error";
+  if (typeof errors === "string") return errors;
+  if (Array.isArray(errors)) {
+    if (errors.length === 0) return "";
+    return errors.map(String).join("; ");
+  }
+  if (typeof errors === "object") {
+    const entries = Object.entries(errors as Record<string, unknown>);
+    if (!entries.length) return "";
+    return entries
+      .map(([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`)
+      .join("; ");
+  }
+  return String(errors);
 }
 
 async function afFetch<T>(
@@ -82,8 +113,9 @@ async function afFetch<T>(
   const key = getApiFootballKey();
   if (!key) {
     throw new ApiFootballError(
-      "API_FOOTBALL_KEY is not set. Add it to .env to sync fixtures and lineups.",
-      503
+      "API_FOOTBALL_KEY is not set. Add it to .env / .env.local and restart the Next.js server.",
+      503,
+      "missing_key"
     );
   }
 
@@ -91,25 +123,51 @@ async function afFetch<T>(
   for (const [k, v] of Object.entries(params)) {
     if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
   }
-  const url = `${BASE}${path}?${qs.toString()}`;
+  const url = `${BASE}${path}${qs.toString() ? `?${qs.toString()}` : ""}`;
   const cacheKey = url;
   const hit = cache.get(cacheKey);
   if (hit && Date.now() - hit.at < ttlMs) {
     return hit.data as T;
   }
 
-  const res = await fetch(url, {
-    headers: {
-      "x-apisports-key": key,
-      Accept: "application/json",
-    },
-    next: { revalidate: 0 },
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: {
+        "x-apisports-key": key,
+        Accept: "application/json",
+      },
+      cache: "no-store",
+    });
+  } catch (e) {
+    throw new ApiFootballError(
+      `API-Football network error: ${e instanceof Error ? e.message : String(e)}`,
+      502,
+      "network"
+    );
+  }
+
+  if (res.status === 401 || res.status === 403) {
+    throw new ApiFootballError(
+      "API-Football rejected the key (401/403). Check API_FOOTBALL_KEY and restart the server.",
+      res.status,
+      "unauthorized"
+    );
+  }
+
+  if (res.status === 429) {
+    throw new ApiFootballError(
+      "API-Football rate limit hit (429). Wait a minute or upgrade your plan. Cached results may still appear.",
+      429,
+      "rate_limit"
+    );
+  }
 
   if (!res.ok) {
     throw new ApiFootballError(
       `API-Football HTTP ${res.status}`,
-      res.status
+      res.status,
+      "http"
     );
   }
 
@@ -119,14 +177,50 @@ async function afFetch<T>(
     results?: number;
   };
 
-  if (json.errors && Object.keys(json.errors as object).length > 0) {
+  const errText = formatApiErrors(json.errors);
+  if (errText) {
+    const lower = errText.toLowerCase();
+    const planSeason =
+      lower.includes("free plan") ||
+      lower.includes("do not have access to this season") ||
+      (lower.includes("season") && lower.includes("try from"));
+    const rateLimited =
+      !planSeason &&
+      (lower.includes("rate") ||
+        lower.includes("request limit") ||
+        lower.includes("too many request"));
+    const badKey =
+      lower.includes("token") ||
+      lower.includes("key") ||
+      lower.includes("authoriz");
+    if (planSeason) {
+      throw new ApiFootballError(
+        "API-Football Free plan cannot access this season (current seasons need Pro). " +
+          "Search by date only works on Free; upgrade to Pro for league+season on 2025+. " +
+          `Upstream: ${errText}`,
+        200,
+        "plan_season"
+      );
+    }
     throw new ApiFootballError(
-      `API-Football error: ${JSON.stringify(json.errors)}`,
-      502
+      rateLimited
+        ? `API-Football rate limit: ${errText}`
+        : badKey
+          ? `API-Football auth error: ${errText}`
+          : `API-Football error: ${errText}`,
+      rateLimited ? 429 : badKey ? 401 : 502,
+      rateLimited ? "rate_limit" : badKey ? "unauthorized" : "api_error"
     );
   }
 
-  const data = (json.response ?? []) as T;
+  // Most endpoints return arrays; /status returns a single object.
+  const data = (
+    json.response !== undefined && json.response !== null
+      ? json.response
+      : path === "/status"
+        ? ({} as T)
+        : ([] as unknown as T)
+  ) as T;
   cache.set(cacheKey, { at: Date.now(), data });
   return data;
 }
@@ -140,6 +234,176 @@ export async function searchFixtures(opts: {
   live?: string;
 }) {
   return afFetch<AfFixture[]>("/fixtures", opts, 20_000);
+}
+
+export type SmartFixturesResult = {
+  fixtures: AfFixture[];
+  seasonUsed?: number;
+  triedSeasons?: number[];
+  strategy?: "date_only" | "date_filter_league" | "league_season" | "passthrough";
+  planSeasonBlocked?: boolean;
+  message?: string;
+};
+
+const FREE_PLAN_SEASON_MSG =
+  "API-Football Free plan does not include current seasons (often capped ~2022–2024). " +
+  "Date-only fixture search still works; league+season for 2025+ needs a Pro upgrade at api-football.com.";
+
+/**
+ * Prefer date-only /fixtures (works on Free). If a league is requested, filter
+ * those results by league.id. Only fall back to league+season when needed;
+ * Free-plan season errors become a soft message (never opaque 502).
+ */
+export async function searchFixturesSmart(opts: {
+  date?: string;
+  league?: number;
+  season?: number;
+  team?: number;
+  id?: number;
+}): Promise<SmartFixturesResult> {
+  // id / team lookups — pass through
+  if (opts.id || (opts.team && !opts.date && !opts.league)) {
+    const fixtures = await searchFixtures(opts);
+    return { fixtures, strategy: "passthrough" };
+  }
+
+  // Date path: never send season (Free plan friendly)
+  if (opts.date) {
+    const all = await searchFixtures({
+      date: opts.date,
+      team: opts.team,
+    });
+
+    if (!opts.league) {
+      return { fixtures: all, strategy: "date_only" };
+    }
+
+    const filtered = all.filter((fx) => fx.league?.id === opts.league);
+    if (filtered.length > 0) {
+      return {
+        fixtures: filtered,
+        strategy: "date_filter_league",
+        message:
+          all.length !== filtered.length
+            ? `Showing ${filtered.length} of ${all.length} fixtures for selected league (date-only search, Free-plan safe).`
+            : undefined,
+      };
+    }
+
+    // No league matches in date-only results — try league+season (may fail on Free)
+    const candidates = opts.season
+      ? [opts.season, opts.season - 1, opts.season + 1]
+      : seasonCandidates(opts.date);
+    const tried: number[] = [];
+    let planBlocked = false;
+    let lastError: ApiFootballError | null = null;
+
+    for (const season of candidates) {
+      if (tried.includes(season)) continue;
+      tried.push(season);
+      try {
+        const fixtures = await searchFixtures({
+          date: opts.date,
+          league: opts.league,
+          season,
+          team: opts.team,
+        });
+        if (fixtures.length > 0) {
+          return { fixtures, seasonUsed: season, triedSeasons: tried, strategy: "league_season" };
+        }
+      } catch (e) {
+        if (e instanceof ApiFootballError) {
+          if (e.code === "plan_season") {
+            planBlocked = true;
+            lastError = e;
+            continue;
+          }
+          if (e.code === "unauthorized" || e.code === "rate_limit" || e.code === "missing_key") {
+            throw e;
+          }
+          lastError = e;
+          continue;
+        }
+        throw e;
+      }
+    }
+
+    if (planBlocked) {
+      return {
+        fixtures: [],
+        triedSeasons: tried,
+        strategy: "league_season",
+        planSeasonBlocked: true,
+        message:
+          FREE_PLAN_SEASON_MSG +
+          ` No ${opts.league} matches on ${opts.date} in the date-wide feed either.`,
+      };
+    }
+
+    if (lastError && lastError.code !== "plan_season") throw lastError;
+
+    return {
+      fixtures: [],
+      seasonUsed: candidates[0],
+      triedSeasons: tried,
+      strategy: "date_filter_league",
+      message: `No fixtures for league ${opts.league} on ${opts.date} (searched date-wide then seasons ${tried.join(",")}).`,
+    };
+  }
+
+  // League without date: try seasons carefully
+  if (opts.league) {
+    const candidates = opts.season
+      ? [opts.season, opts.season - 1, opts.season + 1]
+      : [europeanSeasonYear(new Date()), ...seasonCandidates(new Date())];
+    const tried: number[] = [];
+    let planBlocked = false;
+    let lastError: ApiFootballError | null = null;
+
+    for (const season of candidates) {
+      if (tried.includes(season)) continue;
+      tried.push(season);
+      try {
+        const fixtures = await searchFixtures({
+          league: opts.league,
+          season,
+          team: opts.team,
+        });
+        if (fixtures.length > 0) {
+          return { fixtures, seasonUsed: season, triedSeasons: tried, strategy: "league_season" };
+        }
+      } catch (e) {
+        if (e instanceof ApiFootballError) {
+          if (e.code === "plan_season") {
+            planBlocked = true;
+            lastError = e;
+            continue;
+          }
+          if (e.code === "unauthorized" || e.code === "rate_limit" || e.code === "missing_key") {
+            throw e;
+          }
+          lastError = e;
+          continue;
+        }
+        throw e;
+      }
+    }
+
+    if (planBlocked) {
+      return {
+        fixtures: [],
+        triedSeasons: tried,
+        strategy: "league_season",
+        planSeasonBlocked: true,
+        message: FREE_PLAN_SEASON_MSG,
+      };
+    }
+    if (lastError) throw lastError;
+    return { fixtures: [], seasonUsed: candidates[0], triedSeasons: tried, strategy: "league_season" };
+  }
+
+  const fixtures = await searchFixtures(opts);
+  return { fixtures, strategy: "passthrough" };
 }
 
 export async function getFixture(id: number) {
@@ -170,6 +434,11 @@ export async function searchLeagues(search: string) {
   >("/leagues", { search }, 120_000);
 }
 
+/** Lightweight connectivity check — hits /status without exposing the key. */
+export async function getApiStatus() {
+  return afFetch<AfStatus>("/status", {}, RATE_LIMIT_TTL_MS);
+}
+
 /** Map API-Football grid "row:col" (1-based from attack) into our formation slot ids loosely. */
 export function gridToSlot(grid: string | null | undefined, index: number): string {
   if (!grid) {
@@ -180,7 +449,6 @@ export function gridToSlot(grid: string | null | undefined, index: number): stri
   const row = Number(rowStr);
   const col = Number(colStr);
   if (row === 1) return "GK";
-  // defensive line
   if (row === 2) {
     if (col <= 1) return "LB";
     if (col === 2) return "LCB";
@@ -210,7 +478,6 @@ export function mapAfStatus(short: string): string {
     case "BT":
     case "P":
     case "LIVE":
-      return "Live";
     case "HT":
       return "Live";
     case "FT":

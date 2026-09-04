@@ -1,20 +1,31 @@
 # Pitchline
 
-Prep + live desk.
+Prep plus live desk for football commentators.
 
-Quick start: copy env example, install, db reset, dev.
+## Quick start
 
-Demo login on login page.
+Copy env example, install dependencies, reset the database, start the dev server.
+
+Demo login credentials are on the login page.
 
 ## Env
 
-See .env.example for DATABASE_URL, AUTH_SECRET, and optional integration vars.
-Empty optional vars degrade gracefully with clear UI banners.
-Never commit .env or *.db.
+See the env example file for database URL, auth secret, and optional integration keys.
+Exact key names matter. Restart the server after env edits.
+Check GET /api/integrations for configured flags.
+
+## Troubleshooting fixture search
+
+Root cause on Free plans: league plus season queries for current seasons are rejected
+with a message about Free plans not having access to this season (often try 2022 to 2024).
+Date-only fixture search still works. Pitchline defaults to date-only then filters by league.
+Upgrade to Pro for current season league plus season queries.
+Use Add Match Desk Test connection to see plan name and Free-plan season hint.
+Settings Integrations tab also shows badges and a Test connection button.
 
 ## DB
 
-npm run db:reset once after pull (Note/Pack/feed schema).
+Reset the database once after pull.
 
 ## Fixture link
 
@@ -22,9 +33,8 @@ Add Match Desk import, or Prep paste fixture id then sync. Live polls while on a
 
 ## Packs
 
-Generate Research, Intro, Profiles, Referee, Lineup, Hooks. Saves to Scripts/Notes.
-Unofficial broadcast house rules; country top-flight labels.
+Generate Research, Intro, Profiles, Referee, Lineup, Hooks.
 
 ## Routes
 
-Desk, Scripts, Packs, Prep, Notes, Live, /match-day/new. Speaks redirects to Scripts.
+Desk, Scripts, Packs, Prep, Notes, Live, /match-day/new.

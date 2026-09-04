@@ -4,6 +4,7 @@ import { EventComposer } from "@/components/live/event-composer";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { FeedBanner } from "@/components/match/feed-banner";
 import { LivePitch } from "@/components/match/live-pitch";
+import { EventTimeline } from "@/components/match/event-timeline";
 
 export default async function LivePage({
   params,
@@ -103,28 +104,19 @@ export default async function LivePage({
             <CardHeader>
               <CardTitle>Event timeline</CardTitle>
             </CardHeader>
-            <CardBody className="space-y-2 max-h-[70vh] overflow-y-auto">
-              {match.events.map((e) => (
-                <div
-                  key={e.id}
-                  className="rounded-lg border border-slate-100 dark:border-slate-800 px-3 py-2 text-sm"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-bold text-teal-700 dark:text-teal-300">
-                      {e.minute}&apos;
-                    </span>
-                    <span className="text-[10px] uppercase tracking-wide text-slate-400">
-                      {e.type.replace("_", " ")}
-                    </span>
-                  </div>
-                  <div className="mt-0.5">{e.description}</div>
-                  {e.commentary && (
-                    <div className="mt-1 text-xs italic text-slate-500">
-                      {e.commentary}
-                    </div>
-                  )}
-                </div>
-              ))}
+            <CardBody className="max-h-[70vh] overflow-hidden">
+              <EventTimeline
+                events={match.events.map((e) => ({
+                  id: e.id,
+                  type: e.type,
+                  minute: e.minute,
+                  description: e.description,
+                  teamSide: e.teamSide,
+                  commentary: e.commentary,
+                  playerId: e.playerId,
+                }))}
+                maxHeightClass="max-h-[70vh]"
+              />
             </CardBody>
           </Card>
         </div>

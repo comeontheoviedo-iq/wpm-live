@@ -6,13 +6,23 @@ import { useRouter } from "next/navigation";
 import {
   RefreshCw,
   Sparkles,
-  X,
   AlertTriangle,
   Link2,
+  CloudSun,
+  MapPin,
+  ChevronDown,
+  Radio,
 } from "lucide-react";
 import { PitchBoard, type PitchPlayer } from "@/components/match/pitch";
 import { SquadRail, type SquadPlayer } from "@/components/match/squad-rail";
-import { NotesPanel, type NoteRow } from "@/components/notes/notes-panel";
+import {
+  NotesPanel,
+  type NoteRow,
+  type NotesFilterScope,
+} from "@/components/notes/notes-panel";
+import { PlayerDossier } from "@/components/match/player-dossier";
+import { EventTimeline } from "@/components/match/event-timeline";
+import { EventComposer } from "@/components/live/event-composer";
 import { Button } from "@/components/ui/button";
 import { FORMATIONS } from "@/lib/formations";
 import { cn } from "@/lib/utils";
@@ -23,6 +33,36 @@ type Predictions = {
   advice?: string | null;
   percent?: { home?: number | null; draw?: number | null; away?: number | null };
   winner?: { name?: string | null } | null;
+};
+
+type MatchEventRow = {
+  id: string;
+  type: string;
+  minute: number;
+  description: string;
+  teamSide: string | null;
+  playerId: string | null;
+};
+
+type StatRow = { label: string; homeValue: string; awayValue: string };
+type ScorerRow = {
+  id: string;
+  goals: number;
+  assists: number;
+  rank: number;
+  playerName: string;
+  clubShort: string;
+  side: "home" | "away" | "other";
+};
+type KeeperRow = {
+  id: string;
+  cleanSheets: number;
+  saves: number;
+  appearances: number;
+  rank: number;
+  playerName: string;
+  clubShort: string;
+  side: "home" | "away" | "other";
 };
 
 function parsePredictions(json: string | null | undefined): Predictions | null {
@@ -42,6 +82,55 @@ function lineupHint(status: string) {
     return "Your personal predicted XI (click squad → tap slot, or drag). Official will override when published.";
   }
   return "Official lineups usually drop 20–60 min before KO — showing Expected (last XI). Click a squad player, then tap a pitch slot.";
+}
+
+function enrichPlayers(
+  players: PitchPlayer[],
+  events: MatchEventRow[]
+): PitchPlayer[] {
+  const subbedOutNames = new Set<string>();
+  const subbedOutIds = new Set<string>();
+  for (const e of events) {
+    if (e.type !== "sub") continue;
+    // AF sync: player = out, assist name often in "(Name)"
+    if (e.playerId) subbedOutIds.add(e.playerId);
+    const m = e.description.match(/^[^—]+—\s*([^(\n]+)/);
+    const outName = m?.[1]?.trim();
+    if (outName) subbedOutNames.add(outName.toLowerCase());
+  }
+  return players.map((p) => {
+    const mine = events.filter(
+      (e) =>
+        e.playerId === p.id ||
+        (e.description && e.description.includes(p.name))
+    );
+    const matchGoals = mine.filter((e) =>
+      ["goal", "penalty_goal", "own_goal"].includes(e.type)
+    ).length;
+    const matchAssists = mine.filter(
+      (e) =>
+        e.description.toLowerCase().includes(`(${p.name.toLowerCase()})`) ||
+        (e.type === "goal" && e.description.toLowerCase().includes("assist"))
+    ).length;
+    const matchYellow = mine.some((e) => e.type === "yellow");
+    const matchRed = mine.some((e) => e.type === "red");
+    const subbedOff =
+      subbedOutIds.has(p.id) ||
+      subbedOutNames.has(p.name.toLowerCase()) ||
+      mine.some(
+        (e) =>
+          e.type === "sub" &&
+          e.playerId === p.id
+      );
+    return {
+      ...p,
+      matchGoals: matchGoals || undefined,
+      matchAssists: matchAssists || undefined,
+      matchYellow: matchYellow || undefined,
+      matchRed: matchRed || undefined,
+      subbedOff: subbedOff || undefined,
+    };
+  });
 }
 
 export function MatchDesk({
@@ -74,6 +163,19 @@ export function MatchDesk({
   predictionsJson,
   h2hSummary,
   packCount,
+  venueName,
+  venueCity,
+  venueCapacity,
+  weatherSummary,
+  weatherTempC,
+  weatherWindKph,
+  weatherHumidity,
+  events = [],
+  statistics = [],
+  scorers = [],
+  keepers = [],
+  homeClubId,
+  awayClubId,
 }: {
   matchId: string;
   homeName: string;
@@ -104,46 +206,75 @@ export function MatchDesk({
   predictionsJson: string | null;
   h2hSummary: string | null;
   packCount: number;
+  venueName?: string | null;
+  venueCity?: string | null;
+  venueCapacity?: number | null;
+  weatherSummary?: string | null;
+  weatherTempC?: number | null;
+  weatherWindKph?: number | null;
+  weatherHumidity?: number | null;
+  events?: MatchEventRow[];
+  statistics?: StatRow[];
+  scorers?: ScorerRow[];
+  keepers?: KeeperRow[];
+  homeClubId?: string;
+  awayClubId?: string;
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<SquadPlayer | null>(null);
   const [placing, setPlacing] = useState<SquadPlayer | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [flash, setFlash] = useState<string | null>(null);
   const [configured, setConfigured] = useState<boolean | null>(null);
-  // Desk stays editable even when Official — Sync restores AF XI.
   const locked = false;
   const [homeForm, setHomeForm] = useState(homeFormation);
   const [awayForm, setAwayForm] = useState(awayFormation);
+  const [notesFilter, setNotesFilter] = useState<NotesFilterScope>("all");
+  const [dossierId, setDossierId] = useState<string | null>(null);
+  const [onAirOpen, setOnAirOpen] = useState(
+    status === "Live" || status === "Full Time"
+  );
+  const [flashEventIds, setFlashEventIds] = useState<string[]>([]);
+
   useEffect(() => {
     setHomeForm(homeFormation);
     setAwayForm(awayFormation);
   }, [homeFormation, awayFormation]);
+
   const preds = useMemo(
     () => parsePredictions(predictionsJson),
     [predictionsJson]
+  );
+
+  const homeEnriched = useMemo(
+    () => enrichPlayers(homePlayers, events),
+    [homePlayers, events]
+  );
+  const awayEnriched = useMemo(
+    () => enrichPlayers(awayPlayers, events),
+    [awayPlayers, events]
   );
 
   const squad: SquadPlayer[] = useMemo(() => {
     const noteCount = (id: string) =>
       notes.filter((n) => n.entityId === id).length;
     return [
-      ...homePlayers.map((p) => ({
+      ...homeEnriched.map((p) => ({
         ...p,
         side: "home" as const,
         team: homeName,
         noteCount: noteCount(p.id),
       })),
-      ...awayPlayers.map((p) => ({
+      ...awayEnriched.map((p) => ({
         ...p,
         side: "away" as const,
         team: awayName,
         noteCount: noteCount(p.id),
       })),
     ];
-  }, [homePlayers, awayPlayers, homeName, awayName, notes]);
+  }, [homeEnriched, awayEnriched, homeName, awayName, notes]);
 
-  // Keep placing pointer fresh after refresh
   useEffect(() => {
     if (!placing) return;
     const fresh = squad.find((p) => p.id === placing.id);
@@ -165,8 +296,8 @@ export function MatchDesk({
   }, [placing]);
 
   const starterCount =
-    homePlayers.filter((p) => p.isStarter || p.onPitch).length +
-    awayPlayers.filter((p) => p.isStarter || p.onPitch).length;
+    homeEnriched.filter((p) => p.isStarter || p.onPitch).length +
+    awayEnriched.filter((p) => p.isStarter || p.onPitch).length;
 
   const sync = useCallback(
     async (silent = false) => {
@@ -184,9 +315,25 @@ export function MatchDesk({
         if (!res.ok) {
           setMsg(json.error || "Sync failed");
         } else {
+          const news = (json.newEvents || []) as {
+            type: string;
+            minute: number;
+            description: string;
+          }[];
+          if (news.length) {
+            const top = news
+              .slice(0, 3)
+              .map((e) => `${e.minute}' ${e.description}`)
+              .join(" · ");
+            setFlash(`${news.length} new: ${top}`);
+            setOnAirOpen(true);
+            setTimeout(() => setFlash(null), 8000);
+          }
           if (!silent) {
             setMsg(
-              `Synced · ${json.lineupStatus} · squads ${json.squadHome ?? 0}/${json.squadAway ?? 0} · injuries ${json.injuryCount ?? 0}`
+              `Synced · ${json.lineupStatus} · squads ${json.squadHome ?? 0}/${json.squadAway ?? 0} · injuries ${json.injuryCount ?? 0}` +
+                (json.venueName ? ` · ${json.venueName}` : "") +
+                (json.weatherSummary ? ` · ${json.weatherSummary}` : "")
             );
           }
           router.refresh();
@@ -219,7 +366,7 @@ export function MatchDesk({
 
   useEffect(() => {
     if (!configured || !apiFootballFixtureId || status !== "Live") return;
-    const t = setInterval(() => sync(true), 45_000);
+    const t = setInterval(() => sync(true), 18_000);
     return () => clearInterval(t);
   }, [configured, apiFootballFixtureId, status, sync]);
 
@@ -254,6 +401,7 @@ export function MatchDesk({
       setMsg("Players can only be placed on their own team half.");
       return;
     }
+    // place → API swaps if occupied
     await lineupAction({
       action: "place",
       playerId: args.playerId,
@@ -272,7 +420,6 @@ export function MatchDesk({
       setMsg("Players can only be placed on their own team half.");
       return;
     }
-    // Same player on their current / occupied slot → clear
     if (
       args.occupantId &&
       (args.occupantId === placing.id ||
@@ -283,7 +430,6 @@ export function MatchDesk({
       setPlacing(null);
       return;
     }
-    // Occupied → place (API vacates previous occupant = swap semantics)
     await lineupAction({
       action: "place",
       playerId: placing.id,
@@ -302,9 +448,16 @@ export function MatchDesk({
   }
 
   function onSquadClick(p: SquadPlayer) {
-    // Click squad player → place mode (official boards stay editable)
     setPlacing(p);
     setSelected(null);
+  }
+
+  function openPlayer(p: PitchPlayer | SquadPlayer) {
+    if (placing) return;
+    const full = squad.find((s) => s.id === p.id);
+    if (full) setSelected(full);
+    setDossierId(p.id);
+    setNotesFilter("players");
   }
 
   async function changeFormation(side: "home" | "away", formation: string) {
@@ -322,7 +475,9 @@ export function MatchDesk({
       } else {
         if (side === "home") setHomeForm(formation);
         else setAwayForm(formation);
-        setMsg(`${side === "home" ? "Home" : "Away"} → ${formation} (starters remapped)`);
+        setMsg(
+          `${side === "home" ? "Home" : "Away"} → ${formation} (starters remapped)`
+        );
         router.refresh();
       }
     } catch {
@@ -332,35 +487,70 @@ export function MatchDesk({
     }
   }
 
-  const playerNotes = useMemo(() => {
-    if (!selected) return notes;
-    return notes.filter((n) => n.entityId === selected.id);
-  }, [notes, selected]);
-
   const placingOnXi = Boolean(
     placing &&
       placing.formationSlot &&
       (placing.isStarter || placing.onPitch)
   );
 
+  const possession = statistics.find((s) =>
+    /possession/i.test(s.label)
+  );
+  const shots = statistics.find((s) =>
+    /^shots$/i.test(s.label) || /total shots/i.test(s.label)
+  );
+  const corners = statistics.find((s) => /corner/i.test(s.label));
+  const fouls = statistics.find((s) => /^fouls$/i.test(s.label) || /fouls committed/i.test(s.label));
+  const hasAfStats = Boolean(possession || shots || corners || fouls || statistics.length);
+
+  const penalties = events.filter((e) =>
+    ["penalty_goal", "penalty_miss"].includes(e.type)
+  );
+
+  const deskNotes = useMemo(() => {
+    if (dossierId) {
+      return notes.filter((n) => n.entityId === dossierId);
+    }
+    return notes;
+  }, [notes, dossierId]);
+
   return (
-    <div className="h-[calc(100dvh-7.5rem)] max-h-[100dvh] min-h-[420px] grid grid-rows-[auto_auto_1fr] gap-2 overflow-hidden">
-      {/* Top bar */}
+    <div className="h-[calc(100dvh-7.5rem)] max-h-[100dvh] min-h-[420px] flex flex-col gap-2 overflow-hidden">
       <header className="shrink-0 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 px-3 py-2">
         <div className="min-w-0 flex-1">
           <div className="font-bold text-sm sm:text-base truncate">
             {homeFullName}{" "}
             <span className="text-slate-400 font-normal">vs</span>{" "}
             {awayFullName}
-            {status === "Live" && (
+            {(status === "Live" || status === "Full Time") && (
               <span className="ml-2 text-rose-600 font-semibold tabular-nums">
-                {minute}&apos; {homeScore}-{awayScore}
+                {status === "Live" ? `${minute}' ` : ""}
+                {homeScore}-{awayScore}
               </span>
             )}
           </div>
-          <div className="text-[11px] text-slate-500 truncate">
-            {competition} · {kickoffLabel} · {status}
-            {apiFootballFixtureId ? ` · #${apiFootballFixtureId}` : ""}
+          <div className="text-[11px] text-slate-500 truncate flex flex-wrap gap-x-2">
+            <span>
+              {competition} · {kickoffLabel} · {status}
+              {apiFootballFixtureId ? ` · #${apiFootballFixtureId}` : ""}
+            </span>
+            {(venueName || venueCity) && (
+              <span className="inline-flex items-center gap-0.5">
+                <MapPin className="h-3 w-3" />
+                {venueName || "Venue"}
+                {venueCity ? `, ${venueCity}` : ""}
+                {venueCapacity ? ` · ${venueCapacity.toLocaleString()}` : ""}
+              </span>
+            )}
+            {(weatherSummary || weatherTempC != null) && (
+              <span className="inline-flex items-center gap-0.5">
+                <CloudSun className="h-3 w-3" />
+                {weatherSummary || "Weather"}
+                {weatherTempC != null ? ` · ${weatherTempC}°C` : ""}
+                {weatherWindKph != null ? ` · ${weatherWindKph} kph` : ""}
+                {weatherHumidity != null ? ` · ${weatherHumidity}%` : ""}
+              </span>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
@@ -393,7 +583,12 @@ export function MatchDesk({
         </div>
       </header>
 
-      {/* Intel strip */}
+      {flash && (
+        <div className="shrink-0 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/50 dark:border-amber-800 px-3 py-1.5 text-xs font-medium text-amber-900 dark:text-amber-100 animate-pulse">
+          {flash}
+        </div>
+      )}
+
       <div className="shrink-0 flex flex-wrap items-center gap-2 text-[11px]">
         <span
           className={cn(
@@ -414,6 +609,19 @@ export function MatchDesk({
         <span className="rounded-full border border-slate-200 dark:border-slate-700 px-2 py-0.5">
           Injuries {injuryCount}
         </span>
+        {hasAfStats && (
+          <span className="rounded-full border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40 px-2 py-0.5 font-semibold tabular-nums">
+            {homeScore}–{awayScore}
+            {possession
+              ? ` · Poss ${possession.homeValue}–${possession.awayValue}`
+              : ""}
+            {shots ? ` · Shots ${shots.homeValue}–${shots.awayValue}` : ""}
+            {corners
+              ? ` · Corners ${corners.homeValue}–${corners.awayValue}`
+              : ""}
+            {fouls ? ` · Fouls ${fouls.homeValue}–${fouls.awayValue}` : ""}
+          </span>
+        )}
         {(predictionsAdvice || preds?.advice) && (
           <span
             className="rounded-full border border-teal-200 dark:border-teal-900 bg-teal-50 dark:bg-teal-950/40 px-2 py-0.5 text-teal-800 dark:text-teal-200 truncate max-w-[280px]"
@@ -438,14 +646,48 @@ export function MatchDesk({
         {msg && <span className="text-slate-500 truncate">{msg}</span>}
       </div>
 
-      {/* Placing banner */}
+      {(scorers.length > 0 || keepers.length > 0 || penalties.length > 0) && (
+        <div className="shrink-0 flex flex-wrap gap-2 text-[10px] rounded-lg border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/70 px-2 py-1.5">
+          {scorers.slice(0, 6).map((s) => (
+            <span
+              key={s.id}
+              className="rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 px-2 py-0.5"
+            >
+              #{s.rank} {s.playerName} ({s.clubShort}) {s.goals}G
+              {s.assists ? ` ${s.assists}A` : ""}
+            </span>
+          ))}
+          {keepers.slice(0, 4).map((k) => (
+            <span
+              key={k.id}
+              className="rounded-full bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-900 px-2 py-0.5"
+            >
+              GK {k.playerName} {k.cleanSheets} CS
+            </span>
+          ))}
+          {penalties.map((e) => (
+            <span
+              key={e.id}
+              className={cn(
+                "rounded-full px-2 py-0.5 border",
+                e.type === "penalty_goal"
+                  ? "bg-violet-50 dark:bg-violet-950/40 border-violet-200 dark:border-violet-900"
+                  : "bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900"
+              )}
+            >
+              Pen {e.minute}&apos; {e.description}
+            </span>
+          ))}
+        </div>
+      )}
+
       {placing && (
         <div className="shrink-0 flex flex-wrap items-center gap-2 rounded-lg border border-sky-300 bg-sky-50 dark:bg-sky-950/50 dark:border-sky-800 px-3 py-1.5 text-xs">
           <span className="font-semibold text-sky-900 dark:text-sky-100">
             Tap a pitch slot for {placing.name}
             <span className="font-normal text-sky-700 dark:text-sky-300">
               {" "}
-              · Esc cancel
+              · Esc cancel · drag also swaps
             </span>
           </span>
           {placingOnXi && (
@@ -471,17 +713,101 @@ export function MatchDesk({
         </div>
       )}
 
-      {/* Main grid: pitch + squad */}
-      <div className="min-h-0 grid grid-cols-1 lg:grid-cols-[1fr_240px] gap-2 overflow-hidden">
-        <section className="min-h-0 flex flex-col gap-1.5 overflow-hidden">
+      <div className="shrink-0 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 overflow-hidden">
+        <button
+          type="button"
+          className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-50 dark:hover:bg-slate-900/60"
+          onClick={() => setOnAirOpen((v) => !v)}
+        >
+          <Radio className="h-3.5 w-3.5 text-rose-500" />
+          <span className="text-xs font-bold uppercase tracking-wide">On-air</span>
+          <span className="text-[10px] text-slate-500">
+            {events.length} events
+            {status === "Live" ? ` · ${minute}'` : ""}
+          </span>
+          {flash && (
+            <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 truncate max-w-[40%]">
+              {flash}
+            </span>
+          )}
+          <ChevronDown
+            className={cn(
+              "h-3.5 w-3.5 ml-auto text-slate-400 transition",
+              onAirOpen && "rotate-180"
+            )}
+          />
+        </button>
+        {onAirOpen && (
+          <div className="border-t border-slate-100 dark:border-slate-800 grid md:grid-cols-2 gap-2 p-2 max-h-[220px]">
+            <div className="min-h-0 overflow-hidden flex flex-col">
+              <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400 px-1 mb-1">
+                Timeline
+              </div>
+              <EventTimeline
+                events={events}
+                highlightIds={flashEventIds}
+                compact
+                maxHeightClass="max-h-[180px]"
+              />
+            </div>
+            <div className="min-h-0 overflow-y-auto">
+              <EventComposer
+                matchId={matchId}
+                homeName={homeName}
+                awayName={awayName}
+                homeScore={homeScore}
+                awayScore={awayScore}
+                minute={minute || 1}
+                players={squad.map((p) => ({
+                  id: p.id,
+                  name: p.name,
+                  shirtNumber: p.shirtNumber,
+                  side: p.side,
+                  team: p.team,
+                }))}
+                compact
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Main landscape: notes LEFT | pitch CENTER | squad RIGHT */}
+      <div className="min-h-0 flex-1 grid grid-cols-1 lg:grid-cols-[240px_1fr_220px] gap-2 overflow-hidden">
+        <aside className="min-h-0 overflow-hidden order-2 lg:order-1">
+          <NotesPanel
+            matchId={matchId}
+            initialNotes={deskNotes}
+            entityType={dossierId ? "player" : undefined}
+            entityId={dossierId || undefined}
+            entityLabel={
+              dossierId
+                ? squad.find((s) => s.id === dossierId)?.name
+                : undefined
+            }
+            homePlayerIds={homePlayers.map((p) => p.id)}
+            awayPlayerIds={awayPlayers.map((p) => p.id)}
+            homeClubId={homeClubId}
+            awayClubId={awayClubId}
+            externalFilter={notesFilter}
+            onFilterChange={setNotesFilter}
+            fillHeight
+            compact={Boolean(dossierId)}
+            playerNameById={Object.fromEntries(
+              squad.map((p) => [p.id, p.name])
+            )}
+          />
+        </aside>
+
+        <section className="min-h-0 flex flex-col gap-1.5 overflow-hidden order-1 lg:order-2">
           <div className="shrink-0 flex flex-wrap items-center gap-2 px-0.5">
             <p className="text-[10px] text-slate-500 flex-1 min-w-[12rem]">
               {lineupHint(lineupStatus)}
               {starterCount === 0 && (
                 <span className="text-amber-600">
                   {" "}
-                  Empty pitch — Sync squads / last XI, then click a player and tap
-                  a slot.
+                  Empty pitch — Sync squads / last XI, then click a player and
+                  tap a slot.
                 </span>
               )}
             </p>
@@ -535,17 +861,13 @@ export function MatchDesk({
               awayColor={awayColor}
               homeFormation={homeForm}
               awayFormation={awayForm}
-              homePlayers={homePlayers}
-              awayPlayers={awayPlayers}
+              homePlayers={homeEnriched}
+              awayPlayers={awayEnriched}
               homeCoach={homeCoach}
               awayCoach={awayCoach}
               referee={referee}
               lineupStatus={lineupStatus}
-              onPlayerClick={(p) => {
-                if (placing) return; // placing mode handles slot clicks
-                const full = squad.find((s) => s.id === p.id);
-                if (full) setSelected(full);
-              }}
+              onPlayerClick={openPlayer}
               onSlotDrop={onSlotDrop}
               onSlotClick={onSlotClick}
               onClearSlot={onClearSlot}
@@ -557,7 +879,7 @@ export function MatchDesk({
           </div>
         </section>
 
-        <aside className="min-h-0 overflow-hidden">
+        <aside className="min-h-0 overflow-hidden order-3">
           <SquadRail
             players={squad}
             homeName={homeName}
@@ -565,7 +887,7 @@ export function MatchDesk({
             homeColor={homeColor}
             awayColor={awayColor}
             locked={locked}
-            selectedId={selected?.id}
+            selectedId={selected?.id || dossierId}
             placingId={placing?.id}
             onPlayerClick={onSquadClick}
             onRemoveFromXi={(p) =>
@@ -577,39 +899,15 @@ export function MatchDesk({
         </aside>
       </div>
 
-      {/* Notes drawer */}
-      {selected && (
-        <div className="fixed inset-y-0 right-0 z-40 w-full max-w-md shadow-2xl border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 flex flex-col">
-          <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-slate-100 dark:border-slate-800">
-            <div className="min-w-0">
-              <div className="text-sm font-bold truncate">{selected.name}</div>
-              <div className="text-[11px] text-slate-500">
-                #{selected.shirtNumber} · {selected.team} ·{" "}
-                {selected.position || "—"}
-                {selected.formationSlot
-                  ? ` · ${selected.formationSlot}`
-                  : ""}
-              </div>
-            </div>
-            <button
-              type="button"
-              className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
-              onClick={() => setSelected(null)}
-              aria-label="Close notes"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-          <div className="flex-1 min-h-0 overflow-y-auto p-3">
-            <NotesPanel
-              matchId={matchId}
-              initialNotes={playerNotes}
-              entityType="player"
-              entityId={selected.id}
-              entityLabel={selected.name}
-            />
-          </div>
-        </div>
+      {dossierId && (
+        <PlayerDossier
+          matchId={matchId}
+          playerId={dossierId}
+          onClose={() => {
+            setDossierId(null);
+            setSelected(null);
+          }}
+        />
       )}
     </div>
   );

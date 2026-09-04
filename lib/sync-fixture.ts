@@ -9,6 +9,11 @@ import {
   getLineups,
   getPredictions,
   getSquads,
+  getStatistics,
+  getTopScorers,
+  getPlayersByTeam,
+  getVenueById,
+  getTeam,
   mapAfStatus,
   parsePercent,
   summarizeH2h,
@@ -16,6 +21,7 @@ import {
   type AfLineup,
   type AfSquadPlayer,
 } from "./api-football";
+import { resolveWeatherForVenue } from "./weather";
 
 function posGuess(pos?: string | null) {
   if (!pos) return "MID";
@@ -71,6 +77,7 @@ export async function syncSquadForClub(clubId: string, teamAfId: number) {
       position: posGuess(p.position),
       age: p.age ?? existing?.age ?? null,
       apiFootballPlayerId: p.id,
+      ...(p.photo ? { photoUrl: p.photo } : {}),
     };
     if (existing) {
       await prisma.player.update({ where: { id: existing.id }, data });
@@ -404,8 +411,12 @@ function mapEventType(ev: AfEvent): string {
   const d = (ev.detail || "").toLowerCase();
   if (t === "goal") {
     if (d.includes("own")) return "own_goal";
+    if (d.includes("missed") && d.includes("penalty")) return "penalty_miss";
     if (d.includes("penalty")) return "penalty_goal";
     return "goal";
+  }
+  if (t.includes("missed") || (t === "missed penalty")) {
+    return "penalty_miss";
   }
   if (t === "card") {
     if (d.includes("red")) return "red";
@@ -460,6 +471,369 @@ async function dedupeClubSlots(clubId: string, formation?: string | null) {
       });
     }
   }
+}
+
+
+async function syncVenueAndWeather(
+  matchId: string,
+  fixture: Awaited<ReturnType<typeof getFixture>>,
+  kickoff: Date
+) {
+  if (!fixture) return { venueName: null as string | null, weather: null as string | null };
+  const v = fixture.fixture.venue;
+  const venueName = v?.name || null;
+  const city = v?.city || null;
+  let capacity = 0;
+  let lat: number | null = null;
+  let lon: number | null = null;
+  let address: string | null = null;
+  let surface: string | null = null;
+  let imageUrl: string | null = null;
+  let afVenueId = v?.id ?? null;
+
+  if (afVenueId) {
+    const detail = await getVenueById(afVenueId).catch(() => null);
+    if (detail) {
+      capacity = detail.capacity ?? 0;
+      address = detail.address || null;
+      surface = detail.surface || null;
+      imageUrl = detail.image || null;
+      // AF venues endpoint typically has no lat/lon — geocode city
+    }
+  } else if (fixture.teams?.home?.id) {
+    // Fixture venue id often null — fall back to home club venue
+    const team = await getTeam(fixture.teams.home.id).catch(() => null);
+    const tv = team?.venue;
+    if (tv?.id) {
+      afVenueId = tv.id;
+      capacity = tv.capacity ?? 0;
+      address = tv.address || null;
+      surface = tv.surface || null;
+      imageUrl = tv.image || null;
+      if (!venueName && tv.name) {
+        // keep fixture name when present; else use club venue name
+      }
+    }
+  }
+
+  let venueId: string | null = null;
+  if (venueName && city) {
+    let existing = afVenueId
+      ? await prisma.venue.findFirst({ where: { apiFootballVenueId: afVenueId } })
+      : null;
+    if (!existing) {
+      existing = await prisma.venue.findFirst({ where: { name: venueName, city } });
+    }
+    if (!existing && afVenueId) {
+      // last resort: same city with empty AF id
+      existing = await prisma.venue.findFirst({
+        where: { city, apiFootballVenueId: null },
+      });
+    }
+    if (existing) {
+      venueId = existing.id;
+      await prisma.venue.update({
+        where: { id: existing.id },
+        data: {
+          name: venueName,
+          city,
+          capacity: capacity || existing.capacity,
+          address: address ?? existing.address,
+          surface: surface || existing.surface,
+          imageUrl: imageUrl ?? existing.imageUrl,
+          apiFootballVenueId: afVenueId ?? existing.apiFootballVenueId,
+        },
+      });
+      lat = existing.lat;
+      lon = existing.lon;
+    } else {
+      const created = await prisma.venue.create({
+        data: {
+          name: venueName,
+          city,
+          capacity: capacity || 0,
+          address,
+          surface: surface || "Grass",
+          imageUrl,
+          apiFootballVenueId: afVenueId,
+        },
+      });
+      venueId = created.id;
+    }
+  }
+
+  const weather = city
+    ? await resolveWeatherForVenue({
+        city,
+        countryHint: fixture.league?.country,
+        lat,
+        lon,
+        kickoff,
+      }).catch(() => null)
+    : null;
+
+  if (weather && venueId) {
+    await prisma.venue.update({
+      where: { id: venueId },
+      data: { lat: weather.lat, lon: weather.lon },
+    });
+  }
+
+  await prisma.match.update({
+    where: { id: matchId },
+    data: {
+      ...(venueId ? { venueId } : {}),
+      ...(weather
+        ? {
+            weatherSummary: weather.summary,
+            weatherTempC: weather.tempC,
+            weatherWindKph: weather.windKph,
+            weatherHumidity: weather.humidity,
+          }
+        : {}),
+    },
+  });
+
+  return {
+    venueName: venueName,
+    weather: weather?.summary ?? null,
+  };
+}
+
+
+async function syncSeasonScorers(
+  homeClubId: string,
+  awayClubId: string,
+  homeAfId: number,
+  awayAfId: number,
+  leagueId: number,
+  season: number
+) {
+  const clubByAf = new Map<number, string>([
+    [homeAfId, homeClubId],
+    [awayAfId, awayClubId],
+  ]);
+
+  await prisma.seasonScorer.deleteMany({
+    where: { clubId: { in: [homeClubId, awayClubId] } },
+  });
+  await prisma.seasonKeeper.deleteMany({
+    where: { clubId: { in: [homeClubId, awayClubId] } },
+  });
+
+  const tops = await getTopScorers(leagueId, season).catch(() => []);
+  const teamPages: Awaited<ReturnType<typeof getPlayersByTeam>> = [];
+  for (const teamId of [homeAfId, awayAfId]) {
+    const page1 = await getPlayersByTeam(teamId, season, 1).catch(() => []);
+    teamPages.push(...page1);
+    if (page1.length >= 20) {
+      const page2 = await getPlayersByTeam(teamId, season, 2).catch(() => []);
+      teamPages.push(...page2);
+    }
+  }
+
+  type Acc = {
+    clubId: string;
+    apiId: number;
+    name: string;
+    goals: number;
+    assists: number;
+    apps: number;
+    cleanSheets: number;
+    saves: number;
+    conceded: number;
+    position?: string | null;
+    age?: number | null;
+    nationality?: string;
+    photo?: string;
+    height?: string;
+    weight?: string;
+    birth?: string | null;
+  };
+  const byApi = new Map<number, Acc>();
+
+  function ingest(row: (typeof tops)[number]) {
+    const teamId = row.statistics?.[0]?.team?.id;
+    const clubId = teamId && clubByAf.has(teamId) ? clubByAf.get(teamId)! : null;
+    if (!clubId || !row.player?.id) return;
+    const goals = row.statistics?.[0]?.goals?.total ?? 0;
+    const assists = row.statistics?.[0]?.goals?.assists ?? 0;
+    const apps = row.statistics?.[0]?.games?.appearences ?? 0;
+    const saves = row.statistics?.[0]?.goals?.saves ?? 0;
+    const conceded = row.statistics?.[0]?.goals?.conceded ?? 0;
+    const prev = byApi.get(row.player.id);
+    byApi.set(row.player.id, {
+      clubId,
+      apiId: row.player.id,
+      name: row.player.name,
+      goals: Math.max(goals || 0, prev?.goals || 0),
+      assists: Math.max(assists || 0, prev?.assists || 0),
+      apps: Math.max(apps || 0, prev?.apps || 0),
+      cleanSheets: prev?.cleanSheets || 0,
+      saves: Math.max(saves || 0, prev?.saves || 0),
+      conceded: Math.max(conceded || 0, prev?.conceded || 0),
+      position: row.statistics?.[0]?.games?.position || prev?.position,
+      age: row.player.age ?? prev?.age,
+      nationality: row.player.nationality || prev?.nationality,
+      photo: row.player.photo || prev?.photo,
+      height: row.player.height || prev?.height,
+      weight: row.player.weight || prev?.weight,
+      birth: row.player.birth?.date || prev?.birth || null,
+    });
+  }
+
+  for (const row of tops) ingest(row);
+  for (const row of teamPages) ingest(row);
+
+  function parseCm(h?: string | null) {
+    if (!h) return null;
+    const m = String(h).match(/(\d+)/);
+    return m ? Number(m[1]) : null;
+  }
+  function parseKg(w?: string | null) {
+    if (!w) return null;
+    const m = String(w).match(/(\d+)/);
+    return m ? Number(m[1]) : null;
+  }
+
+  let scorers = 0;
+  let keepers = 0;
+
+  const scorerRows = [...byApi.values()]
+    .filter((r) => (r.goals || 0) > 0)
+    .sort((a, b) => b.goals - a.goals || b.assists - a.assists);
+
+  let rank = 1;
+  for (const row of scorerRows) {
+    let player = await findClubPlayer(row.clubId, {
+      apiId: row.apiId,
+      name: row.name,
+    });
+    if (!player) {
+      player = await prisma.player.create({
+        data: {
+          clubId: row.clubId,
+          name: row.name,
+          shirtNumber: 0,
+          position: posGuess(row.position),
+          apiFootballPlayerId: row.apiId,
+          age: row.age ?? null,
+          nationality: row.nationality || "UNK",
+          photoUrl: row.photo || null,
+          heightCm: parseCm(row.height),
+          weightKg: parseKg(row.weight),
+          birthDate: row.birth || null,
+          goals: row.goals,
+          assists: row.assists,
+          appearances: row.apps || 0,
+        },
+      });
+    } else {
+      await prisma.player.update({
+        where: { id: player.id },
+        data: {
+          goals: row.goals,
+          assists: row.assists,
+          ...(row.apps ? { appearances: row.apps } : {}),
+          ...(row.photo && !player.photoUrl ? { photoUrl: row.photo } : {}),
+          ...(parseCm(row.height) && !player.heightCm
+            ? { heightCm: parseCm(row.height) }
+            : {}),
+          ...(parseKg(row.weight) && !player.weightKg
+            ? { weightKg: parseKg(row.weight) }
+            : {}),
+          ...(row.birth && !player.birthDate ? { birthDate: row.birth } : {}),
+          ...(row.nationality &&
+          (!player.nationality ||
+            player.nationality === "ENG" ||
+            player.nationality === "UNK")
+            ? { nationality: row.nationality }
+            : {}),
+          ...(row.age && !player.age ? { age: row.age } : {}),
+        },
+      });
+    }
+    await prisma.seasonScorer.create({
+      data: {
+        clubId: row.clubId,
+        playerId: player.id,
+        goals: row.goals,
+        assists: row.assists || 0,
+        rank: rank++,
+      },
+    });
+    scorers++;
+  }
+
+  const keeperAcc: Acc[] = [];
+  for (const row of byApi.values()) {
+    const pos = (row.position || "").toUpperCase();
+    if (pos.startsWith("G") || row.saves > 0) keeperAcc.push(row);
+  }
+  for (const clubId of [homeClubId, awayClubId]) {
+    const gks = await prisma.player.findMany({
+      where: { clubId, position: "GK" },
+    });
+    for (const gk of gks) {
+      if (!gk.apiFootballPlayerId) continue;
+      if (keeperAcc.some((k) => k.apiId === gk.apiFootballPlayerId)) continue;
+      keeperAcc.push({
+        clubId,
+        apiId: gk.apiFootballPlayerId,
+        name: gk.name,
+        goals: 0,
+        assists: 0,
+        apps: gk.appearances || 0,
+        cleanSheets: gk.cleanSheets || 0,
+        saves: 0,
+        conceded: 0,
+        position: "Goalkeeper",
+      });
+    }
+  }
+
+  keeperAcc.sort(
+    (a, b) =>
+      (b.cleanSheets || 0) - (a.cleanSheets || 0) ||
+      (b.saves || 0) - (a.saves || 0) ||
+      (b.apps || 0) - (a.apps || 0)
+  );
+
+  let keeperRank = 1;
+  const seenKeeper = new Set<string>();
+  for (const row of keeperAcc) {
+    const player = await findClubPlayer(row.clubId, {
+      apiId: row.apiId,
+      name: row.name,
+    });
+    if (!player || seenKeeper.has(player.id)) continue;
+    seenKeeper.add(player.id);
+    const cs = row.cleanSheets || player.cleanSheets || 0;
+    const saves = row.saves || 0;
+    const apps = row.apps || player.appearances || 0;
+    if (!cs && !saves && !apps) continue;
+    await prisma.player.update({
+      where: { id: player.id },
+      data: {
+        cleanSheets: cs || player.cleanSheets,
+        appearances: apps || player.appearances,
+        position: "GK",
+      },
+    });
+    await prisma.seasonKeeper.create({
+      data: {
+        clubId: row.clubId,
+        playerId: player.id,
+        cleanSheets: cs,
+        saves,
+        appearances: apps,
+        rank: keeperRank++,
+      },
+    });
+    keepers++;
+  }
+
+  return { scorers, keepers };
 }
 
 export async function syncMatchFromApiFootball(matchId: string) {
@@ -557,11 +931,63 @@ export async function syncMatchFromApiFootball(matchId: string) {
     lineupStatus = homeLast || awayLast ? "expected" : match.lineupStatus || "expected";
   }
 
+  const venueWeather = await syncVenueAndWeather(
+    matchId,
+    fixture,
+    match.kickoff
+  ).catch(() => ({ venueName: null, weather: null }));
+
+  let statsCount = 0;
+  try {
+    const rawStats = await getStatistics(match.apiFootballFixtureId);
+    if (rawStats.length >= 2) {
+      const homeBlock =
+        rawStats.find((r) => r.team.id === homeAfId) || rawStats[0];
+      const awayBlock =
+        rawStats.find((r) => r.team.id === awayAfId) || rawStats[1];
+      await prisma.statistic.deleteMany({ where: { matchId } });
+      const types = [
+        ...new Set([
+          ...(homeBlock.statistics || []).map((s) => s.type),
+          ...(awayBlock.statistics || []).map((s) => s.type),
+        ]),
+      ];
+      let order = 0;
+      for (const type of types) {
+        const hv = homeBlock.statistics?.find((s) => s.type === type)?.value;
+        const av = awayBlock.statistics?.find((s) => s.type === type)?.value;
+        await prisma.statistic.create({
+          data: {
+            matchId,
+            label: type,
+            homeValue: hv == null ? "—" : String(hv),
+            awayValue: av == null ? "—" : String(av),
+            order: order++,
+          },
+        });
+      }
+      statsCount = types.length;
+    }
+  } catch {
+    /* stats optional */
+  }
+
+  const scorerSync = await syncSeasonScorers(
+    match.homeClubId,
+    match.awayClubId,
+    homeAfId,
+    awayAfId,
+    fixture.league.id,
+    fixture.league.season
+  ).catch(() => ({ scorers: 0, keepers: 0 }));
+
   const events = await getEvents(match.apiFootballFixtureId).catch(() => []);
   const homeScore = fixture.goals.home ?? match.homeScore;
   const awayScore = fixture.goals.away ?? match.awayScore;
   const minute = fixture.fixture.status.elapsed ?? match.minute;
   const status = mapAfStatus(fixture.fixture.status.short);
+
+  const newEvents: { type: string; minute: number; description: string }[] = [];
 
   for (const ev of events) {
     const elapsed = ev.time?.elapsed ?? 0;
@@ -571,6 +997,21 @@ export async function syncMatchFromApiFootball(matchId: string) {
     const type = mapEventType(ev);
     const teamSide =
       ev.team?.id === homeAfId ? "home" : ev.team?.id === awayAfId ? "away" : null;
+
+    const clubId =
+      teamSide === "home"
+        ? match.homeClubId
+        : teamSide === "away"
+          ? match.awayClubId
+          : null;
+    let playerId: string | null = null;
+    if (clubId && (ev.player?.id || ev.player?.name)) {
+      const pl = await findClubPlayer(clubId, {
+        apiId: ev.player?.id,
+        name: ev.player?.name,
+      });
+      playerId = pl?.id ?? null;
+    }
 
     const existing = await prisma.matchEvent.findFirst({
       where: {
@@ -588,7 +1029,42 @@ export async function syncMatchFromApiFootball(matchId: string) {
           minute: elapsed,
           teamSide,
           description: desc,
+          playerId,
         },
+      });
+      newEvents.push({ type, minute: elapsed, description: desc });
+
+      // Auto-pin short note for goals/cards
+      if (
+        ["goal", "penalty_goal", "own_goal", "yellow", "red", "penalty_miss"].includes(
+          type
+        )
+      ) {
+        const already = await prisma.note.findFirst({
+          where: {
+            matchId,
+            title: `${elapsed}' ${type.replace("_", " ")}`,
+            body: desc,
+          },
+        });
+        if (!already) {
+          await prisma.note.create({
+            data: {
+              matchId,
+              title: `${elapsed}' ${type.replace("_", " ")}`,
+              body: desc,
+              category: type.includes("goal") || type.includes("penalty") ? "Match" : "Match",
+              entityType: playerId ? "player" : "match",
+              entityId: playerId || matchId,
+              pinned: true,
+            },
+          });
+        }
+      }
+    } else if (playerId && !existing.playerId) {
+      await prisma.matchEvent.update({
+        where: { id: existing.id },
+        data: { playerId },
       });
     }
 
@@ -635,6 +1111,7 @@ export async function syncMatchFromApiFootball(matchId: string) {
     match: updated,
     lineupCount: lineups.length,
     eventCount: events.length,
+    newEvents,
     lineupStatus,
     squadHome: squadHome.upserted,
     squadAway: squadAway.upserted,
@@ -642,6 +1119,11 @@ export async function syncMatchFromApiFootball(matchId: string) {
     predictionsAdvice: pred.advice,
     h2hSummary: pred.h2h,
     expectedFrom,
+    venueName: venueWeather.venueName,
+    weatherSummary: venueWeather.weather,
+    statsCount,
+    scorersSynced: scorerSync.scorers,
+    keepersSynced: scorerSync.keepers,
   };
 }
 

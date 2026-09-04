@@ -57,6 +57,9 @@ model Player {
   age              Int?
   heightCm         Int?
   preferredFoot    String?
+  photoUrl         String?
+  weightKg         Int?
+  birthDate        String?
   isCaptain        Boolean         @default(false)
   isStarter        Boolean         @default(false)
   formationSlot    String?
@@ -95,17 +98,21 @@ model Official {
 }
 
 model Venue {
-  id          String  @id @default(cuid())
-  name        String
-  city        String
-  capacity    Int
-  surface     String  @default("Grass")
-  opened      Int?
-  address     String?
-  pitchLength Int?    @default(105)
-  pitchWidth  Int?    @default(68)
-  notes       String?
-  matches     Match[]
+  id               String  @id @default(cuid())
+  name             String
+  city             String
+  capacity         Int
+  surface          String  @default("Grass")
+  opened           Int?
+  address          String?
+  pitchLength      Int?    @default(105)
+  pitchWidth       Int?    @default(68)
+  notes            String?
+  lat              Float?
+  lon              Float?
+  imageUrl         String?
+  apiFootballVenueId Int?
+  matches          Match[]
 }
 
 model MatchDay {

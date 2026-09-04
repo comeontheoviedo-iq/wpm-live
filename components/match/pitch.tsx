@@ -14,6 +14,18 @@ export type PitchPlayer = {
   isStarter: boolean;
   onPitch?: boolean;
   position?: string;
+  nationality?: string | null;
+  age?: number | null;
+  /** Compact card facts (goals/assists/cards from events or season) */
+  goals?: number;
+  assists?: number;
+  yellowCards?: number;
+  redCards?: number;
+  matchGoals?: number;
+  matchAssists?: number;
+  matchYellow?: boolean;
+  matchRed?: boolean;
+  subbedOff?: boolean;
 };
 
 type Coach = { name: string; nationality: string; age: number | null };
@@ -315,7 +327,7 @@ export function PitchBoard({
                       ? isPlacingHere
                         ? `Clear ${player.name} from XI`
                         : `Place here (swap ${player.name})`
-                      : `${player.name} · click notes · right-click remove`
+                      : `${player.name} · click dossier · right-click remove`
                     : locked
                       ? slot.label
                       : placing
@@ -323,14 +335,9 @@ export function PitchBoard({
                         : `Drop / tap slot · ${slot.label}`
                 }
                 className={cn(
-                  "relative z-[2] flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-full text-[9px] sm:text-[10px] font-bold text-white shadow-lg ring-2",
-                  player
-                    ? "ring-white/60 cursor-pointer hover:ring-teal-300"
-                    : "ring-white/25 border border-dashed border-white/40 bg-black/25",
-                  isPlacingHere && "ring-amber-300 ring-offset-1 ring-offset-transparent",
-                  highlightPlace && !player && "ring-sky-200/80"
+                  "relative z-[2] flex flex-col items-center",
+                  player ? "cursor-pointer" : ""
                 )}
-                style={player ? { backgroundColor: color } : undefined}
                 onClick={(e) => {
                   e.stopPropagation();
                   if (placing && onSlotClick && !locked) {
@@ -355,7 +362,114 @@ export function PitchBoard({
                   e.dataTransfer.effectAllowed = "move";
                 }}
               >
-                {player ? player.shirtNumber : slot.label}
+                {player ? (
+                  <span
+                    className={cn(
+                      "group relative flex min-w-[58px] max-w-[72px] flex-col items-center rounded-lg bg-black/75 backdrop-blur-sm px-1.5 py-1 shadow-lg ring-1 ring-white/45",
+                      isPlacingHere && "ring-2 ring-amber-300",
+                      "hover:ring-teal-300",
+                      player.subbedOff && "opacity-45 grayscale-[30%]"
+                    )}
+                    title={[
+                      player.name,
+                      player.isCaptain ? "Captain" : null,
+                      player.position || null,
+                      player.matchGoals
+                        ? `${player.matchGoals} goal(s) this match`
+                        : player.goals
+                          ? `${player.goals} season goals`
+                          : null,
+                      player.matchYellow || player.matchRed
+                        ? `Cards${player.matchYellow ? " Y" : ""}${player.matchRed ? " R" : ""}`
+                        : null,
+                      player.subbedOff ? "Subbed off" : null,
+                      player.nationality || null,
+                      player.age != null ? `Age ${player.age}` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  >
+                    <span className="flex items-center gap-1">
+                      <span
+                        className="flex h-6 w-6 items-center justify-center rounded-full text-[9px] font-bold text-white shadow ring-1 ring-white/50"
+                        style={{ backgroundColor: color }}
+                      >
+                        {player.shirtNumber}
+                      </span>
+                      <span className="max-w-[40px] truncate text-[9px] font-semibold text-white leading-tight">
+                        {player.isCaptain ? "© " : ""}
+                        {player.name.split(" ").slice(-1)[0]}
+                      </span>
+                    </span>
+                    <span className="mt-0.5 flex max-w-full flex-wrap items-center justify-center gap-0.5 text-[8px] leading-none text-white/95">
+                      {player.matchGoals ? (
+                        <span className="rounded bg-emerald-600/95 px-0.5 font-bold">
+                          {player.matchGoals}G
+                        </span>
+                      ) : player.goals ? (
+                        <span className="rounded bg-emerald-700/80 px-0.5">
+                          {player.goals}G
+                        </span>
+                      ) : null}
+                      {player.matchAssists ? (
+                        <span className="rounded bg-sky-600/95 px-0.5 font-bold">
+                          {player.matchAssists}A
+                        </span>
+                      ) : player.assists ? (
+                        <span className="rounded bg-sky-700/80 px-0.5">
+                          {player.assists}A
+                        </span>
+                      ) : null}
+                      {player.matchYellow ||
+                      (player.yellowCards && player.yellowCards > 0) ? (
+                        <span
+                          className="h-2.5 w-1.5 rounded-[1px] bg-yellow-400 ring-1 ring-black/20"
+                          title="Yellow"
+                        />
+                      ) : null}
+                      {player.matchRed ||
+                      (player.redCards && player.redCards > 0) ? (
+                        <span
+                          className="h-2.5 w-1.5 rounded-[1px] bg-rose-600 ring-1 ring-black/20"
+                          title="Red"
+                        />
+                      ) : null}
+                      {player.subbedOff ? (
+                        <span className="rounded bg-slate-500/90 px-0.5">OUT</span>
+                      ) : null}
+                      {!player.matchGoals &&
+                      !player.goals &&
+                      !player.matchAssists &&
+                      !player.assists &&
+                      !player.matchYellow &&
+                      !player.matchRed &&
+                      !player.subbedOff &&
+                      player.position ? (
+                        <span className="opacity-80">{player.position}</span>
+                      ) : null}
+                    </span>
+                    <span className="pointer-events-none absolute -top-8 left-1/2 z-30 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-950/95 px-1.5 py-0.5 text-[9px] text-white shadow-lg group-hover:block">
+                      {[
+                        `#${player.shirtNumber} ${player.name}`,
+                        player.isCaptain ? "©" : null,
+                        player.position,
+                        player.matchGoals ? `${player.matchGoals}G` : null,
+                        player.nationality,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </span>
+                  </span>
+                ) : (
+                  <span
+                    className={cn(
+                      "flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-full text-[9px] sm:text-[10px] font-bold text-white/80 shadow ring-2 ring-white/25 border border-dashed border-white/40 bg-black/25",
+                      highlightPlace && "ring-sky-200/80"
+                    )}
+                  >
+                    {slot.label}
+                  </span>
+                )}
               </button>
 
               {player && !locked && onClearSlot && (
@@ -375,12 +489,6 @@ export function PitchBoard({
                   <X className="h-2.5 w-2.5" />
                 </button>
               )}
-
-              <span className="relative z-[2] mt-0.5 max-w-[56px] truncate rounded bg-black/55 px-1 text-[8px] sm:text-[9px] text-white font-medium leading-tight">
-                {player
-                  ? `${player.isCaptain ? "© " : ""}${player.name.split(" ").slice(-1)[0]}`
-                  : slot.label}
-              </span>
             </div>
           );
         })}

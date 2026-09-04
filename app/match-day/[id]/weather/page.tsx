@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { getMatchFull } from "@/lib/match-data";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
-import { CloudSun, Thermometer, Wind, Droplets } from "lucide-react";
+import { CloudSun, Thermometer, Wind, Droplets, MapPin } from "lucide-react";
 
 export default async function WeatherPage({
   params,
@@ -17,7 +17,10 @@ export default async function WeatherPage({
       <div>
         <h2 className="text-xl font-bold">Weather</h2>
         <p className="text-sm text-slate-500">
-          Kick-off conditions · demo forecast (no external API)
+          Kick-off conditions via Open-Meteo
+          {match.venue
+            ? ` · ${match.venue.name}, ${match.venue.city}`
+            : " · sync match to link venue"}
         </p>
       </div>
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -38,7 +41,7 @@ export default async function WeatherPage({
           label="Wind"
           value={
             match.weatherWindKph != null
-              ? `${match.weatherWindKph} kph W`
+              ? `${match.weatherWindKph} kph`
               : "—"
           }
         />
@@ -50,18 +53,38 @@ export default async function WeatherPage({
           }
         />
       </div>
+      {match.venue && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <MapPin className="h-4 w-4" /> Venue
+            </CardTitle>
+          </CardHeader>
+          <CardBody className="text-sm space-y-1">
+            <div className="font-semibold">{match.venue.name}</div>
+            <div className="text-slate-500">
+              {match.venue.city}
+              {match.venue.capacity
+                ? ` · capacity ${match.venue.capacity.toLocaleString()}`
+                : ""}
+            </div>
+            {match.venue.lat != null && match.venue.lon != null && (
+              <div className="text-xs text-slate-400">
+                {match.venue.lat.toFixed(3)}, {match.venue.lon.toFixed(3)}
+              </div>
+            )}
+          </CardBody>
+        </Card>
+      )}
       <Card>
         <CardHeader>
           <CardTitle>On-air notes</CardTitle>
         </CardHeader>
         <CardBody className="text-sm leading-relaxed text-slate-600 dark:text-slate-300 space-y-2">
           <p>
-            Partly cloudy with a brisk westerly — expect the ball to hold up
-            when attacking the West Stand in the first half. Surface is hybrid
-            grass and should play true; light dew possible after sunset.
-          </p>
-          <p className="text-xs text-slate-400">
-            Last refreshed: demo seed · not live meteorological data
+            Weather is fetched from Open-Meteo for the kick-off hour at the
+            venue city (or geocoded coordinates). Hit Sync on the desk to
+            refresh.
           </p>
         </CardBody>
       </Card>

@@ -863,3 +863,99 @@ export function parsePercent(p?: string | null): number | null {
   const n = Number(String(p).replace("%", "").trim());
   return Number.isFinite(n) ? n : null;
 }
+
+
+/* ── Statistics / scorers / venues / player stats ───────────────────────── */
+
+export type AfStatisticRow = {
+  type: string;
+  value: number | string | null;
+};
+
+export type AfFixtureStatistics = {
+  team: { id: number; name: string; logo?: string };
+  statistics: AfStatisticRow[];
+};
+
+export async function getStatistics(fixtureId: number) {
+  return afFetch<AfFixtureStatistics[]>(
+    "/fixtures/statistics",
+    { fixture: fixtureId },
+    20_000
+  );
+}
+
+export type AfTopScorer = {
+  player: {
+    id: number;
+    name: string;
+    firstname?: string;
+    lastname?: string;
+    age?: number;
+    nationality?: string;
+    height?: string;
+    weight?: string;
+    photo?: string;
+    birth?: { date?: string | null; place?: string | null; country?: string | null };
+  };
+  statistics: {
+    team: { id: number; name: string; logo?: string };
+    league?: { id: number; name: string; country: string; season: number };
+    games?: { appearences?: number | null; lineups?: number | null; minutes?: number | null; position?: string | null };
+    goals?: { total?: number | null; assists?: number | null; conceded?: number | null; saves?: number | null };
+    cards?: { yellow?: number | null; red?: number | null };
+  }[];
+};
+
+export async function getTopScorers(leagueId: number, season: number) {
+  return afFetch<AfTopScorer[]>(
+    "/players/topscorers",
+    { league: leagueId, season },
+    300_000
+  );
+}
+
+export type AfVenueDetail = {
+  id: number;
+  name: string;
+  address?: string | null;
+  city?: string | null;
+  country?: string | null;
+  capacity?: number | null;
+  surface?: string | null;
+  image?: string | null;
+};
+
+export async function getVenueById(venueId: number) {
+  const list = await afFetch<AfVenueDetail[]>("/venues", { id: venueId }, 300_000);
+  return list[0] || null;
+}
+
+export type AfTeamRow = {
+  team: { id: number; name: string; code?: string | null; country?: string; founded?: number | null; national?: boolean; logo?: string };
+  venue?: AfVenueDetail | null;
+};
+
+export async function getTeam(teamId: number) {
+  const list = await afFetch<AfTeamRow[]>("/teams", { id: teamId }, 300_000);
+  return list[0] || null;
+}
+
+export async function getPlayerById(playerId: number, season?: number) {
+  const params: Record<string, string | number | undefined> = { id: playerId };
+  if (season) params.season = season;
+  return afFetch<AfTopScorer[]>("/players", params, 120_000);
+}
+
+/** Team season player stats (paginated; page 1 is usually enough for XI depth). */
+export async function getPlayersByTeam(
+  teamId: number,
+  season: number,
+  page = 1
+) {
+  return afFetch<AfTopScorer[]>(
+    "/players",
+    { team: teamId, season, page },
+    300_000
+  );
+}

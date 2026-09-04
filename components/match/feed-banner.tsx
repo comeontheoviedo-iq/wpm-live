@@ -30,6 +30,7 @@ export function FeedBanner({
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [flash, setFlash] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/integrations")
@@ -42,7 +43,7 @@ export function FeedBanner({
     if (!configured || !apiFootballFixtureId || status !== "Live") return;
     const t = setInterval(() => {
       sync(true);
-    }, 45_000);
+    }, 18_000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [configured, apiFootballFixtureId, status]);
@@ -60,6 +61,11 @@ export function FeedBanner({
       if (!res.ok) {
         setMsg(json.error || "Sync failed");
       } else {
+        const news = (json.newEvents || []) as { minute: number; description: string }[];
+        if (news.length) {
+          setFlash(`${news.length} new · ${news.slice(0, 2).map((e: {minute:number;description:string}) => `${e.minute}' ${e.description}`).join(" · ")}`);
+          setTimeout(() => setFlash(null), 8000);
+        }
         setMsg(
           silent
             ? null
@@ -104,6 +110,7 @@ export function FeedBanner({
             ? `Last sync ${new Date(lastFeedSyncAt).toLocaleTimeString("en-GB", { timeZone: "Europe/London" })} PT`
             : "Not synced yet"}
           {msg ? ` · ${msg}` : ""}
+          {flash ? ` · ⚡ ${flash}` : ""}
         </div>
       </div>
       <div className="flex gap-2">

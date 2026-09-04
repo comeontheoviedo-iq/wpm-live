@@ -18,6 +18,26 @@ export default async function MatchOverviewPage({
 
   const packCount = await prisma.packSection.count({ where: { matchId: id } });
 
+  const scorersRaw = await prisma.seasonScorer.findMany({
+    where: { clubId: { in: [match.homeClubId, match.awayClubId] } },
+    orderBy: { rank: "asc" },
+    include: { player: true, club: true },
+    take: 12,
+  });
+  const keepersRaw = await prisma.seasonKeeper.findMany({
+    where: { clubId: { in: [match.homeClubId, match.awayClubId] } },
+    orderBy: { rank: "asc" },
+    include: { player: true, club: true },
+    take: 8,
+  });
+
+  const sideOf = (clubId: string) =>
+    clubId === match.homeClubId
+      ? ("home" as const)
+      : clubId === match.awayClubId
+        ? ("away" as const)
+        : ("other" as const);
+
   return (
     <MatchDesk
       matchId={match.id}
@@ -57,6 +77,47 @@ export default async function MatchOverviewPage({
       predictionsJson={match.predictionsJson}
       h2hSummary={match.h2hSummary}
       packCount={packCount}
+      venueName={match.venue?.name}
+      venueCity={match.venue?.city}
+      venueCapacity={match.venue?.capacity}
+      weatherSummary={match.weatherSummary}
+      weatherTempC={match.weatherTempC}
+      weatherWindKph={match.weatherWindKph}
+      weatherHumidity={match.weatherHumidity}
+      events={match.events.map((e) => ({
+        id: e.id,
+        type: e.type,
+        minute: e.minute,
+        description: e.description,
+        teamSide: e.teamSide,
+        playerId: e.playerId,
+      }))}
+      statistics={match.statistics.map((s) => ({
+        label: s.label,
+        homeValue: s.homeValue,
+        awayValue: s.awayValue,
+      }))}
+      scorers={scorersRaw.map((s) => ({
+        id: s.id,
+        goals: s.goals,
+        assists: s.assists,
+        rank: s.rank,
+        playerName: s.player.name,
+        clubShort: s.club.shortName,
+        side: sideOf(s.clubId),
+      }))}
+      keepers={keepersRaw.map((k) => ({
+        id: k.id,
+        cleanSheets: k.cleanSheets,
+        saves: k.saves,
+        appearances: k.appearances,
+        rank: k.rank,
+        playerName: k.player.name,
+        clubShort: k.club.shortName,
+        side: sideOf(k.clubId),
+      }))}
+      homeClubId={match.homeClubId}
+      awayClubId={match.awayClubId}
     />
   );
 }

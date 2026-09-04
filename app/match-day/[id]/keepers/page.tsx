@@ -12,7 +12,8 @@ export default async function KeepersPage({
   const match = await getMatchFull(id);
   if (!match) notFound();
   const keepers = await prisma.seasonKeeper.findMany({
-    orderBy: { rank: "asc" },
+    where: { clubId: { in: [match.homeClubId, match.awayClubId] } },
+    orderBy: [{ cleanSheets: "desc" }, { rank: "asc" }],
     include: { player: true, club: true },
   });
 
@@ -20,34 +21,36 @@ export default async function KeepersPage({
     <div className="space-y-4">
       <div>
         <h2 className="text-xl font-bold">Top keepers</h2>
-        <p className="text-sm text-slate-500">Clean sheets & save volume</p>
+        <p className="text-sm text-slate-500">
+          Clean sheets & save volume for tonight&apos;s clubs
+        </p>
       </div>
       <Card>
         <CardHeader>
           <CardTitle>Goalkeeper leaderboard</CardTitle>
         </CardHeader>
         <CardBody className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-xs text-slate-500 border-b border-slate-100 dark:border-slate-800">
-                <th className="py-2 pr-2">#</th>
-                <th className="py-2 pr-2">Keeper</th>
-                <th className="py-2 pr-2">Club</th>
-                <th className="py-2 pr-2 text-right">CS</th>
-                <th className="py-2 pr-2 text-right">Saves</th>
-                <th className="py-2 text-right">Apps</th>
-              </tr>
-            </thead>
-            <tbody>
-              {keepers.map((k) => {
-                const highlight =
-                  k.clubId === match.homeClubId || k.clubId === match.awayClubId;
-                return (
+          {keepers.length === 0 ? (
+            <p className="text-sm text-slate-500 py-6 text-center">
+              Sync to load keeper stats from API-Football.
+            </p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-slate-500 border-b border-slate-100 dark:border-slate-800">
+                  <th className="py-2 pr-2">#</th>
+                  <th className="py-2 pr-2">Keeper</th>
+                  <th className="py-2 pr-2">Club</th>
+                  <th className="py-2 pr-2 text-right">CS</th>
+                  <th className="py-2 pr-2 text-right">Saves</th>
+                  <th className="py-2 text-right">Apps</th>
+                </tr>
+              </thead>
+              <tbody>
+                {keepers.map((k) => (
                   <tr
                     key={k.id}
-                    className={`border-b border-slate-50 dark:border-slate-800/60 ${
-                      highlight ? "bg-teal-50/50 dark:bg-teal-950/20" : ""
-                    }`}
+                    className="border-b border-slate-50 dark:border-slate-800/60 bg-teal-50/40 dark:bg-teal-950/20"
                   >
                     <td className="py-2.5 pr-2 font-semibold text-slate-500">
                       {k.rank}
@@ -66,10 +69,10 @@ export default async function KeepersPage({
                       {k.appearances}
                     </td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                ))}
+              </tbody>
+            </table>
+          )}
         </CardBody>
       </Card>
     </div>

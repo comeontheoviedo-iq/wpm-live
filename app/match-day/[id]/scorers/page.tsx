@@ -12,7 +12,8 @@ export default async function ScorersPage({
   const match = await getMatchFull(id);
   if (!match) notFound();
   const scorers = await prisma.seasonScorer.findMany({
-    orderBy: { rank: "asc" },
+    where: { clubId: { in: [match.homeClubId, match.awayClubId] } },
+    orderBy: [{ goals: "desc" }, { rank: "asc" }],
     include: { player: true, club: true },
   });
 
@@ -21,34 +22,36 @@ export default async function ScorersPage({
       <div>
         <h2 className="text-xl font-bold">Top scorers</h2>
         <p className="text-sm text-slate-500">
-          Northern Premier Demo League · season tally
+          Season goals for {match.homeClub.shortName} &{" "}
+          {match.awayClub.shortName}
+          {match.matchDay.competition ? ` · ${match.matchDay.competition}` : ""}
         </p>
       </div>
       <Card>
         <CardHeader>
-          <CardTitle>League scoring chart</CardTitle>
+          <CardTitle>Scoring chart</CardTitle>
         </CardHeader>
         <CardBody className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-xs text-slate-500 border-b border-slate-100 dark:border-slate-800">
-                <th className="py-2 pr-2">#</th>
-                <th className="py-2 pr-2">Player</th>
-                <th className="py-2 pr-2">Club</th>
-                <th className="py-2 pr-2 text-right">G</th>
-                <th className="py-2 text-right">A</th>
-              </tr>
-            </thead>
-            <tbody>
-              {scorers.map((s) => {
-                const highlight =
-                  s.clubId === match.homeClubId || s.clubId === match.awayClubId;
-                return (
+          {scorers.length === 0 ? (
+            <p className="text-sm text-slate-500 py-6 text-center">
+              Sync to load season scorers from API-Football.
+            </p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-slate-500 border-b border-slate-100 dark:border-slate-800">
+                  <th className="py-2 pr-2">#</th>
+                  <th className="py-2 pr-2">Player</th>
+                  <th className="py-2 pr-2">Club</th>
+                  <th className="py-2 pr-2 text-right">G</th>
+                  <th className="py-2 text-right">A</th>
+                </tr>
+              </thead>
+              <tbody>
+                {scorers.map((s) => (
                   <tr
                     key={s.id}
-                    className={`border-b border-slate-50 dark:border-slate-800/60 ${
-                      highlight ? "bg-teal-50/50 dark:bg-teal-950/20" : ""
-                    }`}
+                    className="border-b border-slate-50 dark:border-slate-800/60 bg-teal-50/40 dark:bg-teal-950/20"
                   >
                     <td className="py-2.5 pr-2 font-semibold text-slate-500">
                       {s.rank}
@@ -64,10 +67,10 @@ export default async function ScorersPage({
                       {s.assists}
                     </td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                ))}
+              </tbody>
+            </table>
+          )}
         </CardBody>
       </Card>
     </div>

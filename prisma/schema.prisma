@@ -8,68 +8,71 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String
-  name         String
-  role         String   @default("commentator")
-  avatarInitials String @default("PL")
-  theme        String   @default("system")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  matchDays    MatchDay[]
-  notes        Note[]
-  speaks       Speak[]
+  id             String     @id @default(cuid())
+  email          String     @unique
+  passwordHash   String
+  name           String
+  role           String     @default("commentator")
+  avatarInitials String     @default("PL")
+  theme          String     @default("system")
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  matchDays      MatchDay[]
+  notes          Note[]
+  speaks         Speak[]
 }
 
 model Club {
-  id          String   @id @default(cuid())
-  name        String
-  shortName   String
-  abbreviation String
-  primaryColor String
-  secondaryColor String
-  founded     Int?
-  city        String?
-  stadiumName String?
-  nickname    String?
-  fansApprox  Int?
-  badgeEmoji  String   @default("⚽")
-  players     Player[]
-  coaches     Coach[]
-  homeMatches Match[]  @relation("HomeClub")
-  awayMatches Match[]  @relation("AwayClub")
-  injuries    Injury[]
-  scorers     SeasonScorer[]
-  keepers     SeasonKeeper[]
-  penalties   PenaltyRecord[]
+  id               String          @id @default(cuid())
+  name             String
+  shortName        String
+  abbreviation     String
+  primaryColor     String
+  secondaryColor   String
+  founded          Int?
+  city             String?
+  stadiumName      String?
+  nickname         String?
+  fansApprox       Int?
+  badgeEmoji       String          @default("⚽")
+  apiFootballTeamId Int?
+  players          Player[]
+  coaches          Coach[]
+  homeMatches      Match[]         @relation("HomeClub")
+  awayMatches      Match[]         @relation("AwayClub")
+  injuries         Injury[]
+  scorers          SeasonScorer[]
+  keepers          SeasonKeeper[]
+  penalties        PenaltyRecord[]
 }
 
 model Player {
-  id          String   @id @default(cuid())
-  clubId      String
-  club        Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  name        String
-  shirtNumber Int
-  position    String
-  nationality String   @default("ENG")
-  age         Int?
-  heightCm    Int?
-  preferredFoot String?
-  isCaptain   Boolean  @default(false)
-  isStarter   Boolean  @default(false)
-  formationSlot String?
-  goals       Int      @default(0)
-  assists     Int      @default(0)
-  appearances Int      @default(0)
-  cleanSheets Int      @default(0)
-  yellowCards Int      @default(0)
-  redCards    Int      @default(0)
-  injuries    Injury[]
-  events      MatchEvent[]
-  scorers     SeasonScorer[]
-  keepers     SeasonKeeper[]
-  penalties   PenaltyRecord[]
+  id               String          @id @default(cuid())
+  clubId           String
+  club             Club            @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  name             String
+  shirtNumber      Int
+  position         String
+  nationality      String          @default("ENG")
+  age              Int?
+  heightCm         Int?
+  preferredFoot    String?
+  isCaptain        Boolean         @default(false)
+  isStarter        Boolean         @default(false)
+  formationSlot    String?
+  onPitch          Boolean         @default(false)
+  apiFootballPlayerId Int?
+  goals            Int             @default(0)
+  assists          Int             @default(0)
+  appearances      Int             @default(0)
+  cleanSheets      Int             @default(0)
+  yellowCards      Int             @default(0)
+  redCards         Int             @default(0)
+  injuries         Injury[]
+  events           MatchEvent[]
+  scorers          SeasonScorer[]
+  keepers          SeasonKeeper[]
+  penalties        PenaltyRecord[]
 }
 
 model Coach {
@@ -83,10 +86,10 @@ model Coach {
 }
 
 model Official {
-  id          String  @id @default(cuid())
+  id          String          @id @default(cuid())
   name        String
   role        String
-  nationality String  @default("ENG")
+  nationality String          @default("ENG")
   age         Int?
   matches     MatchOfficial[]
 }
@@ -118,38 +121,42 @@ model MatchDay {
 }
 
 model Match {
-  id              String   @id @default(cuid())
-  matchDayId      String
-  matchDay        MatchDay @relation(fields: [matchDayId], references: [id], onDelete: Cascade)
-  homeClubId      String
-  awayClubId      String
-  homeClub        Club     @relation("HomeClub", fields: [homeClubId], references: [id])
-  awayClub        Club     @relation("AwayClub", fields: [awayClubId], references: [id])
-  venueId         String?
-  venue           Venue?   @relation(fields: [venueId], references: [id])
-  kickoff         DateTime
-  status          String   @default("Assigned")
-  homeScore       Int      @default(0)
-  awayScore       Int      @default(0)
-  homeFormation   String   @default("4-3-3")
-  awayFormation   String   @default("4-2-3-1")
-  minute          Int      @default(0)
-  period          String   @default("pre")
-  weatherSummary  String?
-  weatherTempC    Float?
-  weatherWindKph  Float?
-  weatherHumidity Int?
-  attendance      Int?
-  featured        Boolean  @default(false)
-  notes           Note[]
-  speaks          Speak[]
-  checklistItems  ChecklistItem[]
-  events          MatchEvent[]
-  officials       MatchOfficial[]
-  injuries        Injury[]
-  statistics      Statistic[]
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                   String          @id @default(cuid())
+  matchDayId           String
+  matchDay             MatchDay        @relation(fields: [matchDayId], references: [id], onDelete: Cascade)
+  homeClubId           String
+  awayClubId           String
+  homeClub             Club            @relation("HomeClub", fields: [homeClubId], references: [id])
+  awayClub             Club            @relation("AwayClub", fields: [awayClubId], references: [id])
+  venueId              String?
+  venue                Venue?          @relation(fields: [venueId], references: [id])
+  kickoff              DateTime
+  status               String          @default("Assigned")
+  homeScore            Int             @default(0)
+  awayScore            Int             @default(0)
+  homeFormation        String          @default("4-3-3")
+  awayFormation        String          @default("4-2-3-1")
+  minute               Int             @default(0)
+  period               String          @default("pre")
+  weatherSummary       String?
+  weatherTempC         Float?
+  weatherWindKph       Float?
+  weatherHumidity      Int?
+  attendance           Int?
+  featured             Boolean         @default(false)
+  apiFootballFixtureId Int?
+  lineupStatus         String          @default("predicted")
+  lastFeedSyncAt       DateTime?
+  notes                Note[]
+  speaks               Speak[]
+  checklistItems       ChecklistItem[]
+  events               MatchEvent[]
+  officials            MatchOfficial[]
+  injuries             Injury[]
+  statistics           Statistic[]
+  packSections         PackSection[]
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
 }
 
 model MatchOfficial {
@@ -162,15 +169,19 @@ model MatchOfficial {
 }
 
 model Note {
-  id        String   @id @default(cuid())
-  matchId   String?
-  match     Match?   @relation(fields: [matchId], references: [id], onDelete: Cascade)
-  userId    String?
-  user      User?    @relation(fields: [userId], references: [id])
-  title     String
-  body      String
-  category  String   @default("general")
-  createdAt DateTime @default(now())
+  id         String   @id @default(cuid())
+  matchId    String?
+  match      Match?   @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  title      String
+  body       String
+  category   String   @default("Custom")
+  entityType String?
+  entityId   String?
+  pinned     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
 model Speak {
@@ -187,41 +198,42 @@ model Speak {
 }
 
 model ChecklistItem {
-  id        String   @id @default(cuid())
+  id        String  @id @default(cuid())
   matchId   String
-  match     Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  match     Match   @relation(fields: [matchId], references: [id], onDelete: Cascade)
   label     String
-  category  String   @default("prep")
-  done      Boolean  @default(false)
-  order     Int      @default(0)
+  category  String  @default("prep")
+  done      Boolean @default(false)
+  order     Int     @default(0)
 }
 
 model MatchEvent {
-  id          String   @id @default(cuid())
-  matchId     String
-  match       Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
-  playerId    String?
-  player      Player?  @relation(fields: [playerId], references: [id])
-  type        String
-  minute      Int
-  teamSide    String?
-  description String
-  commentary  String?
-  createdAt   DateTime @default(now())
+  id               String   @id @default(cuid())
+  matchId          String
+  match            Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  playerId         String?
+  player           Player?  @relation(fields: [playerId], references: [id])
+  type             String
+  minute           Int
+  teamSide         String?
+  description      String
+  commentary       String?
+  apiFootballEventId Int?
+  createdAt        DateTime @default(now())
 }
 
 model Injury {
-  id          String   @id @default(cuid())
-  matchId     String?
-  match       Match?   @relation(fields: [matchId], references: [id], onDelete: Cascade)
-  clubId      String
-  club        Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  playerId    String
-  player      Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
-  status      String   @default("doubtful")
-  injuryType  String
+  id             String  @id @default(cuid())
+  matchId        String?
+  match          Match?  @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  clubId         String
+  club           Club    @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  playerId       String
+  player         Player  @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  status         String  @default("doubtful")
+  injuryType     String
   expectedReturn String?
-  notes       String?
+  notes          String?
 }
 
 model Statistic {
@@ -269,4 +281,28 @@ model PenaltyRecord {
   saved      Int     @default(0)
   preference String  @default("right")
   notes      String?
+}
+
+model PackTemplate {
+  id          String @id @default(cuid())
+  key         String @unique
+  title       String
+  description String?
+  section     String
+  prompt      String
+  order       Int    @default(0)
+}
+
+model PackSection {
+  id          String   @id @default(cuid())
+  matchId     String
+  match       Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  templateKey String
+  title       String
+  content     String
+  status      String   @default("draft")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([matchId, templateKey])
 }

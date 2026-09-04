@@ -8,7 +8,7 @@ import { StatusBadge } from "@/components/ui/badge";
 import { formatKickoff } from "@/lib/utils";
 import {
   CalendarDays,
-  Clock,
+  StickyNote,
   Radio,
   AlertTriangle,
   MessageSquare,
@@ -32,18 +32,24 @@ export default async function DashboardPage() {
     },
   });
 
-  const liveCount = matchDays
-    .flatMap((md) => md.matches)
-    .filter((m) => m.status === "Live").length;
-  const upcoming = matchDays.flatMap((md) =>
-    md.matches.filter((m) => m.status !== "Full Time")
-  );
+  const allMatches = matchDays.flatMap((md) => md.matches);
+  const liveCount = allMatches.filter((m) => m.status === "Live").length;
+  const upcoming = allMatches.filter((m) => m.status !== "Full Time");
   const featured = upcoming.find((m) => m.featured) || upcoming[0];
-  const openChecklist = featured
-    ? await prisma.checklistItem.count({
-        where: { matchId: featured.id, done: false },
-      })
-    : 0;
+
+  const [openChecklist, scriptsCount, notesCount] = await Promise.all([
+    featured
+      ? prisma.checklistItem.count({
+          where: { matchId: featured.id, done: false },
+        })
+      : Promise.resolve(0),
+    featured
+      ? prisma.speak.count({ where: { matchId: featured.id } })
+      : Promise.resolve(0),
+    featured
+      ? prisma.note.count({ where: { matchId: featured.id } })
+      : Promise.resolve(0),
+  ]);
 
   return (
     <div className="min-h-screen">
@@ -55,30 +61,38 @@ export default async function DashboardPage() {
               Good call, {user.name.split(" ")[0]}
             </h1>
             <p className="text-sm text-slate-500">
-              Your commentary desk · Northern Premier Demo League
+              Your commentary desk · Pitchline
             </p>
           </div>
           <div className="flex gap-2">
-            <button className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm">
-              <Plus className="h-4 w-4" /> Add Match Day
-            </button>
-            <button className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm">
-              <Plus className="h-4 w-4" /> Add Note
-            </button>
+            <Link
+              href="/match-day/new"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm hover:border-teal-400"
+            >
+              <Plus className="h-4 w-4" /> Add Match Desk
+            </Link>
+            {featured ? (
+              <Link
+                href={`/match-day/${featured.id}/notes`}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm hover:border-teal-400"
+              >
+                <Plus className="h-4 w-4" /> Add Note
+              </Link>
+            ) : null}
           </div>
         </div>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <StatCard
             icon={<CalendarDays className="h-4 w-4" />}
-            label="Match Days"
+            label="Match desks"
             value={String(matchDays.length)}
             tone="bg-sky-50 text-sky-700 dark:bg-sky-950 dark:text-sky-300"
           />
           <StatCard
-            icon={<Clock className="h-4 w-4" />}
-            label="Hours Saved"
-            value="12.5"
+            icon={<StickyNote className="h-4 w-4" />}
+            label="Notes"
+            value={String(notesCount)}
             tone="bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
           />
           <StatCard
@@ -89,8 +103,8 @@ export default async function DashboardPage() {
           />
           <StatCard
             icon={<MessageSquare className="h-4 w-4" />}
-            label="Speaks ready"
-            value={featured ? "7" : "0"}
+            label="Scripts ready"
+            value={String(scriptsCount)}
             tone="bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300"
           />
         </div>
@@ -100,10 +114,19 @@ export default async function DashboardPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <CalendarDays className="h-4 w-4 text-teal-600" />
-                My Match Days
+                My Match Desks
               </CardTitle>
             </CardHeader>
             <CardBody className="space-y-3">
+              {matchDays.length === 0 && (
+                <p className="text-sm text-slate-500">
+                  No desks yet.{" "}
+                  <Link href="/match-day/new" className="text-teal-600 hover:underline">
+                    Create one
+                  </Link>
+                  .
+                </p>
+              )}
               {matchDays.map((md) => (
                 <div
                   key={md.id}
@@ -111,8 +134,17 @@ export default async function DashboardPage() {
                 >
                   <div className="text-sm font-semibold">{md.title}</div>
                   <div className="text-xs text-slate-500 mt-0.5">
-                    {formatKickoff(md.date)} · {md.matches.length} matches
+                    {formatKickoff(md.date)} · {md.competition} ·{" "}
+                    {md.matches.length} matches
                   </div>
+                  {md.matches[0] && (
+                    <Link
+                      href={`/match-day/${md.matches[0].id}`}
+                      className="mt-2 inline-block text-xs text-teal-700 dark:text-teal-300 hover:underline"
+                    >
+                      Open desk →
+                    </Link>
+                  )}
                 </div>
               ))}
             </CardBody>

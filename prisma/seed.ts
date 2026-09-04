@@ -30,6 +30,8 @@ function makeSquad(
 
 async function main() {
   // Wipe in dependency order
+  await prisma.packSection.deleteMany();
+  await prisma.packTemplate.deleteMany();
   await prisma.penaltyRecord.deleteMany();
   await prisma.seasonKeeper.deleteMany();
   await prisma.seasonScorer.deleteMany();
@@ -517,14 +519,20 @@ async function main() {
         userId: user.id,
         title: "Wind note",
         body: "Westerly 22 kph — expect long balls to hold up toward the West Stand first half.",
-        category: "venue",
+        category: "Match",
+        entityType: "match",
+        entityId: featured.id,
+        pinned: true,
       },
       {
         matchId: featured.id,
         userId: user.id,
         title: "Form guide",
         body: "Oviedo: WWDWL. Whitby: DDDWL. Whitby unbeaten in 5 but scoring drought (1 goal in 3).",
-        category: "form",
+        category: "Match",
+        entityType: "match",
+        entityId: featured.id,
+        pinned: false,
       },
     ],
   });
@@ -535,6 +543,30 @@ async function main() {
   const salt = whitbyPlayers.find((p) => p.name === "Harry Salt")!;
   const blythe = whitbyPlayers.find((p) => p.name === "Connor Blythe")!;
   const moss = oviedoPlayers.find((p) => p.name === "Ryan Moss")!;
+
+  await prisma.note.create({
+    data: {
+      matchId: featured.id,
+      userId: user.id,
+      title: "Marín left foot",
+      body: "Diego Marín prefers far-post cutbacks when drifting off the right shoulder.",
+      category: "Funfact",
+      entityType: "player",
+      entityId: marin.id,
+      pinned: true,
+    },
+  });
+
+  const { PACK_TEMPLATE_SEEDS } = await import("../lib/pack-templates");
+  for (const t of PACK_TEMPLATE_SEEDS) {
+    await prisma.packTemplate.create({ data: t });
+  }
+
+  // Mark starters on pitch for demo
+  await prisma.player.updateMany({
+    where: { isStarter: true },
+    data: { onPitch: true },
+  });
 
   await prisma.injury.createMany({
     data: [

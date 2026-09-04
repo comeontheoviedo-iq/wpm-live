@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { getMatchFull } from "@/lib/match-data";
-import { PitchBoard } from "@/components/match/pitch";
+import { OverviewBoard } from "@/components/match/overview-board";
 import { EventComposer } from "@/components/live/event-composer";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
@@ -97,7 +97,8 @@ export default async function MatchOverviewPage({
             <div>
               Checklist: {done}/{total} complete
             </div>
-            <div>Speaks: {match.speaks.length} loaded</div>
+            <div>Scripts: {match.speaks.length} loaded</div>
+            <div>Notes: {match.notes.length}</div>
             <div>Injuries tracked: {match.injuries.length}</div>
             <Link
               href={`/match-day/${match.id}/prep`}
@@ -110,7 +111,8 @@ export default async function MatchOverviewPage({
       </aside>
 
       <section className="lg:col-span-6 order-1 lg:order-2 space-y-4">
-        <PitchBoard
+        <OverviewBoard
+          matchId={match.id}
           homeName={match.homeClub.shortName}
           awayName={match.awayClub.shortName}
           homeColor={match.homeClub.primaryColor}
@@ -122,6 +124,19 @@ export default async function MatchOverviewPage({
           homeCoach={match.homeClub.coaches[0]}
           awayCoach={match.awayClub.coaches[0]}
           referee={referee}
+          lineupStatus={match.lineupStatus}
+          apiFootballFixtureId={match.apiFootballFixtureId}
+          lastFeedSyncAt={match.lastFeedSyncAt}
+          status={match.status}
+          notes={match.notes.map((n) => ({
+            id: n.id,
+            title: n.title,
+            body: n.body,
+            category: n.category,
+            entityType: n.entityType,
+            entityId: n.entityId,
+            pinned: n.pinned,
+          }))}
         />
       </section>
 
@@ -142,7 +157,9 @@ export default async function MatchOverviewPage({
           </CardHeader>
           <CardBody className="grid grid-cols-2 gap-2 text-xs">
             {[
-              "speaks",
+              "scripts",
+              "packs",
+              "notes",
               "injuries",
               "scorers",
               "keepers",
@@ -164,7 +181,10 @@ export default async function MatchOverviewPage({
           </CardBody>
         </Card>
         <p className="text-[10px] text-slate-400 px-1">
-          Data freshness: seeded demo · updated just now
+          Data freshness:{" "}
+          {match.lastFeedSyncAt
+            ? `API-Football sync ${new Date(match.lastFeedSyncAt).toLocaleString("en-GB", { timeZone: "Europe/London" })} PT`
+            : "seeded / manual · sync when key linked"}
         </p>
       </aside>
     </div>

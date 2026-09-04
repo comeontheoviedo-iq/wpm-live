@@ -1,61 +1,30 @@
 # Pitchline
 
-Football commentary **prep + live desk** web app. Teal/green branded, mobile-first matchday workspace with speaks, pitch board, injuries, scorers, keepers, penalties, venue, weather, fans, live event composer, and print/export.
+Prep + live desk.
 
-## Quick start
+Quick start: copy env example, install, db reset, dev.
 
-```bash
-cd /workspace/pitchline
-bun install
-bun run db:push
-bun run db:seed
-bun run dev
-```
+Demo login on login page.
 
-Package manager alternatives work the same via the scripts in package.json (`install`, `db:push`, `db:seed`, `dev`).
+## Env
 
-Open http://localhost:3000
+See .env.example for DATABASE_URL, AUTH_SECRET, and optional integration vars.
+Empty optional vars degrade gracefully with clear UI banners.
+Never commit .env or *.db.
 
-### Demo login
+## DB
 
-- **Email:** demo@pitchline.app
-- **Password:** demo1234
+npm run db:reset once after pull (Note/Pack/feed schema).
 
-## Scripts
+## Fixture link
 
-| Script | Purpose |
-|--------|---------|
-| `dev` | Next.js dev server (Turbopack) |
-| `build` / `start` | Production build and serve |
-| `db:push` | Sync Prisma schema to SQLite |
-| `db:seed` | Seed Northern Premier Demo League |
-| `db:reset` | Wipe DB, push schema, re-seed |
-| `postinstall` | prisma generate |
+Add Match Desk import, or Prep paste fixture id then sync. Live polls while on air.
 
-## Stack
+## Packs
 
-- Next.js 15 App Router + TypeScript + Tailwind CSS 4
-- Prisma + SQLite
-- Cookie session auth (JWT via jose + bcryptjs)
-- Local AI commentary templates (no external sports/LLM APIs)
+Generate Research, Intro, Profiles, Referee, Lineup, Hooks. Saves to Scripts/Notes.
+Unofficial broadcast house rules; country top-flight labels.
 
-## Main routes
+## Routes
 
-- `/login` — credentials auth
-- `/dashboard` — match days and upcoming fixtures
-- `/match-day/[id]` — pitch overview + widgets
-- Subroutes: speaks, prep, injuries, scorers, keepers, penalties, venue, clubs, weather, fans, live, print
-- `/settings` — profile, appearance, templates
-- `/pricing` — mock plans
-
-## Prep to Live flow
-
-Status pipeline: **Assigned → Preparation → Ready → Live → Full Time**
-
-Use **Go Live** when Ready. Live event composer shortcuts: G/Y/R/S/C/V/H/F plus template commentary suggestions.
-
-## Notes
-
-- All league/club/player data is fictional.
-- No third-party sports APIs.
-- SQLite file: `prisma/dev.db` (via `DATABASE_URL` in `.env`).
+Desk, Scripts, Packs, Prep, Notes, Live, /match-day/new. Speaks redirects to Scripts.

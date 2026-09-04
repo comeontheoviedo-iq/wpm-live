@@ -16,13 +16,17 @@ import {
   Radio,
   LayoutGrid,
   Printer,
+  StickyNote,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const items = [
-  { slug: "", label: "Overview", icon: LayoutGrid },
-  { slug: "speaks", label: "Speaks", icon: Mic2 },
+  { slug: "", label: "Desk", icon: LayoutGrid },
+  { slug: "scripts", label: "Scripts", icon: Mic2 },
+  { slug: "packs", label: "Packs", icon: Sparkles },
   { slug: "prep", label: "Prep", icon: ClipboardList },
+  { slug: "notes", label: "Notes", icon: StickyNote },
   { slug: "injuries", label: "Injuries", icon: HeartPulse },
   { slug: "scorers", label: "Scorers", icon: Target },
   { slug: "keepers", label: "Keepers", icon: Shield },

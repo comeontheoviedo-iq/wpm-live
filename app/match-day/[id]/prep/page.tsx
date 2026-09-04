@@ -3,6 +3,8 @@ import { getMatchFull } from "@/lib/match-data";
 import { ChecklistClient } from "@/components/match/checklist";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { STATUS_FLOW } from "@/lib/utils";
+import { LinkFixtureCard } from "@/components/match/link-fixture";
+import { NotesPanel } from "@/components/notes/notes-panel";
 
 export default async function PrepPage({
   params,
@@ -46,19 +48,23 @@ export default async function PrepPage({
             ))}
           </CardBody>
         </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Notes</CardTitle>
-          </CardHeader>
-          <CardBody className="space-y-3">
-            {match.notes.map((n) => (
-              <div key={n.id}>
-                <div className="text-sm font-semibold">{n.title}</div>
-                <p className="text-xs text-slate-500 mt-0.5">{n.body}</p>
-              </div>
-            ))}
-          </CardBody>
-        </Card>
+        <LinkFixtureCard
+          matchId={match.id}
+          currentFixtureId={match.apiFootballFixtureId}
+        />
+        <NotesPanel
+          matchId={match.id}
+          initialNotes={match.notes.map((n) => ({
+            id: n.id,
+            title: n.title,
+            body: n.body,
+            category: n.category,
+            entityType: n.entityType,
+            entityId: n.entityId,
+            pinned: n.pinned,
+          }))}
+          compact
+        />
       </div>
     </div>
   );

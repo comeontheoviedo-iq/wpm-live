@@ -38,12 +38,7 @@ export async function PATCH(
   if (body.action === "place" || body.action === "clear") {
     const match = await prisma.match.findUnique({ where: { id } });
     if (!match) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    if (match.lineupStatus === "confirmed") {
-      return NextResponse.json(
-        { error: "Official lineups locked" },
-        { status: 409 }
-      );
-    }
+    // Official boards stay editable for commentary; Sync restores AF XI.
 
     const playerId = String(body.playerId || "");
     if (!playerId) return NextResponse.json({ error: "playerId required" }, { status: 400 });
@@ -71,11 +66,23 @@ export async function PATCH(
       if (!slot) {
         return NextResponse.json({ error: "formationSlot required" }, { status: 400 });
       }
-      // Vacate anyone already in this slot on the same club
-      await prisma.player.updateMany({
+      // Vacate anyone already in this slot on the same club (swap)
+      const occupant = await prisma.player.findFirst({
         where: { clubId: player.clubId, formationSlot: slot, NOT: { id: playerId } },
-        data: { isStarter: false, onPitch: false, formationSlot: null },
       });
+      const prevSlot = player.formationSlot;
+      if (occupant && prevSlot) {
+        // Swap: occupant takes placer's old slot
+        await prisma.player.update({
+          where: { id: occupant.id },
+          data: { isStarter: true, onPitch: true, formationSlot: prevSlot },
+        });
+      } else if (occupant) {
+        await prisma.player.update({
+          where: { id: occupant.id },
+          data: { isStarter: false, onPitch: false, formationSlot: null },
+        });
+      }
       await prisma.player.update({
         where: { id: playerId },
         data: { isStarter: true, onPitch: true, formationSlot: slot },
@@ -85,10 +92,12 @@ export async function PATCH(
     const json = await snapshotPredictedSide(
       side === "home" ? match.homeClubId : match.awayClubId
     );
+    // Keep Official badge when commentary-editing a confirmed board
+    const keepOfficial = match.lineupStatus === "confirmed";
     const updated = await prisma.match.update({
       where: { id },
       data: {
-        lineupStatus: "predicted",
+        lineupStatus: keepOfficial ? "confirmed" : "predicted",
         ...(side === "home" ? { predictedHomeJson: json } : { predictedAwayJson: json }),
         ...(body.formation
           ? side === "home"

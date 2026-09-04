@@ -1,5 +1,7 @@
 import { prisma } from "./prisma";
+import { slotsFor } from "./formations";
 import {
+  assignSlotsFromStartXI,
   getEvents,
   getFixture,
   getInjuriesByFixture,
@@ -7,7 +9,6 @@ import {
   getLineups,
   getPredictions,
   getSquads,
-  gridToSlot,
   mapAfStatus,
   parsePercent,
   summarizeH2h,
@@ -100,10 +101,11 @@ async function upsertLineupSide(
     data: { isStarter: false, onPitch: false, formationSlot: null },
   });
 
+  const slotIds = assignSlotsFromStartXI(lineup.startXI || [], formation);
   for (let i = 0; i < lineup.startXI.length; i++) {
     const row = lineup.startXI[i];
     const p = row.player;
-    const slot = gridToSlot(p.grid, i);
+    const slot = slotIds[i] || slotsFor(formation)[i]?.id || `S${i + 1}`;
     const existing = await findClubPlayer(clubId, {
       apiId: p.id,
       name: p.name,
@@ -331,16 +333,22 @@ async function applySubEvent(
   awayClubId: string,
   homeTeamAfId: number | null,
   awayTeamAfId: number | null,
-  ev: AfEvent
+  ev: AfEvent,
+  homeFormation?: string | null,
+  awayFormation?: string | null
 ) {
   const teamAfId = ev.team?.id;
+  const isHome = Boolean(teamAfId && homeTeamAfId && teamAfId === homeTeamAfId);
   const clubId =
-    teamAfId && homeTeamAfId && teamAfId === homeTeamAfId
+    isHome
       ? homeClubId
       : teamAfId && awayTeamAfId && teamAfId === awayTeamAfId
         ? awayClubId
         : null;
   if (!clubId) return;
+
+  const formation = (isHome ? homeFormation : awayFormation) || "4-3-3";
+  const validSlots = slotsFor(formation);
 
   const outName = ev.player?.name;
   const inName = ev.assist?.name;
@@ -363,18 +371,34 @@ async function applySubEvent(
       where: { clubId, name: inName },
     });
     if (inP) {
+      let slot = inheritedSlot || inP.formationSlot;
+      if (!slot || !validSlots.some((s) => s.id === slot)) {
+        const used = new Set(
+          (
+            await prisma.player.findMany({
+              where: { clubId, OR: [{ isStarter: true }, { onPitch: true }] },
+              select: { formationSlot: true },
+            })
+          )
+            .map((p) => p.formationSlot)
+            .filter(Boolean) as string[]
+        );
+        slot =
+          validSlots.find((s) => !used.has(s.id))?.id ||
+          validSlots[validSlots.length - 1]?.id ||
+          null;
+      }
       await prisma.player.update({
         where: { id: inP.id },
         data: {
           onPitch: true,
           isStarter: true,
-          formationSlot: inheritedSlot || inP.formationSlot || "CM",
+          formationSlot: slot,
         },
       });
     }
   }
 }
-
 function mapEventType(ev: AfEvent): string {
   const t = (ev.type || "").toLowerCase();
   const d = (ev.detail || "").toLowerCase();
@@ -401,6 +425,43 @@ function mapEventType(ev: AfEvent): string {
  * - else Expected (last XI) unless user already has a personal predicted board
  * - events when live/available
  */
+
+/** Ensure at most one on-pitch player per formation slot (subs can double-book on name mismatch). */
+async function dedupeClubSlots(clubId: string, formation?: string | null) {
+  const valid = new Set(slotsFor(formation || "4-3-3").map((s) => s.id));
+  const onPitch = await prisma.player.findMany({
+    where: { clubId, OR: [{ isStarter: true }, { onPitch: true }] },
+  });
+  const bySlot = new Map<string, typeof onPitch>();
+  for (const p of onPitch) {
+    const slot = p.formationSlot;
+    if (!slot || !valid.has(slot)) {
+      // Invalid slot → clear from XI
+      await prisma.player.update({
+        where: { id: p.id },
+        data: { isStarter: false, onPitch: false, formationSlot: null },
+      });
+      continue;
+    }
+    const list = bySlot.get(slot) || [];
+    list.push(p);
+    bySlot.set(slot, list);
+  }
+  for (const [, list] of bySlot) {
+    if (list.length <= 1) continue;
+    // Prefer FWD/MID who are not the "original" alphabetical first — keep highest shirt as heuristic for late sub,
+    // else keep the last in list.
+    const keep = [...list].sort((a, b) => (b.shirtNumber || 0) - (a.shirtNumber || 0))[0];
+    for (const p of list) {
+      if (p.id === keep.id) continue;
+      await prisma.player.update({
+        where: { id: p.id },
+        data: { isStarter: false, onPitch: false, formationSlot: null },
+      });
+    }
+  }
+}
+
 export async function syncMatchFromApiFootball(matchId: string) {
   const match = await prisma.match.findUnique({
     where: { id: matchId },
@@ -538,9 +599,16 @@ export async function syncMatchFromApiFootball(matchId: string) {
         match.awayClubId,
         homeAfId,
         awayAfId,
-        ev
+        ev,
+        homeFormation,
+        awayFormation
       );
     }
+  }
+
+  if (lineupStatus === "confirmed") {
+    await dedupeClubSlots(match.homeClubId, homeFormation);
+    await dedupeClubSlots(match.awayClubId, awayFormation);
   }
 
   const updated = await prisma.match.update({
@@ -596,9 +664,8 @@ export async function savePredictedLineup(
 ) {
   const match = await prisma.match.findUnique({ where: { id: matchId } });
   if (!match) throw new Error("Match not found");
-  if (match.lineupStatus === "confirmed") {
-    throw new Error("Official lineups are locked — personal predicted XI cannot override Official.");
-  }
+  // Commentary desk may remap even when Official is showing; Sync resets from AF.
+  // Bulk predicted save no longer hard-blocks confirmed boards.
 
   const clubId = side === "home" ? match.homeClubId : match.awayClubId;
   await prisma.player.updateMany({

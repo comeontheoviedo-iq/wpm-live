@@ -19,7 +19,7 @@ export type PitchPlayer = {
 type Coach = { name: string; nationality: string; age: number | null };
 
 function lineupBadgeLabel(status?: string) {
-  if (status === "confirmed") return "Official";
+  if (status === "confirmed") return "Official (editable)";
   if (status === "predicted") return "Your predicted XI";
   if (status === "expected") return "Expected (last XI)";
   return status ? status : null;
@@ -97,11 +97,15 @@ export function PitchBoard({
     slots: ReturnType<typeof slotsFor>,
     side: "home" | "away"
   ) {
-    return slots.map((slot) => {
+    const assigned = new Set<string>();
+    const placed = slots.map((slot) => {
       const p = players.find(
         (pl) =>
-          pl.formationSlot === slot.id && (pl.onPitch || pl.isStarter)
+          pl.formationSlot === slot.id &&
+          (pl.onPitch || pl.isStarter) &&
+          !assigned.has(pl.id)
       );
+      if (p) assigned.add(p.id);
       // slot.y: 92 GK → 18 ST (own goal → attack). Map to horizontal depth.
       // slot.x: 0–100 width → vertical on landscape pitch.
       const depth = (100 - slot.y) / 100; // 0 at GK, ~0.8 at ST
@@ -115,8 +119,26 @@ export function PitchBoard({
         x = 96 - depth * 42; // right goal → midfield
         y = 100 - width;
       }
-      return { slot, player: p, x, y, side };
+      return { slot, player: p as PitchPlayer | undefined, x, y, side };
     });
+
+    // Orphans only fill EMPTY slots — never steal a good slot match.
+    // Only consider players whose formationSlot is missing or not in this formation.
+    const validIds = new Set(slots.map((s) => s.id));
+    const orphans = players.filter(
+      (pl) =>
+        (pl.isStarter || pl.onPitch) &&
+        !assigned.has(pl.id) &&
+        (!pl.formationSlot || !validIds.has(pl.formationSlot))
+    );
+    let oi = 0;
+    for (const row of placed) {
+      if (row.player) continue;
+      if (oi >= orphans.length) break;
+      row.player = orphans[oi++];
+      assigned.add(row.player.id);
+    }
+    return placed;
   }
 
   const homePlaced = placeLandscape(homePlayers, homeSlots, "home");

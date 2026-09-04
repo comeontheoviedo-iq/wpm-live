@@ -6,6 +6,7 @@
  */
 
 import { getApiFootballKey } from "./env";
+import { slotsFor } from "./formations";
 import { europeanSeasonYear, seasonCandidates } from "./season";
 
 const BASE = "https://v3.football.api-sports.io";
@@ -439,35 +440,280 @@ export async function getApiStatus() {
   return afFetch<AfStatus>("/status", {}, RATE_LIMIT_TTL_MS);
 }
 
-/** Map API-Football grid "row:col" (1-based from attack) into our formation slot ids loosely. */
-export function gridToSlot(grid: string | null | undefined, index: number): string {
-  if (!grid) {
-    const fallback = ["GK", "RB", "RCB", "LCB", "LB", "RCM", "CM", "LCM", "RW", "ST", "LW"];
-    return fallback[index] || `S${index + 1}`;
+/** Group formation slots into horizontal lines by similar y (GK → attack). */
+function slotLines(formation?: string | null) {
+  const slots = [...slotsFor(formation || "4-3-3")].sort((a, b) => b.y - a.y || a.x - b.x);
+  const lines: typeof slots[] = [];
+  for (const s of slots) {
+    const last = lines[lines.length - 1];
+    if (last && Math.abs(last[0].y - s.y) <= 8) last.push(s);
+    else lines.push([s]);
   }
+  for (const line of lines) line.sort((a, b) => a.x - b.x);
+  return { slots: slotsFor(formation || "4-3-3"), lines, ordered: lines.flat() };
+}
+
+/**
+ * Robust AF startXI → formation slot assignment.
+ * Sort players by grid row/col (row 1 = defensive), map onto formation lines
+ * sorted by y desc / x asc. Forces GK when pos=G or lone row-1 player.
+ * Never uses naive nearest (tx=col*18) for row 1.
+ */
+export function assignSlotsFromStartXI(
+  startXI: AfLineupPlayer[],
+  formation?: string | null
+): string[] {
+  const { slots, lines, ordered } = slotLines(formation);
+  const n = startXI.length;
+  const result = new Array<string>(n).fill("");
+
+  const parsed = startXI.map((row, index) => {
+    const grid = row.player.grid || "";
+    const [rs, cs] = String(grid).split(":");
+    const rowNum = Number(rs);
+    const colNum = Number(cs);
+    const pos = String(row.player.pos || "").toUpperCase();
+    return {
+      index,
+      pos,
+      row: Number.isFinite(rowNum) ? rowNum : 999,
+      col: Number.isFinite(colNum) ? colNum : index + 1,
+      hasGrid: Boolean(grid && Number.isFinite(rowNum)),
+    };
+  });
+
+  // Prefer line-aware mapping when player rows ≈ formation lines
+  const byRow = new Map<number, typeof parsed>();
+  for (const p of parsed) {
+    const list = byRow.get(p.row) || [];
+    list.push(p);
+    byRow.set(p.row, list);
+  }
+  const playerRows = [...byRow.keys()].filter((r) => r < 900).sort((a, b) => a - b);
+
+  let mapped = false;
+  if (playerRows.length && playerRows.length === lines.length && n === ordered.length) {
+    mapped = true;
+    for (let li = 0; li < lines.length; li++) {
+      const rowPlayers = (byRow.get(playerRows[li]) || []).sort((a, b) => a.col - b.col);
+      const lineSlots = lines[li];
+      const count = Math.min(rowPlayers.length, lineSlots.length);
+      for (let i = 0; i < count; i++) {
+        result[rowPlayers[i].index] = lineSlots[i].id;
+      }
+      // Overflow on this row → leftover slots on same line then global leftovers
+      if (rowPlayers.length > lineSlots.length) {
+        const leftoverSlots = ordered.filter((s) => !result.includes(s.id));
+        for (let i = lineSlots.length; i < rowPlayers.length; i++) {
+          const slot = leftoverSlots.shift();
+          if (slot) result[rowPlayers[i].index] = slot.id;
+        }
+      }
+    }
+  }
+
+  if (!mapped && n === ordered.length) {
+    const sorted = [...parsed].sort((a, b) => a.row - b.row || a.col - b.col);
+    for (let i = 0; i < sorted.length; i++) {
+      result[sorted[i].index] = ordered[i].id;
+    }
+    mapped = true;
+  }
+
+  if (!mapped) {
+    const used = new Set<string>();
+    for (let i = 0; i < n; i++) {
+      result[i] = gridToSlot(startXI[i]?.player.grid, i, formation, used);
+    }
+  }
+
+  // Fill any holes
+  const used = new Set(result.filter(Boolean));
+  for (let i = 0; i < n; i++) {
+    if (result[i]) continue;
+    const next = ordered.find((s) => !used.has(s.id)) || slots[i];
+    if (next) {
+      result[i] = next.id;
+      used.add(next.id);
+    } else {
+      result[i] = `S${i + 1}`;
+    }
+  }
+
+  // Force GK slot for goalkeeper
+  const gkSlot = slots.find((s) => s.id === "GK")?.id || ordered[0]?.id;
+  if (gkSlot) {
+    const gkCandidates = parsed.filter(
+      (p) => p.pos === "G" || p.pos.startsWith("G")
+    );
+    const row1 = parsed.filter((p) => p.row === 1);
+    let gkIdx: number | null = null;
+    if (gkCandidates.length === 1) gkIdx = gkCandidates[0].index;
+    else if (row1.length === 1) gkIdx = row1[0].index;
+    else if (gkCandidates.length) {
+      gkIdx =
+        gkCandidates.find((g) => g.row === 1)?.index ?? gkCandidates[0].index;
+    }
+    if (gkIdx != null && result[gkIdx] !== gkSlot) {
+      const holder = result.findIndex((s) => s === gkSlot);
+      const prev = result[gkIdx];
+      result[gkIdx] = gkSlot;
+      if (holder >= 0 && holder !== gkIdx) result[holder] = prev;
+    }
+  }
+
+  return result;
+}
+
+/** Remap existing starters onto a new formation by position band + lateral x. */
+export function remapStartersToFormation(
+  starters: { id: string; formationSlot: string | null; position?: string | null }[],
+  newFormation: string
+): { playerId: string; formationSlot: string }[] {
+  const { ordered, lines } = slotLines(newFormation);
+
+  const coordFor = (slotId: string | null) => {
+    if (!slotId) return { y: 50, x: 50 };
+    for (const f of ["4-3-3", "4-2-3-1", "4-4-2", "3-5-2"]) {
+      const s = slotsFor(f).find((x) => x.id === slotId);
+      if (s) return { y: s.y, x: s.x };
+    }
+    return { y: 50, x: 50 };
+  };
+
+  const posBand = (pos?: string | null, slotId?: string | null) => {
+    const p = String(pos || "").toUpperCase();
+    if (p.startsWith("G") || slotId === "GK") return 0;
+    if (p.startsWith("D")) return 1;
+    if (p.startsWith("M")) return 2;
+    if (p.startsWith("F") || p.startsWith("A")) return 3;
+    // Infer from old slot y if position missing
+    const y = coordFor(slotId || null).y;
+    if (y >= 85) return 0;
+    if (y >= 65) return 1;
+    if (y >= 40) return 2;
+    return 3;
+  };
+
+  // Bucket players into GK / DEF / MID / FWD by position (fallback slot y)
+  const buckets: typeof starters[] = [[], [], [], []];
+  for (const s of starters) {
+    const b = Math.min(3, Math.max(0, posBand(s.position, s.formationSlot)));
+    buckets[b].push(s);
+  }
+  for (const b of buckets) {
+    b.sort((a, c) => coordFor(a.formationSlot).x - coordFor(c.formationSlot).x);
+  }
+
+  // Prefer filling formation lines: line0=GK, then remaining lines left→right
+  const out: { playerId: string; formationSlot: string }[] = [];
+  const used = new Set<string>();
+
+  const takeFromBands = (bands: number[], count: number) => {
+    const picked: typeof starters = [];
+    for (const band of bands) {
+      while (picked.length < count && buckets[band].length) {
+        const p = buckets[band].shift()!;
+        if (used.has(p.id)) continue;
+        used.add(p.id);
+        picked.push(p);
+      }
+    }
+    // spill from any remaining
+    for (const band of [0, 1, 2, 3]) {
+      while (picked.length < count && buckets[band].length) {
+        const p = buckets[band].shift()!;
+        if (used.has(p.id)) continue;
+        used.add(p.id);
+        picked.push(p);
+      }
+    }
+    return picked;
+  };
+
+  for (let li = 0; li < lines.length; li++) {
+    const line = lines[li];
+    const bands =
+      li === 0 ? [0] : li === 1 ? [1] : li >= lines.length - 1 ? [3, 2] : [2, 1, 3];
+    const players = takeFromBands(bands, line.length);
+    players.sort((a, c) => coordFor(a.formationSlot).x - coordFor(c.formationSlot).x);
+    for (let i = 0; i < line.length; i++) {
+      const p = players[i];
+      if (!p) break;
+      out.push({ playerId: p.id, formationSlot: line[i].id });
+    }
+  }
+
+  // Anyone left
+  const leftover = starters.filter((s) => !used.has(s.id));
+  const freeSlots = ordered.filter((s) => !out.some((o) => o.formationSlot === s.id));
+  for (let i = 0; i < leftover.length; i++) {
+    out.push({
+      playerId: leftover[i].id,
+      formationSlot: freeSlots[i]?.id || ordered[ordered.length - 1]?.id || "CM",
+    });
+  }
+
+  return out;
+}
+
+/** Map API-Football grid "row:col" into formation slot ids (legacy / overflow). */
+export function gridToSlot(
+  grid: string | null | undefined,
+  index: number,
+  formation?: string | null,
+  used?: Set<string>
+): string {
+  const { slots, ordered } = slotLines(formation);
+  const taken = used ?? new Set<string>();
+
+  const pickUnused = (preferredId?: string | null): string => {
+    if (preferredId && !taken.has(preferredId) && slots.some((s) => s.id === preferredId)) {
+      taken.add(preferredId);
+      return preferredId;
+    }
+    const byIndex = ordered[index] || slots[index];
+    if (byIndex && !taken.has(byIndex.id)) {
+      taken.add(byIndex.id);
+      return byIndex.id;
+    }
+    const first = ordered.find((s) => !taken.has(s.id)) || slots.find((s) => !taken.has(s.id));
+    if (first) {
+      taken.add(first.id);
+      return first.id;
+    }
+    const fallback = slots[slots.length - 1]?.id || `S${index + 1}`;
+    taken.add(fallback);
+    return fallback;
+  };
+
+  if (!grid) return pickUnused(null);
+
   const [rowStr, colStr] = grid.split(":");
   const row = Number(rowStr);
   const col = Number(colStr);
-  if (row === 1) return "GK";
-  if (row === 2) {
-    if (col <= 1) return "LB";
-    if (col === 2) return "LCB";
-    if (col === 3) return "RCB";
-    return "RB";
+  if (!Number.isFinite(row) || !Number.isFinite(col)) return pickUnused(null);
+
+  // Row 1 is always GK when available — never nearest(tx=col*18)
+  if (row === 1) {
+    return pickUnused("GK");
   }
-  if (row === 3) {
-    if (col <= 1) return "LCM";
-    if (col === 2) return "CM";
-    return "RCM";
+
+  const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
+  const ty = clamp(100 - (row - 1) * 20, 12, 90);
+  const tx = clamp(col * 18, 12, 88);
+
+  let bestId: string | null = null;
+  let bestDist = Number.POSITIVE_INFINITY;
+  for (const slot of slots) {
+    if (taken.has(slot.id) || slot.id === "GK") continue;
+    const dist = (slot.x - tx) ** 2 + (slot.y - ty) ** 2;
+    if (dist < bestDist) {
+      bestDist = dist;
+      bestId = slot.id;
+    }
   }
-  if (row === 4) {
-    if (col <= 1) return "LW";
-    if (col === 2) return "ST";
-    return "RW";
-  }
-  if (col <= 1) return "LW";
-  if (col === 2) return "ST";
-  return "RW";
+  return pickUnused(bestId);
 }
 
 export function mapAfStatus(short: string): string {

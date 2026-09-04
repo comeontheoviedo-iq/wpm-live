@@ -14,6 +14,7 @@ import { PitchBoard, type PitchPlayer } from "@/components/match/pitch";
 import { SquadRail, type SquadPlayer } from "@/components/match/squad-rail";
 import { NotesPanel, type NoteRow } from "@/components/notes/notes-panel";
 import { Button } from "@/components/ui/button";
+import { FORMATIONS } from "@/lib/formations";
 import { cn } from "@/lib/utils";
 
 type Coach = { name: string; nationality: string; age: number | null };
@@ -35,7 +36,7 @@ function parsePredictions(json: string | null | undefined): Predictions | null {
 
 function lineupHint(status: string) {
   if (status === "confirmed") {
-    return "Official lineups from API-Football — board is locked.";
+    return "Official lineups from API-Football — board stays editable for commentary. Sync resets to official.";
   }
   if (status === "predicted") {
     return "Your personal predicted XI (click squad → tap slot, or drag). Official will override when published.";
@@ -110,7 +111,14 @@ export function MatchDesk({
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [configured, setConfigured] = useState<boolean | null>(null);
-  const locked = lineupStatus === "confirmed";
+  // Desk stays editable even when Official — Sync restores AF XI.
+  const locked = false;
+  const [homeForm, setHomeForm] = useState(homeFormation);
+  const [awayForm, setAwayForm] = useState(awayFormation);
+  useEffect(() => {
+    setHomeForm(homeFormation);
+    setAwayForm(awayFormation);
+  }, [homeFormation, awayFormation]);
   const preds = useMemo(
     () => parsePredictions(predictionsJson),
     [predictionsJson]
@@ -216,10 +224,6 @@ export function MatchDesk({
   }, [configured, apiFootballFixtureId, status, sync]);
 
   async function lineupAction(body: Record<string, unknown>) {
-    if (locked) {
-      setMsg("Official lineups locked");
-      return;
-    }
     setBusy(true);
     try {
       const res = await fetch(`/api/matches/${matchId}/lineup`, {
@@ -263,7 +267,7 @@ export function MatchDesk({
     slotId: string;
     occupantId?: string | null;
   }) {
-    if (!placing || locked) return;
+    if (!placing) return;
     if (placing.side !== args.side) {
       setMsg("Players can only be placed on their own team half.");
       return;
@@ -298,13 +302,34 @@ export function MatchDesk({
   }
 
   function onSquadClick(p: SquadPlayer) {
-    if (locked) {
-      setSelected(p);
-      return;
-    }
-    // Click another squad player switches placing selection
+    // Click squad player → place mode (official boards stay editable)
     setPlacing(p);
     setSelected(null);
+  }
+
+  async function changeFormation(side: "home" | "away", formation: string) {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await fetch(`/api/matches/${matchId}/formation`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ side, formation }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setMsg(json.error || "Formation update failed");
+      } else {
+        if (side === "home") setHomeForm(formation);
+        else setAwayForm(formation);
+        setMsg(`${side === "home" ? "Home" : "Away"} → ${formation} (starters remapped)`);
+        router.refresh();
+      }
+    } catch {
+      setMsg("Formation update failed");
+    } finally {
+      setBusy(false);
+    }
   }
 
   const playerNotes = useMemo(() => {
@@ -381,7 +406,7 @@ export function MatchDesk({
           )}
         >
           {lineupStatus === "confirmed"
-            ? "Official"
+            ? "Official (editable)"
             : lineupStatus === "predicted"
               ? "Your predicted XI"
               : "Expected (last XI)"}
@@ -414,7 +439,7 @@ export function MatchDesk({
       </div>
 
       {/* Placing banner */}
-      {placing && !locked && (
+      {placing && (
         <div className="shrink-0 flex flex-wrap items-center gap-2 rounded-lg border border-sky-300 bg-sky-50 dark:bg-sky-950/50 dark:border-sky-800 px-3 py-1.5 text-xs">
           <span className="font-semibold text-sky-900 dark:text-sky-100">
             Tap a pitch slot for {placing.name}
@@ -449,24 +474,67 @@ export function MatchDesk({
       {/* Main grid: pitch + squad */}
       <div className="min-h-0 grid grid-cols-1 lg:grid-cols-[1fr_240px] gap-2 overflow-hidden">
         <section className="min-h-0 flex flex-col gap-1.5 overflow-hidden">
-          <p className="text-[10px] text-slate-500 shrink-0 px-0.5">
-            {lineupHint(lineupStatus)}
-            {starterCount === 0 && (
-              <span className="text-amber-600">
-                {" "}
-                Empty pitch — Sync squads / last XI, then click a player and tap
-                a slot.
-              </span>
+          <div className="shrink-0 flex flex-wrap items-center gap-2 px-0.5">
+            <p className="text-[10px] text-slate-500 flex-1 min-w-[12rem]">
+              {lineupHint(lineupStatus)}
+              {starterCount === 0 && (
+                <span className="text-amber-600">
+                  {" "}
+                  Empty pitch — Sync squads / last XI, then click a player and tap
+                  a slot.
+                </span>
+              )}
+            </p>
+            <label className="text-[10px] text-slate-600 dark:text-slate-300 flex items-center gap-1">
+              Home
+              <select
+                className="rounded-md border border-slate-200 dark:border-slate-700 bg-transparent px-1.5 py-0.5 text-[11px] font-semibold"
+                value={homeForm}
+                disabled={busy}
+                onChange={(e) => changeFormation("home", e.target.value)}
+              >
+                {Object.keys(FORMATIONS).map((k) => (
+                  <option key={k} value={k}>
+                    {k}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-[10px] text-slate-600 dark:text-slate-300 flex items-center gap-1">
+              Away
+              <select
+                className="rounded-md border border-slate-200 dark:border-slate-700 bg-transparent px-1.5 py-0.5 text-[11px] font-semibold"
+                value={awayForm}
+                disabled={busy}
+                onChange={(e) => changeFormation("away", e.target.value)}
+              >
+                {Object.keys(FORMATIONS).map((k) => (
+                  <option key={k} value={k}>
+                    {k}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {lineupStatus === "confirmed" && apiFootballFixtureId && (
+              <button
+                type="button"
+                className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 hover:underline"
+                disabled={busy}
+                onClick={() => sync(false)}
+                title="Re-sync official lineups from API-Football"
+              >
+                Reset to official
+              </button>
             )}
-          </p>
+          </div>
           <div className="min-h-0 flex-1">
             <PitchBoard
               homeName={homeName}
               awayName={awayName}
               homeColor={homeColor}
               awayColor={awayColor}
-              homeFormation={homeFormation}
-              awayFormation={awayFormation}
+              homeFormation={homeForm}
+              awayFormation={awayForm}
               homePlayers={homePlayers}
               awayPlayers={awayPlayers}
               homeCoach={homeCoach}
@@ -478,12 +546,12 @@ export function MatchDesk({
                 const full = squad.find((s) => s.id === p.id);
                 if (full) setSelected(full);
               }}
-              onSlotDrop={locked ? undefined : onSlotDrop}
-              onSlotClick={locked ? undefined : onSlotClick}
-              onClearSlot={locked ? undefined : onClearSlot}
+              onSlotDrop={onSlotDrop}
+              onSlotClick={onSlotClick}
+              onClearSlot={onClearSlot}
               placingPlayerId={placing?.id}
               placingSide={placing?.side}
-              locked={locked}
+              locked={false}
               compact
             />
           </div>

@@ -193,6 +193,33 @@ export function PacksClient({ matchId }: { matchId: string }) {
     }
   }
 
+  async function sendToNotes() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await fetch(`/api/matches/${matchId}/packs/distribute`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ templateKey: active }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Send to notes failed");
+      const d = (json.distributed || {
+        scripts: 0,
+        playerNotes: 0,
+        clubNotes: 0,
+        matchNotes: 0,
+      }) as Distributed;
+      setLastDistributed(d);
+      setMsg(`Sent to desk notes · ${formatDistributed(d)}`);
+      router.refresh();
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "Send to notes failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function save() {
     setBusy(true);
     try {
@@ -354,7 +381,7 @@ export function PacksClient({ matchId }: { matchId: string }) {
                 {current?.description}
               </p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2 justify-end">
               <Button
                 size="sm"
                 variant="outline"
@@ -362,6 +389,15 @@ export function PacksClient({ matchId }: { matchId: string }) {
                 onClick={save}
               >
                 Save edit
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={busy || packBusy || !draft.trim()}
+                onClick={sendToNotes}
+                title="Push this section into Scripts / desk notes"
+              >
+                Send to desk notes
               </Button>
               <Button size="sm" disabled={busy || packBusy} onClick={generate}>
                 <Sparkles className="h-3.5 w-3.5 mr-1" />

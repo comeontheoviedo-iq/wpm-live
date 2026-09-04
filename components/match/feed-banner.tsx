@@ -6,6 +6,13 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 
+function statusLabel(lineupStatus: string) {
+  if (lineupStatus === "confirmed") return "Official";
+  if (lineupStatus === "predicted") return "Your predicted XI";
+  if (lineupStatus === "expected") return "Expected (last XI)";
+  return lineupStatus;
+}
+
 export function FeedBanner({
   matchId,
   apiFootballFixtureId,
@@ -56,7 +63,7 @@ export function FeedBanner({
         setMsg(
           silent
             ? null
-            : `Synced · ${json.lineupStatus} lineups · ${json.eventCount} events`
+            : `Synced · ${statusLabel(json.lineupStatus)} · ${json.eventCount} events`
         );
         router.refresh();
       }
@@ -77,9 +84,8 @@ export function FeedBanner({
           <div className="font-semibold">API-Football key missing</div>
           <p className="text-xs opacity-90 mt-0.5">
             Set <code className="font-mono">API_FOOTBALL_KEY</code> in{" "}
-            <code className="font-mono">.env</code> to sync expected/official
-            lineups, goals, and substitutions onto the formation board. Manual
-            overrides still work.
+            <code className="font-mono">.env</code> to sync squads, Expected /
+            Official lineups, injuries and predictions.
           </p>
         </div>
       </div>
@@ -90,7 +96,7 @@ export function FeedBanner({
     <div className="rounded-xl border border-teal-200 dark:border-teal-900 bg-teal-50/70 dark:bg-teal-950/30 px-3 py-2.5 text-sm flex flex-col sm:flex-row sm:items-center gap-2">
       <div className="flex-1 min-w-0">
         <div className="font-semibold text-teal-900 dark:text-teal-100">
-          Live feed · lineups {lineupStatus}
+          Live feed · {statusLabel(lineupStatus)}
           {apiFootballFixtureId ? ` · fixture #${apiFootballFixtureId}` : " · not linked"}
         </div>
         <div className="text-xs text-teal-800/80 dark:text-teal-200/70">

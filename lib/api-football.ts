@@ -491,3 +491,129 @@ export function mapAfStatus(short: string): string {
       return "Assigned";
   }
 }
+
+/* ── Squads / injuries / predictions / last XI ─────────────────────────── */
+
+export type AfSquadPlayer = {
+  id: number;
+  name: string;
+  age?: number | null;
+  number?: number | null;
+  position?: string | null;
+  photo?: string | null;
+};
+
+export type AfSquadResponse = {
+  team: { id: number; name: string; logo?: string };
+  players: AfSquadPlayer[];
+};
+
+export type AfInjury = {
+  player: {
+    id: number;
+    name: string;
+    photo?: string;
+    type?: string;
+    reason?: string;
+  };
+  team: { id: number; name: string; logo?: string };
+  fixture?: { id: number; timezone?: string; date?: string };
+  league?: { id: number; season: number; name: string };
+};
+
+export type AfPrediction = {
+  predictions: {
+    winner?: { id: number | null; name: string | null; comment?: string | null };
+    win_or_draw?: boolean;
+    under_over?: string | null;
+    goals?: { home?: string | null; away?: string | null };
+    advice?: string | null;
+    percent?: { home?: string; draw?: string; away?: string };
+  };
+  league?: { id: number; name: string; country: string; season: number };
+  teams?: {
+    home?: { id: number; name: string; last_5?: unknown; league?: unknown };
+    away?: { id: number; name: string; last_5?: unknown; league?: unknown };
+  };
+  comparison?: Record<string, { home?: string; away?: string }>;
+  h2h?: AfFixture[];
+};
+
+export async function getSquads(teamId: number) {
+  return afFetch<AfSquadResponse[]>("/players/squads", { team: teamId }, 300_000);
+}
+
+export async function getInjuriesByFixture(fixtureId: number) {
+  return afFetch<AfInjury[]>("/injuries", { fixture: fixtureId }, 120_000);
+}
+
+export async function getPredictions(fixtureId: number) {
+  return afFetch<AfPrediction[]>("/predictions", { fixture: fixtureId }, 300_000);
+}
+
+/** Most recent finished fixtures for a team (newest first). */
+export async function getTeamRecentFinished(teamId: number, last = 8) {
+  return afFetch<AfFixture[]>(
+    "/fixtures",
+    { team: teamId, last, status: "FT-AET-PEN" },
+    120_000
+  );
+}
+
+/**
+ * Find the most recent finished fixture that has lineups for this team.
+ * Returns that team's AfLineup, or null.
+ */
+export async function getLastPlayedLineup(teamId: number): Promise<{
+  fixtureId: number;
+  lineup: AfLineup;
+} | null> {
+  const recent = await getTeamRecentFinished(teamId, 10);
+  for (const fx of recent) {
+    try {
+      const lineups = await getLineups(fx.fixture.id);
+      const mine = lineups.find((l) => l.team.id === teamId);
+      if (mine && mine.startXI?.length) {
+        return { fixtureId: fx.fixture.id, lineup: mine };
+      }
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
+export function summarizeH2h(
+  fixtures: AfFixture[] | undefined,
+  homeAfId: number,
+  awayAfId: number
+): string {
+  if (!fixtures?.length) return "No recent H2H in feed.";
+  let homeWins = 0;
+  let awayWins = 0;
+  let draws = 0;
+  const sample = fixtures.slice(0, 10);
+  for (const fx of sample) {
+    const hg = fx.goals?.home;
+    const ag = fx.goals?.away;
+    if (hg == null || ag == null) continue;
+    const scoreFor = (teamId: number) => {
+      if (fx.teams.home.id === teamId) return hg;
+      if (fx.teams.away.id === teamId) return ag;
+      return null;
+    };
+    const hs = scoreFor(homeAfId);
+    const as_ = scoreFor(awayAfId);
+    if (hs == null || as_ == null) continue;
+    if (hs > as_) homeWins++;
+    else if (as_ > hs) awayWins++;
+    else draws++;
+  }
+  return `Last ${sample.length} H2H: ${homeWins}–${draws}–${awayWins} (W–D–L for home side).`;
+}
+
+export function parsePercent(p?: string | null): number | null {
+  if (!p) return null;
+  const n = Number(String(p).replace("%", "").trim());
+  return Number.isFinite(n) ? n : null;
+}

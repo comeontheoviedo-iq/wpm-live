@@ -145,8 +145,13 @@ model Match {
   attendance           Int?
   featured             Boolean         @default(false)
   apiFootballFixtureId Int?
-  lineupStatus         String          @default("predicted")
+  lineupStatus         String          @default("expected")
   lastFeedSyncAt       DateTime?
+  predictionsAdvice    String?
+  predictionsJson      String?
+  h2hSummary           String?
+  predictedHomeJson    String?
+  predictedAwayJson    String?
   notes                Note[]
   speaks               Speak[]
   checklistItems       ChecklistItem[]

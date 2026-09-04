@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Sparkles, AlertTriangle } from "lucide-react";
+import { Sparkles, AlertTriangle, Wand2 } from "lucide-react";
 
 type Template = {
   key: string;
@@ -27,6 +27,7 @@ export function PacksClient({ matchId }: { matchId: string }) {
   const [gemini, setGemini] = useState(false);
   const [active, setActive] = useState<string>("research");
   const [busy, setBusy] = useState(false);
+  const [packBusy, setPackBusy] = useState(false);
   const [draft, setDraft] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -36,7 +37,7 @@ export function PacksClient({ matchId }: { matchId: string }) {
     setTemplates(json.templates || []);
     setSections(json.sections || []);
     setGemini(Boolean(json.gemini));
-    const key = active || json.templates?.[0]?.key;
+    const key = active || json.templates?.[0]?.key || "research";
     if (key) {
       setActive(key);
       const existing = (json.sections || []).find(
@@ -56,20 +57,22 @@ export function PacksClient({ matchId }: { matchId: string }) {
     setDraft(existing?.content || "");
   }, [active, sections]);
 
+  async function generateOne(templateKey: string) {
+    const res = await fetch(`/api/matches/${matchId}/packs/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ templateKey }),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || "Generate failed");
+    return json;
+  }
+
   async function generate() {
     setBusy(true);
     setMsg(null);
     try {
-      const res = await fetch(`/api/matches/${matchId}/packs/generate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ templateKey: active }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        setMsg(json.error || "Generate failed");
-        return;
-      }
+      const json = await generateOne(active);
       setDraft(json.section.content);
       setSections((prev) => {
         const others = prev.filter((s) => s.templateKey !== active);
@@ -81,8 +84,40 @@ export function PacksClient({ matchId }: { matchId: string }) {
           : "Generated and saved into Scripts / Notes where applicable."
       );
       router.refresh();
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "Generate failed");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function generateResearchPack() {
+    setPackBusy(true);
+    setMsg(null);
+    const keys = ["research", "intro", "profiles", "referee", "hooks"];
+    const available = keys.filter((k) => templates.some((t) => t.key === k));
+    const runKeys = available.length ? available : ["research"];
+    let stub = false;
+    try {
+      for (const key of runKeys) {
+        const json = await generateOne(key);
+        stub = stub || Boolean(json.stub);
+        setSections((prev) => {
+          const others = prev.filter((s) => s.templateKey !== key);
+          return [json.section, ...others];
+        });
+        if (key === active) setDraft(json.section.content);
+      }
+      setMsg(
+        stub
+          ? `Pack placeholders saved (${runKeys.length} sections). Set GEMINI_API_KEY for live copy.`
+          : `Research pack ready — ${runKeys.length} sections generated into Packs / Scripts / Notes.`
+      );
+      router.refresh();
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "Pack generate failed");
+    } finally {
+      setPackBusy(false);
     }
   }
 
@@ -113,6 +148,7 @@ export function PacksClient({ matchId }: { matchId: string }) {
   }
 
   const current = templates.find((t) => t.key === active);
+  const researchDone = sections.some((s) => s.templateKey === "research");
 
   return (
     <div className="space-y-4">
@@ -120,9 +156,22 @@ export function PacksClient({ matchId }: { matchId: string }) {
         <div>
           <h2 className="text-xl font-bold">Broadcast packs</h2>
           <p className="text-sm text-slate-500">
-            Section-by-section Gemini generation from Chris&apos;s prompt library.
+            One-click research pack or section-by-section Gemini generation.
           </p>
         </div>
+        <Button
+          size="sm"
+          disabled={packBusy || busy}
+          onClick={generateResearchPack}
+          className="bg-violet-600 hover:bg-violet-500"
+        >
+          <Wand2 className="h-3.5 w-3.5 mr-1" />
+          {packBusy
+            ? "Generating pack…"
+            : researchDone
+              ? "Regenerate research pack"
+              : "Generate research pack"}
+        </Button>
       </div>
 
       {!gemini && (
@@ -172,10 +221,10 @@ export function PacksClient({ matchId }: { matchId: string }) {
               </p>
             </div>
             <div className="flex gap-2">
-              <Button size="sm" variant="outline" disabled={busy} onClick={save}>
+              <Button size="sm" variant="outline" disabled={busy || packBusy} onClick={save}>
                 Save edit
               </Button>
-              <Button size="sm" disabled={busy} onClick={generate}>
+              <Button size="sm" disabled={busy || packBusy} onClick={generate}>
                 <Sparkles className="h-3.5 w-3.5 mr-1" />
                 {busy ? "Working…" : "Generate"}
               </Button>

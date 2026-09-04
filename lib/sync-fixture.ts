@@ -2,14 +2,21 @@ import { prisma } from "./prisma";
 import {
   getEvents,
   getFixture,
+  getInjuriesByFixture,
+  getLastPlayedLineup,
   getLineups,
+  getPredictions,
+  getSquads,
   gridToSlot,
   mapAfStatus,
+  parsePercent,
+  summarizeH2h,
   type AfEvent,
   type AfLineup,
+  type AfSquadPlayer,
 } from "./api-football";
 
-function posGuess(pos?: string) {
+function posGuess(pos?: string | null) {
   if (!pos) return "MID";
   const p = pos.toUpperCase();
   if (p.startsWith("G")) return "GK";
@@ -19,6 +26,68 @@ function posGuess(pos?: string) {
   return p;
 }
 
+async function findClubPlayer(
+  clubId: string,
+  opts: { apiId?: number | null; name?: string | null; number?: number | null }
+) {
+  if (opts.apiId) {
+    const byApi = await prisma.player.findFirst({
+      where: { clubId, apiFootballPlayerId: opts.apiId },
+    });
+    if (byApi) return byApi;
+  }
+  if (opts.name) {
+    const byName = await prisma.player.findFirst({
+      where: {
+        clubId,
+        name: opts.name,
+        ...(opts.number != null ? { shirtNumber: opts.number } : {}),
+      },
+    });
+    if (byName) return byName;
+    if (opts.number == null) {
+      return prisma.player.findFirst({ where: { clubId, name: opts.name } });
+    }
+  }
+  return null;
+}
+
+export async function syncSquadForClub(clubId: string, teamAfId: number) {
+  const rows = await getSquads(teamAfId);
+  const squad = rows[0];
+  if (!squad?.players?.length) return { upserted: 0 };
+
+  let upserted = 0;
+  for (const p of squad.players as AfSquadPlayer[]) {
+    const existing = await findClubPlayer(clubId, {
+      apiId: p.id,
+      name: p.name,
+      number: p.number ?? null,
+    });
+    const data = {
+      name: p.name,
+      shirtNumber: p.number ?? existing?.shirtNumber ?? 0,
+      position: posGuess(p.position),
+      age: p.age ?? existing?.age ?? null,
+      apiFootballPlayerId: p.id,
+    };
+    if (existing) {
+      await prisma.player.update({ where: { id: existing.id }, data });
+    } else {
+      await prisma.player.create({
+        data: {
+          clubId,
+          ...data,
+          isStarter: false,
+          onPitch: false,
+        },
+      });
+    }
+    upserted++;
+  }
+  return { upserted };
+}
+
 async function upsertLineupSide(
   clubId: string,
   lineup: AfLineup,
@@ -26,7 +95,6 @@ async function upsertLineupSide(
 ) {
   const formation = lineup.formation || (side === "home" ? "4-3-3" : "4-2-3-1");
 
-  // Reset starters for this club
   await prisma.player.updateMany({
     where: { clubId },
     data: { isStarter: false, onPitch: false, formationSlot: null },
@@ -36,14 +104,10 @@ async function upsertLineupSide(
     const row = lineup.startXI[i];
     const p = row.player;
     const slot = gridToSlot(p.grid, i);
-    const existing = await prisma.player.findFirst({
-      where: {
-        clubId,
-        OR: [
-          ...(p.id ? [{ apiFootballPlayerId: p.id }] : []),
-          { AND: [{ name: p.name }, { shirtNumber: p.number || 0 }] },
-        ],
-      },
+    const existing = await findClubPlayer(clubId, {
+      apiId: p.id,
+      name: p.name,
+      number: p.number,
     });
     if (existing) {
       await prisma.player.update({
@@ -76,14 +140,10 @@ async function upsertLineupSide(
 
   for (const row of lineup.substitutes || []) {
     const p = row.player;
-    const existing = await prisma.player.findFirst({
-      where: {
-        clubId,
-        OR: [
-          ...(p.id ? [{ apiFootballPlayerId: p.id }] : []),
-          { AND: [{ name: p.name }, { shirtNumber: p.number || 0 }] },
-        ],
-      },
+    const existing = await findClubPlayer(clubId, {
+      apiId: p.id,
+      name: p.name,
+      number: p.number,
     });
     if (existing) {
       await prisma.player.update({
@@ -93,6 +153,8 @@ async function upsertLineupSide(
           onPitch: false,
           formationSlot: null,
           apiFootballPlayerId: p.id || existing.apiFootballPlayerId,
+          shirtNumber: p.number || existing.shirtNumber,
+          position: posGuess(p.pos) || existing.position,
         },
       });
     } else {
@@ -127,6 +189,142 @@ async function upsertLineupSide(
   return formation;
 }
 
+/** Re-apply a saved personal predicted XI onto Player rows. */
+export async function applyPredictedJson(
+  clubId: string,
+  json: string | null | undefined
+) {
+  if (!json) return false;
+  let slots: { playerId: string; formationSlot: string }[] = [];
+  try {
+    slots = JSON.parse(json);
+  } catch {
+    return false;
+  }
+  if (!Array.isArray(slots) || !slots.length) return false;
+
+  await prisma.player.updateMany({
+    where: { clubId },
+    data: { isStarter: false, onPitch: false, formationSlot: null },
+  });
+  for (const s of slots) {
+    if (!s.playerId || !s.formationSlot) continue;
+    await prisma.player.updateMany({
+      where: { id: s.playerId, clubId },
+      data: {
+        isStarter: true,
+        onPitch: true,
+        formationSlot: s.formationSlot,
+      },
+    });
+  }
+  return true;
+}
+
+export async function snapshotPredictedSide(clubId: string) {
+  const starters = await prisma.player.findMany({
+    where: { clubId, OR: [{ isStarter: true }, { onPitch: true }] },
+    select: { id: true, formationSlot: true },
+  });
+  return JSON.stringify(
+    starters
+      .filter((p) => p.formationSlot)
+      .map((p) => ({ playerId: p.id, formationSlot: p.formationSlot }))
+  );
+}
+
+async function syncInjuriesForMatch(
+  matchId: string,
+  fixtureId: number,
+  homeClubId: string,
+  awayClubId: string,
+  homeAfId: number,
+  awayAfId: number
+) {
+  const injuries = await getInjuriesByFixture(fixtureId);
+  await prisma.injury.deleteMany({ where: { matchId } });
+
+  let count = 0;
+  for (const inj of injuries) {
+    const teamId = inj.team?.id;
+    const clubId =
+      teamId === homeAfId ? homeClubId : teamId === awayAfId ? awayClubId : null;
+    if (!clubId) continue;
+
+    let player = await findClubPlayer(clubId, {
+      apiId: inj.player?.id,
+      name: inj.player?.name,
+    });
+    if (!player && inj.player?.name) {
+      player = await prisma.player.create({
+        data: {
+          clubId,
+          name: inj.player.name,
+          shirtNumber: 0,
+          position: "MID",
+          apiFootballPlayerId: inj.player.id || null,
+        },
+      });
+    }
+    if (!player) continue;
+
+    const reason = inj.player?.reason || inj.player?.type || "Injury";
+    const status = /doubt/i.test(reason)
+      ? "doubtful"
+      : /suspend/i.test(reason)
+        ? "suspended"
+        : "out";
+
+    await prisma.injury.create({
+      data: {
+        matchId,
+        clubId,
+        playerId: player.id,
+        status,
+        injuryType: reason,
+        notes: inj.player?.type || null,
+      },
+    });
+    count++;
+  }
+  return count;
+}
+
+async function syncPredictionsForMatch(
+  matchId: string,
+  fixtureId: number,
+  homeAfId: number,
+  awayAfId: number
+) {
+  const list = await getPredictions(fixtureId);
+  const pred = list[0];
+  if (!pred) {
+    return { advice: null as string | null, h2h: null as string | null };
+  }
+  const percent = pred.predictions?.percent || {};
+  const payload = {
+    advice: pred.predictions?.advice || null,
+    winner: pred.predictions?.winner || null,
+    percent: {
+      home: parsePercent(percent.home),
+      draw: parsePercent(percent.draw),
+      away: parsePercent(percent.away),
+      raw: percent,
+    },
+    comparison: pred.comparison || null,
+  };
+  const h2h = summarizeH2h(pred.h2h, homeAfId, awayAfId);
+  await prisma.match.update({
+    where: { id: matchId },
+    data: {
+      predictionsAdvice: payload.advice,
+      predictionsJson: JSON.stringify(payload),
+      h2hSummary: h2h,
+    },
+  });
+  return { advice: payload.advice, h2h };
+}
+
 async function applySubEvent(
   _matchId: string,
   homeClubId: string,
@@ -135,7 +333,6 @@ async function applySubEvent(
   awayTeamAfId: number | null,
   ev: AfEvent
 ) {
-  // API-Football subst: player = leaving, assist = entering
   const teamAfId = ev.team?.id;
   const clubId =
     teamAfId && homeTeamAfId && teamAfId === homeTeamAfId
@@ -178,6 +375,32 @@ async function applySubEvent(
   }
 }
 
+function mapEventType(ev: AfEvent): string {
+  const t = (ev.type || "").toLowerCase();
+  const d = (ev.detail || "").toLowerCase();
+  if (t === "goal") {
+    if (d.includes("own")) return "own_goal";
+    if (d.includes("penalty")) return "penalty_goal";
+    return "goal";
+  }
+  if (t === "card") {
+    if (d.includes("red")) return "red";
+    return "yellow";
+  }
+  if (t === "subst") return "sub";
+  if (t === "var") return "var";
+  return t || "note";
+}
+
+/**
+ * Full desk sync:
+ * - squads for both clubs
+ * - injuries
+ * - predictions + H2H
+ * - official lineups when present → lineupStatus=confirmed
+ * - else Expected (last XI) unless user already has a personal predicted board
+ * - events when live/available
+ */
 export async function syncMatchFromApiFootball(matchId: string) {
   const match = await prisma.match.findUnique({
     where: { id: matchId },
@@ -191,15 +414,9 @@ export async function syncMatchFromApiFootball(matchId: string) {
   const fixture = await getFixture(match.apiFootballFixtureId);
   if (!fixture) throw new Error("Fixture not found on API-Football");
 
-  const lineups = await getLineups(match.apiFootballFixtureId);
-  let homeFormation = match.homeFormation;
-  let awayFormation = match.awayFormation;
-  let lineupStatus = match.lineupStatus;
-
   const homeAfId = fixture.teams.home.id;
   const awayAfId = fixture.teams.away.id;
 
-  // Persist team ids
   if (!match.homeClub.apiFootballTeamId) {
     await prisma.club.update({
       where: { id: match.homeClubId },
@@ -213,7 +430,36 @@ export async function syncMatchFromApiFootball(matchId: string) {
     });
   }
 
-  if (lineups.length) {
+  const squadHome = await syncSquadForClub(match.homeClubId, homeAfId).catch(
+    () => ({ upserted: 0 })
+  );
+  const squadAway = await syncSquadForClub(match.awayClubId, awayAfId).catch(
+    () => ({ upserted: 0 })
+  );
+
+  const injuryCount = await syncInjuriesForMatch(
+    matchId,
+    match.apiFootballFixtureId,
+    match.homeClubId,
+    match.awayClubId,
+    homeAfId,
+    awayAfId
+  ).catch(() => 0);
+
+  const pred = await syncPredictionsForMatch(
+    matchId,
+    match.apiFootballFixtureId,
+    homeAfId,
+    awayAfId
+  ).catch(() => ({ advice: null, h2h: null }));
+
+  const lineups = await getLineups(match.apiFootballFixtureId);
+  let homeFormation = match.homeFormation;
+  let awayFormation = match.awayFormation;
+  let lineupStatus = match.lineupStatus || "expected";
+  let expectedFrom: number | null = null;
+
+  if (lineups.length >= 1 && lineups.some((l) => l.startXI?.length)) {
     lineupStatus = "confirmed";
     for (const lu of lineups) {
       if (lu.team.id === homeAfId) {
@@ -222,11 +468,35 @@ export async function syncMatchFromApiFootball(matchId: string) {
         awayFormation = await upsertLineupSide(match.awayClubId, lu, "away");
       }
     }
+  } else if (match.lineupStatus === "predicted") {
+    // Preserve personal DnD board; refresh from saved JSON if needed
+    await applyPredictedJson(match.homeClubId, match.predictedHomeJson);
+    await applyPredictedJson(match.awayClubId, match.predictedAwayJson);
+    lineupStatus = "predicted";
   } else {
-    lineupStatus = match.lineupStatus || "predicted";
+    // Expected XI = last finished lineup for each team
+    const homeLast = await getLastPlayedLineup(homeAfId).catch(() => null);
+    const awayLast = await getLastPlayedLineup(awayAfId).catch(() => null);
+    if (homeLast) {
+      homeFormation = await upsertLineupSide(
+        match.homeClubId,
+        homeLast.lineup,
+        "home"
+      );
+      expectedFrom = homeLast.fixtureId;
+    }
+    if (awayLast) {
+      awayFormation = await upsertLineupSide(
+        match.awayClubId,
+        awayLast.lineup,
+        "away"
+      );
+      expectedFrom = expectedFrom || awayLast.fixtureId;
+    }
+    lineupStatus = homeLast || awayLast ? "expected" : match.lineupStatus || "expected";
   }
 
-  const events = await getEvents(match.apiFootballFixtureId);
+  const events = await getEvents(match.apiFootballFixtureId).catch(() => []);
   const homeScore = fixture.goals.home ?? match.homeScore;
   const awayScore = fixture.goals.away ?? match.awayScore;
   const minute = fixture.fixture.status.elapsed ?? match.minute;
@@ -261,7 +531,7 @@ export async function syncMatchFromApiFootball(matchId: string) {
       });
     }
 
-    if (type === "sub") {
+    if (type === "sub" && lineupStatus === "confirmed") {
       await applySubEvent(
         matchId,
         match.homeClubId,
@@ -298,24 +568,13 @@ export async function syncMatchFromApiFootball(matchId: string) {
     lineupCount: lineups.length,
     eventCount: events.length,
     lineupStatus,
+    squadHome: squadHome.upserted,
+    squadAway: squadAway.upserted,
+    injuryCount,
+    predictionsAdvice: pred.advice,
+    h2hSummary: pred.h2h,
+    expectedFrom,
   };
-}
-
-function mapEventType(ev: AfEvent): string {
-  const t = (ev.type || "").toLowerCase();
-  const d = (ev.detail || "").toLowerCase();
-  if (t === "goal") {
-    if (d.includes("own")) return "own_goal";
-    if (d.includes("penalty")) return "penalty_goal";
-    return "goal";
-  }
-  if (t === "card") {
-    if (d.includes("red")) return "red";
-    return "yellow";
-  }
-  if (t === "subst") return "sub";
-  if (t === "var") return "var";
-  return t || "note";
 }
 
 export async function linkFixtureToMatch(
@@ -326,4 +585,49 @@ export async function linkFixtureToMatch(
     where: { id: matchId },
     data: { apiFootballFixtureId },
   });
+}
+
+/** Persist a personal predicted XI from desk DnD. */
+export async function savePredictedLineup(
+  matchId: string,
+  side: "home" | "away",
+  slots: { playerId: string; formationSlot: string }[],
+  formation?: string
+) {
+  const match = await prisma.match.findUnique({ where: { id: matchId } });
+  if (!match) throw new Error("Match not found");
+  if (match.lineupStatus === "confirmed") {
+    throw new Error("Official lineups are locked — personal predicted XI cannot override Official.");
+  }
+
+  const clubId = side === "home" ? match.homeClubId : match.awayClubId;
+  await prisma.player.updateMany({
+    where: { clubId },
+    data: { isStarter: false, onPitch: false, formationSlot: null },
+  });
+
+  for (const s of slots) {
+    await prisma.player.updateMany({
+      where: { id: s.playerId, clubId },
+      data: {
+        isStarter: true,
+        onPitch: true,
+        formationSlot: s.formationSlot,
+      },
+    });
+  }
+
+  const json = JSON.stringify(slots);
+  const data: Record<string, unknown> = {
+    lineupStatus: "predicted",
+    ...(side === "home"
+      ? { predictedHomeJson: json }
+      : { predictedAwayJson: json }),
+  };
+  if (formation) {
+    if (side === "home") data.homeFormation = formation;
+    else data.awayFormation = formation;
+  }
+
+  return prisma.match.update({ where: { id: matchId }, data });
 }

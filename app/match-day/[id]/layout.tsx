@@ -21,19 +21,19 @@ export default async function MatchDayLayout({
   if (!match) notFound();
 
   return (
-    <div className="min-h-screen pb-24">
+    <div className="min-h-dvh pb-2">
       <AppHeader user={user} matchId={match.id} />
       <div className="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">
-        <div className="mx-auto max-w-[1600px] px-3 sm:px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+        <div className="mx-auto max-w-[1600px] px-3 sm:px-4 py-2 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
           <div className="flex items-center gap-3 min-w-0">
-            <span className="text-2xl">{match.homeClub.badgeEmoji}</span>
+            <span className="text-xl sm:text-2xl">{match.homeClub.badgeEmoji}</span>
             <div className="min-w-0">
-              <div className="font-bold text-slate-900 dark:text-white truncate">
+              <div className="font-bold text-slate-900 dark:text-white truncate text-sm sm:text-base">
                 {match.homeClub.name}{" "}
                 <span className="text-slate-400 font-normal">vs</span>{" "}
                 {match.awayClub.name}
               </div>
-              <div className="text-xs text-slate-500 flex flex-wrap items-center gap-2">
+              <div className="text-[11px] sm:text-xs text-slate-500 flex flex-wrap items-center gap-2">
                 <span>{match.matchDay.competition}</span>
                 <span>·</span>
                 <span>{formatKickoff(match.kickoff)}</span>
@@ -45,15 +45,15 @@ export default async function MatchDayLayout({
                 )}
               </div>
             </div>
-            <span className="text-2xl">{match.awayClub.badgeEmoji}</span>
+            <span className="text-xl sm:text-2xl">{match.awayClub.badgeEmoji}</span>
+          </div>
+          <div className="sm:ml-auto">
+            <StatusControl matchId={match.id} status={match.status} />
           </div>
         </div>
       </div>
       <MatchNav matchId={match.id} />
-      <div className="mx-auto max-w-[1600px] px-3 sm:px-4 py-4 space-y-4">
-        <StatusControl matchId={match.id} status={match.status} />
-        {children}
-      </div>
+      <div className="mx-auto max-w-[1600px] px-3 sm:px-4 py-2">{children}</div>
     </div>
   );
 }

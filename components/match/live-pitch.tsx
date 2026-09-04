@@ -1,18 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { PitchBoard } from "@/components/match/pitch";
-import { NotesPanel, NoteRow } from "@/components/notes/notes-panel";
-
-type Player = {
-  id: string;
-  name: string;
-  shirtNumber: number;
-  formationSlot: string | null;
-  isCaptain?: boolean;
-  isStarter: boolean;
-  onPitch?: boolean;
-};
+import { PitchBoard, type PitchPlayer } from "@/components/match/pitch";
+import { NotesPanel, type NoteRow } from "@/components/notes/notes-panel";
 
 type Coach = { name: string; nationality: string; age: number | null };
 
@@ -39,15 +29,15 @@ export function LivePitch({
   awayColor: string;
   homeFormation: string;
   awayFormation: string;
-  homePlayers: Player[];
-  awayPlayers: Player[];
+  homePlayers: PitchPlayer[];
+  awayPlayers: PitchPlayer[];
   homeCoach?: Coach | null;
   awayCoach?: Coach | null;
   referee?: string;
   lineupStatus: string;
   notes: NoteRow[];
 }) {
-  const [selected, setSelected] = useState<Player | null>(null);
+  const [selected, setSelected] = useState<PitchPlayer | null>(null);
   const filtered = useMemo(() => {
     if (!selected) return notes;
     return notes.filter((n) => n.entityId === selected.id);
@@ -69,6 +59,7 @@ export function LivePitch({
         referee={referee}
         lineupStatus={lineupStatus}
         onPlayerClick={(p) => setSelected(p)}
+        locked={lineupStatus === "confirmed"}
       />
       <NotesPanel
         matchId={matchId}
@@ -84,7 +75,7 @@ export function LivePitch({
           className="text-xs text-teal-700 dark:text-teal-300 hover:underline"
           onClick={() => setSelected(null)}
         >
-          Show all notes
+          Clear player filter
         </button>
       )}
     </div>

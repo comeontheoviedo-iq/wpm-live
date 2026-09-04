@@ -8,7 +8,13 @@ import { Button } from "@/components/ui/button";
 import { PRIORITY_COMPETITIONS } from "@/lib/competitions";
 import { todayDateInput } from "@/lib/season";
 
-type Club = { id: string; name: string; shortName: string; badgeEmoji: string };
+type Club = {
+  id: string;
+  name: string;
+  shortName: string;
+  badgeEmoji: string;
+  apiFootballTeamId?: number | null;
+};
 type AfFixture = {
   fixture: { id: number; date: string };
   league: { id: number; name: string; season: number };
@@ -81,9 +87,14 @@ export default function NewMatchDayPage() {
 
   async function ensureClubFromAf(name: string, afId: number) {
     const existing = clubs.find(
-      (c) => c.name.toLowerCase() === name.toLowerCase()
+      (c) =>
+        c.apiFootballTeamId === afId ||
+        c.name.toLowerCase() === name.toLowerCase()
     );
-    if (existing) return existing.id;
+    if (existing) {
+      // If found by name only, still POST so server can attach apiFootballTeamId
+      if (existing.apiFootballTeamId === afId) return existing.id;
+    }
     const res = await fetch("/api/clubs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -93,12 +104,19 @@ export default function NewMatchDayPage() {
         apiFootballTeamId: afId,
       }),
     });
-    const json = await res.json();
-    if (json.club) {
-      setClubs((prev) => [...prev, json.club]);
+    const json = await res.json().catch(() => ({}));
+    if (json.club?.id) {
+      setClubs((prev) => {
+        if (prev.some((c) => c.id === json.club.id)) {
+          return prev.map((c) => (c.id === json.club.id ? { ...c, ...json.club } : c));
+        }
+        return [...prev, json.club];
+      });
       return json.club.id as string;
     }
-    throw new Error("Could not create club");
+    throw new Error(
+      json.error || `Could not ensure club "${name}" (AF #${afId})`
+    );
   }
 
   async function testConnection() {
@@ -181,8 +199,39 @@ export default function NewMatchDayPage() {
     }
   }
 
+  function parseKickoffLocal(value: string): Date | null {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    // datetime-local is typically YYYY-MM-DDTHH:mm (optionally with :ss)
+    let normalized = trimmed;
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(trimmed)) {
+      normalized = `${trimmed}:00`;
+    }
+    const d = new Date(normalized);
+    if (Number.isNaN(d.getTime())) return null;
+    return d;
+  }
+
   async function createDesk() {
     setError(null);
+    if (!homeClubId || !awayClubId) {
+      setError("Select home and away teams");
+      return;
+    }
+    if (homeClubId === awayClubId) {
+      setError("Home and away teams must differ");
+      return;
+    }
+    if (!kickoff) {
+      setError("Pick a kick-off time");
+      return;
+    }
+    const kickoffDate = parseKickoffLocal(kickoff);
+    if (!kickoffDate) {
+      setError("Invalid kick-off date/time — use the date picker or YYYY-MM-DDTHH:mm");
+      return;
+    }
+
     setPending(true);
     try {
       const res = await fetch("/api/match-days", {
@@ -193,18 +242,30 @@ export default function NewMatchDayPage() {
           competition: effectiveCompetition,
           homeClubId,
           awayClubId,
-          kickoff: new Date(kickoff).toISOString(),
+          kickoff: kickoffDate.toISOString(),
           apiFootballFixtureId: selectedFixture?.fixture.id,
           featured: true,
         }),
       });
-      const json = await res.json();
+      const json = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(json.error || "Create failed");
+        setError(
+          json.error ||
+            (typeof json === "object" ? JSON.stringify(json) : "Create failed")
+        );
+        return;
+      }
+      if (!json.match?.id) {
+        setError(
+          json.error ||
+            `Create succeeded without match id: ${JSON.stringify(json)}`
+        );
         return;
       }
       router.push(`/match-day/${json.match.id}`);
       router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Create failed");
     } finally {
       setPending(false);
     }

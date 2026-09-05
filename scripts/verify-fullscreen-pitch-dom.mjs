@@ -1,6 +1,9 @@
 /**
- * Playwright: login → Rangers desk → enter fullscreen (or large desk) →
- * assert 0 AABB overlaps among player cards at whatever marker fit chooses.
+ * Playwright: login → Rangers desk → assert 0 AABB overlaps among real
+ * `[data-pitch-card]` / `[data-pitch-token]` boxes for:
+ *   1) windowed three-column desk
+ *   2) fullscreen desk
+ * Prefer smaller cards over overlaps — fail if any DOM AABB intersects.
  */
 import { chromium } from "playwright";
 
@@ -37,18 +40,19 @@ await page.evaluate(() => {
 });
 await page.reload({ waitUntil: "networkidle" });
 await page.waitForSelector('[data-pitch-card="1"]', { timeout: 20000 });
-await page.waitForTimeout(800);
+await page.waitForTimeout(1000);
 
 async function countOverlaps() {
   return page.evaluate(() => {
     const nodes = [...document.querySelectorAll('[data-pitch-card="1"]')];
     const rects = nodes.map((el) => {
       const token =
+        el.querySelector("[data-pitch-token]") ||
         el.querySelector("button span.inline-flex") ||
         el.querySelector("button") ||
         el;
       const r = token.getBoundingClientRect();
-      return { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+      return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, w: r.width, h: r.height };
     });
     let overlaps = 0;
     const pairs = [];
@@ -69,12 +73,18 @@ async function countOverlaps() {
         }
       }
     }
-    const pitchEl = document.querySelector(".relative.w-full.min-h-\\[220px\\]");
+    const pitchEl =
+      document.querySelector("[data-pitch-card]")?.closest(".relative.w-full") ||
+      null;
     const pr = pitchEl ? pitchEl.getBoundingClientRect() : null;
+    const sample = rects[0]
+      ? { w: Math.round(rects[0].w), h: Math.round(rects[0].h) }
+      : null;
     return {
       overlaps,
       pairs: pairs.slice(0, 12),
       cards: rects.length,
+      sampleCard: sample,
       pitch: pr
         ? { w: Math.round(pr.width), h: Math.round(pr.height) }
         : null,
@@ -83,7 +93,16 @@ async function countOverlaps() {
   });
 }
 
-// Prefer real Fullscreen API so match-desk sets isFullscreen → auto-fit ceiling.
+// --- 1) Windowed three-column desk ---
+const windowed = await countOverlaps();
+console.log("WINDOWED", JSON.stringify(windowed, null, 2));
+await page.screenshot({
+  path: ".pitchline-windowed-fit.png",
+  fullPage: false,
+});
+console.log("wrote .pitchline-windowed-fit.png");
+
+// --- 2) Fullscreen ---
 const fsOk = await page.evaluate(async () => {
   const desk = document.querySelector(
     ".relative.flex.flex-col.gap-1\\.5.overflow-hidden"
@@ -98,8 +117,6 @@ const fsOk = await page.evaluate(async () => {
 });
 
 if (!fsOk) {
-  // Fallback: enlarge desk + dispatch events; also force a high desired marker
-  // via localStorage userAdjusted so fit still has to clamp.
   console.log("requestFullscreen unavailable — simulating large container");
   await page.evaluate(() => {
     localStorage.setItem(
@@ -136,9 +153,9 @@ if (!fsOk) {
   console.log("entered document fullscreen");
 }
 
-await page.waitForTimeout(1000);
-const result = await countOverlaps();
-console.log(JSON.stringify(result, null, 2));
+await page.waitForTimeout(1200);
+const fullscreen = await countOverlaps();
+console.log("FULLSCREEN", JSON.stringify(fullscreen, null, 2));
 await page.screenshot({
   path: ".pitchline-fullscreen-fit.png",
   fullPage: false,
@@ -146,12 +163,22 @@ await page.screenshot({
 console.log("wrote .pitchline-fullscreen-fit.png");
 
 await browser.close();
-if (result.cards < 20) {
-  console.error(`Expected ~22 cards, got ${result.cards}`);
-  process.exit(1);
+
+let failed = false;
+for (const [label, result] of [
+  ["windowed", windowed],
+  ["fullscreen", fullscreen],
+]) {
+  if (result.cards < 20) {
+    console.error(`${label}: Expected ~22 cards, got ${result.cards}`);
+    failed = true;
+  }
+  if (result.overlaps !== 0) {
+    console.error(`${label}: FAIL overlaps=${result.overlaps}`, result.pairs);
+    failed = true;
+  } else {
+    console.log(`${label}: PASS 0 DOM AABB overlaps`);
+  }
 }
-if (result.overlaps !== 0) {
-  console.error(`FAIL overlaps=${result.overlaps}`, result.pairs);
-  process.exit(1);
-}
-console.log("PASS: 0 DOM AABB overlaps after fullscreen/large fit");
+if (failed) process.exit(1);
+console.log("PASS: windowed + fullscreen 0 real DOM overlaps");

@@ -25,8 +25,10 @@ import {
   type FieldSettings,
   DEFAULT_FIELD_SETTINGS,
   scaleFactor,
+  clampPct,
 } from "@/lib/field-settings";
 import {
+  CARD_GAP_PX,
   estimateCardSizePx,
   fitMarkerPctForContainer,
   resolveCardOverlaps,
@@ -305,6 +307,7 @@ function SportsComToken({
   return (
     <span
       className="inline-flex"
+      data-pitch-token="1"
       style={{
         transform: `scale(${markerScale})`,
         transformOrigin: "center center",
@@ -639,11 +642,13 @@ export function PitchBoard({
       const width = slot.x;
       let x: number;
       let y: number;
+      // Expanded depth bands (~46% span): home 2→48, away 52→98.
+      // Gives formation lines real horizontal room for ~76×152 cards.
       if (side === "home") {
-        x = 4 + depth * 42;
+        x = 2 + depth * 46;
         y = width;
       } else {
-        x = 96 - depth * 42;
+        x = 98 - depth * 46;
         y = 100 - width;
       }
       return { slot, player: p as PitchPlayer | undefined, x, y, side };
@@ -674,7 +679,7 @@ export function PitchBoard({
 
   // Fit marker to the measured pitch box first (auto-fit in fullscreen via
   // desired ceiling), then collision-resolve as a safety net.
-  const fittedMarkerPct = useMemo(
+  const layoutFittedPct = useMemo(
     () =>
       fitMarkerPctForContainer(
         pitchSize.w,
@@ -685,6 +690,15 @@ export function PitchBoard({
       ),
     [pitchSize.w, pitchSize.h, resolvedMarkerPct, resolvedSettings, rawPlaced]
   );
+
+  // DOM truth: if real card boxes still overlap after paint, shrink by 5%
+  // until clean or floor (-40). Prefer smaller cards over any overlap.
+  const [domShrinkPct, setDomShrinkPct] = useState(0);
+  useEffect(() => {
+    setDomShrinkPct(0);
+  }, [layoutFittedPct, pitchSize.w, pitchSize.h, rawPlaced, resolvedSettings]);
+
+  const fittedMarkerPct = clampPct(layoutFittedPct + domShrinkPct);
   const cardPx = estimateCardSizePx(fittedMarkerPct, resolvedSettings);
   const all = useMemo(() => {
     if (!pitchSize.w || !pitchSize.h) return rawPlaced;
@@ -694,9 +708,74 @@ export function PitchBoard({
       pitchSize.h,
       cardPx.w,
       cardPx.h,
-      4
+      CARD_GAP_PX
     );
   }, [rawPlaced, pitchSize.w, pitchSize.h, cardPx.w, cardPx.h]);
+
+  useEffect(() => {
+    const root = pitchRef.current;
+    if (!root || !pitchSize.w || !pitchSize.h) return;
+    let cancelled = false;
+
+    const measureAndShrink = () => {
+      if (cancelled) return;
+      const nodes = [
+        ...root.querySelectorAll('[data-pitch-card="1"]'),
+      ] as HTMLElement[];
+      if (nodes.length < 2) return;
+
+      const rects = nodes.map((el) => {
+        // Prefer the scaled SportsCom token, not the large hit-target button.
+        const token =
+          (el.querySelector("[data-pitch-token]") as HTMLElement | null) ||
+          (el.querySelector("button span.inline-flex") as HTMLElement | null) ||
+          (el.querySelector("button") as HTMLElement | null) ||
+          el;
+        return token.getBoundingClientRect();
+      });
+
+      let overlaps = 0;
+      for (let i = 0; i < rects.length; i++) {
+        for (let j = i + 1; j < rects.length; j++) {
+          const a = rects[i];
+          const b = rects[j];
+          const hit =
+            a.left < b.right - 0.5 &&
+            a.right > b.left + 0.5 &&
+            a.top < b.bottom - 0.5 &&
+            a.bottom > b.top + 0.5;
+          if (hit) overlaps++;
+        }
+      }
+
+      if (overlaps === 0) return;
+      setDomShrinkPct((prev) => {
+        const nextAbs = clampPct(layoutFittedPct + prev - 5);
+        if (nextAbs <= -40 && layoutFittedPct + prev <= -40) return prev;
+        const nextShrink = nextAbs - layoutFittedPct;
+        if (nextShrink === prev) return prev;
+        return nextShrink;
+      });
+    };
+
+    const raf = requestAnimationFrame(() => {
+      requestAnimationFrame(measureAndShrink);
+    });
+    const t = window.setTimeout(measureAndShrink, 120);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+      window.clearTimeout(t);
+    };
+  }, [
+    all,
+    fittedMarkerPct,
+    layoutFittedPct,
+    pitchSize.w,
+    pitchSize.h,
+    resolvedSettings.dataRows,
+  ]);
+
   const placing = Boolean(placingPlayerId && !locked);
 
   const showScore =

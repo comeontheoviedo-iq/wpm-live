@@ -10,22 +10,33 @@ export type PlacedSlot<TSlot = { id: string; label: string }> = {
   side: "home" | "away";
 };
 
+/** Default gap between card AABBs (screen px). Prefer space over overlap. */
+export const CARD_GAP_PX = 8;
+
+/** Honest unscaled SportsCom card height — real DOM is taller than CSS estimate. */
+export function baseCardHeight(settings: FieldSettings): number {
+  return settings.dataRows === 2 ? 152 : 118;
+}
+
+export function baseCardWidth(): number {
+  return 76;
+}
+
 /** Approximate rendered card size (matches SportsComToken baseW + scaled transform). */
 export function estimateCardSizePx(
   markerPct: number,
   settings: FieldSettings
 ): { w: number; h: number } {
   const scale = scaleFactor(markerPct);
-  const baseW = 76;
-  // header + photo/name + 1–2 cream stat rows (slightly tight vs CSS to leave room)
-  const baseH = settings.dataRows === 2 ? 125 : 100;
+  const baseW = baseCardWidth();
+  const baseH = baseCardHeight(settings);
   return { w: baseW * scale, h: baseH * scale };
 }
 
 /**
  * Geometric upper bound so 11+11 cards can physically fit the pitch box.
- * Desk middle column is often ~700–1000px even on a 1440 viewport.
- * Conservative: tall/narrow compact desks previously over-estimated via height.
+ * Landscape: depth = screen X → use cardW; lateral = screen Y → use cardH.
+ * Conservative: 6 depth bands per half × cardW; ~5 lateral stacks × cardH.
  */
 export function geometricMaxMarkerPct(
   containerW: number,
@@ -33,14 +44,20 @@ export function geometricMaxMarkerPct(
   settings: FieldSettings
 ): number {
   if (!containerW || !containerH) return 0;
-  const baseW = 76;
-  const baseH = settings.dataRows === 2 ? 125 : 100;
-  const usableH = Math.max(120, containerH - 48);
-  const halfW = Math.max(100, containerW * 0.45);
-  // Worst case: 5 lateral + gaps; 4 depth bands per half with breathing room
-  const maxScaleH = usableH / (5.4 * baseH + 5 * 6);
-  const maxScaleW = halfW / (4.15 * baseW);
-  const maxScale = Math.max(0.55, Math.min(maxScaleH, maxScaleW, 1.4));
+  const baseW = baseCardWidth();
+  const baseH = baseCardHeight(settings);
+  const gap = CARD_GAP_PX;
+  // Expanded half bands are ~46% of pitch width (home 2→48, away 52→98).
+  const halfW = Math.max(100, containerW * 0.46);
+  const usableH = Math.max(120, containerH - 56);
+  // Depth axis (X): 6 formation lines with gaps
+  const maxScaleDepth = halfW / (6 * baseW + 5 * gap);
+  // Lateral axis (Y): worst-case 5 players in a line
+  const maxScaleLateral = usableH / (5 * baseH + 4 * gap);
+  const maxScale = Math.max(
+    0.55,
+    Math.min(maxScaleDepth, maxScaleLateral, 1.4)
+  );
   return clampPct(Math.round((maxScale - 1) * 100));
 }
 
@@ -50,7 +67,7 @@ export function countAabbOverlaps<T extends PlacedSlot>(
   containerH: number,
   cardW: number,
   cardH: number,
-  gapPx = 0.5
+  gapPx = CARD_GAP_PX
 ): number {
   if (!containerW || !containerH || placed.length < 2) return 0;
   const minDx = cardW + gapPx;
@@ -72,6 +89,7 @@ export function countAabbOverlaps<T extends PlacedSlot>(
  * Cap marker % so 11+11 SportsCom cards fit with zero AABB overlaps after
  * collision resolve. Uses geometric bound as ceiling, then binary-searches
  * against real placements when provided.
+ * Prefer smaller cards over any remaining overlap.
  */
 export function fitMarkerPctForContainer(
   containerW: number,
@@ -96,9 +114,13 @@ export function fitMarkerPctForContainer(
       containerH,
       w,
       h,
-      4
+      CARD_GAP_PX
     );
-    return countAabbOverlaps(resolved, containerW, containerH, w, h, 0.5) === 0;
+    // Require 0 overlaps AFTER resolve with full gap — prefer shrink over touch.
+    return (
+      countAabbOverlaps(resolved, containerW, containerH, w, h, CARD_GAP_PX) ===
+      0
+    );
   };
 
   if (fits(ceiling)) return ceiling;
@@ -106,7 +128,8 @@ export function fitMarkerPctForContainer(
   let lo = -40;
   let hi = ceiling;
   let best = -40;
-  // Binary search max integer pct that fits
+  // Binary search max integer pct that fits; if even -40 overlaps, still -40
+  // (expanded depth bands + DOM shrink loop handle the rest).
   while (lo <= hi) {
     const mid = Math.floor((lo + hi) / 2);
     if (fits(mid)) {
@@ -121,8 +144,10 @@ export function fitMarkerPctForContainer(
 
 /**
  * Iterative AABB separation in screen space.
- * Prefer lateral (y%) spread within a team half; nudge depth (x%) when needed.
- * Preserves relative attack depth as much as possible.
+ * Same-side: push harder along depth (x) when cards sit on different formation
+ * lines (different original x); otherwise prefer lateral (y).
+ * Never leave known overlaps if space exists — caller must shrink marker if
+ * still overlapping after resolve.
  */
 export function resolveCardOverlaps<T extends PlacedSlot>(
   placed: T[],
@@ -130,7 +155,7 @@ export function resolveCardOverlaps<T extends PlacedSlot>(
   containerH: number,
   cardW: number,
   cardH: number,
-  gapPx = 4
+  gapPx = CARD_GAP_PX
 ): T[] {
   if (!containerW || !containerH || placed.length < 2) return placed;
 
@@ -146,78 +171,91 @@ export function resolveCardOverlaps<T extends PlacedSlot>(
   const halfW = cardW / 2;
   const halfH = cardH / 2;
   const midX = containerW / 2;
-  // Keep card bodies on their own half — previous +0.15*cardW bleed let
-  // centers cross midfield and home/away cards collide at large scales.
-  const halfGuard = Math.min(halfW * 0.25, 18);
+  // Keep card bodies on their own half — do not bleed across midfield.
+  const halfGuard = Math.max(halfW * 0.55, cardW * 0.35);
 
   const clampItem = (it: Item, padBottom: number) => {
     if (it.side === "home") {
+      // Expanded home band ~2%–48%
       it.px = Math.min(it.px, midX - halfGuard);
+      it.px = Math.max(halfW + 2, Math.min(containerW * 0.48, it.px));
     } else {
+      // Expanded away band ~52%–98%
       it.px = Math.max(it.px, midX + halfGuard);
+      it.px = Math.max(containerW * 0.52, Math.min(containerW - halfW - 2, it.px));
     }
     it.px = Math.max(halfW + 2, Math.min(containerW - halfW - 2, it.px));
     it.py = Math.max(halfH + 6, Math.min(containerH - halfH - padBottom, it.py));
   };
 
-  for (let iter = 0; iter < 100; iter++) {
-    let moved = false;
-    for (let i = 0; i < items.length; i++) {
-      for (let j = i + 1; j < items.length; j++) {
-        const a = items[i];
-        const b = items[j];
-        const dx = b.px - a.px;
-        const dy = b.py - a.py;
-        const absDx = Math.abs(dx);
-        const absDy = Math.abs(dy);
-        if (absDx >= minDx || absDy >= minDy) continue;
+  const separatePair = (a: Item, b: Item, depthBoost: number) => {
+    const dx = b.px - a.px;
+    const dy = b.py - a.py;
+    const absDx = Math.abs(dx);
+    const absDy = Math.abs(dy);
+    if (absDx >= minDx || absDy >= minDy) return false;
 
-        const overlapX = minDx - absDx;
-        const overlapY = minDy - absDy;
-        const sameSide = a.side === b.side;
+    const overlapX = minDx - absDx;
+    const overlapY = minDy - absDy;
+    const sameSide = a.side === b.side;
+    // Different original depth (formation lines) → push depth harder on same side.
+    const differentLines = Math.abs(a.ox - b.ox) > cardW * 0.15;
+    const preferDepth = sameSide && differentLines;
 
-        const latWeight = sameSide ? 1 : 0.95;
-        const depthWeight = sameSide ? 1 : 0.85;
-
-        if (overlapY > 0) {
-          const push = (overlapY / 2 + 0.5) * latWeight;
-          const sign =
-            dy === 0 ? (a.oy <= b.oy ? -1 : 1) : dy > 0 ? 1 : -1;
-          a.py -= push * sign;
-          b.py += push * sign;
-        }
-        if (overlapX > 0) {
-          let push = (overlapX / 2 + 0.5) * depthWeight;
-          const aDeeper =
-            a.side === "home" ? a.ox <= b.ox : a.ox >= b.ox;
-          const depthSignHome = aDeeper ? -1 : 1;
-          const sign =
-            a.side === "home" && b.side === "home"
-              ? depthSignHome
-              : a.side === "away" && b.side === "away"
-                ? -depthSignHome
-                : dx === 0
-                  ? a.side === "home"
-                    ? -1
-                    : 1
-                  : dx > 0
-                    ? 1
-                    : -1;
-          if (overlapX > cardW * 0.25) push *= 1.25;
-          a.px -= push * sign;
-          b.px += push * sign;
-        }
-        moved = true;
-      }
+    let latWeight = sameSide ? 0.85 : 0.95;
+    let depthWeight = sameSide ? 1.15 : 0.9;
+    if (preferDepth) {
+      depthWeight = 1.55 * depthBoost;
+      latWeight = 0.65;
+    } else if (sameSide) {
+      depthWeight = 1.2 * depthBoost;
     }
 
-    for (const it of items) clampItem(it, 22);
+    if (overlapY > 0) {
+      const push = (overlapY / 2 + 0.75) * latWeight;
+      const sign = dy === 0 ? (a.oy <= b.oy ? -1 : 1) : dy > 0 ? 1 : -1;
+      a.py -= push * sign;
+      b.py += push * sign;
+    }
+    if (overlapX > 0) {
+      let push = (overlapX / 2 + 0.75) * depthWeight;
+      const aDeeper = a.side === "home" ? a.ox <= b.ox : a.ox >= b.ox;
+      const depthSignHome = aDeeper ? -1 : 1;
+      const sign =
+        a.side === "home" && b.side === "home"
+          ? depthSignHome
+          : a.side === "away" && b.side === "away"
+            ? -depthSignHome
+            : dx === 0
+              ? a.side === "home"
+                ? -1
+                : 1
+              : dx > 0
+                ? 1
+                : -1;
+      if (overlapX > cardW * 0.2) push *= 1.35;
+      if (preferDepth) push *= 1.2;
+      a.px -= push * sign;
+      b.px += push * sign;
+    }
+    return true;
+  };
 
+  // Main resolve — many iterations; escalate depth push over time.
+  for (let iter = 0; iter < 180; iter++) {
+    let moved = false;
+    const depthBoost = 1 + Math.min(0.8, iter / 90);
+    for (let i = 0; i < items.length; i++) {
+      for (let j = i + 1; j < items.length; j++) {
+        if (separatePair(items[i], items[j], depthBoost)) moved = true;
+      }
+    }
+    for (const it of items) clampItem(it, 22);
     if (!moved) break;
   }
 
-  // Final pass: if still overlapping, force lateral-only split
-  for (let pass = 0; pass < 30; pass++) {
+  // Final force passes: never leave overlap if axes can still separate.
+  for (let pass = 0; pass < 60; pass++) {
     let moved = false;
     for (let i = 0; i < items.length; i++) {
       for (let j = i + 1; j < items.length; j++) {
@@ -228,14 +266,34 @@ export function resolveCardOverlaps<T extends PlacedSlot>(
         if (Math.abs(dx) >= minDx || Math.abs(dy) >= minDy) continue;
         const overlapY = minDy - Math.abs(dy);
         const overlapX = minDx - Math.abs(dx);
-        const pushY = overlapY / 2 + 1;
-        const signY = dy === 0 ? (i % 2 === 0 ? -1 : 1) : dy > 0 ? 1 : -1;
-        a.py -= pushY * signY;
-        b.py += pushY * signY;
-        const pushX = overlapX / 2 + 1;
-        const signX = dx === 0 ? (a.side === "home" ? -1 : 1) : dx > 0 ? 1 : -1;
-        a.px -= pushX * signX;
-        b.px += pushX * signX;
+        const sameSide = a.side === b.side;
+        const differentLines = Math.abs(a.ox - b.ox) > cardW * 0.15;
+
+        // Same-side different lines: prioritize depth (x) hard.
+        if (sameSide && differentLines && overlapX > 0) {
+          const pushX = overlapX / 2 + 1.5;
+          const aDeeper = a.side === "home" ? a.ox <= b.ox : a.ox >= b.ox;
+          const sign =
+            a.side === "home"
+              ? aDeeper
+                ? -1
+                : 1
+              : aDeeper
+                ? 1
+                : -1;
+          a.px -= pushX * sign;
+          b.px += pushX * sign;
+        } else {
+          const pushY = overlapY / 2 + 1.25;
+          const signY = dy === 0 ? (i % 2 === 0 ? -1 : 1) : dy > 0 ? 1 : -1;
+          a.py -= pushY * signY;
+          b.py += pushY * signY;
+          const pushX = overlapX / 2 + 1.25;
+          const signX =
+            dx === 0 ? (a.side === "home" ? -1 : 1) : dx > 0 ? 1 : -1;
+          a.px -= pushX * signX;
+          b.px += pushX * signX;
+        }
         moved = true;
       }
     }

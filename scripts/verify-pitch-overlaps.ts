@@ -4,6 +4,7 @@
  */
 import { slotsFor } from "../lib/formations";
 import {
+  CARD_GAP_PX,
   estimateCardSizePx,
   fitMarkerPctForContainer,
   resolveCardOverlaps,
@@ -18,11 +19,12 @@ function placeLandscape(formation: string, side: "home" | "away") {
     const width = slot.x;
     let x: number;
     let y: number;
+    // Expanded depth bands (~46% span): home 2→48, away 52→98.
     if (side === "home") {
-      x = 4 + depth * 42;
+      x = 2 + depth * 46;
       y = width;
     } else {
-      x = 96 - depth * 42;
+      x = 98 - depth * 46;
       y = 100 - width;
     }
     return { slot, player: { id: `${side}-${slot.id}` }, x, y, side };
@@ -49,8 +51,22 @@ function check(
     raw
   );
   const { w, h } = estimateCardSizePx(fitted, settings);
-  const resolved = resolveCardOverlaps(raw, width, height, w, h, 4);
-  const overlaps = countAabbOverlaps(resolved, width, height, w, h, 0.5);
+  const resolved = resolveCardOverlaps(
+    raw,
+    width,
+    height,
+    w,
+    h,
+    CARD_GAP_PX
+  );
+  const overlaps = countAabbOverlaps(
+    resolved,
+    width,
+    height,
+    w,
+    h,
+    CARD_GAP_PX
+  );
   const label = `${homeF} vs ${awayF} @ ${width}x${height} want ${markerPct >= 0 ? "+" : ""}${markerPct}% fit ${fitted >= 0 ? "+" : ""}${fitted}% card ${w.toFixed(0)}x${h.toFixed(0)}`;
   console.log(`${overlaps === 0 ? "OK" : "FAIL"} ${label} overlaps=${overlaps}`);
   return overlaps;

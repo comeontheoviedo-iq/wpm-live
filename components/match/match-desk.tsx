@@ -17,6 +17,7 @@ import {
   Minimize2,
   X,
   Pin,
+  SlidersHorizontal,
 } from "lucide-react";
 import { PitchBoard, type PitchPlayer } from "@/components/match/pitch";
 import { SquadRail, type SquadPlayer } from "@/components/match/squad-rail";
@@ -26,11 +27,20 @@ import {
   type NotesFilterScope,
 } from "@/components/notes/notes-panel";
 import { PlayerDossier } from "@/components/match/player-dossier";
+import { FieldSettingsModal } from "@/components/match/field-settings-modal";
 import { EventTimeline } from "@/components/match/event-timeline";
 import { EventComposer } from "@/components/live/event-composer";
 import { Button } from "@/components/ui/button";
 import { FORMATIONS } from "@/lib/formations";
 import { cn } from "@/lib/utils";
+import {
+  type FieldSettings,
+  DEFAULT_FIELD_SETTINGS,
+  loadFieldSettings,
+  saveFieldSettings,
+  effectiveMarkerPct,
+} from "@/lib/field-settings";
+import type { PlayerOverrideRow } from "@/lib/player-overrides";
 
 type Coach = { name: string; nationality: string; age: number | null };
 
@@ -196,6 +206,7 @@ export function MatchDesk({
   keepers = [],
   homeClubId,
   awayClubId,
+  playerOverrides: initialOverrides = [],
 }: {
   matchId: string;
   homeName: string;
@@ -242,6 +253,7 @@ export function MatchDesk({
   keepers?: KeeperRow[];
   homeClubId?: string;
   awayClubId?: string;
+  playerOverrides?: PlayerOverrideRow[];
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<SquadPlayer | null>(null);
@@ -262,6 +274,11 @@ export function MatchDesk({
   const [flashEventIds, setFlashEventIds] = useState<string[]>([]);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const deskRootRef = useRef<HTMLDivElement>(null);
+  const [fieldSettings, setFieldSettings] = useState<FieldSettings>(
+    DEFAULT_FIELD_SETTINGS
+  );
+  const [fieldSettingsOpen, setFieldSettingsOpen] = useState(false);
+  const [overrides, setOverrides] = useState<PlayerOverrideRow[]>(initialOverrides);
 
   useEffect(() => {
     const onFs = () => {
@@ -282,6 +299,29 @@ export function MatchDesk({
         onFs as EventListener
       );
     };
+  }, []);
+
+  useEffect(() => {
+    setFieldSettings(loadFieldSettings());
+  }, []);
+
+  useEffect(() => {
+    setOverrides(initialOverrides);
+  }, [initialOverrides]);
+
+  const updateFieldSettings = useCallback((next: FieldSettings) => {
+    setFieldSettings(next);
+    saveFieldSettings(next);
+  }, []);
+
+  const markerPct = effectiveMarkerPct(fieldSettings, isFullscreen);
+
+  const applyOverride = useCallback((row: PlayerOverrideRow | null, playerId: string) => {
+    setOverrides((prev) => {
+      const rest = prev.filter((o) => o.playerId !== playerId);
+      if (!row) return rest;
+      return [...rest, row];
+    });
   }, []);
 
   const toggleFullscreen = useCallback(async () => {
@@ -367,21 +407,41 @@ export function MatchDesk({
     return map;
   }, [notes]);
 
+  const overrideById = useMemo(() => {
+    const m = new Map<string, PlayerOverrideRow>();
+    for (const o of overrides) m.set(o.playerId, o);
+    return m;
+  }, [overrides]);
+
   const homeEnriched = useMemo(
     () =>
-      enrichPlayers(homePlayers, events).map((p) => ({
-        ...p,
-        noteHook: noteHookByPlayer.get(p.id) || null,
-      })),
-    [homePlayers, events, noteHookByPlayer]
+      enrichPlayers(homePlayers, events).map((p) => {
+        const o = overrideById.get(p.id);
+        return {
+          ...p,
+          noteHook: noteHookByPlayer.get(p.id) || null,
+          displayName: o?.displayName ?? null,
+          pronunciation: o?.pronunciation ?? null,
+          pitchFlag: o?.pitchFlag ?? null,
+          jerseyNumber: o?.jerseyNumber ?? null,
+        };
+      }),
+    [homePlayers, events, noteHookByPlayer, overrideById]
   );
   const awayEnriched = useMemo(
     () =>
-      enrichPlayers(awayPlayers, events).map((p) => ({
-        ...p,
-        noteHook: noteHookByPlayer.get(p.id) || null,
-      })),
-    [awayPlayers, events, noteHookByPlayer]
+      enrichPlayers(awayPlayers, events).map((p) => {
+        const o = overrideById.get(p.id);
+        return {
+          ...p,
+          noteHook: noteHookByPlayer.get(p.id) || null,
+          displayName: o?.displayName ?? null,
+          pronunciation: o?.pronunciation ?? null,
+          pitchFlag: o?.pitchFlag ?? null,
+          jerseyNumber: o?.jerseyNumber ?? null,
+        };
+      }),
+    [awayPlayers, events, noteHookByPlayer, overrideById]
   );
 
   const squad: SquadPlayer[] = useMemo(() => {
@@ -924,6 +984,15 @@ export function MatchDesk({
           <button
             type="button"
             className="inline-flex items-center gap-1 rounded-md border border-slate-200 dark:border-slate-700 px-2 py-1 text-[11px] font-medium hover:bg-slate-50 dark:hover:bg-slate-900"
+            onClick={() => setFieldSettingsOpen(true)}
+            title="Field Settings · Pitch Card"
+          >
+            <SlidersHorizontal className="h-3 w-3" />
+            Field
+          </button>
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 rounded-md border border-slate-200 dark:border-slate-700 px-2 py-1 text-[11px] font-medium hover:bg-slate-50 dark:hover:bg-slate-900"
             onClick={() => void toggleFullscreen()}
             title={isFullscreen ? "Exit fullscreen (Esc)" : "Fullscreen desk"}
             aria-pressed={isFullscreen}
@@ -1051,6 +1120,9 @@ export function MatchDesk({
               matchStatus={status}
               homeAbbr={homeAbbr || homeName}
               awayAbbr={awayAbbr || awayName}
+              cardSettings={fieldSettings}
+              markerPct={markerPct}
+              onOpenFieldSettings={() => setFieldSettingsOpen(true)}
             />
           </div>
 
@@ -1182,12 +1254,23 @@ export function MatchDesk({
           initialTab="profile"
           initialNotes={notes.filter((n) => n.entityId === dossierId)}
           playerName={squad.find((s) => s.id === dossierId)?.name}
+          initialOverride={overrideById.get(dossierId) || null}
+          onOverrideChange={(row) => applyOverride(row, dossierId)}
           onClose={() => {
             setDossierId(null);
             setSelected(null);
           }}
         />
       )}
+
+      <FieldSettingsModal
+        open={fieldSettingsOpen}
+        onClose={() => setFieldSettingsOpen(false)}
+        settings={fieldSettings}
+        markerPct={markerPct}
+        onChange={updateFieldSettings}
+        isFullscreen={isFullscreen}
+      />
     </div>
   );
 

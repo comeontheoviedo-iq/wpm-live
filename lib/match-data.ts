@@ -36,6 +36,7 @@ export async function getMatchFull(id: string) {
       officials: { include: { official: true } },
       injuries: { include: { player: true, club: true } },
       statistics: { orderBy: { order: "asc" } },
+      playerOverrides: true,
     },
   });
 }

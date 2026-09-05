@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type DragEvent } from "react";
-import { User, X } from "lucide-react";
+import { User, X, SlidersHorizontal } from "lucide-react";
 import { slotsFor } from "@/lib/formations";
 import { cn } from "@/lib/utils";
 import {
@@ -15,6 +15,11 @@ import {
   playerPhotoUrl,
   posCode,
 } from "@/lib/flags";
+import {
+  type FieldSettings,
+  DEFAULT_FIELD_SETTINGS,
+  scaleFactor,
+} from "@/lib/field-settings";
 
 export type PitchPlayer = {
   id: string;
@@ -52,6 +57,12 @@ export type PitchPlayer = {
   subMinute?: number | null;
   /** Optional 1-line hook from pinned player note title */
   noteHook?: string | null;
+  /** Match-scoped overrides */
+  displayName?: string | null;
+  pronunciation?: string | null;
+  /** primary | secondary | both | specific nationality label */
+  pitchFlag?: string | null;
+  jerseyNumber?: number | null;
 };
 
 type Coach = { name: string; nationality: string; age: number | null };
@@ -105,6 +116,25 @@ function FlagImg({ nationality, className }: { nationality?: string | null; clas
   );
 }
 
+function resolvePitchFlags(
+  player: PitchPlayer
+): string[] {
+  const dual = dualNationalities(player.nationality, player.birthCountry);
+  const mode = (player.pitchFlag || "both").trim().toLowerCase();
+  if (!dual.length) {
+    return player.nationality ? [player.nationality] : [];
+  }
+  if (mode === "primary" || mode === "first") return [dual[0]];
+  if (mode === "secondary" || mode === "second") return [dual[1] || dual[0]];
+  if (mode === "both" || mode === "dual") return dual;
+  // specific nationality string
+  const hit = dual.find(
+    (n) => n.toLowerCase() === mode || n.toLowerCase().includes(mode)
+  );
+  if (hit) return [hit];
+  return dual;
+}
+
 function SportsComToken({
   player,
   side,
@@ -112,6 +142,8 @@ function SportsComToken({
   slotLabel,
   selected,
   placing,
+  cardSettings = DEFAULT_FIELD_SETTINGS,
+  markerPct = 0,
 }: {
   player: PitchPlayer;
   side: "home" | "away";
@@ -119,14 +151,16 @@ function SportsComToken({
   slotLabel: string;
   selected?: boolean;
   placing?: boolean;
+  cardSettings?: FieldSettings;
+  markerPct?: number;
 }) {
   const isHome = side === "home";
   const isGk =
     posCode(player.position, slotLabel) === "GK" ||
     (player.position || "").toUpperCase() === "GK";
-  const last = lastNameOf(player.name).toUpperCase();
+  const fieldName = (player.displayName || lastNameOf(player.name)).toUpperCase();
   const pos = posCode(player.position, slotLabel);
-  const flagNats = dualNationalities(player.nationality, player.birthCountry);
+  const flagNats = resolvePitchFlags(player);
   const flagTitle = flagNats.length
     ? flagNats.join(" / ")
     : player.nationality || null;
@@ -134,6 +168,10 @@ function SportsComToken({
     photoUrl: player.photoUrl,
     apiFootballPlayerId: player.apiFootballPlayerId,
   });
+  const shirt =
+    player.jerseyNumber != null && Number.isFinite(player.jerseyNumber)
+      ? Number(player.jerseyNumber)
+      : player.shirtNumber;
   const apps = player.appearances ?? 0;
   const seasonG = player.goals ?? 0;
   const seasonA = player.assists ?? 0;
@@ -155,159 +193,251 @@ function SportsComToken({
     ? { borderColor: "#ffffff" }
     : { borderColor: teamColor };
 
+  const cols = cardSettings.fieldsPerRow;
+  const namePx = 9 * scaleFactor(cardSettings.nameSizePct);
+  const markerScale = scaleFactor(markerPct);
+  const baseW = 76;
+
+  const outfieldRow1: [string, string | number][] =
+    cols === 3
+      ? [
+          ["APP", apps || "—"],
+          ["GOL", seasonG],
+          ["AST", seasonA],
+        ]
+      : cols === 5
+        ? [
+            ["APP", apps || "—"],
+            ["GOL", seasonG],
+            ["AST", seasonA],
+            ["RTG", rating],
+            ["AGE", age],
+          ]
+        : [
+            ["APP", apps || "—"],
+            ["GOL", seasonG],
+            ["AST", seasonA],
+            ["RTG", rating],
+          ];
+  const outfieldRow2: [string, string | number][] | null =
+    cardSettings.dataRows === 2
+      ? cols === 3
+        ? [
+            ["AGE", age],
+            ["GOL", matchG],
+            ["SUB", sub],
+          ]
+        : cols === 5
+          ? [
+              ["AGE", age],
+              ["GOL", matchG],
+              ["AST", matchA],
+              ["SUB", sub],
+              ["RTG", rating],
+            ]
+          : [
+              ["AGE", age],
+              ["GOL", matchG],
+              ["AST", matchA],
+              ["SUB", sub],
+            ]
+      : null;
+
+  const gkRow1: [string, string | number][] =
+    cols === 3
+      ? [
+          ["AGE", age],
+          ["HGT", formatHeight(player.heightCm)],
+          ["SV", player.matchSaves ?? player.saves ?? 0],
+        ]
+      : cols === 5
+        ? [
+            ["AGE", age],
+            ["HGT", formatHeight(player.heightCm)],
+            ["WGT", formatWeight(player.weightKg)],
+            ["FOT", formatFoot(player.preferredFoot)],
+            ["SV", player.matchSaves ?? player.saves ?? 0],
+          ]
+        : [
+            ["AGE", age],
+            ["HGT", formatHeight(player.heightCm)],
+            ["WGT", formatWeight(player.weightKg)],
+            ["FOT", formatFoot(player.preferredFoot)],
+          ];
+  const gkRow2: [string, string | number][] | null =
+    cardSettings.dataRows === 2
+      ? cols === 3
+        ? [
+            ["CS", player.cleanSheets ?? 0],
+            ["APP", apps || "—"],
+            ["RTG", rating],
+          ]
+        : cols === 5
+          ? [
+              ["SV", player.matchSaves ?? player.saves ?? 0],
+              ["CS", player.cleanSheets ?? 0],
+              ["APP", apps || "—"],
+              ["RTG", rating],
+              ["AGE", age],
+            ]
+          : [
+              ["SV", player.matchSaves ?? player.saves ?? 0],
+              ["CS", player.cleanSheets ?? 0],
+              ["APP", apps || "—"],
+              ["RTG", rating],
+            ]
+      : null;
+
+  const row1 = isGk ? gkRow1 : outfieldRow1;
+  const row2 = isGk ? gkRow2 : outfieldRow2;
+
   return (
     <span
-      className={cn(
-        "group relative flex w-[70px] sm:w-[76px] flex-col overflow-hidden rounded-md border-[1.5px] shadow-md",
-        band,
-        selected &&
-          "ring-[3px] ring-blue-500 shadow-[0_0_14px_rgba(37,99,235,0.85)]",
-        placing && "ring-2 ring-amber-400",
-        player.subbedOff && "opacity-50 grayscale-[25%]"
-      )}
-      style={borderStyle}
-      title={[
-        player.name,
-        player.isCaptain ? "Captain" : null,
-        pos,
-        flagTitle,
-        player.age != null ? `Age ${player.age}` : null,
-        player.noteHook || null,
-      ]
-        .filter(Boolean)
-        .join(" · ")}
+      className="inline-flex"
+      style={{
+        transform: `scale(${markerScale})`,
+        transformOrigin: "center center",
+      }}
     >
-      {/* Header: # + flag/pos */}
-      <div
+      <span
         className={cn(
-          "flex items-start justify-between gap-0.5 px-1 pt-0.5",
-          isHome ? "bg-[#1a1a1a]" : "bg-white"
+          "group relative flex flex-col overflow-hidden rounded-md border-[1.5px] shadow-md",
+          band,
+          selected &&
+            "ring-[3px] ring-blue-500 shadow-[0_0_14px_rgba(37,99,235,0.85)]",
+          placing && "ring-2 ring-amber-400",
+          player.subbedOff && "opacity-50 grayscale-[25%]"
         )}
+        style={{ ...borderStyle, width: baseW }}
+        title={[
+          player.displayName || player.name,
+          player.isCaptain ? "Captain" : null,
+          pos,
+          flagTitle,
+          player.age != null ? `Age ${player.age}` : null,
+          player.pronunciation ? `🔊 ${player.pronunciation}` : null,
+          player.noteHook || null,
+        ]
+          .filter(Boolean)
+          .join(" · ")}
       >
-        <span
+        {/* Header: # + flag/pos */}
+        <div
           className={cn(
-            "text-[15px] sm:text-[17px] font-black leading-none tabular-nums",
-            isHome ? "text-white" : "text-slate-900"
+            "flex items-start justify-between gap-0.5 px-1 pt-0.5",
+            isHome ? "bg-[#1a1a1a]" : "bg-white"
           )}
         >
-          {player.shirtNumber}
-        </span>
-        <div className="flex flex-col items-end gap-px pt-0.5">
-          <div className="flex items-center gap-px" title={flagTitle || undefined}>
-            {flagNats.length ? (
-              flagNats.map((n) => <FlagImg key={n} nationality={n} />)
-            ) : (
-              <FlagImg nationality={player.nationality} />
-            )}
-          </div>
           <span
             className={cn(
-              "text-[7px] font-bold uppercase leading-none tracking-wide",
-              isHome ? "text-white/90" : "text-slate-700"
+              "text-[15px] sm:text-[17px] font-black leading-none tabular-nums",
+              isHome ? "text-white" : "text-slate-900"
             )}
           >
-            {pos}
+            {shirt}
+          </span>
+          <div className="flex flex-col items-end gap-px pt-0.5">
+            <div className="flex items-center gap-px" title={flagTitle || undefined}>
+              {flagNats.length ? (
+                flagNats.map((n) => <FlagImg key={n} nationality={n} />)
+              ) : (
+                <FlagImg nationality={player.nationality} />
+              )}
+            </div>
+            <span
+              className={cn(
+                "text-[7px] font-bold uppercase leading-none tracking-wide",
+                isHome ? "text-white/90" : "text-slate-700"
+              )}
+            >
+              {pos}
+            </span>
+          </div>
+        </div>
+
+        {/* Photo + name */}
+        <div
+          className={cn(
+            "flex flex-col items-center px-1 pb-1 pt-0.5",
+            isHome ? "bg-[#1a1a1a]" : "bg-neutral-50"
+          )}
+        >
+          <span
+            className={cn(
+              "relative flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center overflow-hidden rounded-sm",
+              isHome ? "bg-black/40 ring-1 ring-white/20" : "bg-slate-200 ring-1 ring-slate-300"
+            )}
+          >
+            {photo ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={photo}
+                alt=""
+                className="h-full w-full object-cover object-top"
+                loading="lazy"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = "none";
+                  const sib = (e.target as HTMLImageElement)
+                    .nextElementSibling as HTMLElement | null;
+                  if (sib) sib.style.display = "flex";
+                }}
+              />
+            ) : null}
+            <span
+              className={cn(
+                "absolute inset-0 items-center justify-center",
+                photo ? "hidden" : "flex",
+                isHome ? "text-white/50" : "text-slate-400"
+              )}
+            >
+              <User className="h-5 w-5" strokeWidth={1.5} />
+            </span>
+          </span>
+          <span
+            className={cn(
+              "mt-0.5 w-full truncate text-center font-extrabold uppercase leading-tight tracking-wide",
+              isHome ? "text-white" : "text-slate-900"
+            )}
+            style={{ fontSize: `${namePx}px` }}
+          >
+            {player.isCaptain ? "© " : ""}
+            {fieldName}
           </span>
         </div>
-      </div>
 
-      {/* Photo + name */}
-      <div
-        className={cn(
-          "flex flex-col items-center px-1 pb-1 pt-0.5",
-          isHome ? "bg-[#1a1a1a]" : "bg-neutral-50"
-        )}
-      >
-        <span
-          className={cn(
-            "relative flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center overflow-hidden rounded-sm",
-            isHome ? "bg-black/40 ring-1 ring-white/20" : "bg-slate-200 ring-1 ring-slate-300"
-          )}
-        >
-          {photo ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={photo}
-              alt=""
-              className="h-full w-full object-cover object-top"
-              loading="lazy"
-              onError={(e) => {
-                (e.target as HTMLImageElement).style.display = "none";
-                const sib = (e.target as HTMLImageElement)
-                  .nextElementSibling as HTMLElement | null;
-                if (sib) sib.style.display = "flex";
-              }}
-            />
-          ) : null}
-          <span
-            className={cn(
-              "absolute inset-0 items-center justify-center",
-              photo ? "hidden" : "flex",
-              isHome ? "text-white/50" : "text-slate-400"
-            )}
+        {/* Cream stats table */}
+        <div className="bg-[#FFF8E7] px-0.5 py-0.5 border-t border-black/10">
+          <div
+            className="grid gap-px"
+            style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
           >
-            <User className="h-5 w-5" strokeWidth={1.5} />
+            {row1.map(([label, value]) => (
+              <StatCell key={`r1-${label}`} label={label} value={value} />
+            ))}
+          </div>
+          {row2 ? (
+            <div
+              className="mt-0.5 grid gap-px border-t border-black/5 pt-0.5"
+              style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+            >
+              {row2.map(([label, value]) => (
+                <StatCell key={`r2-${label}`} label={label} value={value} />
+              ))}
+            </div>
+          ) : null}
+        </div>
+
+        {(player.matchYellow || player.matchRed) && (
+          <span className="absolute left-0.5 top-[22px] flex flex-col gap-px">
+            {player.matchYellow ? (
+              <span className="h-2 w-1.5 rounded-[1px] bg-yellow-400 shadow" />
+            ) : null}
+            {player.matchRed ? (
+              <span className="h-2 w-1.5 rounded-[1px] bg-rose-600 shadow" />
+            ) : null}
           </span>
-        </span>
-        <span
-          className={cn(
-            "mt-0.5 w-full truncate text-center text-[8px] sm:text-[9px] font-extrabold uppercase leading-tight tracking-wide",
-            isHome ? "text-white" : "text-slate-900"
-          )}
-        >
-          {player.isCaptain ? "© " : ""}
-          {last}
-        </span>
-      </div>
-
-      {/* Cream stats table */}
-      <div className="bg-[#FFF8E7] px-0.5 py-0.5 border-t border-black/10">
-        {isGk ? (
-          <>
-            <div className="grid grid-cols-4 gap-px">
-              <StatCell label="AGE" value={age} />
-              <StatCell label="HGT" value={formatHeight(player.heightCm)} />
-              <StatCell label="WGT" value={formatWeight(player.weightKg)} />
-              <StatCell label="FOT" value={formatFoot(player.preferredFoot)} />
-            </div>
-            <div className="mt-0.5 grid grid-cols-4 gap-px border-t border-black/5 pt-0.5">
-              <StatCell
-                label="SV"
-                value={player.matchSaves ?? player.saves ?? 0}
-              />
-              <StatCell label="CS" value={player.cleanSheets ?? 0} />
-              <StatCell label="APP" value={apps || "—"} />
-              <StatCell label="RTG" value={rating} />
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="grid grid-cols-4 gap-px">
-              <StatCell label="APP" value={apps || "—"} />
-              <StatCell label="GOL" value={seasonG} />
-              <StatCell label="AST" value={seasonA} />
-              <StatCell label="RTG" value={rating} />
-            </div>
-            <div className="mt-0.5 grid grid-cols-4 gap-px border-t border-black/5 pt-0.5">
-              <StatCell label="AGE" value={age} />
-              <StatCell label="GOL" value={matchG} />
-              <StatCell label="AST" value={matchA} />
-              <StatCell label="SUB" value={sub} />
-            </div>
-          </>
         )}
-      </div>
-
-      {(player.matchYellow || player.matchRed) && (
-        <span className="absolute left-0.5 top-[22px] flex flex-col gap-px">
-          {player.matchYellow ? (
-            <span className="h-2 w-1.5 rounded-[1px] bg-yellow-400 shadow" />
-          ) : null}
-          {player.matchRed ? (
-            <span className="h-2 w-1.5 rounded-[1px] bg-rose-600 shadow" />
-          ) : null}
-        </span>
-      )}
+      </span>
     </span>
   );
 }
@@ -386,6 +516,9 @@ export function PitchBoard({
   matchStatus,
   homeAbbr,
   awayAbbr,
+  cardSettings,
+  markerPct,
+  onOpenFieldSettings,
 }: {
   homeName: string;
   awayName: string;
@@ -431,9 +564,14 @@ export function PitchBoard({
   matchStatus?: string;
   homeAbbr?: string;
   awayAbbr?: string;
+  cardSettings?: FieldSettings;
+  markerPct?: number;
+  onOpenFieldSettings?: () => void;
 }) {
   const homeSlots = slotsFor(homeFormation);
   const awaySlots = slotsFor(awayFormation);
+  const resolvedSettings = cardSettings || DEFAULT_FIELD_SETTINGS;
+  const resolvedMarkerPct = markerPct ?? resolvedSettings.markerSizePct;
   const badge = lineupBadgeLabel(lineupStatus);
   const [dragOverSlot, setDragOverSlot] = useState<string | null>(null);
 
@@ -653,6 +791,18 @@ export function PitchBoard({
           </div>
 
           <div className="flex flex-col gap-1 items-end pointer-events-auto">
+            {onOpenFieldSettings && (
+              <button
+                type="button"
+                onClick={onOpenFieldSettings}
+                className="inline-flex items-center gap-1 rounded-md bg-white/95 border border-slate-300 shadow px-1.5 py-0.5 text-[10px] font-semibold text-slate-800 hover:bg-white"
+                title="Field Settings · Pitch Card"
+                aria-label="Field Settings"
+              >
+                <SlidersHorizontal className="h-3 w-3" />
+                Field
+              </button>
+            )}
             <div
               className="rounded shadow px-1.5 py-0.5 text-[10px] flex items-center gap-1 text-white border"
               style={{ backgroundColor: awayColor, borderColor: awayColor }}
@@ -820,6 +970,8 @@ export function PitchBoard({
                     slotLabel={slot.label}
                     selected={isSelected}
                     placing={isPlacingHere}
+                    cardSettings={resolvedSettings}
+                    markerPct={resolvedMarkerPct}
                   />
                 ) : (
                   <span

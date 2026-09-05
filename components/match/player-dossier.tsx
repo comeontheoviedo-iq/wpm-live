@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { X, Loader2, BookOpen, Star, User } from "lucide-react";
+import { X, Loader2, BookOpen, Star, User, Settings2, Volume2 } from "lucide-react";
 import { NotesPanel, type NoteRow } from "@/components/notes/notes-panel";
 import { EventTimeline } from "@/components/match/event-timeline";
 import { cn } from "@/lib/utils";
 import {
+  dualNationalities,
   flagUrl,
   formatFoot,
   formatRating,
@@ -13,6 +14,8 @@ import {
   playerPhotoUrl,
   posCode,
 } from "@/lib/flags";
+import { speechLangFromNationality, speakPronunciation } from "@/lib/speech-lang";
+import type { PlayerOverrideRow } from "@/lib/player-overrides";
 
 type DossierPayload = {
   player: {
@@ -154,6 +157,8 @@ export function PlayerDossier({
   initialTab = "profile",
   initialNotes = [],
   playerName,
+  initialOverride = null,
+  onOverrideChange,
 }: {
   matchId: string;
   playerId: string;
@@ -161,6 +166,8 @@ export function PlayerDossier({
   initialTab?: Tab | "overview" | "stats" | "events";
   initialNotes?: NoteRow[];
   playerName?: string;
+  initialOverride?: PlayerOverrideRow | null;
+  onOverrideChange?: (row: PlayerOverrideRow | null) => void;
 }) {
   const mapInitial = (t: string): Tab => {
     if (t === "overview") return "profile";
@@ -177,6 +184,36 @@ export function PlayerDossier({
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>(mapInitial(initialTab));
   const [careerClubIdx, setCareerClubIdx] = useState(0);
+  const [gearOpen, setGearOpen] = useState(false);
+  const [ovDisplayName, setOvDisplayName] = useState(
+    initialOverride?.displayName || ""
+  );
+  const [ovPronunciation, setOvPronunciation] = useState(
+    initialOverride?.pronunciation || ""
+  );
+  const [ovPitchFlag, setOvPitchFlag] = useState(
+    initialOverride?.pitchFlag || "both"
+  );
+  const [ovJersey, setOvJersey] = useState(
+    initialOverride?.jerseyNumber != null
+      ? String(initialOverride.jerseyNumber)
+      : ""
+  );
+  const [ovSaving, setOvSaving] = useState(false);
+  const [ovMsg, setOvMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    setOvDisplayName(initialOverride?.displayName || "");
+    setOvPronunciation(initialOverride?.pronunciation || "");
+    setOvPitchFlag(initialOverride?.pitchFlag || "both");
+    setOvJersey(
+      initialOverride?.jerseyNumber != null
+        ? String(initialOverride.jerseyNumber)
+        : ""
+    );
+    setGearOpen(false);
+    setOvMsg(null);
+  }, [playerId, initialOverride]);
 
   useEffect(() => {
     setCareerClubIdx(0);
@@ -203,7 +240,6 @@ export function PlayerDossier({
 
   const p = data?.player;
   const notesList = data?.notes?.length ? data.notes : initialNotes;
-  const displayName = p?.name || playerName || "Player dossier";
   const afRows = data?.afStats?.statistics || [];
   const af = afRows[0];
   const photo =
@@ -215,10 +251,66 @@ export function PlayerDossier({
     p?.birthCountry ||
     data?.afStats?.player?.birth?.country ||
     null;
+  const displayName =
+    ovDisplayName.trim() || p?.name || playerName || "Player dossier";
+  const flagOptions = dualNationalities(p?.nationality, birthCountry);
   const rating =
     formatRating(p?.rating) !== "—"
       ? formatRating(p?.rating)
       : formatRating(af?.games?.rating);
+
+  async function saveOverrides(clear = false) {
+    setOvSaving(true);
+    setOvMsg(null);
+    try {
+      const body = clear
+        ? { playerId, clear: true }
+        : {
+            playerId,
+            displayName: ovDisplayName.trim() || null,
+            pronunciation: ovPronunciation.trim() || null,
+            pitchFlag: ovPitchFlag || "both",
+            jerseyNumber: ovJersey.trim() === "" ? null : Number(ovJersey),
+          };
+      const r = await fetch(`/api/matches/${matchId}/overrides`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || "Save failed");
+      if (j.cleared || !j.override) {
+        onOverrideChange?.(null);
+        setOvDisplayName("");
+        setOvPronunciation("");
+        setOvPitchFlag("both");
+        setOvJersey("");
+        setOvMsg("Cleared match overrides");
+      } else {
+        onOverrideChange?.({
+          playerId,
+          displayName: j.override.displayName,
+          pronunciation: j.override.pronunciation,
+          pitchFlag: j.override.pitchFlag,
+          jerseyNumber: j.override.jerseyNumber,
+        });
+        setOvMsg("Saved for this match");
+      }
+    } catch (e) {
+      setOvMsg(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setOvSaving(false);
+    }
+  }
+
+  function speakNow() {
+    const text = ovPronunciation.trim() || ovDisplayName.trim() || p?.name || "";
+    const ok = speakPronunciation(
+      text,
+      speechLangFromNationality(p?.nationality)
+    );
+    if (!ok) setOvMsg("Speech not available in this browser");
+  }
 
   const tabs: { key: Tab; label: string }[] = [
     { key: "profile", label: "Profile" },
@@ -314,17 +406,130 @@ export function PlayerDossier({
             <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
               Player
             </span>
-            <button
-              type="button"
-              className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
-              onClick={onClose}
-              aria-label="Close dossier"
-            >
-              <X className="h-4 w-4" />
-            </button>
+            <div className="flex items-center gap-0.5">
+              <button
+                type="button"
+                className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+                onClick={() => setGearOpen((v) => !v)}
+                aria-label="Pitch card overrides"
+                title="Name / pronunciation / flag / jersey (this match)"
+              >
+                <Settings2 className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+                onClick={onClose}
+                aria-label="Close dossier"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
+
+
+      {gearOpen && (
+        <div className="shrink-0 border-b border-slate-200 dark:border-slate-800 bg-amber-50/80 dark:bg-amber-950/30 px-4 py-3 space-y-2.5">
+          <div className="text-[11px] font-bold uppercase tracking-wide text-amber-800 dark:text-amber-200">
+            Pitch card overrides · this match only
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <label className="block text-[11px] space-y-1">
+              <span className="font-semibold text-slate-700 dark:text-slate-200">
+                Name on field
+              </span>
+              <input
+                className="w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-950 px-2 py-1.5 text-sm"
+                placeholder={p ? lastNameOf(p.name) : "Last name"}
+                value={ovDisplayName}
+                onChange={(e) => setOvDisplayName(e.target.value)}
+              />
+            </label>
+            <label className="block text-[11px] space-y-1">
+              <span className="font-semibold text-slate-700 dark:text-slate-200">
+                Jersey #
+              </span>
+              <input
+                type="number"
+                min={0}
+                max={99}
+                className="w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-950 px-2 py-1.5 text-sm"
+                placeholder={p ? String(p.shirtNumber) : "#"}
+                value={ovJersey}
+                onChange={(e) => setOvJersey(e.target.value)}
+              />
+            </label>
+            <label className="block text-[11px] space-y-1 sm:col-span-2">
+              <span className="font-semibold text-slate-700 dark:text-slate-200">
+                Pronunciation (IPA or phonetic)
+              </span>
+              <div className="flex gap-1.5">
+                <input
+                  className="min-w-0 flex-1 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-950 px-2 py-1.5 text-sm"
+                  placeholder="e.g. YO-han-son"
+                  value={ovPronunciation}
+                  onChange={(e) => setOvPronunciation(e.target.value)}
+                />
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 rounded-md border border-slate-300 dark:border-slate-600 px-2.5 text-[11px] font-semibold hover:bg-white dark:hover:bg-slate-900"
+                  onClick={speakNow}
+                  title="Speak with Web Speech API"
+                >
+                  <Volume2 className="h-3.5 w-3.5" />
+                  Speak
+                </button>
+              </div>
+            </label>
+            <label className="block text-[11px] space-y-1 sm:col-span-2">
+              <span className="font-semibold text-slate-700 dark:text-slate-200">
+                Flag on pitch
+              </span>
+              <select
+                className="w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-950 px-2 py-1.5 text-sm"
+                value={ovPitchFlag}
+                onChange={(e) => setOvPitchFlag(e.target.value)}
+              >
+                <option value="both">Both flags (dual)</option>
+                <option value="primary">
+                  Primary only{flagOptions[0] ? ` (${flagOptions[0]})` : ""}
+                </option>
+                <option value="secondary">
+                  Secondary only{flagOptions[1] ? ` (${flagOptions[1]})` : ""}
+                </option>
+                {flagOptions.map((n) => (
+                  <option key={n} value={n}>
+                    {n} only
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 pt-0.5">
+            <button
+              type="button"
+              disabled={ovSaving}
+              onClick={() => void saveOverrides(false)}
+              className="rounded-md bg-teal-600 hover:bg-teal-500 text-white px-3 py-1.5 text-[11px] font-semibold disabled:opacity-50"
+            >
+              {ovSaving ? "Saving…" : "Save overrides"}
+            </button>
+            <button
+              type="button"
+              disabled={ovSaving}
+              onClick={() => void saveOverrides(true)}
+              className="rounded-md border border-slate-300 dark:border-slate-600 px-3 py-1.5 text-[11px] font-semibold hover:bg-white dark:hover:bg-slate-900"
+            >
+              Clear
+            </button>
+            {ovMsg ? (
+              <span className="text-[11px] text-slate-600 dark:text-slate-300">{ovMsg}</span>
+            ) : null}
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="shrink-0 flex gap-1 px-3 py-2 border-b border-slate-200 dark:border-slate-800 bg-slate-100/80 dark:bg-slate-900/50 overflow-x-auto">

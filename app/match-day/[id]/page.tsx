@@ -122,6 +122,13 @@ export default async function MatchOverviewPage({
       }))}
       homeClubId={match.homeClubId}
       awayClubId={match.awayClubId}
+      playerOverrides={match.playerOverrides.map((o) => ({
+        playerId: o.playerId,
+        displayName: o.displayName,
+        pronunciation: o.pronunciation,
+        pitchFlag: o.pitchFlag,
+        jerseyNumber: o.jerseyNumber,
+      }))}
     />
   );
 }

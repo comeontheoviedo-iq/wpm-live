@@ -36,21 +36,38 @@ function parseOptionalSources(raw: unknown): { urls: string[]; notes: string } {
 function generateOptionsFor(templateKey: string) {
   switch (templateKey) {
     case "research":
-      return { googleSearch: true, maxOutputTokens: 10240, timeoutMs: 150_000 };
+      return { googleSearch: true, maxOutputTokens: 12288, timeoutMs: 180_000 };
     case "profiles":
-      return { googleSearch: true, maxOutputTokens: 6144, timeoutMs: 120_000 };
+      return { googleSearch: true, maxOutputTokens: 8192, timeoutMs: 150_000 };
     case "intro":
-      return { googleSearch: true, maxOutputTokens: 4096, timeoutMs: 120_000 };
+      return { googleSearch: true, maxOutputTokens: 8192, timeoutMs: 180_000 };
     case "lineup":
       return { googleSearch: false, maxOutputTokens: 2048, timeoutMs: 60_000 };
     case "referee":
-      return { googleSearch: false, maxOutputTokens: 1536, timeoutMs: 45_000 };
+      return { googleSearch: false, maxOutputTokens: 2048, timeoutMs: 60_000 };
     case "hooks":
-      return { googleSearch: true, maxOutputTokens: 4096, timeoutMs: 120_000 };
+      return { googleSearch: true, maxOutputTokens: 6144, timeoutMs: 120_000 };
     default:
       return { googleSearch: true, maxOutputTokens: 4096, timeoutMs: 90_000 };
   }
 }
+
+const RESEARCH_BRIEF_PROMPT = `Produce a FACTUAL RESEARCH BRIEF only (not an on-air script).
+Use grounded search + MATCH CONTEXT. Mark Unknown when missing. No invention.
+Headings required:
+## Venue & atmosphere
+## Table position & form
+## Last 7 days
+## Continental / competition context
+## Team news
+## Opposition identity
+## Manager / touchline
+## Referee & cards
+## Tactical battle lines
+## Key players
+## Must-mention facts
+## Unknowns
+Keep it dense and cited (outlet/date).`;
 
 export async function POST(
   req: Request,
@@ -199,11 +216,37 @@ export async function POST(
     ].join(" ");
 
     const genOpts = generateOptionsFor(templateKey);
+    const baseUser = `MATCH CONTEXT:\n${ctx}\n\n${deepResearchBlock}${sourcesBlock}`;
     let result;
     try {
+      // Two-step for Notebook depth: research brief → final pack (intro always; research may refine from brief)
+      let researchSpine = "";
+      if (templateKey === "intro" || templateKey === "research") {
+        try {
+          const brief = await generateWithGemini(
+            systemPrompt,
+            `${RESEARCH_BRIEF_PROMPT}\n\n${baseUser}`,
+            {
+              googleSearch: true,
+              maxOutputTokens: 8192,
+              timeoutMs: 150_000,
+            }
+          );
+          if (!brief.stub && brief.text && brief.text.length > 80) {
+            researchSpine = brief.text;
+          }
+        } catch (briefErr) {
+          console.error("[packs/generate] research brief step failed", templateKey, briefErr);
+        }
+      }
+
+      const spineBlock = researchSpine
+        ? `\n\n=== RESEARCH BRIEF (use as factual spine; still no invention) ===\n${researchSpine}`
+        : "";
+
       result = await generateWithGemini(
         systemPrompt,
-        `${template.prompt}\n\nMATCH CONTEXT:\n${ctx}\n\n${deepResearchBlock}${sourcesBlock}`,
+        `${template.prompt}\n\n${baseUser}${spineBlock}`,
         genOpts
       );
     } catch (firstErr) {
@@ -211,11 +254,11 @@ export async function POST(
       console.error("[packs/generate] primary failed", templateKey, firstErr);
       result = await generateWithGemini(
         systemPrompt,
-        `${template.prompt}\n\nMATCH CONTEXT:\n${ctx}\n\n${deepResearchBlock}${sourcesBlock}`,
+        `${template.prompt}\n\n${baseUser}`,
         {
           googleSearch: false,
-          maxOutputTokens: Math.min(genOpts.maxOutputTokens, 2048),
-          timeoutMs: 45_000,
+          maxOutputTokens: Math.min(genOpts.maxOutputTokens, 4096),
+          timeoutMs: 60_000,
         }
       );
     }

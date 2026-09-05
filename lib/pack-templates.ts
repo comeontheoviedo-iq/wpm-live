@@ -24,66 +24,103 @@ export const PACK_TEMPLATE_SEEDS: PackTemplateSeed[] = [
   {
     key: "research",
     title: "Research pack",
-    description: "Deep-research brief: form, team news, tactics, key players, officials, stakes.",
+    description:
+      "Notebook-depth brief: venue, form, continental context, team news, opposition identity, officials, tactical battle lines.",
     section: "research",
     order: 1,
     prompt: `${HOUSE_RULES}
 
-Write a DEEP-RESEARCH BRIEF for this fixture — Notebook-style, scannable, factual only.
+Write a NOTEBOOK-LEVEL DEEP-RESEARCH BRIEF for this fixture — scannable headings, factual only, gold-standard commentary prep depth.
 
 Use ONLY: grounded Google search + the provided MATCH CONTEXT / desk / API-Football block.
 Every claim must be sourced (cite outlet/date in parentheses) OR explicitly marked Unknown.
-Forbid fabricated quotes, numbers, injuries, transfers, or personal anecdotes.
+Forbid fabricated quotes, numbers, injuries, transfers, managerial bans, or personal anecdotes.
 
-Required sections (use these headings):
-## Form
+Required sections (use these exact headings — do not skip; write Unknown under a heading if missing):
+
+## Venue & atmosphere
+Capacity, city, expected feel / home crowd colour ONLY if known from context/search. Note surface/weather if in desk context.
+
+## Broadcast framing
+One short paragraph reinforcing this is an independent / unofficial broadcast (no rights-holder claim). Competition via country top-flight / UEFA label (NOT sponsor name).
+
+## Table position & form
+League/group standing if known; last-5 / recent form for both sides. Include a "Last 7 days" mini-list of relevant results when search/context provides them.
+
+## Continental / competition context
+UEFA or domestic cup path, group stakes, tie-breakers, must-win framing — only if applicable and known.
+
 ## Team news
-## Tactics
-## Key players
-## Officials
-## Stakes
-## Must-mention (5 facts)
+Absences, returns, surprise inclusions/omissions ONLY if listed in context injuries / XI / confirmed search.
+Call out notable selection stories when grounded (e.g. dropped starter, returning midfielder). Mark Unknown rather than guessing.
 
-Under Form: last-5 / recent results if known; otherwise Unknown.
-Under Team news: absences/returns ONLY if listed in context injuries or confirmed via search.
-Under Tactics: formations from context + one watchpoint per side (no invented systems).
-Under Key players: named players from XI/squad only.
-Under Officials: referee from context; style notes only if known.
-Under Stakes: competition framing with country top-flight / UEFA label (NOT sponsor name).
+## Opposition identity
+Style fingerprint for each side / key creator / press shape — ONLY when grounded. Name managers and one concrete stylistic note each if known.
 
-End with a short "Open questions / Unknowns" bullet list.`,
+## Manager / touchline notes
+Suspensions, bans, absences from dugout — ONLY if confirmed. Else Unknown / none listed.
+
+## Referee & cards
+Referee (+ assistants if known). Card profile / average cards / reputation ONLY when sourced; otherwise keep clean and factual.
+
+## Tactical battle lines
+Formations from context + 2–4 concrete watchpoints (e.g. wide overloads, set-piece threat, midfield duel). No invented tactics boards.
+
+## Key players to track
+Named players from XI/squad only — one watchpoint each (max 6–8 total).
+
+## Must-mention (8 facts)
+Numbered bullets of air-ready facts grounded above.
+
+## Open questions / Unknowns
+Bullet list of gaps.
+
+Target depth: thorough Notebook brief (roughly 700–1200 words equivalent). Prefer scannable bullets under headings over fluff.`,
   },
   {
     key: "intro",
     title: "Intro script",
-    description: "Fuller broadcast open — stakes, form, absentees, tactical beat, human story.",
+    description:
+      "Air-ready open 600–900w: venue, disclaimer, table/form, continental stakes, team news, opposition identity, ref, tactical battle.",
     section: "intro",
     order: 2,
     prompt: `${HOUSE_RULES}
 
-Write a FULLER BROADCAST OPEN / INTRO SCRIPT for an unofficial broadcast of this match.
-Target length: ~400–700 words equivalent — a scannable spoken script (not a novel).
+Write an AIR-READY BROADCAST INTRO SCRIPT for an unofficial broadcast of this match.
+Target length: 600–900 words spoken — scannable headings, Notebook / gold-standard depth (venue atmosphere, independent-broadcast disclaimer, table/form, continental context, last-7-days results, team news, opposition identity, manager touchline notes, referee card profile, tactical battle lines).
 NO invented stats. If a detail is not in context/search, omit or mark Unknown.
 
 Use these headings (keep them in the output):
+
 ## Cold open
-## Scene-set
-## Stakes & form
-## Key absentees
-## Tactical beat
-## Human story
+## Venue & atmosphere
+## Independent broadcast note
+## Stakes, table & form
+## Last 7 days
+## Team news
+## Opposition identity
+## Manager / touchline
+## Referee watch
+## Tactical battle lines
+## Human beat
 ## Hand-off
 
 Guidance:
 1) Cold open — 2–4 spoken lines that land the fixture.
-2) Scene-set — teams, venue, kick-off energy; competition via country top-flight / UEFA label (NOT sponsor).
-3) Stakes & form — why it matters + recent form only if known.
-4) Key absentees — ONLY from provided injuries / confirmed search; else say none listed.
-5) Tactical beat — ONE concrete watchpoint grounded in formations/XI (no invented tactics boards).
-6) Human story — ONE grounded narrative (player/coach/club) from context/search; never invent personal drama.
-7) Hand-off — bridge into lineups / first whistle.
+2) Venue & atmosphere — stadium, city, crowd colour only if known.
+3) Independent broadcast note — explicit unofficial / independent framing; competition via country top-flight / UEFA label (NOT sponsor).
+4) Stakes, table & form — why it matters + standings/form only if known.
+5) Last 7 days — recent results that shape the story; else Unknown / skip lightly.
+6) Team news — ONLY from provided injuries / XI / confirmed search (e.g. dropped/returning players); else none listed.
+7) Opposition identity — style notes for both sides grounded in context/search (managers, creators).
+8) Manager / touchline — bans/absences ONLY if confirmed.
+9) Referee watch — referee + card profile ONLY when known.
+10) Tactical battle lines — formations from context + 1–2 concrete watchpoints (no invented boards).
+11) Human beat — ONE grounded narrative from context/search; never invent personal drama.
+12) Hand-off — bridge into lineups / first whistle.
 
-Write in spoken prose, first person plural ("we"), ready to read on air.`,
+Write in spoken prose, first person plural ("we"), ready to read on air.
+If a RESEARCH BRIEF is provided below the match context, treat it as the primary factual spine — still do not invent beyond it.`,
   },
   {
     key: "profiles",

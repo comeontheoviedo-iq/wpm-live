@@ -84,7 +84,7 @@ model Coach {
   clubId      String
   club        Club    @relation(fields: [clubId], references: [id], onDelete: Cascade)
   name        String
-  nationality String  @default("ENG")
+  nationality String  @default("UNK")
   age         Int?
   role        String  @default("Head Coach")
 }

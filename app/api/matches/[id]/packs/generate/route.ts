@@ -36,17 +36,17 @@ function parseOptionalSources(raw: unknown): { urls: string[]; notes: string } {
 function generateOptionsFor(templateKey: string) {
   switch (templateKey) {
     case "research":
-      return { googleSearch: true, maxOutputTokens: 8192, timeoutMs: 120_000 };
+      return { googleSearch: true, maxOutputTokens: 10240, timeoutMs: 150_000 };
     case "profiles":
       return { googleSearch: true, maxOutputTokens: 6144, timeoutMs: 120_000 };
     case "intro":
-      return { googleSearch: false, maxOutputTokens: 2048, timeoutMs: 60_000 };
+      return { googleSearch: true, maxOutputTokens: 4096, timeoutMs: 120_000 };
     case "lineup":
       return { googleSearch: false, maxOutputTokens: 2048, timeoutMs: 60_000 };
     case "referee":
-      return { googleSearch: false, maxOutputTokens: 1024, timeoutMs: 45_000 };
+      return { googleSearch: false, maxOutputTokens: 1536, timeoutMs: 45_000 };
     case "hooks":
-      return { googleSearch: false, maxOutputTokens: 3072, timeoutMs: 60_000 };
+      return { googleSearch: true, maxOutputTokens: 4096, timeoutMs: 120_000 };
     default:
       return { googleSearch: true, maxOutputTokens: 4096, timeoutMs: 90_000 };
   }
@@ -191,7 +191,11 @@ export async function POST(
 
     const systemPrompt = [
       "You are Pitchline, a football commentary prep assistant.",
-      "Be accurate, scannable, and usable live. No invented stats.",
+      "Be accurate, scannable, and usable live.",
+      "You are not allowed to invent. If unsure write Unknown.",
+      "Prefer fewer true hooks over colourful fiction.",
+      "Ground claims in MATCH CONTEXT, desk/API data, or grounded search only.",
+      "Never fabricate stats, quotes, injuries, transfers, or personal stories.",
     ].join(" ");
 
     const genOpts = generateOptionsFor(templateKey);

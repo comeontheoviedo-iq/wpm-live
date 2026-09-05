@@ -12,8 +12,11 @@ import {
   getStatistics,
   getTopScorers,
   getPlayersByTeam,
+  getPlayerById,
   getVenueById,
   getTeam,
+  getCoachById,
+  getCoachByTeam,
   mapAfStatus,
   parsePercent,
   summarizeH2h,
@@ -274,20 +277,97 @@ async function upsertLineupSide(
   }
 
   if (lineup.coach?.name) {
-    const coach = await prisma.coach.findFirst({ where: { clubId } });
-    if (coach) {
-      await prisma.coach.update({
-        where: { id: coach.id },
-        data: { name: lineup.coach.name },
-      });
-    } else {
-      await prisma.coach.create({
-        data: { clubId, name: lineup.coach.name, role: "Head Coach" },
-      });
-    }
+    await upsertCoachFromLineup(clubId, lineup);
   }
 
   return formation;
+}
+
+/**
+ * Sync coach name + nationality/age from AF.
+ * Lineup.coach only has id/name/photo — fetch /coachs for nationality & age.
+ * Never default to ENG; use UNK when AF has no nationality.
+ */
+async function upsertCoachFromLineup(clubId: string, lineup: AfLineup) {
+  const name = lineup.coach?.name?.trim();
+  if (!name) return;
+
+  let nationality = "UNK";
+  let age: number | null = null;
+
+  const coachAfId = lineup.coach?.id;
+  let detail = coachAfId
+    ? await getCoachById(coachAfId).catch(() => null)
+    : null;
+  if (!detail && lineup.team?.id) {
+    detail = await getCoachByTeam(lineup.team.id).catch(() => null);
+  }
+  if (detail) {
+    const nat = detail.nationality?.trim();
+    if (nat) nationality = nat;
+    if (detail.age != null && Number.isFinite(detail.age)) age = detail.age;
+  }
+
+  const coach = await prisma.coach.findFirst({ where: { clubId } });
+  const data = {
+    name: detail?.name?.trim() || name,
+    nationality,
+    ...(age != null ? { age } : {}),
+    role: "Head Coach" as const,
+  };
+  if (coach) {
+    const patch: Record<string, unknown> = { name: data.name };
+    // Always set nationality when we have AF detail, or when still on ENG/UNK placeholder
+    if (detail?.nationality?.trim()) {
+      patch.nationality = nationality;
+    } else if (isUnsetNationality(coach.nationality)) {
+      patch.nationality = "UNK";
+    }
+    if (age != null) patch.age = age;
+    await prisma.coach.update({ where: { id: coach.id }, data: patch });
+  } else {
+    await prisma.coach.create({
+      data: { clubId, ...data },
+    });
+  }
+}
+
+/** Patch a club coach from /coachs?team= when no lineup coach id is available. */
+export async function syncCoachForClub(clubId: string, teamAfId: number) {
+  const detail = await getCoachByTeam(teamAfId).catch(() => null);
+  if (!detail?.name) {
+    // Ensure ENG placeholders become UNK even without AF data
+    await prisma.coach.updateMany({
+      where: { clubId, nationality: { in: ["ENG", "UNKNOWN", ""] } },
+      data: { nationality: "UNK" },
+    });
+    return null;
+  }
+  const nationality = detail.nationality?.trim() || "UNK";
+  const age =
+    detail.age != null && Number.isFinite(detail.age) ? detail.age : null;
+  const existing = await prisma.coach.findFirst({ where: { clubId } });
+  if (existing) {
+    await prisma.coach.update({
+      where: { id: existing.id },
+      data: {
+        name: detail.name,
+        nationality,
+        ...(age != null ? { age } : {}),
+      },
+    });
+    return existing.id;
+  }
+  const created = await prisma.coach.create({
+    data: {
+      clubId,
+      name: detail.name,
+      nationality,
+      age,
+      role: "Head Coach",
+    },
+  });
+  return created.id;
 }
 
 /** Re-apply a saved personal predicted XI onto Player rows. */
@@ -716,11 +796,11 @@ async function syncSeasonScorers(
   const tops = await getTopScorers(leagueId, season).catch(() => []);
   const teamPages: Awaited<ReturnType<typeof getPlayersByTeam>> = [];
   for (const teamId of [homeAfId, awayAfId]) {
-    const page1 = await getPlayersByTeam(teamId, season, 1).catch(() => []);
-    teamPages.push(...page1);
-    if (page1.length >= 20) {
-      const page2 = await getPlayersByTeam(teamId, season, 2).catch(() => []);
-      teamPages.push(...page2);
+    for (let page = 1; page <= 4; page++) {
+      const rows = await getPlayersByTeam(teamId, season, page).catch(() => []);
+      if (!rows.length) break;
+      teamPages.push(...rows);
+      if (rows.length < 20) break;
     }
   }
 
@@ -792,6 +872,42 @@ async function syncSeasonScorers(
   let bios = 0;
   for (const row of byApi.values()) {
     await upsertPlayerBioFromAf(row.clubId, row);
+    bios++;
+  }
+
+  // Second pass: remaining UNK/ENG players with AF ids — /players?id=
+  const stillUnset = await prisma.player.findMany({
+    where: {
+      clubId: { in: [homeClubId, awayClubId] },
+      nationality: { in: ["UNK", "ENG", "UNKNOWN", ""] },
+      apiFootballPlayerId: { not: null },
+    },
+    select: { id: true, clubId: true, apiFootballPlayerId: true, name: true },
+  });
+  for (const p of stillUnset) {
+    const apiId = p.apiFootballPlayerId;
+    if (!apiId) continue;
+    // Prefer already-ingested team page row
+    const fromPages = byApi.get(apiId);
+    if (fromPages?.nationality) {
+      await upsertPlayerBioFromAf(p.clubId, fromPages);
+      bios++;
+      continue;
+    }
+    const rows = await getPlayerById(apiId, season).catch(() => []);
+    const row = rows[0];
+    if (!row?.player) continue;
+    await upsertPlayerBioFromAf(p.clubId, {
+      apiId: row.player.id,
+      name: row.player.name || p.name,
+      nationality: row.player.nationality,
+      photo: row.player.photo,
+      height: row.player.height,
+      weight: row.player.weight,
+      birth: row.player.birth?.date || null,
+      age: row.player.age ?? null,
+      position: row.statistics?.[0]?.games?.position,
+    });
     bios++;
   }
 
@@ -971,6 +1087,10 @@ export async function syncMatchFromApiFootball(matchId: string) {
   const squadAway = await syncSquadForClub(match.awayClubId, awayAfId).catch(
     () => ({ upserted: 0 })
   );
+
+  // Coach nationality/age from /coachs (lineup.coach has no nationality)
+  await syncCoachForClub(match.homeClubId, homeAfId).catch(() => null);
+  await syncCoachForClub(match.awayClubId, awayAfId).catch(() => null);
 
   const injuryCount = await syncInjuriesForMatch(
     matchId,

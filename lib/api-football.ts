@@ -959,3 +959,32 @@ export async function getPlayersByTeam(
     300_000
   );
 }
+
+export type AfCoach = {
+  id: number;
+  name: string;
+  firstname?: string | null;
+  lastname?: string | null;
+  age?: number | null;
+  nationality?: string | null;
+  photo?: string | null;
+  birth?: { date?: string | null; place?: string | null; country?: string | null };
+  team?: { id?: number | null; name?: string; logo?: string } | null;
+};
+
+/** API path is `/coachs` (API-Football spelling). */
+export async function getCoachById(coachId: number) {
+  const list = await afFetch<AfCoach[]>("/coachs", { id: coachId }, 300_000);
+  return list[0] || null;
+}
+
+export async function getCoachByTeam(teamId: number) {
+  const list = await afFetch<AfCoach[]>("/coachs", { team: teamId }, 300_000);
+  // Prefer the one currently attached to the team when multiple rows return
+  const match = list.find((c) => c.team?.id === teamId) || list[0];
+  return match || null;
+}
+
+export async function searchCoaches(search: string) {
+  return afFetch<AfCoach[]>("/coachs", { search }, 120_000);
+}

@@ -39,7 +39,7 @@ export async function GET(
     ? await prisma.note.findMany({
         where: {
           matchId,
-          OR: [{ entityId: id }, { entityType: "player", entityId: id }],
+          entityId: id,
         },
         orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
       })
@@ -48,6 +48,15 @@ export async function GET(
         orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
         take: 40,
       });
+
+  const injuries = await prisma.injury.findMany({
+    where: {
+      playerId: id,
+      ...(matchId ? { OR: [{ matchId }, { matchId: null }] } : {}),
+    },
+    orderBy: { injuryType: "asc" },
+    take: 8,
+  });
 
   const events = matchId
     ? await prisma.matchEvent.findMany({
@@ -68,9 +77,22 @@ export async function GET(
   if (player.apiFootballPlayerId) {
     try {
       const season = europeanSeasonYear(new Date());
-      let rows = await getPlayerById(player.apiFootballPlayerId, season);
+      const withTimeout = <T,>(p: Promise<T>, ms: number): Promise<T> =>
+        Promise.race([
+          p,
+          new Promise<T>((_, rej) =>
+            setTimeout(() => rej(new Error("AF player stats timeout")), ms)
+          ),
+        ]);
+      let rows = await withTimeout(
+        getPlayerById(player.apiFootballPlayerId, season),
+        3500
+      );
       if (!rows?.[0]) {
-        rows = await getPlayerById(player.apiFootballPlayerId, season - 1);
+        rows = await withTimeout(
+          getPlayerById(player.apiFootballPlayerId, season - 1),
+          2500
+        );
       }
       afStats = rows?.[0] || null;
       if (!afStats) {
@@ -157,6 +179,13 @@ export async function GET(
     },
     notes,
     events,
+    injuries: injuries.map((i) => ({
+      id: i.id,
+      status: i.status,
+      injuryType: i.injuryType,
+      expectedReturn: i.expectedReturn,
+      notes: i.notes,
+    })),
     afStats,
     afStub,
   });

@@ -243,13 +243,67 @@ export function MatchDesk({
     [predictionsJson]
   );
 
+  const noteHookByPlayer = useMemo(() => {
+    function hookText(n: NoteRow): string | null {
+      const title = (n.title || "").trim();
+      const body = (n.body || "").trim();
+      // Prefer a spoken hook line from body (pack hooks often bullet/quoted)
+      const line = body
+        .split(/\n+/)
+        .map((l) =>
+          l
+            .replace(/^[-*•]+\s*/, "")
+            .replace(/^"+|"+$/g, "")
+            .replace(/^\*\*?\s*/, "")
+            .replace(/\*\*?$/g, "")
+            .trim()
+        )
+        .find((l) => l.length > 12 && !/^profile:/i.test(l));
+      if (line) return line.length > 42 ? `${line.slice(0, 40)}…` : line;
+      // Clean "Name — Hooks/Bio" titles
+      const cleaned = title
+        .replace(/^.*?\s*[—-]\s*/u, "")
+        .replace(/\s*—\s*(Hooks|Bio)$/i, "")
+        .trim();
+      if (cleaned && !/^(hooks|bio)$/i.test(cleaned)) {
+        return cleaned.length > 42 ? `${cleaned.slice(0, 40)}…` : cleaned;
+      }
+      return null;
+    }
+    const map = new Map<string, string>();
+    // Prefer Hook category, then pinned, then any player note
+    const ranked = [...notes].sort((a, b) => {
+      const score = (n: NoteRow) =>
+        (n.pinned ? 4 : 0) +
+        (/hook/i.test(n.category || "") ? 2 : 0) +
+        (/hook/i.test(n.title || "") ? 1 : 0);
+      return score(b) - score(a);
+    });
+    for (const n of ranked) {
+      if (!n.entityId) continue;
+      if (n.entityType && n.entityType !== "player") continue;
+      if (map.has(n.entityId)) continue;
+      const hook = hookText(n);
+      if (hook) map.set(n.entityId, hook);
+    }
+    return map;
+  }, [notes]);
+
   const homeEnriched = useMemo(
-    () => enrichPlayers(homePlayers, events),
-    [homePlayers, events]
+    () =>
+      enrichPlayers(homePlayers, events).map((p) => ({
+        ...p,
+        noteHook: noteHookByPlayer.get(p.id) || null,
+      })),
+    [homePlayers, events, noteHookByPlayer]
   );
   const awayEnriched = useMemo(
-    () => enrichPlayers(awayPlayers, events),
-    [awayPlayers, events]
+    () =>
+      enrichPlayers(awayPlayers, events).map((p) => ({
+        ...p,
+        noteHook: noteHookByPlayer.get(p.id) || null,
+      })),
+    [awayPlayers, events, noteHookByPlayer]
   );
 
   const squad: SquadPlayer[] = useMemo(() => {
@@ -727,7 +781,7 @@ export function MatchDesk({
 
       {/* Placing toast */}
       {placing && (
-        <div className="absolute left-1/2 top-12 z-40 -translate-x-1/2 flex flex-wrap items-center gap-2 rounded-lg border border-sky-300 bg-sky-50/95 dark:bg-sky-950/95 dark:border-sky-800 px-3 py-1.5 text-xs shadow-lg">
+        <div className="pointer-events-none absolute left-1/2 top-12 z-40 -translate-x-1/2 flex flex-wrap items-center gap-2 rounded-lg border border-sky-300 bg-sky-50/95 dark:bg-sky-950/95 dark:border-sky-800 px-3 py-1.5 text-xs shadow-lg [&>button]:pointer-events-auto">
           <span className="font-semibold text-sky-900 dark:text-sky-100">
             Place {placing.name}
             <span className="font-normal text-sky-700 dark:text-sky-300"> · Esc cancel</span>
@@ -894,6 +948,9 @@ export function MatchDesk({
         <PlayerDossier
           matchId={matchId}
           playerId={dossierId}
+          initialTab="notes"
+          initialNotes={notes.filter((n) => n.entityId === dossierId)}
+          playerName={squad.find((s) => s.id === dossierId)?.name}
           onClose={() => {
             setDossierId(null);
             setSelected(null);

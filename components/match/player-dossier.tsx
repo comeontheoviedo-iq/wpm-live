@@ -44,6 +44,13 @@ type DossierPayload = {
     description: string;
     teamSide: string | null;
   }[];
+  injuries?: {
+    id: string;
+    status: string;
+    injuryType: string;
+    expectedReturn: string | null;
+    notes: string | null;
+  }[];
   afStats: {
     player?: {
       photo?: string;
@@ -79,21 +86,29 @@ export function PlayerDossier({
   matchId,
   playerId,
   onClose,
+  initialTab = "notes",
+  initialNotes = [],
+  playerName,
 }: {
   matchId: string;
   playerId: string;
   onClose: () => void;
+  /** Pitch click path defaults to Notes so pack bios/hooks show immediately */
+  initialTab?: Tab;
+  /** Desk already has player notes — show Notes tab instantly while profile loads */
+  initialNotes?: NoteRow[];
+  playerName?: string;
 }) {
   const [data, setData] = useState<DossierPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<Tab>("overview");
+  const [tab, setTab] = useState<Tab>(initialTab);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    setTab("overview");
+    setTab(initialTab);
     fetch(`/api/players/${playerId}?matchId=${encodeURIComponent(matchId)}`)
       .then(async (r) => {
         const j = await r.json();
@@ -109,9 +124,11 @@ export function PlayerDossier({
     return () => {
       cancelled = true;
     };
-  }, [playerId, matchId]);
+  }, [playerId, matchId, initialTab]);
 
   const p = data?.player;
+  const notesList = data?.notes?.length ? data.notes : initialNotes;
+  const displayName = p?.name || playerName || "Player dossier";
   const afRows = data?.afStats?.statistics || [];
   const af = afRows[0];
   const photo =
@@ -152,7 +169,7 @@ export function PlayerDossier({
           )}
           <div className="min-w-0">
             <div className="text-sm font-bold truncate">
-              {p ? p.name : "Player dossier"}
+              {displayName}
             </div>
             {p && (
               <div className="text-[11px] text-slate-500">
@@ -186,8 +203,8 @@ export function PlayerDossier({
             )}
           >
             {t.label}
-            {t.key === "notes" && data
-              ? ` (${data.notes.length})`
+            {t.key === "notes"
+              ? ` (${notesList.length})`
               : t.key === "events" && data
                 ? ` (${data.events.length})`
                 : ""}
@@ -196,7 +213,7 @@ export function PlayerDossier({
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
-        {loading && (
+        {loading && tab !== "notes" && (
           <div className="flex items-center gap-2 text-xs text-slate-500 py-8 justify-center">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading dossier…
           </div>
@@ -236,11 +253,78 @@ export function PlayerDossier({
                 <Fact label="Cards" value={`Y${p.yellowCards} R${p.redCards}`} />
               </div>
             </div>
+            {(data?.injuries?.length ?? 0) > 0 && (
+              <div className="rounded-xl border border-rose-200 dark:border-rose-900/50 bg-rose-50/60 dark:bg-rose-950/20 p-3">
+                <div className="text-[10px] font-bold uppercase tracking-wide text-rose-600 dark:text-rose-300 mb-2">
+                  Injuries
+                </div>
+                <ul className="space-y-1">
+                  {(data?.injuries || []).map((inj) => (
+                    <li key={inj.id} className="text-xs">
+                      <span className="font-semibold">{inj.injuryType}</span>
+                      <span className="text-slate-500"> · {inj.status}</span>
+                      {inj.expectedReturn ? (
+                        <span className="text-slate-500">
+                          {" "}
+                          · back {inj.expectedReturn}
+                        </span>
+                      ) : null}
+                      {inj.notes ? (
+                        <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                          {inj.notes}
+                        </p>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {data?.afStub && (
               <p className="text-[10px] text-amber-700 dark:text-amber-300 rounded-lg border border-amber-200 dark:border-amber-900 bg-amber-50/80 dark:bg-amber-950/30 px-2 py-1.5">
                 {data.afStub}
               </p>
             )}
+            <div className="rounded-xl border border-violet-200 dark:border-violet-900/60 bg-violet-50/50 dark:bg-violet-950/20 p-3">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="text-[10px] font-bold uppercase tracking-wide text-violet-600 dark:text-violet-300">
+                  Notes ({notesList.length})
+                </div>
+                <button
+                  type="button"
+                  className="text-[10px] font-semibold text-violet-700 dark:text-violet-300 hover:underline"
+                  onClick={() => setTab("notes")}
+                >
+                  Open Notes tab
+                </button>
+              </div>
+              {notesList.length === 0 ? (
+                <p className="text-xs text-slate-500">
+                  No player notes yet — pack bios/hooks appear here after generate.
+                </p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {notesList.slice(0, 5).map((n) => (
+                    <li
+                      key={n.id}
+                      className="rounded-lg bg-white/80 dark:bg-slate-950/50 border border-violet-100 dark:border-violet-900/40 px-2 py-1.5"
+                    >
+                      <div className="text-xs font-semibold truncate">
+                        {n.pinned ? "📌 " : ""}
+                        {n.title}
+                      </div>
+                      <p className="text-[11px] text-slate-600 dark:text-slate-400 line-clamp-2">
+                        {n.body}
+                      </p>
+                    </li>
+                  ))}
+                  {notesList.length > 5 && (
+                    <li className="text-[10px] text-slate-500">
+                      +{notesList.length - 5} more on Notes tab
+                    </li>
+                  )}
+                </ul>
+              )}
+            </div>
           </>
         )}
 
@@ -310,13 +394,13 @@ export function PlayerDossier({
           </div>
         )}
 
-        {p && tab === "notes" && (
+        {tab === "notes" && (
           <NotesPanel
             matchId={matchId}
-            initialNotes={data?.notes || []}
+            initialNotes={notesList}
             entityType="player"
-            entityId={p.id}
-            entityLabel={p.name}
+            entityId={playerId}
+            entityLabel={displayName}
           />
         )}
 

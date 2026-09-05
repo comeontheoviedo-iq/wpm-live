@@ -19,6 +19,7 @@ export type PitchPlayer = {
   /** Compact card facts (goals/assists/cards from events or season) */
   goals?: number;
   assists?: number;
+  appearances?: number;
   yellowCards?: number;
   redCards?: number;
   matchGoals?: number;
@@ -26,6 +27,8 @@ export type PitchPlayer = {
   matchYellow?: boolean;
   matchRed?: boolean;
   subbedOff?: boolean;
+  /** Optional 1-line hook from pinned player note title */
+  noteHook?: string | null;
 };
 
 type Coach = { name: string; nationality: string; age: number | null };
@@ -316,6 +319,44 @@ export function PitchBoard({
           const isPlacingHere =
             placing && player?.id === placingPlayerId;
 
+          const shortName = player
+            ? player.name.split(" ").slice(-1)[0]
+            : "";
+          const seasonGa =
+            player && (player.goals || player.assists)
+              ? [
+                  player.goals ? `${player.goals}G` : null,
+                  player.assists ? `${player.assists}A` : null,
+                ]
+                  .filter(Boolean)
+                  .join(" ")
+              : null;
+          const appsLabel =
+            player && player.appearances && player.appearances > 0
+              ? `${player.appearances}apps`
+              : null;
+          const factsLine = [
+            player?.matchGoals ? `${player.matchGoals}G` : null,
+            player?.matchAssists ? `${player.matchAssists}A` : null,
+            !player?.matchGoals && !player?.matchAssists ? seasonGa : null,
+            appsLabel && !player?.matchGoals ? appsLabel : null,
+          ]
+            .filter(Boolean)
+            .join(" · ");
+
+          function slotActivate() {
+            if (placing && onSlotClick && !locked) {
+              if (!sideOk) return;
+              onSlotClick({
+                side,
+                slotId: slot.id,
+                occupantId: player?.id ?? null,
+              });
+              return;
+            }
+            if (player) onPlayerClick?.(player);
+          }
+
           return (
             <div
               key={key}
@@ -324,26 +365,23 @@ export function PitchBoard({
                 !locked && onSlotDrop ? "drop-target" : ""
               )}
               style={{ left: `${x}%`, top: `${y}%` }}
+              onDragOver={(e) => handleDragOver(e, key)}
+              onDragLeave={() => handleDragLeave(key)}
+              onDrop={(e) => handleDrop(e, side, slot.id)}
             >
-              {/* Invisible ~46px hit target for drag + click */}
+              {/* ~44px hit target — receives drops even when token button is present */}
               <div
-                className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-[4px] h-8 w-8 sm:h-9 sm:w-9 rounded-full z-0"
+                className={cn(
+                  "absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-11 w-11 rounded-lg z-0",
+                  isDragOver && "bg-sky-400/20"
+                )}
                 style={{ touchAction: "manipulation" }}
                 onDragOver={(e) => handleDragOver(e, key)}
                 onDragLeave={() => handleDragLeave(key)}
                 onDrop={(e) => handleDrop(e, side, slot.id)}
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (placing && onSlotClick && !locked) {
-                    if (!sideOk) return;
-                    onSlotClick({
-                      side,
-                      slotId: slot.id,
-                      occupantId: player?.id ?? null,
-                    });
-                    return;
-                  }
-                  if (player) onPlayerClick?.(player);
+                  slotActivate();
                 }}
                 onContextMenu={(e) => {
                   if (locked || !player || !onClearSlot) return;
@@ -367,11 +405,10 @@ export function PitchBoard({
                 }}
               />
 
-              {/* Ghost ring on dragover / placing mode */}
               {(isDragOver || highlightPlace) && (
                 <div
                   className={cn(
-                    "pointer-events-none absolute left-1/2 top-0 -translate-x-1/2 -translate-y-[4px] h-8 w-8 sm:h-9 sm:w-9 rounded-full border-2 z-[1]",
+                    "pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-11 w-11 rounded-lg border-2 z-[1]",
                     isDragOver
                       ? "border-sky-300 bg-sky-400/25 shadow-[0_0_12px_rgba(56,189,248,0.55)]"
                       : "border-white/50 border-dashed bg-white/10"
@@ -387,7 +424,7 @@ export function PitchBoard({
                       ? isPlacingHere
                         ? `Clear ${player.name} from XI`
                         : `Place here (swap ${player.name})`
-                      : `${player.name} · click dossier · right-click remove`
+                      : `${player.name} · click dossier · drag to swap · right-click remove`
                     : locked
                       ? slot.label
                       : placing
@@ -395,25 +432,19 @@ export function PitchBoard({
                         : `Drop / tap slot · ${slot.label}`
                 }
                 className={cn(
-                  "relative z-[2] flex flex-col items-center",
-                  player ? "cursor-pointer" : ""
+                  "relative z-[2] flex flex-col items-center min-h-[44px] min-w-[44px] justify-center",
+                  player ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
                 )}
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (placing && onSlotClick && !locked) {
-                    if (!sideOk) return;
-                    onSlotClick({
-                      side,
-                      slotId: slot.id,
-                      occupantId: player?.id ?? null,
-                    });
-                    return;
-                  }
-                  if (player) onPlayerClick?.(player);
+                  slotActivate();
                 }}
                 draggable={Boolean(player && !locked && onSlotDrop)}
                 onDragStart={(e) => {
-                  if (!player || locked) return;
+                  if (!player || locked) {
+                    e.preventDefault();
+                    return;
+                  }
                   e.dataTransfer.setData(
                     "application/pitchline-player",
                     JSON.stringify({ playerId: player.id, side })
@@ -421,27 +452,36 @@ export function PitchBoard({
                   e.dataTransfer.setData("text/plain", player.id);
                   e.dataTransfer.effectAllowed = "move";
                 }}
+                onDragOver={(e) => handleDragOver(e, key)}
+                onDragLeave={() => handleDragLeave(key)}
+                onDrop={(e) => handleDrop(e, side, slot.id)}
+                onContextMenu={(e) => {
+                  if (locked || !player || !onClearSlot) return;
+                  e.preventDefault();
+                  onClearSlot({
+                    side,
+                    slotId: slot.id,
+                    playerId: player.id,
+                  });
+                }}
               >
                 {player ? (
                   <span
                     className={cn(
-                      "group relative flex w-[44px] flex-col items-center",
+                      "group relative flex w-[52px] flex-col items-center gap-px",
                       isPlacingHere && "drop-shadow-[0_0_6px_rgba(251,191,36,0.9)]",
                       player.subbedOff && "opacity-45 grayscale-[30%]"
                     )}
                     title={[
                       player.name,
                       player.isCaptain ? "Captain" : null,
-                      player.position || null,
-                      player.matchGoals
-                        ? `${player.matchGoals} goal(s) this match`
-                        : player.goals
-                          ? `${player.goals} season goals`
-                          : null,
+                      player.position || slot.label,
+                      factsLine || null,
                       player.matchYellow || player.matchRed
                         ? `Cards${player.matchYellow ? " Y" : ""}${player.matchRed ? " R" : ""}`
                         : null,
                       player.subbedOff ? "Subbed off" : null,
+                      player.noteHook || null,
                       player.nationality || null,
                       player.age != null ? `Age ${player.age}` : null,
                     ]
@@ -450,15 +490,24 @@ export function PitchBoard({
                   >
                     <span className="relative">
                       <span
-                        className="flex h-5 w-5 sm:h-6 sm:w-6 items-center justify-center rounded-full text-[8px] sm:text-[9px] font-bold text-white shadow ring-1 ring-white/60"
+                        className="flex h-6 w-6 sm:h-7 sm:w-7 items-center justify-center rounded-full text-[9px] sm:text-[10px] font-bold text-white shadow ring-1 ring-white/60"
                         style={{ backgroundColor: color }}
                       >
                         {player.shirtNumber}
                       </span>
-                      <span className="absolute -right-1.5 -top-1 flex items-center gap-px">
-                        {player.matchGoals || player.goals ? (
+                      <span className="absolute -right-2 -top-1.5 flex items-center gap-px">
+                        {player.matchGoals ||
+                        (!player.matchGoals && player.goals) ? (
                           <span className="rounded bg-emerald-600 px-0.5 text-[7px] font-bold text-white leading-none">
                             {player.matchGoals || player.goals}G
+                          </span>
+                        ) : null}
+                        {player.matchAssists ||
+                        (!player.matchAssists &&
+                          player.assists &&
+                          player.assists > 0) ? (
+                          <span className="rounded bg-sky-600 px-0.5 text-[7px] font-bold text-white leading-none">
+                            {player.matchAssists || player.assists}A
                           </span>
                         ) : null}
                         {player.matchYellow ||
@@ -471,15 +520,31 @@ export function PitchBoard({
                         ) : null}
                       </span>
                     </span>
-                    <span className="mt-0.5 max-w-[44px] truncate rounded bg-black/70 px-0.5 text-[8px] font-semibold leading-tight text-white">
-                      {player.isCaptain ? "©" : ""}
-                      {player.name.split(" ").slice(-1)[0]}
+                    <span className="max-w-[52px] truncate rounded bg-black/75 px-0.5 text-[8px] font-semibold leading-tight text-white">
+                      {player.isCaptain ? "© " : ""}
+                      {shortName}
                     </span>
+                    <span className="max-w-[52px] truncate text-[7px] font-medium leading-none text-white/85 drop-shadow">
+                      {slot.label}
+                      {player.position && player.position !== slot.label
+                        ? ` · ${player.position}`
+                        : ""}
+                    </span>
+                    {factsLine ? (
+                      <span className="max-w-[52px] truncate rounded bg-black/55 px-0.5 text-[7px] font-semibold leading-none text-emerald-200">
+                        {factsLine}
+                      </span>
+                    ) : null}
+                    {player.noteHook ? (
+                      <span className="max-w-[56px] truncate rounded bg-violet-900/80 px-0.5 text-[6px] font-medium leading-tight text-violet-100">
+                        {player.noteHook}
+                      </span>
+                    ) : null}
                   </span>
                 ) : (
                   <span
                     className={cn(
-                      "flex h-5 w-5 sm:h-6 sm:w-6 items-center justify-center rounded-full text-[8px] font-bold text-white/80 shadow ring-1 ring-white/30 border border-dashed border-white/40 bg-black/25",
+                      "flex h-6 w-6 sm:h-7 sm:w-7 items-center justify-center rounded-full text-[8px] font-bold text-white/80 shadow ring-1 ring-white/30 border border-dashed border-white/40 bg-black/25",
                       highlightPlace && "ring-sky-200/80"
                     )}
                   >
@@ -492,7 +557,7 @@ export function PitchBoard({
                 <button
                   type="button"
                   aria-label={`Remove ${player.name} from XI`}
-                  className="absolute -right-1.5 -top-0.5 z-[3] flex h-3.5 w-3.5 items-center justify-center rounded-full bg-slate-900/85 text-white hover:bg-rose-600 shadow opacity-80"
+                  className="absolute -right-2 -top-1 z-[3] flex h-4 w-4 items-center justify-center rounded-full bg-slate-900/85 text-white hover:bg-rose-600 shadow opacity-80"
                   onClick={(e) => {
                     e.stopPropagation();
                     onClearSlot({

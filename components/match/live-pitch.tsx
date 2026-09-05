@@ -6,7 +6,12 @@ import { PitchBoard, type PitchPlayer } from "@/components/match/pitch";
 import { NotesPanel, type NoteRow } from "@/components/notes/notes-panel";
 import { PlayerDossier } from "@/components/match/player-dossier";
 
-type Coach = { name: string; nationality: string; age: number | null };
+type Coach = {
+  name: string;
+  nationality: string;
+  age: number | null;
+  photoUrl?: string | null;
+};
 
 export function LivePitch({
   matchId,

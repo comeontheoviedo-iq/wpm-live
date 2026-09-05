@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import { prisma } from "./prisma";
 import {
   clearAllPitchPlacements,
@@ -416,6 +417,35 @@ async function upsertLineupSide(
   return formation;
 }
 
+
+/** AF grey "NO PHOTO YET" coach media stub (sha256). */
+const AF_COACH_PHOTO_STUB_SHA256 =
+  "575e4487e3942dd820fe682e8b81f9c59b0b0d60265433ce5bd1884db4004035";
+
+/**
+ * Keep only real AF coach headshots. Never invent URLs from coach id.
+ * AF often returns a URL pointing at their grey "NO PHOTO YET" stub — drop those.
+ */
+async function afCoachPhotoOrNull(url?: string | null): Promise<string | null> {
+  const u = url?.trim() || null;
+  if (!u) return null;
+  if (!/^https:\/\/media\.api-sports\.io\/football\/coachs?\//i.test(u)) {
+    return null;
+  }
+  try {
+    const res = await fetch(u, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return null;
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (!buf.length) return null;
+    const hex = createHash("sha256").update(buf).digest("hex");
+    if (hex === AF_COACH_PHOTO_STUB_SHA256) return null;
+    return u;
+  } catch {
+    // Network flake: keep URL so UI can try; img onError falls back to placeholder
+    return u;
+  }
+}
+
 function coachNationalityFromAf(
   detail: {
     nationality?: string | null;
@@ -434,8 +464,9 @@ function coachNationalityFromAf(
 }
 
 /**
- * Sync coach name + nationality/age from AF lineup.coach.
+ * Sync coach name + nationality/age/photo from AF lineup.coach.
  * Lineup.coach only has id/name/photo — fetch /coachs for nationality & age.
+ * Store photo only when AF provides a URL (never invent from id).
  * Never default to ENG; use UNK when AF has no nationality.
  */
 async function upsertCoachFromLineup(clubId: string, lineup: AfLineup) {
@@ -452,6 +483,11 @@ async function upsertCoachFromLineup(clubId: string, lineup: AfLineup) {
 
   const age =
     detail?.age != null && Number.isFinite(detail.age) ? detail.age : null;
+  // Only store AF-provided photo URLs — never invent from coach id.
+  // Drop AF's grey "NO PHOTO YET" stub so UI uses our User placeholder.
+  const photoUrl = await afCoachPhotoOrNull(
+    detail?.photo?.trim() || lineup.coach?.photo?.trim() || null
+  );
 
   const coach = await prisma.coach.findFirst({ where: { clubId } });
   // Keep a single Head Coach row per club
@@ -463,6 +499,8 @@ async function upsertCoachFromLineup(clubId: string, lineup: AfLineup) {
 
   const resolvedName = detail?.name?.trim() || name;
   const nationality = coachNationalityFromAf(detail, coach?.nationality);
+  const afCoachId =
+    detail?.id ?? (coachAfId != null && Number.isFinite(coachAfId) ? coachAfId : null);
 
   if (coach) {
     const patch: Record<string, unknown> = {
@@ -471,6 +509,8 @@ async function upsertCoachFromLineup(clubId: string, lineup: AfLineup) {
       role: "Head Coach",
     };
     if (age != null) patch.age = age;
+    patch.photoUrl = photoUrl;
+    if (afCoachId != null) patch.apiFootballCoachId = afCoachId;
     await prisma.coach.update({ where: { id: coach.id }, data: patch });
   } else {
     await prisma.coach.create({
@@ -479,6 +519,8 @@ async function upsertCoachFromLineup(clubId: string, lineup: AfLineup) {
         name: resolvedName,
         nationality,
         ...(age != null ? { age } : {}),
+        photoUrl,
+        ...(afCoachId != null ? { apiFootballCoachId: afCoachId } : {}),
         role: "Head Coach",
       },
     });
@@ -518,6 +560,9 @@ export async function syncCoachForClub(clubId: string, teamAfId: number) {
   );
   const age =
     detail.age != null && Number.isFinite(detail.age) ? detail.age : null;
+  // Only store AF-provided photo URLs — never invent from coach id.
+  // Drop AF's grey "NO PHOTO YET" stub so UI uses our User placeholder.
+  const photoUrl = await afCoachPhotoOrNull(detail.photo?.trim() || null);
 
   if (existing) {
     await prisma.coach.update({
@@ -527,6 +572,9 @@ export async function syncCoachForClub(clubId: string, teamAfId: number) {
         nationality,
         role: "Head Coach",
         ...(age != null ? { age } : {}),
+        // Set real photo; clear when AF only has the stub / none
+        photoUrl: photoUrl,
+        ...(detail.id != null ? { apiFootballCoachId: detail.id } : {}),
       },
     });
     return existing.id;
@@ -537,6 +585,8 @@ export async function syncCoachForClub(clubId: string, teamAfId: number) {
       name: detail.name,
       nationality,
       age,
+      photoUrl,
+      ...(detail.id != null ? { apiFootballCoachId: detail.id } : {}),
       role: "Head Coach",
     },
   });

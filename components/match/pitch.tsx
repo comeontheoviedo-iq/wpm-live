@@ -86,7 +86,12 @@ export type PitchPlayer = {
   pitchY?: number | null;
 };
 
-type Coach = { name: string; nationality: string; age: number | null };
+type Coach = {
+  name: string;
+  nationality: string;
+  age: number | null;
+  photoUrl?: string | null;
+};
 
 function lineupBadgeLabel(status?: string) {
   if (status === "confirmed") return "Official (editable)";
@@ -464,26 +469,60 @@ function CoachChip({
 }) {
   const isHome = side === "home";
   const Comp = onClick ? "button" : "div";
+  // Only AF-stored photoUrl — never invent a media URL from coach id.
+  const photo = coach.photoUrl?.trim() || null;
   return (
     <Comp
       type={onClick ? "button" : undefined}
       onClick={onClick}
       title={onClick ? `Open ${coach.name} profile` : undefined}
       className={cn(
-        "flex items-center gap-1 rounded-md border bg-white/95 shadow px-1 py-0.5 max-w-[11rem] text-left",
+        "flex items-center gap-1.5 rounded-md border bg-white/95 shadow px-1 py-0.5 max-w-[12rem] text-left",
         isHome ? "border-slate-800" : "",
         onClick && "pointer-events-auto cursor-pointer hover:ring-2 hover:ring-teal-400/60"
       )}
       style={!isHome ? { borderColor: teamColor } : undefined}
     >
-      <FlagImg nationality={coach.nationality} className="h-3 w-4" />
-      <div className="min-w-0">
-        <div className="text-[8px] text-slate-500 leading-none">
-          {coach.age != null ? `${coach.age}y · Coach` : "Coach"}
+      <span
+        className={cn(
+          "relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-sm",
+          "bg-slate-200 ring-1 ring-slate-300"
+        )}
+      >
+        {photo ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={photo}
+            alt=""
+            className="h-full w-full object-cover object-top"
+            loading="lazy"
+            onError={(e) => {
+              (e.target as HTMLImageElement).style.display = "none";
+              const sib = (e.target as HTMLImageElement)
+                .nextElementSibling as HTMLElement | null;
+              if (sib) sib.style.display = "flex";
+            }}
+          />
+        ) : null}
+        <span
+          className={cn(
+            "absolute inset-0 items-center justify-center text-slate-400",
+            photo ? "hidden" : "flex"
+          )}
+        >
+          <User className="h-4 w-4" strokeWidth={1.5} />
+        </span>
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1">
+          <FlagImg nationality={coach.nationality} className="h-3 w-4" />
+          <div className="text-[8px] text-slate-500 leading-none truncate">
+            {coach.age != null ? `${coach.age}y · Coach` : "Coach"}
+          </div>
         </div>
         <div
           className={cn(
-            "text-[9px] font-bold leading-tight whitespace-nowrap",
+            "text-[9px] font-bold leading-tight whitespace-nowrap truncate",
             isHome ? "text-slate-900" : ""
           )}
           style={!isHome ? { color: teamColor } : undefined}

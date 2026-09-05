@@ -89,6 +89,8 @@ model Coach {
   nationality String  @default("UNK")
   age         Int?
   role        String  @default("Head Coach")
+  photoUrl    String?
+  apiFootballCoachId Int?
 }
 
 model Official {

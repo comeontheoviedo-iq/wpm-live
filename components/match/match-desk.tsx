@@ -53,6 +53,7 @@ type Coach = {
   nationality: string;
   age: number | null;
   role?: string | null;
+  photoUrl?: string | null;
 };
 
 type Predictions = {
@@ -1907,13 +1908,30 @@ export function MatchDesk({
                 <>
                   <div className="flex items-center gap-3">
                     <div
-                      className="h-14 w-14 rounded-md flex items-center justify-center text-white text-lg font-bold"
+                      className="relative h-14 w-14 rounded-md overflow-hidden flex items-center justify-center text-white text-lg font-bold ring-1 ring-black/10"
                       style={{
                         backgroundColor:
                           coachSide === "home" ? homeColor : awayColor,
                       }}
                     >
-                      {(c.name || "?").split(" ").map((w) => w[0]).slice(0, 2).join("")}
+                      {c.photoUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={c.photoUrl}
+                          alt=""
+                          className="absolute inset-0 h-full w-full object-cover object-top"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = "none";
+                          }}
+                        />
+                      ) : null}
+                      <span className="relative z-0">
+                        {(c.name || "?")
+                          .split(" ")
+                          .map((w) => w[0])
+                          .slice(0, 2)
+                          .join("")}
+                      </span>
                     </div>
                     <div className="min-w-0">
                       <div className="font-bold text-base">{c.name}</div>

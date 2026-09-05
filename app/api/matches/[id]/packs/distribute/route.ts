@@ -14,10 +14,16 @@ export async function POST(
   try {
     const { id } = await params;
     const body = await req.json().catch(() => ({}));
-    const templateKey = String(body.templateKey || "");
+    const templateKey = String(body.templateKey || "").trim();
     if (!templateKey) {
-      return NextResponse.json({ error: "templateKey required" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Pick a pack section first, then Send to desk notes." },
+        { status: 400 }
+      );
     }
+
+    const seed = PACK_TEMPLATE_SEEDS.find((t) => t.key === templateKey);
+    const label = seed?.title || templateKey;
 
     const match = await prisma.match.findUnique({
       where: { id },
@@ -26,20 +32,43 @@ export async function POST(
         awayClub: { include: { players: { select: { id: true, name: true } } } },
       },
     });
-    if (!match) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (!match) return NextResponse.json({ error: "Match not found" }, { status: 404 });
 
-    const section = await prisma.packSection.findUnique({
+    const existing = await prisma.packSection.findUnique({
       where: { matchId_templateKey: { matchId: id, templateKey } },
     });
-    if (!section?.content?.trim()) {
+
+    // Prefer live draft from the client so Save is not required before Send
+    const draftContent =
+      typeof body.content === "string" ? body.content.trim() : "";
+    const content = draftContent || existing?.content?.trim() || "";
+
+    if (!content) {
       return NextResponse.json(
-        { error: "No pack content for this section — Generate first." },
+        {
+          error: `No content for “${label}” yet — Generate or paste first.`,
+          templateKey,
+          code: "EMPTY_SECTION",
+        },
         { status: 404 }
       );
     }
 
-    const seed = PACK_TEMPLATE_SEEDS.find((t) => t.key === templateKey);
-    const title = section.title || seed?.title || templateKey;
+    const title = existing?.title || seed?.title || templateKey;
+    const section = await prisma.packSection.upsert({
+      where: { matchId_templateKey: { matchId: id, templateKey } },
+      create: {
+        matchId: id,
+        templateKey,
+        title,
+        content,
+        status: existing?.status || "draft",
+      },
+      update: {
+        content,
+        title,
+      },
+    });
 
     const allPlayers = [
       ...match.homeClub.players.map((p) => ({ id: p.id, name: p.name })),
@@ -50,14 +79,30 @@ export async function POST(
       matchId: id,
       userId: session.id,
       templateKey,
-      templateTitle: title,
+      templateTitle: section.title || title,
       content: section.content,
       homeClub: { id: match.homeClub.id, name: match.homeClub.name },
       awayClub: { id: match.awayClub.id, name: match.awayClub.name },
       allPlayers,
     });
 
-    return NextResponse.json({ ok: true, templateKey, distributed });
+    const total =
+      (distributed.scripts || 0) +
+      (distributed.playerNotes || 0) +
+      (distributed.clubNotes || 0) +
+      (distributed.matchNotes || 0);
+
+    return NextResponse.json({
+      ok: true,
+      templateKey,
+      title: section.title || title,
+      distributed,
+      emptyDistribution: total === 0,
+      message:
+        total === 0
+          ? `“${label}” was saved but nothing mapped into Scripts/Notes (check headings).`
+          : undefined,
+    });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     return NextResponse.json({ error: message }, { status: 500 });

@@ -194,15 +194,66 @@ export function PacksClient({ matchId }: { matchId: string }) {
   }
 
   async function sendToNotes() {
+    if (!draft.trim()) {
+      setMsg(null);
+      return;
+    }
     setBusy(true);
     setMsg(null);
     try {
+      const tpl = templates.find((t) => t.key === active);
+      const saveRes = await fetch(`/api/matches/${matchId}/packs`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          templateKey: active,
+          title: tpl?.title || active,
+          content: draft,
+        }),
+      });
+      const saveText = await saveRes.text();
+      let saveJson: { section?: Section; error?: string };
+      try {
+        saveJson = JSON.parse(saveText);
+      } catch {
+        throw new Error(
+          saveRes.ok
+            ? "Unexpected response while saving draft"
+            : `Save failed (${saveRes.status}) — server returned a page instead of JSON. Try refreshing.`
+        );
+      }
+      if (!saveRes.ok) throw new Error(saveJson.error || "Save draft failed");
+      if (saveJson.section) {
+        setSections((prev) => {
+          const others = prev.filter((s) => s.templateKey !== active);
+          return [saveJson.section!, ...others];
+        });
+      }
+
       const res = await fetch(`/api/matches/${matchId}/packs/distribute`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ templateKey: active }),
+        body: JSON.stringify({
+          templateKey: active,
+          content: draft.trim(),
+        }),
       });
-      const json = await res.json();
+      const text = await res.text();
+      let json: {
+        distributed?: Distributed;
+        error?: string;
+        message?: string;
+        emptyDistribution?: boolean;
+      };
+      try {
+        json = JSON.parse(text);
+      } catch {
+        throw new Error(
+          res.ok
+            ? "Unexpected response from distribute"
+            : `Send failed (${res.status}) — server returned a page instead of JSON. Try refreshing.`
+        );
+      }
       if (!res.ok) throw new Error(json.error || "Send to notes failed");
       const d = (json.distributed || {
         scripts: 0,
@@ -211,7 +262,11 @@ export function PacksClient({ matchId }: { matchId: string }) {
         matchNotes: 0,
       }) as Distributed;
       setLastDistributed(d);
-      setMsg(`Sent to desk notes · ${formatDistributed(d)}`);
+      setMsg(
+        json.emptyDistribution && json.message
+          ? json.message
+          : `Sent to desk notes · ${formatDistributed(d)}`
+      );
       router.refresh();
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "Send to notes failed");

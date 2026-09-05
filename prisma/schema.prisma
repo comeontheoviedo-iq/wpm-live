@@ -68,6 +68,8 @@ model Player {
   apiFootballPlayerId Int?
   goals            Int             @default(0)
   assists          Int             @default(0)
+  goalsAllComps    Int             @default(0)
+  assistsAllComps  Int             @default(0)
   appearances      Int             @default(0)
   cleanSheets      Int             @default(0)
   yellowCards      Int             @default(0)
@@ -149,6 +151,7 @@ model Match {
   homeFormation        String          @default("4-3-3")
   awayFormation        String          @default("4-2-3-1")
   minute               Int             @default(0)
+  minuteExtra          Int?
   period               String          @default("pre")
   weatherSummary       String?
   weatherTempC         Float?

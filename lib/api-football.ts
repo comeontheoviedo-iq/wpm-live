@@ -16,7 +16,7 @@ export type AfFixture = {
     id: number;
     date: string;
     referee?: string | null;
-    status: { short: string; long: string; elapsed: number | null };
+    status: { short: string; long: string; elapsed: number | null; extra?: number | null };
     venue?: { id: number | null; name: string | null; city: string | null };
   };
   league: {

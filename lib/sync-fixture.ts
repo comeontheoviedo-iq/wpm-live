@@ -35,6 +35,12 @@ import { resolveWeatherForVenue } from "./weather";
 import { nationalityToIso } from "./flags";
 import { maybeAutoGenerateLineupPack } from "./pack-generate";
 import { namesLooselyMatch } from "./player-name";
+import {
+  aggregateForIngest,
+  buildGoalSeasonLines,
+  fetchPlayerSeasonSplit,
+  seasonOrdinal,
+} from "./season-tally";
 
 
 /**
@@ -133,6 +139,8 @@ async function upsertPlayerBioFromAf(
     rating?: number | null;
     goals?: number;
     assists?: number;
+    goalsAllComps?: number;
+    assistsAllComps?: number;
     apps?: number;
   }
 ) {
@@ -166,6 +174,8 @@ async function upsertPlayerBioFromAf(
         birthDate: row.birth || null,
         goals: row.goals || 0,
         assists: row.assists || 0,
+        goalsAllComps: row.goalsAllComps || row.goals || 0,
+        assistsAllComps: row.assistsAllComps || row.assists || 0,
         appearances: row.apps || 0,
         ...(row.rating != null ? { rating: row.rating } : {}),
       },
@@ -190,6 +200,18 @@ async function upsertPlayerBioFromAf(
   if (row.apps) data.appearances = row.apps;
   if (row.goals != null && row.goals > (existing.goals || 0)) data.goals = row.goals;
   if (row.assists != null && row.assists > (existing.assists || 0)) data.assists = row.assists;
+  if (
+    row.goalsAllComps != null &&
+    row.goalsAllComps > ((existing as { goalsAllComps?: number }).goalsAllComps || 0)
+  ) {
+    data.goalsAllComps = row.goalsAllComps;
+  }
+  if (
+    row.assistsAllComps != null &&
+    row.assistsAllComps > ((existing as { assistsAllComps?: number }).assistsAllComps || 0)
+  ) {
+    data.assistsAllComps = row.assistsAllComps;
+  }
   if (Object.keys(data).length) {
     await prisma.player.update({ where: { id: existing.id }, data });
   }
@@ -1045,6 +1067,21 @@ async function syncVenueAndWeather(
 }
 
 
+
+function evTeamAfForPlayer(
+  afPlayerId: number,
+  events: AfEvent[],
+  homeAfId: number,
+  awayAfId: number
+): number | null {
+  for (const ev of events) {
+    if (ev.player?.id === afPlayerId || ev.assist?.id === afPlayerId) {
+      if (ev.team?.id === homeAfId || ev.team?.id === awayAfId) return ev.team.id;
+    }
+  }
+  return null;
+}
+
 async function syncSeasonScorers(
   homeClubId: string,
   awayClubId: string,
@@ -1082,6 +1119,8 @@ async function syncSeasonScorers(
     name: string;
     goals: number;
     assists: number;
+    goalsAllComps: number;
+    assistsAllComps: number;
     apps: number;
     cleanSheets: number;
     saves: number;
@@ -1100,15 +1139,21 @@ async function syncSeasonScorers(
   const byApi = new Map<number, Acc>();
 
   function ingest(row: (typeof tops)[number]) {
-    const teamId = row.statistics?.[0]?.team?.id;
+    const teamId =
+      row.statistics?.find((s) => s.team?.id && clubByAf.has(s.team.id))?.team
+        ?.id ?? row.statistics?.[0]?.team?.id;
     const clubId = teamId && clubByAf.has(teamId) ? clubByAf.get(teamId)! : null;
     if (!clubId || !row.player?.id) return;
-    const goals = row.statistics?.[0]?.goals?.total ?? 0;
-    const assists = row.statistics?.[0]?.goals?.assists ?? 0;
-    const apps = row.statistics?.[0]?.games?.appearences ?? 0;
-    const saves = row.statistics?.[0]?.goals?.saves ?? 0;
-    const conceded = row.statistics?.[0]?.goals?.conceded ?? 0;
-    const rawRating = row.statistics?.[0]?.games?.rating;
+    const agg = aggregateForIngest(row.statistics, leagueId, teamId);
+    const saves = row.statistics?.find((s) => s.league?.id === leagueId)?.goals
+      ?.saves ?? row.statistics?.[0]?.goals?.saves ?? 0;
+    const conceded =
+      row.statistics?.find((s) => s.league?.id === leagueId)?.goals?.conceded ??
+      row.statistics?.[0]?.goals?.conceded ??
+      0;
+    const rawRating =
+      row.statistics?.find((s) => s.league?.id === leagueId)?.games?.rating ??
+      row.statistics?.[0]?.games?.rating;
     const ratingNum =
       rawRating != null && rawRating !== ""
         ? Number(rawRating)
@@ -1119,13 +1164,16 @@ async function syncSeasonScorers(
       clubId,
       apiId: row.player.id,
       name: row.player.name,
-      goals: Math.max(goals || 0, prev?.goals || 0),
-      assists: Math.max(assists || 0, prev?.assists || 0),
-      apps: Math.max(apps || 0, prev?.apps || 0),
+      // Competition (desk league) — do not take statistics[0] cup/UCL row alone
+      goals: Math.max(agg.leagueGoals || 0, prev?.goals || 0),
+      assists: Math.max(agg.leagueAssists || 0, prev?.assists || 0),
+      goalsAllComps: Math.max(agg.allGoals || 0, prev?.goalsAllComps || 0),
+      assistsAllComps: Math.max(agg.allAssists || 0, prev?.assistsAllComps || 0),
+      apps: Math.max(agg.leagueApps || 0, prev?.apps || 0),
       cleanSheets: prev?.cleanSheets || 0,
       saves: Math.max(saves || 0, prev?.saves || 0),
       conceded: Math.max(conceded || 0, prev?.conceded || 0),
-      position: row.statistics?.[0]?.games?.position || prev?.position,
+      position: agg.position || prev?.position,
       age: row.player.age ?? prev?.age,
       nationality: row.player.nationality || prev?.nationality,
       birthCountry:
@@ -1184,6 +1232,8 @@ async function syncSeasonScorers(
       rating: prev?.rating ?? null,
       goals: prev?.goals || 0,
       assists: prev?.assists || 0,
+      goalsAllComps: prev?.goalsAllComps || prev?.goals || 0,
+      assistsAllComps: prev?.assistsAllComps || prev?.assists || 0,
       apps: prev?.apps || 0,
     });
     return true;
@@ -1343,6 +1393,8 @@ async function syncSeasonScorers(
         name: gk.name,
         goals: 0,
         assists: 0,
+        goalsAllComps: 0,
+        assistsAllComps: 0,
         apps: gk.appearances || 0,
         cleanSheets: gk.cleanSheets || 0,
         saves: 0,
@@ -1635,14 +1687,30 @@ export async function syncMatchFromApiFootball(
   const homeScore = fixture.goals.home ?? match.homeScore;
   const awayScore = fixture.goals.away ?? match.awayScore;
   const minute = fixture.fixture.status.elapsed ?? match.minute;
+  const minuteExtraRaw = fixture.fixture.status.extra;
+  const minuteExtra =
+    minuteExtraRaw != null && Number.isFinite(Number(minuteExtraRaw))
+      ? Math.floor(Number(minuteExtraRaw))
+      : null;
   const status = mapAfStatus(fixture.fixture.status.short);
+  const competitionName =
+    fixture.league?.name?.trim() ||
+    matchDay?.competition ||
+    "This competition";
 
   const newEvents: {
     type: string;
     minute: number;
     description: string;
     playerId?: string | null;
+    /** Pre-built season tally lines for rich goal popups */
+    seasonLines?: string[];
+    assistSeasonLines?: string[];
   }[] = [];
+
+  // Running in-match goal/assist counts (AF player id) for ordinal math
+  const matchGoalCountByAf = new Map<number, number>();
+  const matchAssistCountByAf = new Map<number, number>();
 
   for (const ev of events) {
     const elapsed = ev.time?.elapsed ?? 0;
@@ -1650,6 +1718,21 @@ export async function syncMatchFromApiFootball(
       ev.assist?.name ? ` (${ev.assist.name})` : ""
     }`;
     const type = mapEventType(ev);
+    const isGoalType =
+      type === "goal" || type === "penalty_goal" || type === "own_goal";
+    const isSeasonGoal = type === "goal" || type === "penalty_goal";
+    if (isSeasonGoal && ev.player?.id) {
+      matchGoalCountByAf.set(
+        ev.player.id,
+        (matchGoalCountByAf.get(ev.player.id) || 0) + 1
+      );
+    }
+    if (isSeasonGoal && ev.assist?.id) {
+      matchAssistCountByAf.set(
+        ev.assist.id,
+        (matchAssistCountByAf.get(ev.assist.id) || 0) + 1
+      );
+    }
     const teamSide =
       ev.team?.id === homeAfId ? "home" : ev.team?.id === awayAfId ? "away" : null;
 
@@ -1696,11 +1779,66 @@ export async function syncMatchFromApiFootball(
           playerId,
         },
       });
+      let seasonLines: string[] | undefined;
+      let assistSeasonLines: string[] | undefined;
+      if (isSeasonGoal) {
+        try {
+          const scorerAf = ev.player?.id || null;
+          const assistAf = ev.assist?.id || null;
+          const scorerTeamAf =
+            ev.team?.id === homeAfId
+              ? homeAfId
+              : ev.team?.id === awayAfId
+                ? awayAfId
+                : null;
+          if (scorerAf) {
+            const split = await fetchPlayerSeasonSplit(
+              scorerAf,
+              fixture.league.season,
+              fixture.league.id,
+              competitionName,
+              scorerTeamAf
+            );
+            const inMatch = matchGoalCountByAf.get(scorerAf) || 1;
+            const built = buildGoalSeasonLines({
+              kind: "goal",
+              split: split!,
+              inMatchCount: inMatch,
+              indexInMatch: inMatch,
+              matchStatus: status,
+            });
+            seasonLines = built.lines;
+          }
+          if (assistAf) {
+            const assistTeamAf = scorerTeamAf;
+            const splitA = await fetchPlayerSeasonSplit(
+              assistAf,
+              fixture.league.season,
+              fixture.league.id,
+              competitionName,
+              assistTeamAf
+            );
+            const inMatchA = matchAssistCountByAf.get(assistAf) || 1;
+            const builtA = buildGoalSeasonLines({
+              kind: "assist",
+              split: splitA!,
+              inMatchCount: inMatchA,
+              indexInMatch: inMatchA,
+              matchStatus: status,
+            });
+            assistSeasonLines = builtA.lines;
+          }
+        } catch (err) {
+          console.error("[sync] season tally for popup failed", err);
+        }
+      }
       newEvents.push({
         type,
         minute: elapsed,
         description: desc,
         playerId,
+        seasonLines,
+        assistSeasonLines,
       });
 
       // Auto-pin short note for goals/cards
@@ -1767,6 +1905,80 @@ export async function syncMatchFromApiFootball(
     }
   }
 
+  // Idempotent bump: total after this match = seasonOrdinal(AF, inMatch, inMatch, status)
+  // so repeated live syncs do not double-count multi-goal games.
+  try {
+    for (const [afId, gCount] of matchGoalCountByAf) {
+      const pl = await prisma.player.findFirst({
+        where: {
+          apiFootballPlayerId: afId,
+          clubId: { in: [match.homeClubId, match.awayClubId] },
+        },
+      });
+      if (!pl) continue;
+      const split = await fetchPlayerSeasonSplit(
+        afId,
+        fixture.league.season,
+        fixture.league.id,
+        competitionName,
+        afId && matchGoalCountByAf
+          ? evTeamAfForPlayer(afId, events, homeAfId, awayAfId)
+          : null
+      );
+      const afG = split?.competitionGoals ?? pl.goals ?? 0;
+      const afAll = split?.allCompGoals ?? (pl as { goalsAllComps?: number }).goalsAllComps ?? afG;
+      const nextG = seasonOrdinal(afG, gCount, gCount, status);
+      const nextAll = seasonOrdinal(afAll, gCount, gCount, status);
+      const data: Record<string, number> = {};
+      if (nextG != null && nextG > (pl.goals || 0)) data.goals = nextG;
+      if (
+        nextAll != null &&
+        nextAll > ((pl as { goalsAllComps?: number }).goalsAllComps || 0)
+      ) {
+        data.goalsAllComps = nextAll;
+      }
+      if (Object.keys(data).length) {
+        await prisma.player.update({ where: { id: pl.id }, data });
+      }
+    }
+    for (const [afId, aCount] of matchAssistCountByAf) {
+      const pl = await prisma.player.findFirst({
+        where: {
+          apiFootballPlayerId: afId,
+          clubId: { in: [match.homeClubId, match.awayClubId] },
+        },
+      });
+      if (!pl) continue;
+      const split = await fetchPlayerSeasonSplit(
+        afId,
+        fixture.league.season,
+        fixture.league.id,
+        competitionName,
+        evTeamAfForPlayer(afId, events, homeAfId, awayAfId)
+      );
+      const afA = split?.competitionAssists ?? pl.assists ?? 0;
+      const afAll =
+        split?.allCompAssists ??
+        (pl as { assistsAllComps?: number }).assistsAllComps ??
+        afA;
+      const nextA = seasonOrdinal(afA, aCount, aCount, status);
+      const nextAll = seasonOrdinal(afAll, aCount, aCount, status);
+      const data: Record<string, number> = {};
+      if (nextA != null && nextA > (pl.assists || 0)) data.assists = nextA;
+      if (
+        nextAll != null &&
+        nextAll > ((pl as { assistsAllComps?: number }).assistsAllComps || 0)
+      ) {
+        data.assistsAllComps = nextAll;
+      }
+      if (Object.keys(data).length) {
+        await prisma.player.update({ where: { id: pl.id }, data });
+      }
+    }
+  } catch (err) {
+    console.error("[sync] reconcile in-match season tallies failed", matchId, err);
+  }
+
   await dedupeMatchEvents(matchId).catch((err) =>
     console.error("[sync] dedupe events failed", matchId, err)
   );
@@ -1787,6 +1999,7 @@ export async function syncMatchFromApiFootball(
       homeScore,
       awayScore,
       minute,
+      minuteExtra,
       status: status === "Assigned" ? match.status : status,
       homeFormation,
       awayFormation,

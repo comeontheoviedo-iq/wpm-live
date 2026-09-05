@@ -10,6 +10,7 @@ import {
 import { User, X, SlidersHorizontal, ArrowLeftRight } from "lucide-react";
 import { slotsFor } from "@/lib/formations";
 import { cn } from "@/lib/utils";
+import { formatPitchClockBadge } from "@/lib/live-clock";
 import {
   dualNationalities,
   flagUrl,
@@ -54,9 +55,12 @@ export type PitchPlayer = {
   heightCm?: number | null;
   weightKg?: number | null;
   preferredFoot?: string | null;
-  /** Season */
+  /** Season — competition (desk league) */
   goals?: number;
   assists?: number;
+  /** Season — all club competitions (AF sum) */
+  goalsAllComps?: number;
+  assistsAllComps?: number;
   appearances?: number;
   rating?: number | string | null;
   saves?: number;
@@ -477,7 +481,7 @@ function CoachChip({
       onClick={onClick}
       title={onClick ? `Open ${coach.name} profile` : undefined}
       className={cn(
-        "flex items-center gap-1.5 rounded-md border bg-white/95 shadow px-1 py-0.5 max-w-[12rem] text-left",
+        "flex items-center gap-2 rounded-lg border bg-white/95 shadow-md px-1.5 py-1 max-w-[15rem] text-left",
         isHome ? "border-slate-800" : "",
         onClick && "pointer-events-auto cursor-pointer hover:ring-2 hover:ring-teal-400/60"
       )}
@@ -485,7 +489,7 @@ function CoachChip({
     >
       <span
         className={cn(
-          "relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-sm",
+          "relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-md",
           "bg-slate-200 ring-1 ring-slate-300"
         )}
       >
@@ -510,19 +514,19 @@ function CoachChip({
             photo ? "hidden" : "flex"
           )}
         >
-          <User className="h-4 w-4" strokeWidth={1.5} />
+          <User className="h-6 w-6" strokeWidth={1.5} />
         </span>
       </span>
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 pr-0.5">
         <div className="flex items-center gap-1">
-          <FlagImg nationality={coach.nationality} className="h-3 w-4" />
-          <div className="text-[8px] text-slate-500 leading-none truncate">
+          <FlagImg nationality={coach.nationality} className="h-3.5 w-[1.15rem]" />
+          <div className="text-[10px] text-slate-500 leading-none truncate">
             {coach.age != null ? `${coach.age}y · Coach` : "Coach"}
           </div>
         </div>
         <div
           className={cn(
-            "text-[9px] font-bold leading-tight whitespace-nowrap truncate",
+            "text-[12px] font-bold leading-tight whitespace-nowrap truncate",
             isHome ? "text-slate-900" : ""
           )}
           style={!isHome ? { color: teamColor } : undefined}
@@ -568,6 +572,8 @@ export function PitchBoard({
   onResetOfficial,
   homeScore,
   awayScore,
+  minute,
+  minuteExtra,
   matchStatus,
   homeAbbr,
   awayAbbr,
@@ -629,6 +635,10 @@ export function PitchBoard({
   onResetOfficial?: () => void;
   homeScore?: number;
   awayScore?: number;
+  /** AF elapsed minute for live clock */
+  minute?: number | null;
+  /** AF stoppage/injury time (status.extra) when provided */
+  minuteExtra?: number | null;
   matchStatus?: string;
   homeAbbr?: string;
   awayAbbr?: string;
@@ -936,7 +946,7 @@ export function PitchBoard({
       homeScore > 0 ||
       awayScore > 0);
 
-  const statusShort =
+  const statusShortBase =
     matchStatus === "Full Time"
       ? "FT"
       : matchStatus === "Live"
@@ -944,6 +954,11 @@ export function PitchBoard({
         : matchStatus === "Half Time"
           ? "HT"
           : null;
+  const statusShort = formatPitchClockBadge(
+    minute,
+    minuteExtra,
+    statusShortBase
+  );
 
   function handleDragOver(e: DragEvent, key: string) {
     if (locked || !onSlotDrop) return;
@@ -1163,7 +1178,7 @@ export function PitchBoard({
 
           <div className="flex flex-col items-center gap-0.5 pointer-events-none">
             {showScore && (
-              <div className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-white/95 shadow-md border border-slate-200 px-2 py-1">
+              <div className="pointer-events-auto flex items-center gap-2 rounded-full bg-white/95 shadow-md border border-slate-200 px-2.5 py-1.5">
                 {leagueLogoUrl ? (
                   <button
                     type="button"
@@ -1176,7 +1191,7 @@ export function PitchBoard({
                     <img
                       src={leagueLogoUrl}
                       alt=""
-                      className="h-5 w-5 object-contain"
+                      className="h-7 w-7 object-contain"
                     />
                   </button>
                 ) : null}
@@ -1205,15 +1220,15 @@ export function PitchBoard({
                           <img
                             src={leftLogo}
                             alt=""
-                            className="h-5 w-5 object-contain"
+                            className="h-7 w-7 object-contain"
                           />
                         </button>
                       ) : (
-                        <span className="text-[10px] font-bold text-slate-700 tracking-wide">
+                        <span className="text-xs font-bold text-slate-700 tracking-wide">
                           {leftCode}
                         </span>
                       )}
-                      <span className="text-sm font-black tabular-nums text-slate-900">
+                      <span className="text-lg font-black tabular-nums text-slate-900 leading-none">
                         {leftScore}-{rightScore}
                       </span>
                       {rightLogo ? (
@@ -1228,11 +1243,11 @@ export function PitchBoard({
                           <img
                             src={rightLogo}
                             alt=""
-                            className="h-5 w-5 object-contain"
+                            className="h-7 w-7 object-contain"
                           />
                         </button>
                       ) : (
-                        <span className="text-[10px] font-bold text-slate-700 tracking-wide">
+                        <span className="text-xs font-bold text-slate-700 tracking-wide">
                           {rightCode}
                         </span>
                       )}
@@ -1243,7 +1258,7 @@ export function PitchBoard({
             )}
             <div className="flex items-center gap-1 pointer-events-auto">
               {statusShort && (
-                <span className="rounded bg-black/55 px-1.5 py-px text-[8px] font-bold text-white tracking-wider">
+                <span className="rounded bg-black/55 px-1.5 py-0.5 text-[10px] font-bold text-white tracking-wider tabular-nums">
                   {statusShort}
                 </span>
               )}

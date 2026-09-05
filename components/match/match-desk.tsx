@@ -35,6 +35,8 @@ import { FORMATIONS } from "@/lib/formations";
 import { leagueIdForCompetition } from "@/lib/competitions";
 import { namesLooselyMatch, parseSubDescription } from "@/lib/player-name";
 import { cn } from "@/lib/utils";
+import { formatLiveClock } from "@/lib/live-clock";
+import { ordinal, seasonOrdinal } from "@/lib/season-tally";
 import {
   type FieldSettings,
   DEFAULT_FIELD_SETTINGS,
@@ -282,6 +284,7 @@ export function MatchDesk({
   homeScore,
   awayScore,
   minute,
+  minuteExtra = null,
   notes,
   injuryCount,
   predictionsAdvice,
@@ -331,6 +334,8 @@ export function MatchDesk({
   homeScore: number;
   awayScore: number;
   minute: number;
+  /** AF status.extra stoppage — null when feed omits it */
+  minuteExtra?: number | null;
   notes: NoteRow[];
   injuryCount: number;
   predictionsAdvice: string | null;
@@ -632,6 +637,20 @@ export function MatchDesk({
   const scoreRef = useRef({ home: homeScore, away: awayScore });
   scoreRef.current = { home: homeScore, away: awayScore };
 
+  const [liveMinute, setLiveMinute] = useState(minute);
+  const [liveMinuteExtra, setLiveMinuteExtra] = useState<number | null>(
+    minuteExtra ?? null
+  );
+  useEffect(() => {
+    setLiveMinute(minute);
+  }, [minute]);
+  useEffect(() => {
+    setLiveMinuteExtra(minuteExtra ?? null);
+  }, [minuteExtra]);
+  const clockLabel = formatLiveClock(liveMinute, liveMinuteExtra, {
+    status,
+  });
+
   useEffect(() => {
     if (!placing) return;
     const fresh = squad.find((p) => p.id === placing.id);
@@ -797,10 +816,27 @@ export function MatchDesk({
           if (syncedHome != null && syncedAway != null) {
             scoreRef.current = { home: syncedHome, away: syncedAway };
           }
+          const syncedMinute =
+            typeof json.match?.minute === "number"
+              ? json.match.minute
+              : typeof json.minute === "number"
+                ? json.minute
+                : null;
+          if (syncedMinute != null) setLiveMinute(syncedMinute);
+          if ("minuteExtra" in (json.match || {}) || "minuteExtra" in json) {
+            const ex =
+              json.match?.minuteExtra ?? json.minuteExtra ?? null;
+            setLiveMinuteExtra(
+              typeof ex === "number" && Number.isFinite(ex) ? ex : null
+            );
+          }
           const news = (json.newEvents || []) as {
             type: string;
             minute: number;
             description: string;
+            playerId?: string | null;
+            seasonLines?: string[];
+            assistSeasonLines?: string[];
           }[];
           if (news.length) {
             const top = news
@@ -865,19 +901,92 @@ export function MatchDesk({
                 const hook = scorer
                   ? noteHookByPlayerRef.current[scorer.id] || null
                   : null;
-                const seasonBits = scorer
-                  ? [
-                      scorer.appearances != null
-                        ? `${scorer.appearances} season apps`
-                        : null,
-                      scorer.goals != null
-                        ? `${scorer.goals} season goals`
-                        : null,
-                      scorer.assists != null
-                        ? `${scorer.assists} season assists`
-                        : null,
-                    ].filter(Boolean)
-                  : [];
+                const isOwn = /own_goal/i.test(e.type || "");
+                const serverSeason = (e as { seasonLines?: string[] }).seasonLines;
+                const serverAssist = (e as { assistSeasonLines?: string[] })
+                  .assistSeasonLines;
+                const seasonBits: string[] = [];
+                if (!isOwn) {
+                  if (serverSeason?.length) {
+                    seasonBits.push(...serverSeason);
+                  } else if (scorer) {
+                    // Client fallback from synced competition + all-comp fields
+                    const matchGoals =
+                      (scorer.matchGoals || 0) > 0
+                        ? scorer.matchGoals!
+                        : 1;
+                    const afComp = scorer.goals ?? null;
+                    const afAll =
+                      (scorer as { goalsAllComps?: number }).goalsAllComps ??
+                      afComp;
+                    const nth = seasonOrdinal(
+                      afComp,
+                      matchGoals,
+                      matchGoals,
+                      status
+                    );
+                    if (nth != null) {
+                      seasonBits.push(
+                        `${ordinal(nth)} in ${competition} this season`
+                      );
+                    } else {
+                      seasonBits.push(
+                        `${competition} goal tally unavailable from feed`
+                      );
+                    }
+                    const allNth = seasonOrdinal(
+                      afAll,
+                      matchGoals,
+                      matchGoals,
+                      status
+                    );
+                    if (allNth != null) {
+                      seasonBits.push(
+                        `${allNth} ${allNth === 1 ? "goal" : "goals"} all competitions this season`
+                      );
+                    }
+                  }
+                  if (assistName) {
+                    if (serverAssist?.length) {
+                      seasonBits.push(
+                        ...serverAssist.map((l) =>
+                          l.startsWith("Assist:") ? l : `Assist — ${l}`
+                        )
+                      );
+                    } else if (assister) {
+                      const matchA =
+                        (assister.matchAssists || 0) > 0
+                          ? assister.matchAssists!
+                          : 1;
+                      const afCompA = assister.assists ?? null;
+                      const afAllA =
+                        (assister as { assistsAllComps?: number })
+                          .assistsAllComps ?? afCompA;
+                      const nthA = seasonOrdinal(
+                        afCompA,
+                        matchA,
+                        matchA,
+                        status
+                      );
+                      if (nthA != null) {
+                        seasonBits.push(
+                          `Assist — ${ordinal(nthA)} in ${competition} this season`
+                        );
+                      }
+                      const allA = seasonOrdinal(
+                        afAllA,
+                        matchA,
+                        matchA,
+                        status
+                      );
+                      if (allA != null) {
+                        seasonBits.push(
+                          `Assist — ${allA} ${allA === 1 ? "assist" : "assists"} all competitions this season`
+                        );
+                      }
+                    }
+                  }
+                }
                 const lines = [
                   scorerName
                     ? `Scorer: ${scorer?.name || scorerName}`
@@ -892,7 +1001,7 @@ export function MatchDesk({
                   kind: "goal",
                   title: `GOAL ${e.minute}'`,
                   subtitle: scorer?.name || scorerName || undefined,
-                  lines: [...new Set(lines)].slice(0, 6),
+                  lines: [...new Set(lines)].slice(0, 8),
                   scoreline: `${homeName} ${scoreRef.current.home}–${scoreRef.current.away} ${awayName}`,
                 });
               } else if (/^sub$/i.test(e.type || "")) {
@@ -1250,7 +1359,7 @@ export function MatchDesk({
                   status === "Live" ? "text-rose-600" : "text-slate-700 dark:text-slate-200"
                 )}
               >
-                {status === "Live" ? `${minute}' ` : ""}
+                {status === "Live" && clockLabel ? `${clockLabel} ` : ""}
                 {homeScore}–{awayScore}
               </span>
             )}
@@ -1726,6 +1835,8 @@ export function MatchDesk({
               onCoachClick={(side) => setCoachSide(side)}
               homeScore={homeScore}
               awayScore={awayScore}
+              minute={liveMinute}
+              minuteExtra={liveMinuteExtra}
               matchStatus={status}
               homeAbbr={homeAbbr || homeName}
               awayAbbr={awayAbbr || awayName}
@@ -1752,7 +1863,7 @@ export function MatchDesk({
                 <span className="text-xs font-bold uppercase tracking-wide">On-air</span>
                 <span className="text-[10px] text-slate-500">
                   {events.length} events
-                  {status === "Live" ? ` · ${minute}'` : ""}
+                  {status === "Live" && clockLabel ? ` · ${clockLabel}` : ""}
                 </span>
                 <button
                   type="button"

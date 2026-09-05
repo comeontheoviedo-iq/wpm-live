@@ -14,6 +14,7 @@ import {
   MessageSquare,
   Plus,
 } from "lucide-react";
+import { DeleteMatchDesk } from "@/components/match/delete-match-desk";
 
 export default async function DashboardPage() {
   const user = await getSession();
@@ -127,26 +128,41 @@ export default async function DashboardPage() {
                   .
                 </p>
               )}
-              {matchDays.map((md) => (
-                <div
-                  key={md.id}
-                  className="rounded-lg border border-slate-100 dark:border-slate-800 p-3"
-                >
-                  <div className="text-sm font-semibold">{md.title}</div>
-                  <div className="text-xs text-slate-500 mt-0.5">
-                    {formatKickoff(md.date)} · {md.competition} ·{" "}
-                    {md.matches.length} matches
+              {matchDays.map((md) => {
+                const m0 = md.matches[0];
+                const matchLabel = m0
+                  ? `${m0.homeClub.shortName} vs ${m0.awayClub.shortName}`
+                  : md.title;
+                return (
+                  <div
+                    key={md.id}
+                    className="rounded-lg border border-slate-100 dark:border-slate-800 p-3"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold">{md.title}</div>
+                        <div className="text-xs text-slate-500 mt-0.5">
+                          {formatKickoff(md.date)} · {md.competition} ·{" "}
+                          {md.matches.length} matches
+                        </div>
+                      </div>
+                      <DeleteMatchDesk
+                        matchDayId={md.id}
+                        matchLabel={matchLabel}
+                        variant="list"
+                      />
+                    </div>
+                    {m0 && (
+                      <Link
+                        href={`/match-day/${m0.id}`}
+                        className="mt-2 inline-block text-xs text-teal-700 dark:text-teal-300 hover:underline"
+                      >
+                        Open desk →
+                      </Link>
+                    )}
                   </div>
-                  {md.matches[0] && (
-                    <Link
-                      href={`/match-day/${md.matches[0].id}`}
-                      className="mt-2 inline-block text-xs text-teal-700 dark:text-teal-300 hover:underline"
-                    >
-                      Open desk →
-                    </Link>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </CardBody>
           </Card>
 

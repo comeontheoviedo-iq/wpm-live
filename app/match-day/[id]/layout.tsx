@@ -4,6 +4,7 @@ import { getMatchFull } from "@/lib/match-data";
 import { AppHeader } from "@/components/layout/app-header";
 import { MatchNav } from "@/components/layout/match-nav";
 import { StatusControl } from "@/components/match/status-control";
+import { DeleteMatchDesk } from "@/components/match/delete-match-desk";
 import { StatusBadge } from "@/components/ui/badge";
 import { formatKickoff } from "@/lib/utils";
 
@@ -57,8 +58,13 @@ export default async function MatchDayLayout({
               {match.awayClub.badgeEmoji}
             </span>
           </div>
-          <div className="sm:ml-auto">
+          <div className="flex items-center gap-2 sm:ml-auto">
             <StatusControl matchId={match.id} status={match.status} />
+            <DeleteMatchDesk
+              matchDayId={match.matchDayId}
+              matchLabel={`${match.homeClub.shortName} vs ${match.awayClub.shortName}`}
+              variant="overflow"
+            />
           </div>
         </div>
       </div>

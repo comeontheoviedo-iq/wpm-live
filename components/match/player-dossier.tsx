@@ -644,7 +644,7 @@ export function PlayerDossier({
               )}
             </div>
 
-            {/* Notes panel — SportsCom right column */}
+            {/* Notes panel — dossier right column */}
             <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 overflow-hidden flex flex-col min-h-[280px]">
               <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-slate-100 dark:border-slate-800">
                 <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-700 dark:text-slate-200">

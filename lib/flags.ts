@@ -278,7 +278,7 @@ export function nationalityToIso(nationality?: string | null): string | null {
 
 
 /**
- * Up to 2 distinct nationality labels for SportsCom-style dual flags.
+ * Up to 2 distinct nationality labels for dual nationality flags.
  * Sources (AF-only today): citizenship (`nationality`) + birth.country when different.
  * Sync may also promote national-team caps over a stale England/etc. citizenship.
  * National-team caps (current or prior AF season) can promote citizenship

@@ -6,9 +6,17 @@ import { cn } from "@/lib/utils";
 import {
   type FieldSettings,
   type FieldSettingsTab,
+  type CardStatField,
+  type CurrencyCode,
+  type HeightUnit,
+  ALL_CARD_FIELDS,
   DEFAULT_FIELD_SETTINGS,
   formatPctLabel,
   scaleFactor,
+  pickVisibleFields,
+  currencySymbol,
+  formatHeightValue,
+  formatMarketValue,
 } from "@/lib/field-settings";
 
 const TABS: { key: FieldSettingsTab; label: string; enabled: boolean }[] = [
@@ -17,6 +25,23 @@ const TABS: { key: FieldSettingsTab; label: string; enabled: boolean }[] = [
   { key: "coach", label: "Coach", enabled: false },
   { key: "referee", label: "Referee", enabled: false },
 ];
+
+const SAMPLE: Record<CardStatField, string> = {
+  APP: "12",
+  S_GOL: "3",
+  S_AST: "1",
+  M_GOL: "1",
+  M_AST: "0",
+  RTG: "7.2",
+  AGE: "27",
+  SUB: "-",
+  HGT: "182",
+  WGT: "74",
+  FOT: "R",
+  SV: "3",
+  CS: "2",
+  VAL: "€12m",
+};
 
 function PreviewCard({
   settings,
@@ -29,63 +54,35 @@ function PreviewCard({
   const nameScale = scaleFactor(settings.nameSizePct);
   const cols = settings.fieldsPerRow;
   const baseW = 76;
-  const cells =
-    cols === 3
-      ? [
-          ["APP", "12"],
-          ["GOL", "3"],
-          ["AST", "1"],
-        ]
-      : cols === 5
-        ? [
-            ["APP", "12"],
-            ["GOL", "3"],
-            ["AST", "1"],
-            ["RTG", "7.2"],
-            ["AGE", "27"],
-          ]
-        : [
-            ["APP", "12"],
-            ["GOL", "3"],
-            ["AST", "1"],
-            ["RTG", "7.2"],
-          ];
+  const picked = pickVisibleFields(settings, "outfield");
+  const labelOf = (id: CardStatField) =>
+    ALL_CARD_FIELDS.find((f) => f.id === id)?.label || id;
+  const valueOf = (id: CardStatField) => {
+    if (id === "HGT") return formatHeightValue(182, settings.heightUnit);
+    if (id === "VAL") return formatMarketValue(12_000_000, settings.currency);
+    return SAMPLE[id];
+  };
+  const cells = picked.map((id) => [labelOf(id), valueOf(id)] as const);
+  const row1 = cells.slice(0, cols);
   const row2 =
-    settings.dataRows === 2
-      ? cols === 3
-        ? [
-            ["AGE", "27"],
-            ["GOL", "0"],
-            ["SUB", "-"],
-          ]
-        : cols === 5
-          ? [
-              ["AGE", "27"],
-              ["HGT", "182"],
-              ["WGT", "74"],
-              ["FOT", "R"],
-              ["SUB", "-"],
-            ]
-          : [
-              ["AGE", "27"],
-              ["GOL", "0"],
-              ["AST", "0"],
-              ["SUB", "-"],
-            ]
-      : null;
+    settings.dataRows === 2 ? cells.slice(cols, cols * 2) : [];
 
   return (
     <div className="flex flex-col items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-emerald-900/90 p-4 min-h-[160px] justify-center">
       <span className="text-[9px] font-semibold uppercase tracking-wide text-emerald-100/80">
-        Live preview
+        Live preview · S = season · M = match
       </span>
-      <div style={{ transform: `scale(${scale})`, transformOrigin: "center center" }}>
+      <div
+        style={{ transform: `scale(${scale})`, transformOrigin: "center center" }}
+      >
         <div
           className="flex flex-col overflow-hidden rounded-md border-[1.5px] border-slate-800 bg-white shadow-md text-slate-900"
           style={{ width: baseW }}
         >
           <div className="flex items-start justify-between px-1 pt-0.5">
-            <span className="text-[15px] font-black leading-none tabular-nums">9</span>
+            <span className="text-[15px] font-black leading-none tabular-nums">
+              9
+            </span>
             <span className="text-[7px] font-bold uppercase">ST</span>
           </div>
           <div className="flex flex-col items-center px-1 pb-1">
@@ -100,28 +97,36 @@ function PreviewCard({
           <div className="bg-[#FFF8E7] px-0.5 py-0.5 border-t border-black/10">
             <div
               className="grid gap-px"
-              style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+              style={{
+                gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+              }}
             >
-              {cells.map(([l, v]) => (
+              {row1.map(([l, v]) => (
                 <div key={l} className="min-w-0 text-center leading-none">
                   <div className="text-[6px] font-semibold uppercase text-slate-500 truncate">
                     {l}
                   </div>
-                  <div className="text-[9px] font-bold tabular-nums truncate">{v}</div>
+                  <div className="text-[9px] font-bold tabular-nums truncate">
+                    {v}
+                  </div>
                 </div>
               ))}
             </div>
-            {row2 && (
+            {row2.length > 0 && (
               <div
                 className="mt-0.5 grid gap-px border-t border-black/5 pt-0.5"
-                style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+                style={{
+                  gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+                }}
               >
                 {row2.map(([l, v]) => (
                   <div key={l} className="min-w-0 text-center leading-none">
                     <div className="text-[6px] font-semibold uppercase text-slate-500 truncate">
                       {l}
                     </div>
-                    <div className="text-[9px] font-bold tabular-nums truncate">{v}</div>
+                    <div className="text-[9px] font-bold tabular-nums truncate">
+                      {v}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -130,7 +135,9 @@ function PreviewCard({
         </div>
       </div>
       <span className="text-[10px] text-emerald-100/70">
-        Marker {formatPctLabel(markerPct)} · Name {formatPctLabel(settings.nameSizePct)}
+        Marker {formatPctLabel(markerPct)} · Name{" "}
+        {formatPctLabel(settings.nameSizePct)} · {currencySymbol(settings.currency)}{" "}
+        · {settings.heightUnit === "ftin" ? "ft/in" : "cm"}
       </span>
     </div>
   );
@@ -148,8 +155,12 @@ function SliderRow({
   return (
     <label className="block space-y-1.5">
       <div className="flex items-center justify-between text-xs">
-        <span className="font-semibold text-slate-700 dark:text-slate-200">{label}</span>
-        <span className="tabular-nums text-slate-500">{formatPctLabel(value)}</span>
+        <span className="font-semibold text-slate-700 dark:text-slate-200">
+          {label}
+        </span>
+        <span className="tabular-nums text-slate-500">
+          {formatPctLabel(value)}
+        </span>
       </div>
       <input
         type="range"
@@ -180,7 +191,6 @@ export function FieldSettingsModal({
   open: boolean;
   onClose: () => void;
   settings: FieldSettings;
-  /** Effective marker % shown in preview (may include fullscreen bump). */
   markerPct: number;
   onChange: (next: FieldSettings) => void;
   isFullscreen?: boolean;
@@ -193,6 +203,16 @@ export function FieldSettingsModal({
     },
     [onChange, settings]
   );
+
+  function toggleField(id: CardStatField) {
+    const has = settings.visibleFields.includes(id);
+    const next = has
+      ? settings.visibleFields.filter((x) => x !== id)
+      : [...settings.visibleFields, id];
+    // Keep at least one field
+    if (!next.length) return;
+    patch({ visibleFields: next });
+  }
 
   if (!open) return null;
 
@@ -208,16 +228,16 @@ export function FieldSettingsModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="field-settings-title"
-        className="relative z-10 w-full max-w-lg rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 shadow-2xl overflow-hidden"
+        className="relative z-10 w-full max-w-xl rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
       >
-        <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 px-4 py-3">
+        <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 px-4 py-3 shrink-0">
           <SlidersHorizontal className="h-4 w-4 text-teal-600" />
           <div className="min-w-0 flex-1">
             <h2 id="field-settings-title" className="text-sm font-bold">
               Field Settings · Pitch Card
             </h2>
             <p className="text-[10px] text-slate-500">
-              SportsCom-style marker controls · saved in this browser
+              Customise card data · saved in this browser
               {isFullscreen ? " · fullscreen active" : ""}
             </p>
           </div>
@@ -231,7 +251,7 @@ export function FieldSettingsModal({
           </button>
         </div>
 
-        <div className="flex gap-1 border-b border-slate-100 dark:border-slate-800 px-3 pt-2">
+        <div className="flex gap-1 border-b border-slate-100 dark:border-slate-800 px-3 pt-2 shrink-0">
           {TABS.map((t) => (
             <button
               key={t.key}
@@ -252,7 +272,7 @@ export function FieldSettingsModal({
           ))}
         </div>
 
-        <div className="grid gap-4 p-4 sm:grid-cols-[1fr_140px]">
+        <div className="grid gap-4 p-4 sm:grid-cols-[1fr_150px] overflow-y-auto min-h-0">
           <div className="space-y-4">
             <SliderRow
               label="Marker size"
@@ -308,22 +328,121 @@ export function FieldSettingsModal({
                 ))}
               </div>
             </div>
+
+            <div className="space-y-1.5">
+              <div className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                Card data fields
+              </div>
+              <p className="text-[10px] text-slate-500">
+                Toggle what appears on pitch cards. Order follows the list;
+                row × columns sets how many show.
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {ALL_CARD_FIELDS.filter((f) => f.outfield).map((f) => {
+                  const on = settings.visibleFields.includes(f.id);
+                  return (
+                    <button
+                      key={f.id}
+                      type="button"
+                      title={f.hint}
+                      onClick={() => toggleField(f.id)}
+                      className={cn(
+                        "rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+                        on
+                          ? "border-teal-600 bg-teal-50 text-teal-800 dark:bg-teal-950 dark:text-teal-200"
+                          : "border-slate-200 dark:border-slate-700 text-slate-400 line-through"
+                      )}
+                    >
+                      {f.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <div className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                  Height units
+                </div>
+                <div className="flex gap-1.5">
+                  {(
+                    [
+                      ["cm", "cm"],
+                      ["ftin", "ft/in"],
+                    ] as [HeightUnit, string][]
+                  ).map(([id, label]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => patch({ heightUnit: id })}
+                      className={cn(
+                        "rounded-md border px-2.5 py-1 text-[11px] font-semibold",
+                        settings.heightUnit === id
+                          ? "border-teal-600 bg-teal-50 text-teal-800 dark:bg-teal-950 dark:text-teal-200"
+                          : "border-slate-200 dark:border-slate-700 text-slate-600"
+                      )}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <div className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                  Market value currency
+                </div>
+                <div className="flex gap-1.5">
+                  {(
+                    [
+                      ["EUR", "€"],
+                      ["GBP", "£"],
+                      ["USD", "$"],
+                    ] as [CurrencyCode, string][]
+                  ).map(([id, label]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => patch({ currency: id })}
+                      className={cn(
+                        "rounded-md border px-2.5 py-1 text-[11px] font-semibold",
+                        settings.currency === id
+                          ? "border-teal-600 bg-teal-50 text-teal-800 dark:bg-teal-950 dark:text-teal-200"
+                          : "border-slate-200 dark:border-slate-700 text-slate-600"
+                      )}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[9px] text-slate-400">
+                  Used when VAL is enabled (shows — if value unknown).
+                </p>
+              </div>
+            </div>
+
             {!settings.userAdjusted && isFullscreen && (
               <p className="text-[10px] text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/40 rounded-md px-2 py-1.5">
-                Fullscreen uses the same size as windowed (no auto-inflate). Pitch still shrinks cards if needed so they never overlap.
+                Fullscreen uses the same size as windowed (no auto-inflate).
+                Pitch still shrinks cards if needed so they never overlap.
               </p>
             )}
             <button
               type="button"
               className="text-[11px] font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 underline"
               onClick={() =>
-                onChange({ ...DEFAULT_FIELD_SETTINGS, userAdjusted: false })
+                onChange({
+                  ...DEFAULT_FIELD_SETTINGS,
+                  visibleFields: [...DEFAULT_FIELD_SETTINGS.visibleFields],
+                  userAdjusted: false,
+                })
               }
             >
               Reset to defaults
             </button>
           </div>
-          <PreviewCard settings={settings} markerPct={settings.markerSizePct} />
+
+          <PreviewCard settings={settings} markerPct={markerPct} />
         </div>
       </div>
     </div>

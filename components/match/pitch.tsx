@@ -14,7 +14,6 @@ import {
   dualNationalities,
   flagUrl,
   formatFoot,
-  formatHeight,
   formatRating,
   formatWeight,
   lastNameOf,
@@ -23,9 +22,13 @@ import {
 } from "@/lib/flags";
 import {
   type FieldSettings,
+  type CardStatField,
   DEFAULT_FIELD_SETTINGS,
   scaleFactor,
   clampPct,
+  pickVisibleFields,
+  formatHeightValue,
+  formatMarketValue,
 } from "@/lib/field-settings";
 import {
   CARD_GAP_PX,
@@ -60,6 +63,8 @@ export type PitchPlayer = {
   yellowCards?: number;
   redCards?: number;
   cleanSheets?: number;
+  /** Market value in EUR (AF), converted for display currency when shown */
+  marketValue?: number | null;
   /** Match-level */
   matchGoals?: number;
   matchAssists?: number;
@@ -93,16 +98,28 @@ function lineupBadgeLabel(status?: string) {
 function StatCell({
   label,
   value,
+  title,
+  emphasize,
 }: {
   label: string;
   value: string | number;
+  title?: string;
+  /** Highlight live match tallies (e.g. M GOL after a goal). */
+  emphasize?: boolean;
 }) {
   return (
-    <div className="min-w-0 text-center leading-none">
+    <div className="min-w-0 text-center leading-none" title={title || label}>
       <div className="text-[6px] font-semibold uppercase tracking-wide text-slate-500 truncate">
         {label}
       </div>
-      <div className="text-[9px] font-bold tabular-nums text-slate-900 truncate">
+      <div
+        className={cn(
+          "text-[9px] font-bold tabular-nums truncate",
+          emphasize
+            ? "text-emerald-700 dark:text-emerald-800"
+            : "text-slate-900"
+        )}
+      >
         {value}
       </div>
     </div>
@@ -151,7 +168,7 @@ function resolvePitchFlags(
   return dual;
 }
 
-function SportsComToken({
+function PitchCardToken({
   player,
   side,
   teamColor,
@@ -214,98 +231,61 @@ function SportsComToken({
   const markerScale = scaleFactor(markerPct);
   const baseW = 76;
 
-  const outfieldRow1: [string, string | number][] =
-    cols === 3
-      ? [
-          ["APP", apps || "—"],
-          ["GOL", seasonG],
-          ["AST", seasonA],
-        ]
-      : cols === 5
-        ? [
-            ["APP", apps || "—"],
-            ["GOL", seasonG],
-            ["AST", seasonA],
-            ["RTG", rating],
-            ["AGE", age],
-          ]
-        : [
-            ["APP", apps || "—"],
-            ["GOL", seasonG],
-            ["AST", seasonA],
-            ["RTG", rating],
-          ];
-  const outfieldRow2: [string, string | number][] | null =
-    cardSettings.dataRows === 2
-      ? cols === 3
-        ? [
-            ["AGE", age],
-            ["GOL", matchG],
-            ["SUB", sub],
-          ]
-        : cols === 5
-          ? [
-              ["AGE", age],
-              ["GOL", matchG],
-              ["AST", matchA],
-              ["SUB", sub],
-              ["RTG", rating],
-            ]
-          : [
-              ["AGE", age],
-              ["GOL", matchG],
-              ["AST", matchA],
-              ["SUB", sub],
-            ]
-      : null;
+  // Build cells from Field Settings visibility (S = season, M = match).
+  type StatTuple = [string, string | number, string?, boolean?];
+  const valueFor = (id: CardStatField): StatTuple => {
+    switch (id) {
+      case "APP":
+        return ["APP", apps || "—", "Season appearances"];
+      case "S_GOL":
+        return ["S GOL", seasonG, "Season goals"];
+      case "S_AST":
+        return ["S AST", seasonA, "Season assists"];
+      case "M_GOL":
+        return ["M GOL", matchG, "Goals this match", matchG > 0];
+      case "M_AST":
+        return ["M AST", matchA, "Assists this match", matchA > 0];
+      case "RTG":
+        return ["RTG", rating, "Season rating"];
+      case "AGE":
+        return ["AGE", age, "Age"];
+      case "SUB":
+        return ["SUB", sub, "Sub minute / out"];
+      case "HGT":
+        return [
+          "HGT",
+          formatHeightValue(player.heightCm, cardSettings.heightUnit),
+          "Height",
+        ];
+      case "WGT":
+        return ["WGT", formatWeight(player.weightKg), "Weight"];
+      case "FOT":
+        return ["FOT", formatFoot(player.preferredFoot), "Preferred foot"];
+      case "SV":
+        return [
+          "SV",
+          player.matchSaves ?? player.saves ?? 0,
+          "Saves this match",
+        ];
+      case "CS":
+        return ["CS", player.cleanSheets ?? 0, "Season clean sheets"];
+      case "VAL":
+        return [
+          "VAL",
+          formatMarketValue(player.marketValue, cardSettings.currency),
+          "Market value",
+        ];
+      default:
+        return ["—", "—"];
+    }
+  };
+  const picked = pickVisibleFields(cardSettings, isGk ? "gk" : "outfield");
+  const cells = picked.map(valueFor);
+  const row1: StatTuple[] = cells.slice(0, cols);
+  const row2Slice = cells.slice(cols, cols * 2);
+  const row2: StatTuple[] | null =
+    cardSettings.dataRows === 2 && row2Slice.length ? row2Slice : null;
 
-  const gkRow1: [string, string | number][] =
-    cols === 3
-      ? [
-          ["AGE", age],
-          ["HGT", formatHeight(player.heightCm)],
-          ["SV", player.matchSaves ?? player.saves ?? 0],
-        ]
-      : cols === 5
-        ? [
-            ["AGE", age],
-            ["HGT", formatHeight(player.heightCm)],
-            ["WGT", formatWeight(player.weightKg)],
-            ["FOT", formatFoot(player.preferredFoot)],
-            ["SV", player.matchSaves ?? player.saves ?? 0],
-          ]
-        : [
-            ["AGE", age],
-            ["HGT", formatHeight(player.heightCm)],
-            ["WGT", formatWeight(player.weightKg)],
-            ["FOT", formatFoot(player.preferredFoot)],
-          ];
-  const gkRow2: [string, string | number][] | null =
-    cardSettings.dataRows === 2
-      ? cols === 3
-        ? [
-            ["CS", player.cleanSheets ?? 0],
-            ["APP", apps || "—"],
-            ["RTG", rating],
-          ]
-        : cols === 5
-          ? [
-              ["SV", player.matchSaves ?? player.saves ?? 0],
-              ["CS", player.cleanSheets ?? 0],
-              ["APP", apps || "—"],
-              ["RTG", rating],
-              ["AGE", age],
-            ]
-          : [
-              ["SV", player.matchSaves ?? player.saves ?? 0],
-              ["CS", player.cleanSheets ?? 0],
-              ["APP", apps || "—"],
-              ["RTG", rating],
-            ]
-      : null;
-
-  const row1 = isGk ? gkRow1 : outfieldRow1;
-  const row2 = isGk ? gkRow2 : outfieldRow2;
 
   return (
     <span
@@ -428,8 +408,14 @@ function SportsComToken({
             className="grid gap-px"
             style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
           >
-            {row1.map(([label, value]) => (
-              <StatCell key={`r1-${label}`} label={label} value={value} />
+            {row1.map(([label, value, tip, emph]) => (
+              <StatCell
+                key={`r1-${label}`}
+                label={label}
+                value={value}
+                title={tip}
+                emphasize={emph}
+              />
             ))}
           </div>
           {row2 ? (
@@ -437,8 +423,14 @@ function SportsComToken({
               className="mt-0.5 grid gap-px border-t border-black/5 pt-0.5"
               style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
             >
-              {row2.map(([label, value]) => (
-                <StatCell key={`r2-${label}`} label={label} value={value} />
+              {row2.map(([label, value, tip, emph]) => (
+                <StatCell
+                  key={`r2-${label}`}
+                  label={label}
+                  value={value}
+                  title={tip}
+                  emphasize={emph}
+                />
               ))}
             </div>
           ) : null}
@@ -540,6 +532,12 @@ export function PitchBoard({
   matchStatus,
   homeAbbr,
   awayAbbr,
+  homeLogoUrl,
+  awayLogoUrl,
+  leagueLogoUrl,
+  onHomeLogoClick,
+  onAwayLogoClick,
+  onLeagueLogoClick,
   cardSettings,
   markerPct,
   onOpenFieldSettings,
@@ -595,6 +593,12 @@ export function PitchBoard({
   matchStatus?: string;
   homeAbbr?: string;
   awayAbbr?: string;
+  homeLogoUrl?: string | null;
+  awayLogoUrl?: string | null;
+  leagueLogoUrl?: string | null;
+  onHomeLogoClick?: () => void;
+  onAwayLogoClick?: () => void;
+  onLeagueLogoClick?: () => void;
   cardSettings?: FieldSettings;
   markerPct?: number;
   onOpenFieldSettings?: () => void;
@@ -756,12 +760,13 @@ export function PitchBoard({
     liveCompact && !resolvedSettings.userAdjusted
       ? Math.min(resolvedMarkerPct, -35)
       : resolvedMarkerPct;
+  // Keep dataRows from Field Settings (default 2) so M GOL / M AST stay visible
+  // on LIVE — only shrink marker size for quieter cards when unset by user.
   const liveSettings = useMemo(() => {
     if (!liveCompact) return resolvedSettings;
     if (resolvedSettings.userAdjusted) return resolvedSettings;
     return {
       ...resolvedSettings,
-      dataRows: 1 as const,
       markerSizePct: liveDesiredPct,
     };
   }, [liveCompact, resolvedSettings, liveDesiredPct]);
@@ -830,7 +835,7 @@ export function PitchBoard({
       if (nodes.length < 2) return;
 
       const rects = nodes.map((el) => {
-        // Prefer the scaled SportsCom token, not the large hit-target button.
+        // Prefer the scaled pitch card token, not the large hit-target button.
         const token =
           (el.querySelector("[data-pitch-token]") as HTMLElement | null) ||
           (el.querySelector("button span.inline-flex") as HTMLElement | null) ||
@@ -1045,6 +1050,11 @@ export function PitchBoard({
             "repeating-linear-gradient(90deg, #1a7a3c 0 8%, #1f8a44 8% 16%)",
         }}
        onDragOver={(e) => { if (!locked && onFreePlace) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; } }} onDrop={handlePitchFreeDrop} title={onFreePlace ? "Drop on grass for free place · Alt+drop on slot also free-moves" : undefined}>
+        {/* S / M legend — season vs match card stats */}
+        <div className="absolute bottom-1 left-1/2 z-20 -translate-x-1/2 pointer-events-none rounded bg-black/55 px-1.5 py-0.5 text-[8px] font-semibold tracking-wide text-white/90 whitespace-nowrap">
+          S = season · M = this match
+        </div>
+
         {/* Pitch markings — landscape goals left/right */}
         <div className="absolute inset-2 sm:inset-3 border-2 border-white/70 rounded-sm pointer-events-none">
           <div className="absolute top-0 bottom-0 left-1/2 w-0 border-l-2 border-white/70" />
@@ -1114,16 +1124,82 @@ export function PitchBoard({
 
           <div className="flex flex-col items-center gap-0.5 pointer-events-none">
             {showScore && (
-              <div className="flex items-center gap-1.5 rounded-full bg-white/95 shadow-md border border-slate-200 px-2.5 py-1">
-                <span className="text-[10px] font-bold text-slate-700 tracking-wide">
-                  {leftCode}
-                </span>
-                <span className="text-sm font-black tabular-nums text-slate-900">
-                  {leftScore}-{rightScore}
-                </span>
-                <span className="text-[10px] font-bold text-slate-700 tracking-wide">
-                  {rightCode}
-                </span>
+              <div className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-white/95 shadow-md border border-slate-200 px-2 py-1">
+                {leagueLogoUrl ? (
+                  <button
+                    type="button"
+                    onClick={onLeagueLogoClick}
+                    className="shrink-0 rounded-sm overflow-hidden hover:ring-2 hover:ring-teal-500"
+                    title="League notes"
+                    aria-label="Open league notes"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={leagueLogoUrl}
+                      alt=""
+                      className="h-5 w-5 object-contain"
+                    />
+                  </button>
+                ) : null}
+                {(() => {
+                  const leftLogo = homeOnLeft ? homeLogoUrl : awayLogoUrl;
+                  const rightLogo = homeOnLeft ? awayLogoUrl : homeLogoUrl;
+                  const onLeft = homeOnLeft ? onHomeLogoClick : onAwayLogoClick;
+                  const onRight = homeOnLeft ? onAwayLogoClick : onHomeLogoClick;
+                  const leftTitle = homeOnLeft
+                    ? "Home club notes"
+                    : "Away club notes";
+                  const rightTitle = homeOnLeft
+                    ? "Away club notes"
+                    : "Home club notes";
+                  return (
+                    <>
+                      {leftLogo ? (
+                        <button
+                          type="button"
+                          onClick={onLeft}
+                          className="shrink-0 rounded-sm overflow-hidden hover:ring-2 hover:ring-teal-500"
+                          title={leftTitle}
+                          aria-label={leftTitle}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={leftLogo}
+                            alt=""
+                            className="h-5 w-5 object-contain"
+                          />
+                        </button>
+                      ) : (
+                        <span className="text-[10px] font-bold text-slate-700 tracking-wide">
+                          {leftCode}
+                        </span>
+                      )}
+                      <span className="text-sm font-black tabular-nums text-slate-900">
+                        {leftScore}-{rightScore}
+                      </span>
+                      {rightLogo ? (
+                        <button
+                          type="button"
+                          onClick={onRight}
+                          className="shrink-0 rounded-sm overflow-hidden hover:ring-2 hover:ring-teal-500"
+                          title={rightTitle}
+                          aria-label={rightTitle}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={rightLogo}
+                            alt=""
+                            className="h-5 w-5 object-contain"
+                          />
+                        </button>
+                      ) : (
+                        <span className="text-[10px] font-bold text-slate-700 tracking-wide">
+                          {rightCode}
+                        </span>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             )}
             <div className="flex items-center gap-1 pointer-events-auto">
@@ -1414,7 +1490,7 @@ export function PitchBoard({
                 }}
               >
                 {player ? (
-                  <SportsComToken
+                  <PitchCardToken
                     player={player}
                     side={side}
                     teamColor={color}

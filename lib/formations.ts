@@ -2,8 +2,7 @@
 export type Slot = { id: string; x: number; y: number; label: string };
 
 /**
- * Slot spacing is intentionally wider than classic chalkboards so SportsCom-style
- * cards (76px+ at +40% scale) have room before collision resolution runs.
+ * Slot spacing is intentionally wider than classic chalkboards so pitch cards (76px+ at +40% scale) have room before collision resolution runs.
  */
 export const FORMATIONS: Record<string, Slot[]> = {
   "4-3-3": [

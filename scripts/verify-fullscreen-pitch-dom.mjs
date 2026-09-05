@@ -183,7 +183,7 @@ for (const [label, result] of [
   }
 }
 // Cards must look reasonably small — not edge-to-edge columns spanning pitch height.
-// Base SportsCom ~76x152; at -25% scale ≈ 57x114. Fail if sample taller than ~45% of pitch height
+// Base card ~76x152; at -25% scale ≈ 57x114. Fail if sample taller than ~45% of pitch height
 // or wider than ~18% of pitch width (would look like oversized columns).
 for (const [label, result] of [
   ["windowed", windowed],

@@ -1,4 +1,4 @@
-/** Pixel collision resolution for SportsCom-style pitch cards. */
+/** Pixel collision resolution for pitch cards. */
 
 import { type FieldSettings, scaleFactor, clampPct } from "./field-settings";
 
@@ -13,7 +13,7 @@ export type PlacedSlot<TSlot = { id: string; label: string }> = {
 /** Default gap between card AABBs (screen px). Prefer space over overlap. */
 export const CARD_GAP_PX = 8;
 
-/** Honest unscaled SportsCom card height — real DOM is taller than CSS estimate. */
+/** Honest unscaled pitch card height — real DOM is taller than CSS estimate. */
 export function baseCardHeight(settings: FieldSettings): number {
   // Slightly tighter than prior 152/118 so windowed desks aren't floored at -40%.
   return settings.dataRows === 2 ? 136 : 108;
@@ -23,7 +23,7 @@ export function baseCardWidth(): number {
   return 76;
 }
 
-/** Approximate rendered card size (matches SportsComToken baseW + scaled transform). */
+/** Approximate rendered card size (matches PitchCardToken baseW + scaled transform). */
 export function estimateCardSizePx(
   markerPct: number,
   settings: FieldSettings
@@ -87,7 +87,7 @@ export function countAabbOverlaps<T extends PlacedSlot>(
 }
 
 /**
- * Cap marker % so 11+11 SportsCom cards fit with zero AABB overlaps after
+ * Cap marker % so 11+11 pitch cards fit with zero AABB overlaps after
  * collision resolve. Binary-searches from the user's desired % downward.
  * geometricMax is a soft hint only — never floors the slider before search.
  */

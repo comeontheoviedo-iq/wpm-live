@@ -319,32 +319,31 @@ export function NotesPanel({
 
   return (
     <Card className={cn(fillHeight && "h-full flex flex-col overflow-hidden")}>
-      <CardHeader className="shrink-0">
-        <CardTitle className="flex items-center justify-between gap-2">
+      <CardHeader className={cn("shrink-0", fillHeight && "px-2.5 py-1.5")}>
+        <CardTitle className="flex items-center justify-between gap-2 text-xs">
           <span>
             Notes
             {entityLabel ? (
-              <span className="ml-2 text-xs font-normal text-slate-500">
+              <span className="ml-1.5 text-[10px] font-normal text-slate-500">
                 · {entityLabel}
               </span>
             ) : null}
           </span>
-          <span className="text-[10px] font-normal text-slate-400">
+          <span className="text-[10px] font-normal text-slate-400 tabular-nums">
             {visible.length}
-            <span className="ml-1 opacity-60">(/ search)</span>
           </span>
         </CardTitle>
       </CardHeader>
       <CardBody
         className={cn(
-          "space-y-3",
-          fillHeight && "flex-1 min-h-0 flex flex-col overflow-hidden"
+          "space-y-2",
+          fillHeight && "flex-1 min-h-0 flex flex-col overflow-hidden p-2"
         )}
       >
         <div
           className={cn(
-            "shrink-0 space-y-2 bg-white/95 dark:bg-slate-950/95 backdrop-blur z-10",
-            fillHeight && "sticky top-0 pb-1"
+            "shrink-0 space-y-1.5 bg-white/95 dark:bg-slate-950/95 backdrop-blur z-10",
+            fillHeight && "sticky top-0"
           )}
         >
           <div className="relative">
@@ -353,19 +352,19 @@ export function NotesPanel({
               ref={searchRef}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search notes… (/)"
-              className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-transparent pl-7 pr-2 py-1 text-xs"
+              placeholder="Search… (/)"
+              className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-transparent pl-7 pr-2 py-0.5 text-[11px]"
             />
           </div>
 
-          <div className="flex flex-wrap gap-1">
+          <div className="flex gap-1 overflow-x-auto scrollbar-none pb-0.5 flex-nowrap">
             {scopeChips.map((c) => (
               <button
                 key={c.key}
                 type="button"
                 onClick={() => setScope(c.key)}
                 className={cn(
-                  "rounded-full px-2 py-0.5 text-[10px] border inline-flex items-center gap-1",
+                  "shrink-0 rounded-full px-1.5 py-0.5 text-[9px] border inline-flex items-center gap-0.5",
                   activeFilter === c.key
                     ? "bg-teal-600 text-white border-teal-600"
                     : "border-slate-200 dark:border-slate-700"
@@ -392,7 +391,7 @@ export function NotesPanel({
                 type="button"
                 onClick={() => setScope(c)}
                 className={cn(
-                  "rounded-full px-2 py-0.5 text-[10px] border",
+                  "shrink-0 rounded-full px-1.5 py-0.5 text-[9px] border",
                   activeFilter === c
                     ? "bg-teal-600 text-white border-teal-600"
                     : "border-slate-200 dark:border-slate-700"

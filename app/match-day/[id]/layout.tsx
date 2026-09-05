@@ -21,7 +21,7 @@ export default async function MatchDayLayout({
   if (!match) notFound();
 
   return (
-    <div className="min-h-dvh pb-2">
+    <div className="min-h-dvh pb-0">
       <AppHeader user={user} matchId={match.id} />
       <div className="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">
         <div className="mx-auto max-w-[1600px] px-3 sm:px-4 py-2 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
@@ -53,7 +53,7 @@ export default async function MatchDayLayout({
         </div>
       </div>
       <MatchNav matchId={match.id} />
-      <div className="mx-auto max-w-[1600px] px-3 sm:px-4 py-2">{children}</div>
+      <div className="mx-auto max-w-[1600px] px-2 sm:px-3 py-1.5">{children}</div>
     </div>
   );
 }

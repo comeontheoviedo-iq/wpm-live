@@ -62,6 +62,11 @@ export function PitchBoard({
   placingSide,
   locked,
   compact,
+  formationOptions,
+  onFormationChange,
+  formationBusy,
+  lineupHintText,
+  onResetOfficial,
 }: {
   homeName: string;
   awayName: string;
@@ -98,6 +103,11 @@ export function PitchBoard({
   placingSide?: "home" | "away" | null;
   locked?: boolean;
   compact?: boolean;
+  formationOptions?: string[];
+  onFormationChange?: (side: "home" | "away", formation: string) => void;
+  formationBusy?: boolean;
+  lineupHintText?: string;
+  onResetOfficial?: () => void;
 }) {
   const homeSlots = slotsFor(homeFormation);
   const awaySlots = slotsFor(awayFormation);
@@ -222,28 +232,78 @@ export function PitchBoard({
           <div className="absolute top-1/2 right-0 h-[28%] w-[6%] -translate-y-1/2 border-2 border-r-0 border-white/70" />
         </div>
 
-        <div className="absolute top-1.5 left-2 right-2 z-20 flex items-start justify-between gap-2 pointer-events-none">
-          <div className="rounded-md bg-black/55 backdrop-blur px-2 py-0.5 text-white text-[10px] sm:text-xs">
-            <span className="font-semibold">{homeName}</span>
-            <span className="opacity-80 ml-1">{homeFormation}</span>
+        <div className="absolute top-1 left-1.5 right-1.5 z-20 flex items-start justify-between gap-1.5 pointer-events-none">
+          <div className="rounded-md bg-black/55 backdrop-blur px-1.5 py-0.5 text-white text-[10px] flex items-center gap-1 pointer-events-auto">
+            <span className="font-semibold truncate max-w-[5.5rem]">{homeName}</span>
+            {formationOptions && onFormationChange ? (
+              <select
+                className="rounded bg-black/40 border border-white/25 px-1 py-0 text-[10px] font-semibold max-w-[4.5rem]"
+                value={homeFormation}
+                disabled={formationBusy || locked}
+                onChange={(e) => onFormationChange("home", e.target.value)}
+                aria-label="Home formation"
+              >
+                {formationOptions.map((k) => (
+                  <option key={k} value={k} className="text-slate-900">
+                    {k}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="opacity-80">{homeFormation}</span>
+            )}
           </div>
-          {badge && (
-            <div
-              className={cn(
-                "rounded-md px-2 py-0.5 text-[9px] sm:text-[10px] font-bold uppercase tracking-wide text-white",
-                lineupStatus === "confirmed"
-                  ? "bg-emerald-600/95"
-                  : lineupStatus === "predicted"
-                    ? "bg-sky-600/95"
-                    : "bg-amber-500/95"
-              )}
-            >
-              {badge}
-            </div>
-          )}
-          <div className="rounded-md bg-black/55 backdrop-blur px-2 py-0.5 text-white text-[10px] sm:text-xs text-right">
-            <span className="font-semibold">{awayName}</span>
-            <span className="opacity-80 ml-1">{awayFormation}</span>
+          <div className="flex flex-col items-center gap-0.5 pointer-events-none">
+            {badge && (
+              <div
+                className={cn(
+                  "rounded-md px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-white",
+                  lineupStatus === "confirmed"
+                    ? "bg-emerald-600/95"
+                    : lineupStatus === "predicted"
+                      ? "bg-sky-600/95"
+                      : "bg-amber-500/95"
+                )}
+                title={lineupHintText}
+              >
+                {badge}
+              </div>
+            )}
+            {lineupHintText && (
+              <span className="rounded bg-black/45 px-1.5 py-px text-[8px] text-white/90 max-w-[12rem] truncate" title={lineupHintText}>
+                {lineupHintText}
+              </span>
+            )}
+            {onResetOfficial && (
+              <button
+                type="button"
+                className="pointer-events-auto text-[8px] font-semibold text-emerald-200 hover:text-white underline"
+                disabled={formationBusy}
+                onClick={onResetOfficial}
+              >
+                Reset official
+              </button>
+            )}
+          </div>
+          <div className="rounded-md bg-black/55 backdrop-blur px-1.5 py-0.5 text-white text-[10px] flex items-center gap-1 justify-end pointer-events-auto">
+            {formationOptions && onFormationChange ? (
+              <select
+                className="rounded bg-black/40 border border-white/25 px-1 py-0 text-[10px] font-semibold max-w-[4.5rem]"
+                value={awayFormation}
+                disabled={formationBusy || locked}
+                onChange={(e) => onFormationChange("away", e.target.value)}
+                aria-label="Away formation"
+              >
+                {formationOptions.map((k) => (
+                  <option key={k} value={k} className="text-slate-900">
+                    {k}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="opacity-80">{awayFormation}</span>
+            )}
+            <span className="font-semibold truncate max-w-[5.5rem]">{awayName}</span>
           </div>
         </div>
 
@@ -267,7 +327,7 @@ export function PitchBoard({
             >
               {/* Invisible ~46px hit target for drag + click */}
               <div
-                className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-[6px] h-11 w-11 sm:h-12 sm:w-12 rounded-full z-0"
+                className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-[4px] h-8 w-8 sm:h-9 sm:w-9 rounded-full z-0"
                 style={{ touchAction: "manipulation" }}
                 onDragOver={(e) => handleDragOver(e, key)}
                 onDragLeave={() => handleDragLeave(key)}
@@ -311,7 +371,7 @@ export function PitchBoard({
               {(isDragOver || highlightPlace) && (
                 <div
                   className={cn(
-                    "pointer-events-none absolute left-1/2 top-0 -translate-x-1/2 -translate-y-[6px] h-11 w-11 sm:h-12 sm:w-12 rounded-full border-2 z-[1]",
+                    "pointer-events-none absolute left-1/2 top-0 -translate-x-1/2 -translate-y-[4px] h-8 w-8 sm:h-9 sm:w-9 rounded-full border-2 z-[1]",
                     isDragOver
                       ? "border-sky-300 bg-sky-400/25 shadow-[0_0_12px_rgba(56,189,248,0.55)]"
                       : "border-white/50 border-dashed bg-white/10"
@@ -365,9 +425,8 @@ export function PitchBoard({
                 {player ? (
                   <span
                     className={cn(
-                      "group relative flex min-w-[58px] max-w-[72px] flex-col items-center rounded-lg bg-black/75 backdrop-blur-sm px-1.5 py-1 shadow-lg ring-1 ring-white/45",
-                      isPlacingHere && "ring-2 ring-amber-300",
-                      "hover:ring-teal-300",
+                      "group relative flex w-[44px] flex-col items-center",
+                      isPlacingHere && "drop-shadow-[0_0_6px_rgba(251,191,36,0.9)]",
                       player.subbedOff && "opacity-45 grayscale-[30%]"
                     )}
                     title={[
@@ -389,81 +448,38 @@ export function PitchBoard({
                       .filter(Boolean)
                       .join(" · ")}
                   >
-                    <span className="flex items-center gap-1">
+                    <span className="relative">
                       <span
-                        className="flex h-6 w-6 items-center justify-center rounded-full text-[9px] font-bold text-white shadow ring-1 ring-white/50"
+                        className="flex h-5 w-5 sm:h-6 sm:w-6 items-center justify-center rounded-full text-[8px] sm:text-[9px] font-bold text-white shadow ring-1 ring-white/60"
                         style={{ backgroundColor: color }}
                       >
                         {player.shirtNumber}
                       </span>
-                      <span className="max-w-[40px] truncate text-[9px] font-semibold text-white leading-tight">
-                        {player.isCaptain ? "© " : ""}
-                        {player.name.split(" ").slice(-1)[0]}
+                      <span className="absolute -right-1.5 -top-1 flex items-center gap-px">
+                        {player.matchGoals || player.goals ? (
+                          <span className="rounded bg-emerald-600 px-0.5 text-[7px] font-bold text-white leading-none">
+                            {player.matchGoals || player.goals}G
+                          </span>
+                        ) : null}
+                        {player.matchYellow ||
+                        (player.yellowCards && player.yellowCards > 0) ? (
+                          <span className="h-2 w-1.5 rounded-[1px] bg-yellow-400" />
+                        ) : null}
+                        {player.matchRed ||
+                        (player.redCards && player.redCards > 0) ? (
+                          <span className="h-2 w-1.5 rounded-[1px] bg-rose-600" />
+                        ) : null}
                       </span>
                     </span>
-                    <span className="mt-0.5 flex max-w-full flex-wrap items-center justify-center gap-0.5 text-[8px] leading-none text-white/95">
-                      {player.matchGoals ? (
-                        <span className="rounded bg-emerald-600/95 px-0.5 font-bold">
-                          {player.matchGoals}G
-                        </span>
-                      ) : player.goals ? (
-                        <span className="rounded bg-emerald-700/80 px-0.5">
-                          {player.goals}G
-                        </span>
-                      ) : null}
-                      {player.matchAssists ? (
-                        <span className="rounded bg-sky-600/95 px-0.5 font-bold">
-                          {player.matchAssists}A
-                        </span>
-                      ) : player.assists ? (
-                        <span className="rounded bg-sky-700/80 px-0.5">
-                          {player.assists}A
-                        </span>
-                      ) : null}
-                      {player.matchYellow ||
-                      (player.yellowCards && player.yellowCards > 0) ? (
-                        <span
-                          className="h-2.5 w-1.5 rounded-[1px] bg-yellow-400 ring-1 ring-black/20"
-                          title="Yellow"
-                        />
-                      ) : null}
-                      {player.matchRed ||
-                      (player.redCards && player.redCards > 0) ? (
-                        <span
-                          className="h-2.5 w-1.5 rounded-[1px] bg-rose-600 ring-1 ring-black/20"
-                          title="Red"
-                        />
-                      ) : null}
-                      {player.subbedOff ? (
-                        <span className="rounded bg-slate-500/90 px-0.5">OUT</span>
-                      ) : null}
-                      {!player.matchGoals &&
-                      !player.goals &&
-                      !player.matchAssists &&
-                      !player.assists &&
-                      !player.matchYellow &&
-                      !player.matchRed &&
-                      !player.subbedOff &&
-                      player.position ? (
-                        <span className="opacity-80">{player.position}</span>
-                      ) : null}
-                    </span>
-                    <span className="pointer-events-none absolute -top-8 left-1/2 z-30 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-950/95 px-1.5 py-0.5 text-[9px] text-white shadow-lg group-hover:block">
-                      {[
-                        `#${player.shirtNumber} ${player.name}`,
-                        player.isCaptain ? "©" : null,
-                        player.position,
-                        player.matchGoals ? `${player.matchGoals}G` : null,
-                        player.nationality,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
+                    <span className="mt-0.5 max-w-[44px] truncate rounded bg-black/70 px-0.5 text-[8px] font-semibold leading-tight text-white">
+                      {player.isCaptain ? "©" : ""}
+                      {player.name.split(" ").slice(-1)[0]}
                     </span>
                   </span>
                 ) : (
                   <span
                     className={cn(
-                      "flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-full text-[9px] sm:text-[10px] font-bold text-white/80 shadow ring-2 ring-white/25 border border-dashed border-white/40 bg-black/25",
+                      "flex h-5 w-5 sm:h-6 sm:w-6 items-center justify-center rounded-full text-[8px] font-bold text-white/80 shadow ring-1 ring-white/30 border border-dashed border-white/40 bg-black/25",
                       highlightPlace && "ring-sky-200/80"
                     )}
                   >
@@ -476,7 +492,7 @@ export function PitchBoard({
                 <button
                   type="button"
                   aria-label={`Remove ${player.name} from XI`}
-                  className="absolute -right-2 -top-1 z-[3] flex h-4 w-4 items-center justify-center rounded-full bg-slate-900/85 text-white hover:bg-rose-600 shadow"
+                  className="absolute -right-1.5 -top-0.5 z-[3] flex h-3.5 w-3.5 items-center justify-center rounded-full bg-slate-900/85 text-white hover:bg-rose-600 shadow opacity-80"
                   onClick={(e) => {
                     e.stopPropagation();
                     onClearSlot({

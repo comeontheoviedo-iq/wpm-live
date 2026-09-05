@@ -12,6 +12,7 @@ import {
   MapPin,
   ChevronDown,
   Radio,
+  Info,
 } from "lucide-react";
 import { PitchBoard, type PitchPlayer } from "@/components/match/pitch";
 import { SquadRail, type SquadPlayer } from "@/components/match/squad-rail";
@@ -75,13 +76,9 @@ function parsePredictions(json: string | null | undefined): Predictions | null {
 }
 
 function lineupHint(status: string) {
-  if (status === "confirmed") {
-    return "Official lineups from API-Football — board stays editable for commentary. Sync resets to official.";
-  }
-  if (status === "predicted") {
-    return "Your personal predicted XI (click squad → tap slot, or drag). Official will override when published.";
-  }
-  return "Official lineups usually drop 20–60 min before KO — showing Expected (last XI). Click a squad player, then tap a pitch slot.";
+  if (status === "confirmed") return "Official XI · editable";
+  if (status === "predicted") return "Your predicted XI";
+  return "Expected XI · click squad → tap slot";
 }
 
 function enrichPlayers(
@@ -232,9 +229,8 @@ export function MatchDesk({
   const [awayForm, setAwayForm] = useState(awayFormation);
   const [notesFilter, setNotesFilter] = useState<NotesFilterScope>("all");
   const [dossierId, setDossierId] = useState<string | null>(null);
-  const [onAirOpen, setOnAirOpen] = useState(
-    status === "Live" || status === "Full Time"
-  );
+  const [onAirOpen, setOnAirOpen] = useState(false);
+  const [intelOpen, setIntelOpen] = useState(false);
   const [flashEventIds, setFlashEventIds] = useState<string[]>([]);
 
   useEffect(() => {
@@ -326,7 +322,6 @@ export function MatchDesk({
               .map((e) => `${e.minute}' ${e.description}`)
               .join(" · ");
             setFlash(`${news.length} new: ${top}`);
-            setOnAirOpen(true);
             setTimeout(() => setFlash(null), 8000);
           }
           if (!silent) {
@@ -501,8 +496,6 @@ export function MatchDesk({
   );
   const corners = statistics.find((s) => /corner/i.test(s.label));
   const fouls = statistics.find((s) => /^fouls$/i.test(s.label) || /fouls committed/i.test(s.label));
-  const hasAfStats = Boolean(possession || shots || corners || fouls || statistics.length);
-
   const penalties = events.filter((e) =>
     ["penalty_goal", "penalty_miss"].includes(e.type)
   );
@@ -515,188 +508,237 @@ export function MatchDesk({
   }, [notes, dossierId]);
 
   return (
-    <div className="h-[calc(100dvh-7.5rem)] max-h-[100dvh] min-h-[420px] flex flex-col gap-2 overflow-hidden">
-      <header className="shrink-0 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 px-3 py-2">
+    <div className="relative h-[calc(100dvh-11rem)] max-h-[100dvh] min-h-[380px] flex flex-col gap-1.5 overflow-hidden">
+      {/* Slim top bar — score / meta / stats / actions */}
+      <header className="shrink-0 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 px-2.5 py-1.5">
         <div className="min-w-0 flex-1">
-          <div className="font-bold text-sm sm:text-base truncate">
-            {homeFullName}{" "}
-            <span className="text-slate-400 font-normal">vs</span>{" "}
-            {awayFullName}
-            {(status === "Live" || status === "Full Time") && (
-              <span className="ml-2 text-rose-600 font-semibold tabular-nums">
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <span className="font-bold text-sm truncate">
+              {homeName}{" "}
+              <span className="text-slate-400 font-normal">vs</span>{" "}
+              {awayName}
+            </span>
+            {(status === "Live" || status === "Full Time" || homeScore > 0 || awayScore > 0) && (
+              <span
+                className={cn(
+                  "font-semibold tabular-nums text-sm",
+                  status === "Live" ? "text-rose-600" : "text-slate-700 dark:text-slate-200"
+                )}
+              >
                 {status === "Live" ? `${minute}' ` : ""}
-                {homeScore}-{awayScore}
+                {homeScore}–{awayScore}
               </span>
             )}
-          </div>
-          <div className="text-[11px] text-slate-500 truncate flex flex-wrap gap-x-2">
-            <span>
+            <span className="text-[11px] text-slate-500 truncate">
               {competition} · {kickoffLabel} · {status}
-              {apiFootballFixtureId ? ` · #${apiFootballFixtureId}` : ""}
             </span>
+          </div>
+          <div className="text-[10px] text-slate-500 truncate flex flex-wrap items-center gap-x-2 gap-y-0.5">
             {(venueName || venueCity) && (
               <span className="inline-flex items-center gap-0.5">
-                <MapPin className="h-3 w-3" />
+                <MapPin className="h-3 w-3 shrink-0" />
                 {venueName || "Venue"}
                 {venueCity ? `, ${venueCity}` : ""}
-                {venueCapacity ? ` · ${venueCapacity.toLocaleString()}` : ""}
               </span>
             )}
             {(weatherSummary || weatherTempC != null) && (
               <span className="inline-flex items-center gap-0.5">
-                <CloudSun className="h-3 w-3" />
+                <CloudSun className="h-3 w-3 shrink-0" />
                 {weatherSummary || "Weather"}
                 {weatherTempC != null ? ` · ${weatherTempC}°C` : ""}
-                {weatherWindKph != null ? ` · ${weatherWindKph} kph` : ""}
-                {weatherHumidity != null ? ` · ${weatherHumidity}%` : ""}
+              </span>
+            )}
+            <span
+              className={cn(
+                "rounded-full px-1.5 py-px font-semibold text-white text-[9px]",
+                lineupStatus === "confirmed"
+                  ? "bg-emerald-600"
+                  : lineupStatus === "predicted"
+                    ? "bg-sky-600"
+                    : "bg-amber-500"
+              )}
+              title={lineupHint(lineupStatus)}
+            >
+              {lineupStatus === "confirmed"
+                ? "Official"
+                : lineupStatus === "predicted"
+                  ? "Predicted"
+                  : "Expected"}
+            </span>
+            {injuryCount > 0 && (
+              <span className="rounded-full border border-slate-200 dark:border-slate-700 px-1.5 py-px">
+                Inj {injuryCount}
+              </span>
+            )}
+            {possession && (
+              <span className="tabular-nums">
+                Poss {possession.homeValue}–{possession.awayValue}
+              </span>
+            )}
+            {shots && (
+              <span className="tabular-nums">
+                Shots {shots.homeValue}–{shots.awayValue}
+              </span>
+            )}
+            {corners && (
+              <span className="tabular-nums">
+                Corners {corners.homeValue}–{corners.awayValue}
+              </span>
+            )}
+            {fouls && (
+              <span className="tabular-nums">
+                Fouls {fouls.homeValue}–{fouls.awayValue}
+              </span>
+            )}
+            {(predictionsAdvice || preds?.advice) && (
+              <span
+                className="truncate max-w-[200px] text-teal-700 dark:text-teal-300"
+                title={predictionsAdvice || preds?.advice || ""}
+              >
+                Pred {predictionsAdvice || preds?.advice}
+              </span>
+            )}
+            {configured === false && (
+              <span className="inline-flex items-center gap-0.5 text-amber-700 dark:text-amber-300">
+                <AlertTriangle className="h-3 w-3" /> No API key
+              </span>
+            )}
+            {msg && (
+              <span className="text-slate-400 truncate max-w-[240px]" title={msg}>
+                {msg}
               </span>
             )}
           </div>
         </div>
-        <div className="flex items-center gap-1.5 flex-wrap">
+
+        <div className="flex items-center gap-1 flex-wrap shrink-0">
+          <div className="relative">
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 rounded-md border border-slate-200 dark:border-slate-700 px-2 py-1 text-[11px] font-medium hover:bg-slate-50 dark:hover:bg-slate-900"
+              onClick={() => setIntelOpen((v) => !v)}
+              aria-expanded={intelOpen}
+            >
+              <Info className="h-3 w-3" />
+              Intel
+            </button>
+            {intelOpen && (
+              <>
+                <button
+                  type="button"
+                  className="fixed inset-0 z-30 cursor-default"
+                  aria-label="Close intel"
+                  onClick={() => setIntelOpen(false)}
+                />
+                <div className="absolute right-0 top-full mt-1 z-40 w-56 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 shadow-lg p-2 text-[11px]">
+                  <div className="font-semibold text-slate-500 uppercase tracking-wide px-1 mb-1">
+                    Match intel
+                  </div>
+                  <Link
+                    href={`/match-day/${matchId}/scorers`}
+                    className="block rounded-md px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-900"
+                    onClick={() => setIntelOpen(false)}
+                  >
+                    Scorers {scorers.length ? `(${scorers.length})` : ""}
+                  </Link>
+                  <Link
+                    href={`/match-day/${matchId}/keepers`}
+                    className="block rounded-md px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-900"
+                    onClick={() => setIntelOpen(false)}
+                  >
+                    Keepers {keepers.length ? `(${keepers.length})` : ""}
+                  </Link>
+                  <Link
+                    href={`/match-day/${matchId}/penalties`}
+                    className="block rounded-md px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-900"
+                    onClick={() => setIntelOpen(false)}
+                  >
+                    Penalties {penalties.length ? `(${penalties.length})` : ""}
+                  </Link>
+                  <Link
+                    href={`/match-day/${matchId}/injuries`}
+                    className="block rounded-md px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-900"
+                    onClick={() => setIntelOpen(false)}
+                  >
+                    Injuries ({injuryCount})
+                  </Link>
+                  {h2hSummary && (
+                    <p className="mt-1 px-2 py-1 text-slate-500 border-t border-slate-100 dark:border-slate-800">
+                      {h2hSummary}
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+
+          <button
+            type="button"
+            className={cn(
+              "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium",
+              onAirOpen
+                ? "border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-200"
+                : "border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-900"
+            )}
+            onClick={() => setOnAirOpen((v) => !v)}
+          >
+            <Radio className="h-3 w-3 text-rose-500" />
+            On-air
+            <span className="tabular-nums text-slate-500">{events.length}</span>
+            <ChevronDown
+              className={cn("h-3 w-3 text-slate-400 transition", onAirOpen && "rotate-180")}
+            />
+          </button>
+
           <Link
             href={`/match-day/${matchId}/packs`}
-            className="inline-flex items-center gap-1 rounded-lg bg-violet-600 hover:bg-violet-500 text-white px-2.5 py-1.5 text-xs font-semibold"
+            className="inline-flex items-center gap-1 rounded-md bg-violet-600 hover:bg-violet-500 text-white px-2 py-1 text-[11px] font-semibold"
           >
-            <Sparkles className="h-3.5 w-3.5" />
+            <Sparkles className="h-3 w-3" />
             Packs{packCount ? ` (${packCount})` : ""}
           </Link>
           {!apiFootballFixtureId && (
             <Link
               href={`/match-day/${matchId}/prep`}
-              className="inline-flex items-center gap-1 rounded-lg border border-slate-300 dark:border-slate-700 px-2.5 py-1.5 text-xs"
+              className="inline-flex items-center gap-1 rounded-md border border-slate-300 dark:border-slate-700 px-2 py-1 text-[11px]"
             >
-              <Link2 className="h-3.5 w-3.5" /> Link fixture
+              <Link2 className="h-3 w-3" /> Link
             </Link>
           )}
           <Button
             size="sm"
             variant="secondary"
+            className="h-7 px-2 text-[11px]"
             disabled={busy || !apiFootballFixtureId}
             onClick={() => sync(false)}
           >
-            <RefreshCw
-              className={cn("h-3.5 w-3.5 mr-1", busy && "animate-spin")}
-            />
+            <RefreshCw className={cn("h-3 w-3 mr-1", busy && "animate-spin")} />
             Sync
           </Button>
         </div>
       </header>
 
+      {/* Flash toast — overlay, not a permanent band */}
       {flash && (
-        <div className="shrink-0 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/50 dark:border-amber-800 px-3 py-1.5 text-xs font-medium text-amber-900 dark:text-amber-100 animate-pulse">
+        <div className="pointer-events-none absolute left-1/2 top-12 z-50 -translate-x-1/2 max-w-[min(90%,36rem)] rounded-lg border border-amber-300 bg-amber-50/95 dark:bg-amber-950/95 dark:border-amber-800 px-3 py-1.5 text-xs font-medium text-amber-900 dark:text-amber-100 shadow-lg animate-pulse">
           {flash}
         </div>
       )}
 
-      <div className="shrink-0 flex flex-wrap items-center gap-2 text-[11px]">
-        <span
-          className={cn(
-            "rounded-full px-2 py-0.5 font-semibold text-white",
-            lineupStatus === "confirmed"
-              ? "bg-emerald-600"
-              : lineupStatus === "predicted"
-                ? "bg-sky-600"
-                : "bg-amber-500"
-          )}
-        >
-          {lineupStatus === "confirmed"
-            ? "Official (editable)"
-            : lineupStatus === "predicted"
-              ? "Your predicted XI"
-              : "Expected (last XI)"}
-        </span>
-        <span className="rounded-full border border-slate-200 dark:border-slate-700 px-2 py-0.5">
-          Injuries {injuryCount}
-        </span>
-        {hasAfStats && (
-          <span className="rounded-full border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40 px-2 py-0.5 font-semibold tabular-nums">
-            {homeScore}–{awayScore}
-            {possession
-              ? ` · Poss ${possession.homeValue}–${possession.awayValue}`
-              : ""}
-            {shots ? ` · Shots ${shots.homeValue}–${shots.awayValue}` : ""}
-            {corners
-              ? ` · Corners ${corners.homeValue}–${corners.awayValue}`
-              : ""}
-            {fouls ? ` · Fouls ${fouls.homeValue}–${fouls.awayValue}` : ""}
-          </span>
-        )}
-        {(predictionsAdvice || preds?.advice) && (
-          <span
-            className="rounded-full border border-teal-200 dark:border-teal-900 bg-teal-50 dark:bg-teal-950/40 px-2 py-0.5 text-teal-800 dark:text-teal-200 truncate max-w-[280px]"
-            title={predictionsAdvice || preds?.advice || ""}
-          >
-            Pred: {predictionsAdvice || preds?.advice}
-            {preds?.percent?.home != null
-              ? ` · ${preds.percent.home}/${preds.percent.draw}/${preds.percent.away}%`
-              : ""}
-          </span>
-        )}
-        {h2hSummary && (
-          <span className="rounded-full border border-slate-200 dark:border-slate-700 px-2 py-0.5 truncate max-w-[320px]">
-            {h2hSummary}
-          </span>
-        )}
-        {configured === false && (
-          <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-300">
-            <AlertTriangle className="h-3 w-3" /> API_FOOTBALL_KEY missing
-          </span>
-        )}
-        {msg && <span className="text-slate-500 truncate">{msg}</span>}
-      </div>
-
-      {(scorers.length > 0 || keepers.length > 0 || penalties.length > 0) && (
-        <div className="shrink-0 flex flex-wrap gap-2 text-[10px] rounded-lg border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/70 px-2 py-1.5">
-          {scorers.slice(0, 6).map((s) => (
-            <span
-              key={s.id}
-              className="rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 px-2 py-0.5"
-            >
-              #{s.rank} {s.playerName} ({s.clubShort}) {s.goals}G
-              {s.assists ? ` ${s.assists}A` : ""}
-            </span>
-          ))}
-          {keepers.slice(0, 4).map((k) => (
-            <span
-              key={k.id}
-              className="rounded-full bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-900 px-2 py-0.5"
-            >
-              GK {k.playerName} {k.cleanSheets} CS
-            </span>
-          ))}
-          {penalties.map((e) => (
-            <span
-              key={e.id}
-              className={cn(
-                "rounded-full px-2 py-0.5 border",
-                e.type === "penalty_goal"
-                  ? "bg-violet-50 dark:bg-violet-950/40 border-violet-200 dark:border-violet-900"
-                  : "bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900"
-              )}
-            >
-              Pen {e.minute}&apos; {e.description}
-            </span>
-          ))}
-        </div>
-      )}
-
+      {/* Placing toast */}
       {placing && (
-        <div className="shrink-0 flex flex-wrap items-center gap-2 rounded-lg border border-sky-300 bg-sky-50 dark:bg-sky-950/50 dark:border-sky-800 px-3 py-1.5 text-xs">
+        <div className="absolute left-1/2 top-12 z-40 -translate-x-1/2 flex flex-wrap items-center gap-2 rounded-lg border border-sky-300 bg-sky-50/95 dark:bg-sky-950/95 dark:border-sky-800 px-3 py-1.5 text-xs shadow-lg">
           <span className="font-semibold text-sky-900 dark:text-sky-100">
-            Tap a pitch slot for {placing.name}
-            <span className="font-normal text-sky-700 dark:text-sky-300">
-              {" "}
-              · Esc cancel · drag also swaps
-            </span>
+            Place {placing.name}
+            <span className="font-normal text-sky-700 dark:text-sky-300"> · Esc cancel</span>
           </span>
           {placingOnXi && (
             <button
               type="button"
               className="rounded-md bg-rose-600 hover:bg-rose-500 text-white px-2 py-0.5 text-[10px] font-semibold"
               onClick={() =>
-                lineupAction({ action: "clear", playerId: placing.id }).then(
-                  () => setPlacing(null)
+                lineupAction({ action: "clear", playerId: placing.id }).then(() =>
+                  setPlacing(null)
                 )
               }
             >
@@ -705,7 +747,7 @@ export function MatchDesk({
           )}
           <button
             type="button"
-            className="ml-auto text-sky-700 dark:text-sky-300 hover:underline"
+            className="text-sky-700 dark:text-sky-300 hover:underline"
             onClick={() => setPlacing(null)}
           >
             Cancel
@@ -713,67 +755,8 @@ export function MatchDesk({
         </div>
       )}
 
-      <div className="shrink-0 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 overflow-hidden">
-        <button
-          type="button"
-          className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-50 dark:hover:bg-slate-900/60"
-          onClick={() => setOnAirOpen((v) => !v)}
-        >
-          <Radio className="h-3.5 w-3.5 text-rose-500" />
-          <span className="text-xs font-bold uppercase tracking-wide">On-air</span>
-          <span className="text-[10px] text-slate-500">
-            {events.length} events
-            {status === "Live" ? ` · ${minute}'` : ""}
-          </span>
-          {flash && (
-            <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 truncate max-w-[40%]">
-              {flash}
-            </span>
-          )}
-          <ChevronDown
-            className={cn(
-              "h-3.5 w-3.5 ml-auto text-slate-400 transition",
-              onAirOpen && "rotate-180"
-            )}
-          />
-        </button>
-        {onAirOpen && (
-          <div className="border-t border-slate-100 dark:border-slate-800 grid md:grid-cols-2 gap-2 p-2 max-h-[220px]">
-            <div className="min-h-0 overflow-hidden flex flex-col">
-              <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400 px-1 mb-1">
-                Timeline
-              </div>
-              <EventTimeline
-                events={events}
-                highlightIds={flashEventIds}
-                compact
-                maxHeightClass="max-h-[180px]"
-              />
-            </div>
-            <div className="min-h-0 overflow-y-auto">
-              <EventComposer
-                matchId={matchId}
-                homeName={homeName}
-                awayName={awayName}
-                homeScore={homeScore}
-                awayScore={awayScore}
-                minute={minute || 1}
-                players={squad.map((p) => ({
-                  id: p.id,
-                  name: p.name,
-                  shirtNumber: p.shirtNumber,
-                  side: p.side,
-                  team: p.team,
-                }))}
-                compact
-              />
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Main landscape: notes LEFT | pitch CENTER | squad RIGHT */}
-      <div className="min-h-0 flex-1 grid grid-cols-1 lg:grid-cols-[240px_1fr_220px] gap-2 overflow-hidden">
+      {/* Main landscape: notes | pitch | squad */}
+      <div className="relative min-h-0 flex-1 grid grid-cols-1 lg:grid-cols-[minmax(220px,260px)_minmax(0,1fr)_minmax(180px,200px)] gap-1.5 overflow-hidden">
         <aside className="min-h-0 overflow-hidden order-2 lg:order-1">
           <NotesPanel
             matchId={matchId}
@@ -781,9 +764,7 @@ export function MatchDesk({
             entityType={dossierId ? "player" : undefined}
             entityId={dossierId || undefined}
             entityLabel={
-              dossierId
-                ? squad.find((s) => s.id === dossierId)?.name
-                : undefined
+              dossierId ? squad.find((s) => s.id === dossierId)?.name : undefined
             }
             homePlayerIds={homePlayers.map((p) => p.id)}
             awayPlayerIds={awayPlayers.map((p) => p.id)}
@@ -793,66 +774,11 @@ export function MatchDesk({
             onFilterChange={setNotesFilter}
             fillHeight
             compact={Boolean(dossierId)}
-            playerNameById={Object.fromEntries(
-              squad.map((p) => [p.id, p.name])
-            )}
+            playerNameById={Object.fromEntries(squad.map((p) => [p.id, p.name]))}
           />
         </aside>
 
-        <section className="min-h-0 flex flex-col gap-1.5 overflow-hidden order-1 lg:order-2">
-          <div className="shrink-0 flex flex-wrap items-center gap-2 px-0.5">
-            <p className="text-[10px] text-slate-500 flex-1 min-w-[12rem]">
-              {lineupHint(lineupStatus)}
-              {starterCount === 0 && (
-                <span className="text-amber-600">
-                  {" "}
-                  Empty pitch — Sync squads / last XI, then click a player and
-                  tap a slot.
-                </span>
-              )}
-            </p>
-            <label className="text-[10px] text-slate-600 dark:text-slate-300 flex items-center gap-1">
-              Home
-              <select
-                className="rounded-md border border-slate-200 dark:border-slate-700 bg-transparent px-1.5 py-0.5 text-[11px] font-semibold"
-                value={homeForm}
-                disabled={busy}
-                onChange={(e) => changeFormation("home", e.target.value)}
-              >
-                {Object.keys(FORMATIONS).map((k) => (
-                  <option key={k} value={k}>
-                    {k}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="text-[10px] text-slate-600 dark:text-slate-300 flex items-center gap-1">
-              Away
-              <select
-                className="rounded-md border border-slate-200 dark:border-slate-700 bg-transparent px-1.5 py-0.5 text-[11px] font-semibold"
-                value={awayForm}
-                disabled={busy}
-                onChange={(e) => changeFormation("away", e.target.value)}
-              >
-                {Object.keys(FORMATIONS).map((k) => (
-                  <option key={k} value={k}>
-                    {k}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {lineupStatus === "confirmed" && apiFootballFixtureId && (
-              <button
-                type="button"
-                className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 hover:underline"
-                disabled={busy}
-                onClick={() => sync(false)}
-                title="Re-sync official lineups from API-Football"
-              >
-                Reset to official
-              </button>
-            )}
-          </div>
+        <section className="relative min-h-0 flex flex-col overflow-hidden order-1 lg:order-2">
           <div className="min-h-0 flex-1">
             <PitchBoard
               homeName={homeName}
@@ -875,8 +801,73 @@ export function MatchDesk({
               placingSide={placing?.side}
               locked={false}
               compact
+              formationOptions={Object.keys(FORMATIONS)}
+              onFormationChange={changeFormation}
+              formationBusy={busy}
+              lineupHintText={
+                starterCount === 0
+                  ? "Empty pitch — Sync, then click player → slot"
+                  : lineupHint(lineupStatus)
+              }
+              onResetOfficial={
+                lineupStatus === "confirmed" && apiFootballFixtureId
+                  ? () => sync(false)
+                  : undefined
+              }
             />
           </div>
+
+          {/* On-air drawer — overlays pitch, does not steal permanent height */}
+          {onAirOpen && (
+            <div className="absolute inset-x-0 bottom-0 z-30 max-h-[min(42%,280px)] rounded-t-xl border border-slate-200 dark:border-slate-700 bg-white/95 dark:bg-slate-950/95 backdrop-blur shadow-2xl overflow-hidden flex flex-col">
+              <div className="shrink-0 flex items-center gap-2 px-3 py-1.5 border-b border-slate-100 dark:border-slate-800">
+                <Radio className="h-3.5 w-3.5 text-rose-500" />
+                <span className="text-xs font-bold uppercase tracking-wide">On-air</span>
+                <span className="text-[10px] text-slate-500">
+                  {events.length} events
+                  {status === "Live" ? ` · ${minute}'` : ""}
+                </span>
+                <button
+                  type="button"
+                  className="ml-auto text-[11px] text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                  onClick={() => setOnAirOpen(false)}
+                >
+                  Close
+                </button>
+              </div>
+              <div className="min-h-0 flex-1 grid md:grid-cols-2 gap-2 p-2 overflow-hidden">
+                <div className="min-h-0 overflow-hidden flex flex-col">
+                  <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400 px-1 mb-1">
+                    Timeline
+                  </div>
+                  <EventTimeline
+                    events={events}
+                    highlightIds={flashEventIds}
+                    compact
+                    maxHeightClass="max-h-[200px]"
+                  />
+                </div>
+                <div className="min-h-0 overflow-y-auto">
+                  <EventComposer
+                    matchId={matchId}
+                    homeName={homeName}
+                    awayName={awayName}
+                    homeScore={homeScore}
+                    awayScore={awayScore}
+                    minute={minute || 1}
+                    players={squad.map((p) => ({
+                      id: p.id,
+                      name: p.name,
+                      shirtNumber: p.shirtNumber,
+                      side: p.side,
+                      team: p.team,
+                    }))}
+                    compact
+                  />
+                </div>
+              </div>
+            </div>
+          )}
         </section>
 
         <aside className="min-h-0 overflow-hidden order-3">
@@ -911,4 +902,5 @@ export function MatchDesk({
       )}
     </div>
   );
+
 }

@@ -140,8 +140,15 @@ export default function NewMatchDayPage() {
       setImportMsg("Pick a date");
       return;
     }
-    // Free-plan safe: date-only request (no season). Filter by league client-side.
+    // Pass league so server never returns Super Liga / Czech fixtures for Süper Lig.
     const params = new URLSearchParams({ date: importDate });
+    if (importLeagueId) params.set("league", String(importLeagueId));
+    const home = clubs.find((c) => c.id === homeClubId);
+    const away = clubs.find((c) => c.id === awayClubId);
+    if (home?.apiFootballTeamId && away?.apiFootballTeamId) {
+      params.set("homeTeam", String(home.apiFootballTeamId));
+      params.set("awayTeam", String(away.apiFootballTeamId));
+    }
     const res = await fetch(`/api/football/fixtures?${params}`);
     const json = await res.json();
     if (!json.configured) {
@@ -150,8 +157,16 @@ export default function NewMatchDayPage() {
       return;
     }
     let list: AfFixture[] = json.fixtures || [];
+    // Defence in depth — never show another league when one is selected
     if (importLeagueId) {
       list = list.filter((fx) => fx.league?.id === importLeagueId);
+    }
+    if (home?.apiFootballTeamId && away?.apiFootballTeamId) {
+      list = list.filter(
+        (fx) =>
+          fx.teams.home.id === home.apiFootballTeamId &&
+          fx.teams.away.id === away.apiFootballTeamId
+      );
     }
     setFixtures(list);
     if (json.planSeasonBlocked || json.code === "plan_season") {
@@ -243,9 +258,36 @@ export default function NewMatchDayPage() {
           homeClubId,
           awayClubId,
           kickoff: kickoffDate.toISOString(),
-          apiFootballFixtureId: selectedFixture?.fixture.id,
-          homeApiFootballTeamId: selectedFixture?.teams.home.id,
-          awayApiFootballTeamId: selectedFixture?.teams.away.id,
+          apiFootballFixtureId: (() => {
+            if (!selectedFixture) return undefined;
+            const expectedLeague = PRIORITY_COMPETITIONS.find(
+              (c) => c.name === effectiveCompetition
+            )?.apiFootballLeagueId;
+            if (
+              expectedLeague &&
+              selectedFixture.league?.id &&
+              selectedFixture.league.id !== expectedLeague
+            ) {
+              return undefined; // never attach wrong-league fixture
+            }
+            const home = clubs.find((c) => c.id === homeClubId);
+            const away = clubs.find((c) => c.id === awayClubId);
+            if (
+              home?.apiFootballTeamId &&
+              away?.apiFootballTeamId &&
+              (selectedFixture.teams.home.id !== home.apiFootballTeamId ||
+                selectedFixture.teams.away.id !== away.apiFootballTeamId)
+            ) {
+              return undefined;
+            }
+            return selectedFixture.fixture.id;
+          })(),
+          homeApiFootballTeamId:
+            selectedFixture?.teams.home.id ??
+            clubs.find((c) => c.id === homeClubId)?.apiFootballTeamId,
+          awayApiFootballTeamId:
+            selectedFixture?.teams.away.id ??
+            clubs.find((c) => c.id === awayClubId)?.apiFootballTeamId,
           homeTeamName: selectedFixture?.teams.home.name,
           awayTeamName: selectedFixture?.teams.away.name,
           featured: true,
@@ -389,7 +431,15 @@ export default function NewMatchDayPage() {
               <select
                 className="mt-1 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-transparent px-2 py-2 text-sm"
                 value={competition}
-                onChange={(e) => setCompetition(e.target.value)}
+                onChange={(e) => {
+                  const name = e.target.value;
+                  setCompetition(name);
+                  const leagueId = PRIORITY_COMPETITIONS.find((c) => c.name === name)
+                    ?.apiFootballLeagueId;
+                  if (leagueId) setImportLeagueId(leagueId);
+                  // Manual competition change invalidates a previously imported fixture
+                  setSelectedFixture(null);
+                }}
               >
                 {PRIORITY_COMPETITIONS.map((c) => (
                   <option key={c.id} value={c.name}>
@@ -425,7 +475,10 @@ export default function NewMatchDayPage() {
                 <select
                   className="mt-1 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-transparent px-2 py-2 text-sm"
                   value={homeClubId}
-                  onChange={(e) => setHomeClubId(e.target.value)}
+                  onChange={(e) => {
+                    setHomeClubId(e.target.value);
+                    setSelectedFixture(null);
+                  }}
                 >
                   <option value="">Select…</option>
                   {filteredClubs.map((c) => (
@@ -440,7 +493,10 @@ export default function NewMatchDayPage() {
                 <select
                   className="mt-1 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-transparent px-2 py-2 text-sm"
                   value={awayClubId}
-                  onChange={(e) => setAwayClubId(e.target.value)}
+                  onChange={(e) => {
+                    setAwayClubId(e.target.value);
+                    setSelectedFixture(null);
+                  }}
                 >
                   <option value="">Select…</option>
                   {filteredClubs.map((c) => (

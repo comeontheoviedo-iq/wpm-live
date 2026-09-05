@@ -25,8 +25,11 @@ export const DEFAULT_FIELD_SETTINGS: FieldSettings = {
   userAdjusted: false,
 };
 
-/** Suggested bump when entering fullscreen if user never adjusted. */
-export const FULLSCREEN_DEFAULT_MARKER_PCT = 20;
+/**
+ * Fullscreen auto-fit ceiling when user never adjusted Field Settings.
+ * PitchBoard fits down from this so 22 cards never overlap (was blind +20).
+ */
+export const FULLSCREEN_DEFAULT_MARKER_PCT = 40;
 
 export function clampPct(n: number): number {
   if (!Number.isFinite(n)) return 0;
@@ -72,7 +75,11 @@ export function saveFieldSettings(settings: FieldSettings): void {
   }
 }
 
-/** Effective marker % — auto +20 in fullscreen until user adjusts. */
+/**
+ * Desired marker % before container fit/clamp.
+ * Fullscreen + !userAdjusted → auto-fit ceiling (+40); PitchBoard fits down.
+ * userAdjusted → user value (still clamped by fit so overlaps never win).
+ */
 export function effectiveMarkerPct(
   settings: FieldSettings,
   isFullscreen: boolean

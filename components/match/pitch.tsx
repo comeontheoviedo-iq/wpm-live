@@ -592,13 +592,33 @@ export function PitchBoard({
     const el = pitchRef.current;
     if (!el) return;
     const apply = () => {
+      // Measure the actual pitch box (not notes/squad columns).
       const r = el.getBoundingClientRect();
       setPitchSize({ w: Math.round(r.width), h: Math.round(r.height) });
     };
+    const applySoon = () => {
+      apply();
+      // Fullscreen / flex reflow often settles a frame late.
+      requestAnimationFrame(() => {
+        apply();
+        requestAnimationFrame(apply);
+      });
+    };
     apply();
-    const ro = new ResizeObserver(() => apply());
+    const ro = new ResizeObserver(() => applySoon());
     ro.observe(el);
-    return () => ro.disconnect();
+    document.addEventListener("fullscreenchange", applySoon);
+    document.addEventListener("webkitfullscreenchange", applySoon as EventListener);
+    window.addEventListener("resize", applySoon);
+    return () => {
+      ro.disconnect();
+      document.removeEventListener("fullscreenchange", applySoon);
+      document.removeEventListener(
+        "webkitfullscreenchange",
+        applySoon as EventListener
+      );
+      window.removeEventListener("resize", applySoon);
+    };
   }, []);
 
   function placeLandscape(
@@ -646,40 +666,37 @@ export function PitchBoard({
     return placed;
   }
 
+  const rawPlaced = useMemo(() => {
+    const homePlaced = placeLandscape(homePlayers, homeSlots, "home");
+    const awayPlaced = placeLandscape(awayPlayers, awaySlots, "away");
+    return [...homePlaced, ...awayPlaced];
+  }, [homePlayers, awayPlayers, homeSlots, awaySlots]);
+
+  // Fit marker to the measured pitch box first (auto-fit in fullscreen via
+  // desired ceiling), then collision-resolve as a safety net.
   const fittedMarkerPct = useMemo(
     () =>
       fitMarkerPctForContainer(
         pitchSize.w,
         pitchSize.h,
         resolvedMarkerPct,
-        resolvedSettings
+        resolvedSettings,
+        rawPlaced
       ),
-    [pitchSize.w, pitchSize.h, resolvedMarkerPct, resolvedSettings]
+    [pitchSize.w, pitchSize.h, resolvedMarkerPct, resolvedSettings, rawPlaced]
   );
   const cardPx = estimateCardSizePx(fittedMarkerPct, resolvedSettings);
   const all = useMemo(() => {
-    const homePlaced = placeLandscape(homePlayers, homeSlots, "home");
-    const awayPlaced = placeLandscape(awayPlayers, awaySlots, "away");
-    const raw = [...homePlaced, ...awayPlaced];
-    if (!pitchSize.w || !pitchSize.h) return raw;
+    if (!pitchSize.w || !pitchSize.h) return rawPlaced;
     return resolveCardOverlaps(
-      raw,
+      rawPlaced,
       pitchSize.w,
       pitchSize.h,
       cardPx.w,
       cardPx.h,
       4
     );
-  }, [
-    homePlayers,
-    awayPlayers,
-    homeSlots,
-    awaySlots,
-    pitchSize.w,
-    pitchSize.h,
-    cardPx.w,
-    cardPx.h,
-  ]);
+  }, [rawPlaced, pitchSize.w, pitchSize.h, cardPx.w, cardPx.h]);
   const placing = Boolean(placingPlayerId && !locked);
 
   const showScore =
@@ -920,6 +937,9 @@ export function PitchBoard({
                 "absolute z-10 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center",
                 !locked && onSlotDrop ? "drop-target" : ""
               )}
+              data-pitch-card={player ? "1" : "0"}
+              data-pitch-side={side}
+              data-pitch-slot={slot.id}
               style={{ left: `${x}%`, top: `${y}%` }}
               onDragOver={(e) => handleDragOver(e, key)}
               onDragLeave={() => handleDragLeave(key)}

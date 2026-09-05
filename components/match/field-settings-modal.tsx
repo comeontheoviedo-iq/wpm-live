@@ -309,7 +309,7 @@ export function FieldSettingsModal({
             </div>
             {!settings.userAdjusted && isFullscreen && (
               <p className="text-[10px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 rounded-md px-2 py-1.5">
-                Fullscreen uses +{markerPct}% until you change a control (then we remember).
+                Fullscreen auto-fits marker size (up to +40%) so cards never overlap — until you change a control (then we remember).
               </p>
             )}
             <button

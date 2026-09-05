@@ -316,6 +316,15 @@ export function MatchDesk({
 
   const markerPct = effectiveMarkerPct(fieldSettings, isFullscreen);
 
+  // When CSS fullscreen class toggles desk height, force a window resize so
+  // PitchBoard's observers remeasure the true pitch box (not notes/squad).
+  useEffect(() => {
+    const id = window.requestAnimationFrame(() => {
+      window.dispatchEvent(new Event("resize"));
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [isFullscreen]);
+
   const applyOverride = useCallback((row: PlayerOverrideRow | null, playerId: string) => {
     setOverrides((prev) => {
       const rest = prev.filter((o) => o.playerId !== playerId);

@@ -323,7 +323,7 @@ export function FieldSettingsModal({
               Reset to defaults
             </button>
           </div>
-          <PreviewCard settings={settings} markerPct={markerPct} />
+          <PreviewCard settings={settings} markerPct={settings.markerSizePct} />
         </div>
       </div>
     </div>

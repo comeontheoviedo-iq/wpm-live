@@ -677,22 +677,24 @@ export function PitchBoard({
     return [...homePlaced, ...awayPlaced];
   }, [homePlayers, awayPlayers, homeSlots, awaySlots]);
 
-  // Fit marker to the measured pitch box first (auto-fit in fullscreen via
-  // desired ceiling), then collision-resolve as a safety net.
-  const layoutFittedPct = useMemo(
-    () =>
-      fitMarkerPctForContainer(
-        pitchSize.w,
-        pitchSize.h,
-        resolvedMarkerPct,
-        resolvedSettings,
-        rawPlaced
-      ),
-    [pitchSize.w, pitchSize.h, resolvedMarkerPct, resolvedSettings, rawPlaced]
-  );
+  // Fit marker to the measured pitch box first (auto-fit when user has not
+  // touched Field Settings). Once userAdjusted, honor the slider exactly so
+  // −40…+40 is visible — collision still preserves formation depth bands.
+  const layoutFittedPct = useMemo(() => {
+    if (resolvedSettings.userAdjusted) {
+      return clampPct(resolvedMarkerPct);
+    }
+    return fitMarkerPctForContainer(
+      pitchSize.w,
+      pitchSize.h,
+      resolvedMarkerPct,
+      resolvedSettings,
+      rawPlaced
+    );
+  }, [pitchSize.w, pitchSize.h, resolvedMarkerPct, resolvedSettings, rawPlaced]);
 
   // DOM truth: if real card boxes still overlap after paint, shrink by 5%
-  // until clean or floor (-40). Prefer smaller cards over any overlap.
+  // until clean or floor (-40). Skipped when user owns the size slider.
   const [domShrinkPct, setDomShrinkPct] = useState(0);
   useEffect(() => {
     setDomShrinkPct(0);
@@ -719,6 +721,8 @@ export function PitchBoard({
 
     const measureAndShrink = () => {
       if (cancelled) return;
+      // User-controlled marker size must not be silently crushed by DOM shrink.
+      if (resolvedSettings.userAdjusted) return;
       const nodes = [
         ...root.querySelectorAll('[data-pitch-card="1"]'),
       ] as HTMLElement[];
@@ -774,6 +778,7 @@ export function PitchBoard({
     pitchSize.w,
     pitchSize.h,
     resolvedSettings.dataRows,
+    resolvedSettings.userAdjusted,
   ]);
 
   const placing = Boolean(placingPlayerId && !locked);

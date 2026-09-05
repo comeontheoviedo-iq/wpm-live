@@ -1209,3 +1209,170 @@ export async function getLeagueLive(leagueId: number) {
     15_000
   );
 }
+/* ── Dossier helpers (transfers / sidelined / fixture players) ── */
+
+export type AfTransferRow = {
+  player?: { id?: number; name?: string };
+  update?: string;
+  transfers?: {
+    date?: string;
+    type?: string | null;
+    teams?: {
+      in?: { id?: number; name?: string; logo?: string } | null;
+      out?: { id?: number; name?: string; logo?: string } | null;
+    };
+  }[];
+};
+
+export async function getPlayerTransfers(playerId: number) {
+  return afFetch<AfTransferRow[]>("/transfers", { player: playerId }, 300_000);
+}
+
+export async function getTeamTransfers(teamId: number) {
+  return afFetch<AfTransferRow[]>("/transfers", { team: teamId }, 300_000);
+}
+
+export type AfSidelinedRow = {
+  type?: string | null;
+  start?: string | null;
+  end?: string | null;
+};
+
+export async function getPlayerSidelined(playerId: number) {
+  return afFetch<AfSidelinedRow[]>("/sidelined", { player: playerId }, 300_000);
+}
+
+export async function getCoachSidelined(coachId: number) {
+  return afFetch<AfSidelinedRow[]>("/sidelined", { coach: coachId }, 300_000);
+}
+
+/** Recent fixtures involving a player (AF /fixtures?player=&last=). Soft-fail empty. */
+export async function getPlayerRecentFixtures(playerId: number, last = 8) {
+  return afFetch<AfFixture[]>(
+    "/fixtures",
+    { player: playerId, last },
+    120_000
+  );
+}
+
+export type AfFixturePlayerStat = {
+  team: { id: number; name: string; logo?: string };
+  players: {
+    player: {
+      id: number;
+      name: string;
+      photo?: string;
+    };
+    statistics: {
+      games?: {
+        minutes?: number | null;
+        number?: number | null;
+        position?: string | null;
+        rating?: string | null;
+        captain?: boolean;
+        substitute?: boolean;
+      };
+      goals?: {
+        total?: number | null;
+        assists?: number | null;
+        conceded?: number | null;
+        saves?: number | null;
+      };
+      shots?: { total?: number | null; on?: number | null };
+      passes?: {
+        total?: number | null;
+        key?: number | null;
+        accuracy?: string | number | null;
+      };
+      tackles?: {
+        total?: number | null;
+        blocks?: number | null;
+        interceptions?: number | null;
+      };
+      duels?: { total?: number | null; won?: number | null };
+      dribbles?: {
+        attempts?: number | null;
+        success?: number | null;
+        past?: number | null;
+      };
+      fouls?: { drawn?: number | null; committed?: number | null };
+      cards?: { yellow?: number | null; red?: number | null };
+      penalty?: {
+        won?: number | null;
+        commited?: number | null;
+        scored?: number | null;
+        missed?: number | null;
+        saved?: number | null;
+      };
+    }[];
+  }[];
+};
+
+export async function getFixturePlayers(fixtureId: number) {
+  return afFetch<AfFixturePlayerStat[]>(
+    "/fixtures/players",
+    { fixture: fixtureId },
+    60_000
+  );
+}
+
+export type AfTrophyRow = {
+  league?: string | null;
+  country?: string | null;
+  season?: string | null;
+  place?: string | null;
+};
+
+export async function getPlayerTrophies(playerId: number) {
+  return afFetch<AfTrophyRow[]>("/trophies", { player: playerId }, 300_000);
+}
+
+export async function getTeamTrophies(teamId: number) {
+  return afFetch<AfTrophyRow[]>("/trophies", { team: teamId }, 300_000);
+}
+
+export type AfLeagueInfo = {
+  league: {
+    id: number;
+    name: string;
+    type?: string;
+    logo?: string;
+  };
+  country: { name?: string; code?: string | null; flag?: string | null };
+  seasons?: {
+    year: number;
+    start?: string;
+    end?: string;
+    current?: boolean;
+    coverage?: Record<string, unknown>;
+  }[];
+};
+
+export async function getLeagueById(leagueId: number) {
+  const list = await afFetch<AfLeagueInfo[]>("/leagues", { id: leagueId }, 300_000);
+  return list[0] || null;
+}
+
+
+/** H2H fixtures between two teams (AF /fixtures/headtohead). */
+export async function getHeadToHead(teamA: number, teamB: number, last = 10) {
+  return afFetch<AfFixture[]>(
+    "/fixtures/headtohead",
+    { h2h: `${teamA}-${teamB}`, last },
+    120_000
+  );
+}
+
+/** Upcoming fixtures for a team. */
+export async function getTeamUpcoming(teamId: number, next = 8) {
+  return afFetch<AfFixture[]>(
+    "/fixtures",
+    { team: teamId, next },
+    120_000
+  );
+}
+
+/** All coaches historically returned for a team (unsorted). */
+export async function listCoachesByTeam(teamId: number) {
+  return afFetch<AfCoach[]>("/coachs", { team: teamId }, 300_000);
+}

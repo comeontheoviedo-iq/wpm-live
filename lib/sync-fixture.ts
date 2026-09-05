@@ -23,6 +23,7 @@ import {
   getTeam,
   getCoachById,
   getCoachByTeam,
+  searchCoaches,
   mapAfStatus,
   parsePercent,
   summarizeH2h,
@@ -495,12 +496,37 @@ async function upsertCoachFromLineup(clubId: string, lineup: AfLineup) {
   const name = lineup.coach?.name?.trim();
   if (!name) return;
 
+  // AF often sends lineup.coach.id = 0 for newly appointed HCs (e.g. Jaissle).
+  // Never treat 0 as valid, and NEVER fall back to /coachs?team= here — that
+  // reintroduces stale open-career names (Howe / Ferguson) over the lineup coach.
   const coachAfId = lineup.coach?.id;
-  let detail = coachAfId
+  const validAfId =
+    coachAfId != null && Number.isFinite(coachAfId) && coachAfId > 0;
+  let detail = validAfId
     ? await getCoachById(coachAfId).catch(() => null)
     : null;
-  if (!detail && lineup.team?.id) {
-    detail = await getCoachByTeam(lineup.team.id).catch(() => null);
+  if (!detail) {
+    // AF search is token-picky ("Matthias Jaissle" → []); try full then surname.
+    const surname = name.split(/\s+/).filter(Boolean).pop() || name;
+    const queries = [...new Set([name, surname].filter((q) => q.length >= 3))];
+    let searched: Awaited<ReturnType<typeof searchCoaches>> = [];
+    for (const q of queries) {
+      searched = await searchCoaches(q).catch(() => []);
+      if (searched.length) break;
+    }
+    detail =
+      searched.find((c) => namesLooselyMatch(c.name, name)) ||
+      searched.find((c) =>
+        namesLooselyMatch(
+          `${c.firstname || ""} ${c.lastname || ""}`.trim() || c.name,
+          name
+        )
+      ) ||
+      null;
+  }
+  // Only enrich from detail when it is the same person as the lineup coach.
+  if (detail && !namesLooselyMatch(detail.name, name)) {
+    detail = null;
   }
 
   const age =
@@ -519,20 +545,33 @@ async function upsertCoachFromLineup(clubId: string, lineup: AfLineup) {
     await prisma.coach.deleteMany({ where: { clubId } });
   }
 
+  // Lineup name is authoritative; prefer AF detail spelling only for same person.
   const resolvedName = detail?.name?.trim() || name;
-  const nationality = coachNationalityFromAf(detail, coach?.nationality);
+  const personChanged =
+    Boolean(coach?.name) && !namesLooselyMatch(coach!.name, resolvedName);
+  // When the desk HC person changes, do NOT keep the previous coach's nat / AF id.
+  const nationality = coachNationalityFromAf(
+    detail,
+    personChanged ? null : coach?.nationality
+  );
   const afCoachId =
-    detail?.id ?? (coachAfId != null && Number.isFinite(coachAfId) ? coachAfId : null);
+    detail?.id && detail.id > 0
+      ? detail.id
+      : validAfId
+        ? coachAfId
+        : null;
 
   if (coach) {
     const patch: Record<string, unknown> = {
       name: resolvedName,
       nationality,
       role: "Head Coach",
+      photoUrl,
+      // Always write AF id (null clears a stale Howe id left from /coachs?team=)
+      apiFootballCoachId: afCoachId,
     };
     if (age != null) patch.age = age;
-    patch.photoUrl = photoUrl;
-    if (afCoachId != null) patch.apiFootballCoachId = afCoachId;
+    else if (personChanged) patch.age = null;
     await prisma.coach.update({ where: { id: coach.id }, data: patch });
   } else {
     await prisma.coach.create({
@@ -540,9 +579,9 @@ async function upsertCoachFromLineup(clubId: string, lineup: AfLineup) {
         clubId,
         name: resolvedName,
         nationality,
-        ...(age != null ? { age } : {}),
+        age,
         photoUrl,
-        ...(afCoachId != null ? { apiFootballCoachId: afCoachId } : {}),
+        apiFootballCoachId: afCoachId,
         role: "Head Coach",
       },
     });
@@ -554,6 +593,8 @@ async function upsertCoachFromLineup(clubId: string, lineup: AfLineup) {
  * Clears duplicate Coach rows. Preserves a known nationality when AF omits it.
  */
 export async function syncCoachForClub(clubId: string, teamAfId: number) {
+  // /coachs?team= ranking (open career, latest start). Confirmed desks then
+  // overwrite via upsertCoachFromLineup — do NOT probe last-XI here (rate limits).
   const detail = await getCoachByTeam(teamAfId).catch(() => null);
   const existing = await prisma.coach.findFirst({ where: { clubId } });
   if (existing) {
@@ -1616,12 +1657,8 @@ export async function syncMatchFromApiFootball(
     lineupStatus = homeLast || awayLast ? "expected" : match.lineupStatus || "expected";
   }
 
-  // Always set current Head Coach from /coachs?team= (prefer open career).
-  // Do this AFTER lineups so expected/last-played coach cannot leave a stale name.
-  await syncCoachForClub(match.homeClubId, homeAfId).catch(() => null);
-  await syncCoachForClub(match.awayClubId, awayAfId).catch(() => null);
-
-  // Confirmed XI: lineup.coach is authoritative for this match-day desk chip
+  // Confirmed XI: lineup.coach is authoritative (may have id 0; search surname).
+  // Skip /coachs?team= on confirmed desks — open careers still rank Howe/Ferguson.
   if (lineupStatus === "confirmed") {
     for (const lu of lineups) {
       if (!lu.coach?.name) continue;
@@ -1631,6 +1668,9 @@ export async function syncMatchFromApiFootball(
         await upsertCoachFromLineup(match.awayClubId, lu).catch(() => null);
       }
     }
+  } else {
+    await syncCoachForClub(match.homeClubId, homeAfId).catch(() => null);
+    await syncCoachForClub(match.awayClubId, awayAfId).catch(() => null);
   }
 
   const venueWeather = await syncVenueAndWeather(

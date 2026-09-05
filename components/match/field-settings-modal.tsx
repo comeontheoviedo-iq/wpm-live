@@ -1,8 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { X, SlidersHorizontal } from "lucide-react";
+import { SlidersHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ModalHeader } from "@/components/ui/modal-header";
+import { TabStrip } from "@/components/ui/tabs";
 import {
   type FieldSettings,
   type FieldSettingsTab,
@@ -30,6 +32,8 @@ const SAMPLE: Record<CardStatField, string> = {
   APP: "12",
   S_GOL: "3",
   S_AST: "1",
+  M_APP: "1",
+  M_MIN: "27",
   M_GOL: "1",
   M_AST: "0",
   RTG: "7.2",
@@ -220,7 +224,7 @@ export function FieldSettingsModal({
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
       <button
         type="button"
-        className="absolute inset-0 bg-black/45"
+        className="absolute inset-0 bg-black/50 backdrop-blur-[2px] animate-fade-in"
         aria-label="Close field settings"
         onClick={onClose}
       />
@@ -228,49 +232,36 @@ export function FieldSettingsModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="field-settings-title"
-        className="relative z-10 w-full max-w-xl rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
+        className="relative z-10 flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-lg animate-slide-up dark:border-slate-700 dark:bg-slate-950"
       >
-        <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 px-4 py-3 shrink-0">
-          <SlidersHorizontal className="h-4 w-4 text-teal-600" />
-          <div className="min-w-0 flex-1">
-            <h2 id="field-settings-title" className="text-sm font-bold">
+        <ModalHeader
+          title={
+            <span id="field-settings-title" className="text-sm font-bold sm:text-sm">
               Field Settings · Pitch Card
-            </h2>
-            <p className="text-[10px] text-slate-500">
+            </span>
+          }
+          subtitle={
+            <>
               Customise card data · saved in this browser
               {isFullscreen ? " · fullscreen active" : ""}
-            </p>
-          </div>
-          <button
-            type="button"
-            className="rounded-lg p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800"
-            onClick={onClose}
-            aria-label="Close"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
+            </>
+          }
+          leading={<SlidersHorizontal className="h-4 w-4 text-teal-600" />}
+          onClose={onClose}
+        />
 
-        <div className="flex gap-1 border-b border-slate-100 dark:border-slate-800 px-3 pt-2 shrink-0">
-          {TABS.map((t) => (
-            <button
-              key={t.key}
-              type="button"
-              disabled={!t.enabled}
-              onClick={() => t.enabled && setTab(t.key)}
-              className={cn(
-                "rounded-t-md px-3 py-1.5 text-[11px] font-semibold border-b-2 -mb-px",
-                tab === t.key && t.enabled
-                  ? "border-teal-600 text-teal-700 dark:text-teal-300"
-                  : "border-transparent text-slate-400",
-                !t.enabled && "opacity-40 cursor-not-allowed"
-              )}
-              title={t.enabled ? t.label : "Coming soon"}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
+        <TabStrip
+          className="shrink-0"
+          variant="underline"
+          value={tab}
+          onChange={(key) => setTab(key)}
+          items={TABS.map((t) => ({
+            key: t.key,
+            label: t.label,
+            disabled: !t.enabled,
+            title: t.enabled ? t.label : "Coming soon",
+          }))}
+        />
 
         <div className="grid gap-4 p-4 sm:grid-cols-[1fr_150px] overflow-y-auto min-h-0">
           <div className="space-y-4">

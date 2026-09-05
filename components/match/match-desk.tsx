@@ -31,7 +31,8 @@ import { FieldSettingsModal } from "@/components/match/field-settings-modal";
 import { EventTimeline } from "@/components/match/event-timeline";
 import { EventComposer } from "@/components/live/event-composer";
 import { Button } from "@/components/ui/button";
-import { FORMATIONS } from "@/lib/formations";
+import { FORMATIONS } from "@/lib/formations"
+import { summarizeSubWindows } from "@/lib/sub-windows";
 import { leagueIdForCompetition } from "@/lib/competitions";
 import { namesLooselyMatch, parseSubDescription } from "@/lib/player-name";
 import { cn } from "@/lib/utils";
@@ -257,7 +258,33 @@ function enrichPlayers(
       matchRed: matchRed || undefined,
     };
   });
-  return applyLiveSubsToXi(withMatchStats, events);
+  const withSubs = applyLiveSubsToXi(withMatchStats, events);
+  // Match minutes / apps from THIS fixture lineup + sub events (not season).
+  const matchEnd = 90;
+  return withSubs.map((p) => {
+    // After applyLiveSubsToXi: starters who stayed have isStarter+onPitch;
+    // subbed-off have subbedOff; sub-ons have subMinute + onPitch.
+    const cameOn = p.subMinute != null && !p.subbedOff && Boolean(p.onPitch || p.isStarter);
+    const wentOff = Boolean(p.subbedOff);
+    const subMin = p.subMinute;
+    let matchMinutes: number | null = null;
+    let matchApps = 0;
+    if (wentOff && subMin != null) {
+      matchApps = 1;
+      matchMinutes = Math.max(0, subMin);
+    } else if (cameOn && subMin != null) {
+      matchApps = 1;
+      matchMinutes = Math.max(0, matchEnd - subMin);
+    } else if (p.onPitch || (p.isStarter && p.formationSlot)) {
+      matchApps = 1;
+      matchMinutes = matchEnd;
+    }
+    return {
+      ...p,
+      matchApps,
+      matchMinutes,
+    };
+  });
 }
 
 export function MatchDesk({
@@ -2004,6 +2031,8 @@ export function MatchDesk({
               locked={false}
               compact
               formationOptions={Object.keys(FORMATIONS)}
+              homeSubWindows={summarizeSubWindows(events, "home")}
+              awaySubWindows={summarizeSubWindows(events, "away")}
               onFormationChange={changeFormation}
               formationBusy={busy}
               lineupHintText={

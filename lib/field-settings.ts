@@ -6,6 +6,8 @@ export type CardStatField =
   | "APP"
   | "S_GOL"
   | "S_AST"
+  | "M_APP"
+  | "M_MIN"
   | "M_GOL"
   | "M_AST"
   | "RTG"
@@ -53,6 +55,8 @@ export const ALL_CARD_FIELDS: {
   { id: "APP", label: "APP", hint: "Season appearances", outfield: true, gk: true },
   { id: "S_GOL", label: "S GOL", hint: "Season goals", outfield: true },
   { id: "S_AST", label: "S AST", hint: "Season assists", outfield: true },
+  { id: "M_APP", label: "M APP", hint: "Appeared this match (starter or sub-on)", outfield: true, gk: true },
+  { id: "M_MIN", label: "M MIN", hint: "Minutes this match", outfield: true, gk: true },
   { id: "M_GOL", label: "M GOL", hint: "Goals this match", outfield: true },
   { id: "M_AST", label: "M AST", hint: "Assists this match", outfield: true },
   { id: "RTG", label: "RTG", hint: "Season rating", outfield: true, gk: true },
@@ -70,8 +74,8 @@ export const DEFAULT_VISIBLE_FIELDS: CardStatField[] = [
   "APP",
   "S_GOL",
   "S_AST",
-  "RTG",
-  "AGE",
+  "M_APP",
+  "M_MIN",
   "M_GOL",
   "M_AST",
   "SUB",
@@ -117,6 +121,18 @@ export function formatHeightValue(
     return `${ft}'${inches}"`;
   }
   return String(Math.round(cm));
+}
+
+export function formatWeightValue(
+  kg: number | null | undefined,
+  heightUnit: HeightUnit
+): string {
+  if (kg == null || !Number.isFinite(kg)) return "—";
+  // Mirror height unit: ft/in → lbs, cm → kg
+  if (heightUnit === "ftin") {
+    return `${Math.round(kg * 2.20462)} lbs`;
+  }
+  return `${Math.round(kg)} kg`;
 }
 
 export function formatMarketValue(

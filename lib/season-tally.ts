@@ -39,8 +39,9 @@ function clubRows(
 ) {
   const rows = stats || [];
   if (teamAfId == null) return rows;
-  const forTeam = rows.filter((s) => s.team?.id === teamAfId);
-  return forTeam.length ? forTeam : rows;
+  // Never fall back to another club / NT row — that caused Fernandez-Pardo
+  // Newcastle APP=3 from Belgium World Cup when AF had no Newcastle season row yet.
+  return rows.filter((s) => s.team?.id === teamAfId);
 }
 
 /** Split AF player season statistics into this-league vs all club comps. */

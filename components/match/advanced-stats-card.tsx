@@ -34,6 +34,7 @@ export type AdvancedStatsPayload = {
   matchedAt: string | null;
   forecast: { homeWin: number; draw: number; awayWin: number } | null;
   shotSummary: ShotSummary | null;
+  shots?: { x: number; y: number; xg: number; result: string; side: "home" | "away"; player?: string; minute?: number }[];
   coverage?: CoverageEntry[];
 };
 
@@ -107,7 +108,7 @@ export function AdvancedStatsCard({
             Advanced stats
           </div>
           <div className="text-[11px] text-slate-500 truncate">
-            {data?.sourceLabel || "xG"}
+            {"Advanced stats"}
             {data?.competition ? ` · ${data.competition}` : ""}
           </div>
         </div>
@@ -236,7 +237,7 @@ export function AdvancedStatsCard({
       {showCoverage && data?.coverage && data.coverage.length > 0 && (
         <div className="border-t border-slate-100 dark:border-slate-800 px-3 py-2 bg-slate-50/80 dark:bg-slate-900/40">
           <div className="text-[9px] font-bold uppercase tracking-wide text-slate-400 mb-1">
-            Free xG coverage (Understat)
+            Free xG coverage
           </div>
           <ul className="flex flex-wrap gap-1">
             {data.coverage.map((c) => (
@@ -260,7 +261,7 @@ export function AdvancedStatsCard({
   );
 }
 
-/** Tiny inline chip for live strips: "xG 2.88–0.91 · Understat" or honest empty. */
+/** Tiny inline chip for live strips: "xG 2.88–0.91" or honest empty. */
 export function AdvancedStatsStrip({
   matchId,
   className,
@@ -298,7 +299,7 @@ export function AdvancedStatsStrip({
         title={data.sourceLabel}
       >
         xG {data.homeXg.toFixed(2)}–{data.awayXg.toFixed(2)}
-        <span className="text-slate-400 font-normal"> · Understat</span>
+        
       </span>
     );
   }

@@ -6,7 +6,7 @@ import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { NOTE_CATEGORIES } from "@/lib/defaults";
 import { Pin, Plus, Trash2, Search } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, normalizeApostrophes } from "@/lib/utils";
 
 export type NoteRow = {
   id: string;
@@ -173,7 +173,7 @@ export function NotesPanel({
 
   function isLiveEventNote(n: NoteRow): boolean {
     if (n.category === "Match" && n.pinned) return true;
-    const t = `${n.title} ${n.body}`.toLowerCase();
+    const t = `${normalizeApostrophes(n.title)} ${normalizeApostrophes(n.body)}`.toLowerCase();
     return (
       n.category === "Match" &&
       (/\d+'/.test(n.title) ||
@@ -216,7 +216,7 @@ export function NotesPanel({
     const filtered = notes.filter((n) => {
       if (!matchesScope(n, activeFilter)) return false;
       if (needle) {
-        const hay = `${n.title} ${n.body} ${n.category} ${
+        const hay = `${normalizeApostrophes(n.title)} ${normalizeApostrophes(n.body)} ${n.category} ${
           (n.entityId && playerNameById?.[n.entityId]) || ""
         }`.toLowerCase();
         if (!hay.includes(needle)) return false;
@@ -267,7 +267,7 @@ export function NotesPanel({
   }, [visible, activeFilter, entityType, playerNameById]);
 
   async function createNote() {
-    if (!title.trim() || !body.trim()) return;
+    if (!title.trim()) return;
     setPending(true);
     try {
       const res = await fetch("/api/notes", {
@@ -368,7 +368,7 @@ export function NotesPanel({
                 liveMode ? "text-[11px] leading-tight" : "text-xs"
               )}
             >
-              {n.title}
+              {normalizeApostrophes(n.title)}
               <span className="ml-1.5 text-[9px] font-normal text-slate-400">
                 {n.category}
                 {n.pinned ? " · pin" : ""}
@@ -385,7 +385,7 @@ export function NotesPanel({
                 !expanded && (liveMode ? "line-clamp-2" : "line-clamp-3")
               )}
             >
-              {n.body}
+              {normalizeApostrophes(n.body)}
             </p>
             {expanded && playerLinked && n.entityId && (
               <button

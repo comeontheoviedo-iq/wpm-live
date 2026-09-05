@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { normalizeApostrophes } from "@/lib/utils";
 
 export async function PATCH(
   req: Request,
@@ -22,6 +23,8 @@ export async function PATCH(
   ]) {
     if (key in body) data[key] = body[key];
   }
+  if (typeof data.title === "string") data.title = normalizeApostrophes(data.title);
+  if (typeof data.body === "string") data.body = normalizeApostrophes(data.body);
   const note = await prisma.note.update({ where: { id }, data });
   return NextResponse.json({ note });
 }

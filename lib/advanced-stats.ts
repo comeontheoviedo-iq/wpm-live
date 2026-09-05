@@ -29,7 +29,7 @@ import {
 } from "./understat";
 import { tryAltXg } from "./xg-alt";
 
-export type AdvancedStatsSource = "Understat";
+export type AdvancedStatsSource = "advanced" | "alt";
 
 export type AdvancedStatsCoverageEntry = {
   competition: string;
@@ -49,22 +49,22 @@ export const ADVANCED_STATS_COVERAGE: AdvancedStatsCoverageEntry[] = [
     competition: "Russian Premier League",
     covered: true,
     understatSlug: "RFPL",
-    note: "Supported by Understat; rarely used on Pitchline desks",
+    note: "Top-five European leagues + RFPL",
   },
   {
     competition: "Süper Lig",
     covered: false,
-    note: "Understat has no Turkey coverage",
+    note: "No free advanced xG coverage for Turkey yet",
   },
   {
     competition: "Scottish Premiership",
     covered: false,
-    note: "Understat has no Scotland coverage",
+    note: "No free advanced xG coverage for Scotland yet",
   },
   {
     competition: "UEFA Champions League",
     covered: false,
-    note: "Understat does not publish UCL match xG in league feed",
+    note: "UEFA club competitions not in free xG feed",
   },
   {
     competition: "UEFA Europa League",
@@ -100,7 +100,7 @@ export type ShotSummary = {
 export type AdvancedMatchStats = {
   available: boolean;
   source: AdvancedStatsSource | null;
-  /** Short provenance label for UI, e.g. "xG · Understat" */
+  /** Short provenance label for UI — never name providers */
   sourceLabel: string;
   competition: string;
   coveredCompetition: boolean;
@@ -114,6 +114,16 @@ export type AdvancedMatchStats = {
   matchedAt: string | null;
   forecast: { homeWin: number; draw: number; awayWin: number } | null;
   shotSummary: ShotSummary | null;
+  /** Normalized shot points for viz flashes (0–1 coords). */
+  shots: {
+    x: number;
+    y: number;
+    xg: number;
+    result: string;
+    side: "home" | "away";
+    player?: string;
+    minute?: number;
+  }[];
   coverage: AdvancedStatsCoverageEntry[];
 };
 
@@ -230,6 +240,7 @@ function emptyResult(
     matchedAt: null,
     forecast: null,
     shotSummary: null,
+    shots: [],
     coverage: ADVANCED_STATS_COVERAGE,
   };
 }
@@ -382,8 +393,8 @@ export async function resolveAdvancedMatchStats(
           true,
           "xG not published yet for this fixture"
         ),
-        source: "Understat",
-        sourceLabel: "xG · Understat",
+        source: "advanced",
+        sourceLabel: "Advanced stats",
         understatMatchId: row.id,
         matchedAt: row.datetime,
       };
@@ -392,14 +403,35 @@ export async function resolveAdvancedMatchStats(
     }
 
     let shotSummary: ShotSummary | null = null;
+    let shots: AdvancedMatchStats["shots"] = [];
     try {
       const matchPayload = await fetchUnderstatMatch(row.id);
       shotSummary = summarizeShots(
         matchPayload.shots?.h,
         matchPayload.shots?.a
       );
+      const mapSide = (list: UnderstatShot[] | undefined, side: "home" | "away") => {
+        for (const s of list || []) {
+          const x = Number(s.X);
+          const y = Number(s.Y);
+          const xg = Number(s.xG);
+          if (![x, y, xg].every(Number.isFinite)) continue;
+          shots.push({
+            x: Math.max(0, Math.min(1, x)),
+            y: Math.max(0, Math.min(1, y)),
+            xg,
+            result: s.result || "",
+            side,
+            player: s.player,
+            minute: Number(s.minute) || undefined,
+          });
+        }
+      };
+      mapSide(matchPayload.shots?.h, "home");
+      mapSide(matchPayload.shots?.a, "away");
     } catch {
       shotSummary = null;
+      shots = [];
     }
 
     let forecast: AdvancedMatchStats["forecast"] = null;
@@ -418,8 +450,8 @@ export async function resolveAdvancedMatchStats(
 
     const data: AdvancedMatchStats = {
       available: true,
-      source: "Understat",
-      sourceLabel: "xG · Understat",
+      source: "advanced",
+      sourceLabel: "Advanced stats",
       competition,
       coveredCompetition: true,
       message: null,
@@ -431,6 +463,7 @@ export async function resolveAdvancedMatchStats(
       matchedAt: row.datetime,
       forecast,
       shotSummary,
+      shots,
       coverage: ADVANCED_STATS_COVERAGE,
     };
     resultCache.set(cacheKey, { at: Date.now(), data });

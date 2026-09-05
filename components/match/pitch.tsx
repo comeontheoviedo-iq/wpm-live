@@ -77,6 +77,10 @@ export type PitchPlayer = {
   matchSaves?: number;
   subbedOff?: boolean;
   subMinute?: number | null;
+  /** 1 if started or came on; 0 otherwise */
+  matchApps?: number;
+  /** Estimated minutes this match */
+  matchMinutes?: number | null;
   /** Optional 1-line hook from pinned player note title */
   noteHook?: string | null;
   /** Match-scoped overrides */
@@ -250,6 +254,19 @@ function PitchCardToken({
         return ["S GOL", seasonG, "Season goals"];
       case "S_AST":
         return ["S AST", seasonA, "Season assists"];
+      case "M_APP": {
+        const mApp = player.matchApps ?? 0;
+        return ["M APP", mApp || "—", "Appeared this match", mApp > 0];
+      }
+      case "M_MIN": {
+        const mMin = player.matchMinutes;
+        return [
+          "M MIN",
+          mMin != null && Number.isFinite(mMin) ? mMin : "—",
+          "Minutes this match",
+          Boolean(mMin && mMin > 0),
+        ];
+      }
       case "M_GOL":
         return ["M GOL", matchG, "Goals this match", matchG > 0];
       case "M_AST":
@@ -568,6 +585,8 @@ export function PitchBoard({
   formationOptions,
   onFormationChange,
   formationBusy,
+  homeSubWindows,
+  awaySubWindows,
   lineupHintText,
   onResetOfficial,
   homeScore,
@@ -631,6 +650,8 @@ export function PitchBoard({
   formationOptions?: string[];
   onFormationChange?: (side: "home" | "away", formation: string) => void;
   formationBusy?: boolean;
+  homeSubWindows?: { used: number; max: number; label: string; windows: number[]; windowsHeuristic?: boolean } | null;
+  awaySubWindows?: { used: number; max: number; label: string; windows: number[]; windowsHeuristic?: boolean } | null;
   lineupHintText?: string;
   onResetOfficial?: () => void;
   homeScore?: number;
@@ -1142,7 +1163,7 @@ export function PitchBoard({
               {formationOptions && onFormationChange ? (
                 <select
                   className={cn(
-                    "bg-transparent font-semibold max-w-[4.5rem] outline-none",
+                    "bg-transparent font-semibold max-w-[7.5rem] outline-none",
                     !leftChrome.light && "text-white"
                   )}
                   value={leftChrome.formation}
@@ -1162,6 +1183,31 @@ export function PitchBoard({
                 <span className="font-semibold">{leftChrome.formation}</span>
               )}
             </div>
+            {(() => {
+              const sw = leftChrome.side === "home" ? homeSubWindows : awaySubWindows;
+              if (!sw || sw.max <= 0) return null;
+              return (
+                <div
+                  className="rounded bg-black/55 text-white px-1.5 py-0.5 text-[8px] font-semibold tracking-wide flex items-center gap-1"
+                  title={
+                    sw.windowsHeuristic
+                      ? "Sub windows estimated from event minutes"
+                      : "Substitutions used / allowance"
+                  }
+                >
+                  <span>SUB {sw.used}/{sw.max}</span>
+                  {sw.windows?.length ? (
+                    <span className="opacity-90 flex gap-0.5">
+                      {sw.windows.map((n, i) => (
+                        <span key={i} className="rounded bg-white/20 px-0.5 tabular-nums">
+                          {n}
+                        </span>
+                      ))}
+                    </span>
+                  ) : null}
+                </div>
+              );
+            })()}
             {leftChrome.coach && (
               <CoachChip
                 coach={leftChrome.coach}
@@ -1369,7 +1415,7 @@ export function PitchBoard({
               {formationOptions && onFormationChange ? (
                 <select
                   className={cn(
-                    "bg-transparent font-semibold max-w-[4.5rem] outline-none",
+                    "bg-transparent font-semibold max-w-[7.5rem] outline-none",
                     !rightChrome.light && "text-white"
                   )}
                   value={rightChrome.formation}
@@ -1389,6 +1435,31 @@ export function PitchBoard({
                 <span className="font-semibold">{rightChrome.formation}</span>
               )}
             </div>
+            {(() => {
+              const sw = rightChrome.side === "home" ? homeSubWindows : awaySubWindows;
+              if (!sw || sw.max <= 0) return null;
+              return (
+                <div
+                  className="rounded bg-black/55 text-white px-1.5 py-0.5 text-[8px] font-semibold tracking-wide flex items-center gap-1"
+                  title={
+                    sw.windowsHeuristic
+                      ? "Sub windows estimated from event minutes"
+                      : "Substitutions used / allowance"
+                  }
+                >
+                  <span>SUB {sw.used}/{sw.max}</span>
+                  {sw.windows?.length ? (
+                    <span className="opacity-90 flex gap-0.5">
+                      {sw.windows.map((n, i) => (
+                        <span key={i} className="rounded bg-white/20 px-0.5 tabular-nums">
+                          {n}
+                        </span>
+                      ))}
+                    </span>
+                  ) : null}
+                </div>
+              );
+            })()}
             {rightChrome.coach && (
               <CoachChip
                 coach={rightChrome.coach}

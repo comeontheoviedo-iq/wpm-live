@@ -28,11 +28,20 @@ async function main() {
   const research = await prisma.packTemplate.findUnique({
     where: { key: "research" },
   });
+  const lineup = await prisma.packTemplate.findUnique({ where: { key: "lineup" } });
   console.log("upserted", PACK_TEMPLATE_SEEDS.length);
   console.log("intro has 600-900?", Boolean(intro?.prompt.includes("600–900")));
   console.log(
     "research Venue & atmosphere?",
     Boolean(research?.prompt.includes("Venue & atmosphere"))
+  );
+  console.log(
+    "lineup Here are the two starting lineups?",
+    Boolean(lineup?.prompt.includes("Here are the two starting lineups"))
+  );
+  console.log(
+    "lineup unable to confirm changes?",
+    Boolean(lineup?.prompt.includes("unable to confirm changes from last outing"))
   );
 }
 

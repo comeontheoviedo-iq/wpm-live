@@ -151,19 +151,29 @@ Never invent disciplinary history. End with a line that hands back to the action
   {
     key: "lineup",
     title: "Lineup read",
-    description: "Spoken lineup read for both XIs — factual only.",
+    description:
+      "Air-ready announce of both XIs: changes from last match, key player POIs, notable absences only.",
     section: "lineup",
     order: 5,
     prompt: `${HOUSE_RULES}
 
-Write a spoken LINEUP / "let's look at the two teams" intro beat for both sides.
-- Open with a short bridge into the XIs (e.g. looking at the two teams)
-- Start with formation for each side (from context)
-- Read numbers + surnames in a natural radio cadence
-- Note captain and any standout selection ONLY if known from context
-- Flag predicted vs confirmed if status is not confirmed
-- Do not invent late changes, absences, or "surprise" inclusions not in the XI list
-Keep it under ~90–120 seconds spoken.`,
+Write the AIR-READY commentary script section where the commentator announces the two teams.
+Voice: factual, grounded, spoken radio prose — ready to read on air. Short paragraphs.
+Do NOT invent changes, drops, injuries, returning players, or stats. Use ONLY MATCH CONTEXT (changes lists, XI, key stats, notable injuries). If a fact is missing, omit it — never guess.
+
+Explicit structure (follow in order):
+
+1) Open exactly / closely with: "Here are the two starting lineups."
+2) Changes from last match — per team (home first, then away):
+   - State how many changes, and who those changes are (names in / out) from CHANGES HOME / CHANGES AWAY in context.
+   - If context says changes are unavailable / unable to confirm, say you are "unable to confirm changes from last outing" — do NOT invent in/outs (e.g. never invent a drop).
+3) Home lineup — formation from context, then the XI in natural radio cadence (numbers + names). Weave in key stats / points of interest ONLY from KEY PLAYER STATS / XI annotations (goals, apps, captain, grounded returning-ex-club notes). Do not pad.
+4) Away lineup — same treatment.
+5) Important absences only — from NOTABLE INJURIES / absences in context. Mention injuries only for important players (starters/regulars). Skip trivial/unknown.
+6) Do NOT repeat intro atmosphere, table stakes, continental storylines, or cold-open colour — that lives in the longer intro script. Stay on lineups, changes, key player POIs, and important absences.
+
+Flag predicted vs confirmed only if LINEUP STATUS is not confirmed.
+Target length: roughly 90–150 seconds spoken.`,
   },
   {
     key: "hooks",
@@ -224,8 +234,16 @@ export function buildMatchContextPrompt(ctx: {
   homeXi?: string[];
   awayXi?: string[];
   notes?: string[];
+  /** Preformatted change summary for home (or unavailable phrase). */
+  changesHome?: string | null;
+  /** Preformatted change summary for away (or unavailable phrase). */
+  changesAway?: string | null;
+  /** Notable injuries / absences only (starters/regulars). */
+  notableInjuries?: string[];
+  /** Extra key-player POI lines (goals/apps/captain/returning). */
+  keyPlayerStats?: string[];
 }) {
-  return [
+  const lines = [
     `HOME: ${ctx.home}`,
     `AWAY: ${ctx.away}`,
     `COMPETITION (official label): ${ctx.competition}`,
@@ -238,7 +256,24 @@ export function buildMatchContextPrompt(ctx: {
     `REFEREE: ${ctx.referee || "TBC"}`,
     `HOME XI: ${(ctx.homeXi || []).join(", ") || "TBC"}`,
     `AWAY XI: ${(ctx.awayXi || []).join(", ") || "TBC"}`,
-    `MATCH NOTES:`,
-    ...(ctx.notes || []).map((n) => `- ${n}`),
-  ].join("\n");
+  ];
+  if (ctx.changesHome != null && ctx.changesHome !== "") {
+    lines.push(`CHANGES HOME: ${ctx.changesHome}`);
+  }
+  if (ctx.changesAway != null && ctx.changesAway !== "") {
+    lines.push(`CHANGES AWAY: ${ctx.changesAway}`);
+  }
+  if (ctx.keyPlayerStats?.length) {
+    lines.push("KEY PLAYER STATS:");
+    for (const s of ctx.keyPlayerStats) lines.push(`- ${s}`);
+  }
+  if (ctx.notableInjuries?.length) {
+    lines.push("NOTABLE INJURIES / ABSENCES (important players only):");
+    for (const s of ctx.notableInjuries) lines.push(`- ${s}`);
+  } else if (ctx.notableInjuries) {
+    lines.push("NOTABLE INJURIES / ABSENCES: None listed for important players");
+  }
+  lines.push("MATCH NOTES:");
+  for (const n of ctx.notes || []) lines.push(`- ${n}`);
+  return lines.join("\n");
 }

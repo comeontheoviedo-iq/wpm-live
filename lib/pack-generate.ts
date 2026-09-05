@@ -10,6 +10,10 @@ import { broadcastLabelFor } from "./competitions";
 import { formatKickoff } from "./utils";
 import { emptyDistributed, type DistributedCounts } from "./pack-distribute";
 import { applyPackDistribution } from "./pack-distribute-apply";
+import {
+  getLastPlayedLineup,
+  type AfLineupPlayer,
+} from "./api-football";
 
 function parseOptionalSources(raw: unknown): { urls: string[]; notes: string } {
   const urls: string[] = [];
@@ -32,6 +36,244 @@ function parseOptionalSources(raw: unknown): { urls: string[]; notes: string } {
   return { urls: [...new Set(urls)].slice(0, 20), notes: notes.slice(0, 8000) };
 }
 
+
+function normalizePlayerKey(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+type XiPlayerLite = {
+  name: string;
+  shirtNumber: number;
+  apiFootballPlayerId: number | null;
+  isCaptain: boolean;
+  goals: number;
+  assists: number;
+  appearances: number;
+  position: string;
+  isStarter: boolean;
+};
+
+export type LineupChangeSummary = {
+  available: boolean;
+  count: number;
+  inNames: string[];
+  outNames: string[];
+  lastFixtureId?: number;
+  summary: string;
+};
+
+/**
+ * Compare current desk starters vs last AF finished XI.
+ * If last XI missing — unavailable (do not invent).
+ * If board is expected/predicted and identical to last XI — unavailable
+ * (current board IS the last outing; cannot claim confirmed changes).
+ */
+export function summarizeXiChanges(args: {
+  sideLabel: string;
+  lineupStatus: string;
+  currentStarters: XiPlayerLite[];
+  lastStartXI: AfLineupPlayer[] | null | undefined;
+  lastFixtureId?: number | null;
+}): LineupChangeSummary {
+  const unavailable =
+    "unable to confirm changes from last outing";
+  if (!args.lastStartXI?.length) {
+    return {
+      available: false,
+      count: 0,
+      inNames: [],
+      outNames: [],
+      summary: unavailable,
+    };
+  }
+
+  const lastAfIds = new Set<string>();
+  const lastNameKeys = new Set<string>();
+  for (const row of args.lastStartXI) {
+    if (row.player?.id) lastAfIds.add(`af:${row.player.id}`);
+    if (row.player?.name) lastNameKeys.add(`n:${normalizePlayerKey(row.player.name)}`);
+  }
+
+  const currKeys = new Set<string>();
+  const inNames: string[] = [];
+  for (const p of args.currentStarters) {
+    const afKey =
+      p.apiFootballPlayerId && p.apiFootballPlayerId > 0
+        ? `af:${p.apiFootballPlayerId}`
+        : null;
+    const nKey = `n:${normalizePlayerKey(p.name)}`;
+    const inLast = afKey
+      ? lastAfIds.has(afKey) || lastNameKeys.has(nKey)
+      : lastNameKeys.has(nKey);
+    currKeys.add(afKey || nKey);
+    if (afKey) currKeys.add(nKey);
+    if (!inLast) {
+      inNames.push(`#${p.shirtNumber} ${p.name}`);
+    }
+  }
+
+  const outNames: string[] = [];
+  const seenOut = new Set<string>();
+  for (const row of args.lastStartXI) {
+    const id = row.player?.id;
+    const name = row.player?.name || "Unknown";
+    const num = row.player?.number;
+    const afKey = id && id > 0 ? `af:${id}` : null;
+    const nKey = `n:${normalizePlayerKey(name)}`;
+    const stillIn = afKey
+      ? currKeys.has(afKey) || currKeys.has(nKey)
+      : currKeys.has(nKey);
+    if (!stillIn) {
+      const label = num != null ? `#${num} ${name}` : name;
+      if (!seenOut.has(nKey)) {
+        seenOut.add(nKey);
+        outNames.push(label);
+      }
+    }
+  }
+
+  const count = Math.max(inNames.length, outNames.length);
+  const status = (args.lineupStatus || "").toLowerCase();
+  const confirmed = status === "confirmed";
+
+  if (!confirmed && count === 0) {
+    // Expected/predicted board mirrors last AF XI — not a confirmed change list.
+    return {
+      available: false,
+      count: 0,
+      inNames: [],
+      outNames: [],
+      lastFixtureId: args.lastFixtureId || undefined,
+      summary: unavailable,
+    };
+  }
+
+  const bits: string[] = [];
+  if (count === 0) {
+    bits.push(`0 changes from last outing`);
+  } else {
+    bits.push(`${count} change${count === 1 ? "" : "s"} from last outing`);
+    if (inNames.length) bits.push(`IN: ${inNames.join(", ")}`);
+    if (outNames.length) bits.push(`OUT: ${outNames.join(", ")}`);
+  }
+  if (args.lastFixtureId) bits.push(`(last AF fixture ${args.lastFixtureId})`);
+
+  return {
+    available: true,
+    count,
+    inNames,
+    outNames,
+    lastFixtureId: args.lastFixtureId || undefined,
+    summary: bits.join(" · "),
+  };
+}
+
+function formatStarterLine(p: XiPlayerLite): string {
+  const bits = [
+    `#${p.shirtNumber} ${p.name}`,
+    p.position ? `(${p.position})` : null,
+    p.isCaptain ? "captain" : null,
+    p.goals > 0 ? `${p.goals}g` : null,
+    p.assists > 0 ? `${p.assists}a` : null,
+    p.appearances > 0 ? `${p.appearances} apps` : null,
+  ].filter(Boolean);
+  return bits.join(" ");
+}
+
+function keyStatLines(
+  side: string,
+  starters: XiPlayerLite[]
+): string[] {
+  const lines: string[] = [];
+  const ranked = [...starters].sort(
+    (a, b) =>
+      b.goals - a.goals ||
+      b.assists - a.assists ||
+      b.appearances - a.appearances
+  );
+  for (const p of ranked) {
+    const poi: string[] = [];
+    if (p.isCaptain) poi.push("captain");
+    if (p.goals > 0) poi.push(`${p.goals} goal${p.goals === 1 ? "" : "s"}`);
+    if (p.assists > 0) poi.push(`${p.assists} assist${p.assists === 1 ? "" : "s"}`);
+    if (p.appearances > 0) poi.push(`${p.appearances} apps`);
+    if (!poi.length) continue;
+    // Prefer players with something notable
+    if (!p.isCaptain && p.goals === 0 && p.assists === 0 && p.appearances < 3) {
+      continue;
+    }
+    lines.push(`${side}: #${p.shirtNumber} ${p.name} — ${poi.join(", ")}`);
+  }
+  // Cap volume
+  return lines.slice(0, 8);
+}
+
+function isNotableInjuredPlayer(p: {
+  isStarter?: boolean;
+  isCaptain?: boolean;
+  goals?: number;
+  assists?: number;
+  appearances?: number;
+} | null | undefined): boolean {
+  if (!p) return false;
+  if (p.isStarter || p.isCaptain) return true;
+  if ((p.goals || 0) > 0 || (p.assists || 0) > 0) return true;
+  if ((p.appearances || 0) >= 3) return true;
+  return false;
+}
+
+async function resolveLastXiChanges(args: {
+  lineupStatus: string;
+  homeLabel: string;
+  awayLabel: string;
+  homeAfTeamId: number | null | undefined;
+  awayAfTeamId: number | null | undefined;
+  homeStarters: XiPlayerLite[];
+  awayStarters: XiPlayerLite[];
+}): Promise<{ home: LineupChangeSummary; away: LineupChangeSummary }> {
+  const unavailable: LineupChangeSummary = {
+    available: false,
+    count: 0,
+    inNames: [],
+    outNames: [],
+    summary: "unable to confirm changes from last outing",
+  };
+
+  async function one(
+    afTeamId: number | null | undefined,
+    starters: XiPlayerLite[],
+    label: string
+  ): Promise<LineupChangeSummary> {
+    if (!afTeamId) return { ...unavailable };
+    try {
+      const last = await getLastPlayedLineup(afTeamId);
+      if (!last?.lineup?.startXI?.length) return { ...unavailable };
+      return summarizeXiChanges({
+        sideLabel: label,
+        lineupStatus: args.lineupStatus,
+        currentStarters: starters,
+        lastStartXI: last.lineup.startXI,
+        lastFixtureId: last.fixtureId,
+      });
+    } catch (e) {
+      console.error("[pack-generate] last XI fetch failed", label, e);
+      return { ...unavailable };
+    }
+  }
+
+  const [home, away] = await Promise.all([
+    one(args.homeAfTeamId, args.homeStarters, args.homeLabel),
+    one(args.awayAfTeamId, args.awayStarters, args.awayLabel),
+  ]);
+  return { home, away };
+}
+
 function generateOptionsFor(templateKey: string) {
   switch (templateKey) {
     case "research":
@@ -41,7 +283,7 @@ function generateOptionsFor(templateKey: string) {
     case "intro":
       return { googleSearch: true, maxOutputTokens: 8192, timeoutMs: 180_000 };
     case "lineup":
-      return { googleSearch: false, maxOutputTokens: 2048, timeoutMs: 60_000 };
+      return { googleSearch: false, maxOutputTokens: 3072, timeoutMs: 90_000 };
     case "referee":
       return { googleSearch: false, maxOutputTokens: 2048, timeoutMs: 60_000 };
     case "hooks":
@@ -129,18 +371,21 @@ export async function generatePackForMatch(args: {
 
   const homePlayers = match.homeClub.players;
   const awayPlayers = match.awayClub.players;
-  const homeXi = homePlayers
-    .filter((p) => p.isStarter)
-    .map(
-      (p) =>
-        `#${p.shirtNumber} ${p.name}${p.position ? ` (${p.position})` : ""}`
-    );
-  const awayXi = awayPlayers
-    .filter((p) => p.isStarter)
-    .map(
-      (p) =>
-        `#${p.shirtNumber} ${p.name}${p.position ? ` (${p.position})` : ""}`
-    );
+  const toLite = (p: (typeof homePlayers)[number]): XiPlayerLite => ({
+    name: p.name,
+    shirtNumber: p.shirtNumber,
+    apiFootballPlayerId: p.apiFootballPlayerId,
+    isCaptain: p.isCaptain,
+    goals: p.goals || 0,
+    assists: p.assists || 0,
+    appearances: p.appearances || 0,
+    position: p.position || "",
+    isStarter: p.isStarter,
+  });
+  const homeStartersLite = homePlayers.filter((p) => p.isStarter).map(toLite);
+  const awayStartersLite = awayPlayers.filter((p) => p.isStarter).map(toLite);
+  const homeXi = homeStartersLite.map(formatStarterLine);
+  const awayXi = awayStartersLite.map(formatStarterLine);
   const homeSquad = homePlayers.map(
     (p) => `#${p.shirtNumber} ${p.name}${p.position ? ` · ${p.position}` : ""}`
   );
@@ -163,6 +408,27 @@ export async function generatePackForMatch(args: {
       .join(" · ");
     return `${who}${club ? ` (${club})` : ""} — ${detail || "injury"}`;
   });
+
+  const notableInjuryLines = match.injuries
+    .filter((inj) => isNotableInjuredPlayer(inj.player))
+    .map((inj) => {
+      const who = inj.player?.name || "Unknown";
+      const club = inj.club?.name || "";
+      const detail = [
+        inj.status,
+        inj.injuryType,
+        inj.notes,
+        inj.expectedReturn ? `return ${inj.expectedReturn}` : null,
+        inj.player?.isStarter ? "usual starter" : null,
+        inj.player?.isCaptain ? "captain" : null,
+        inj.player && inj.player.appearances > 0
+          ? `${inj.player.appearances} apps`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      return `${who}${club ? ` (${club})` : ""} — ${detail || "injury"}`;
+    });
 
   const allPlayers = [
     ...homePlayers.map((p) => ({ id: p.id, name: p.name })),
@@ -190,6 +456,29 @@ export async function generatePackForMatch(args: {
     }
   }
 
+  let changesHome: string | null = null;
+  let changesAway: string | null = null;
+  let keyPlayerStats: string[] = [];
+
+  // Lineup (incl. auto-lineup on confirm) needs change diffs + POIs.
+  if (templateKey === "lineup") {
+    const changes = await resolveLastXiChanges({
+      lineupStatus: match.lineupStatus || "expected",
+      homeLabel: match.homeClub.name,
+      awayLabel: match.awayClub.name,
+      homeAfTeamId: match.homeClub.apiFootballTeamId,
+      awayAfTeamId: match.awayClub.apiFootballTeamId,
+      homeStarters: homeStartersLite,
+      awayStarters: awayStartersLite,
+    });
+    changesHome = changes.home.summary;
+    changesAway = changes.away.summary;
+    keyPlayerStats = [
+      ...keyStatLines(match.homeClub.name, homeStartersLite),
+      ...keyStatLines(match.awayClub.name, awayStartersLite),
+    ];
+  }
+
   const ctx = buildMatchContextPrompt({
     home: match.homeClub.name,
     away: match.awayClub.name,
@@ -204,6 +493,11 @@ export async function generatePackForMatch(args: {
     homeXi,
     awayXi,
     notes: match.notes.map((n) => `${n.title}: ${n.body}`),
+    changesHome,
+    changesAway,
+    notableInjuries:
+      templateKey === "lineup" ? notableInjuryLines : undefined,
+    keyPlayerStats: templateKey === "lineup" ? keyPlayerStats : undefined,
   });
 
   const deepResearchBlock = [

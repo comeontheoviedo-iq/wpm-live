@@ -305,7 +305,13 @@ export async function syncSquadForClub(
         where: { playerId: { in: dropIds } },
         data: { playerId: null },
       });
+      await prisma.penaltyRecord.updateMany({
+        where: { playerId: { in: dropIds } },
+        data: { playerId: null },
+      });
       await prisma.injury.deleteMany({ where: { playerId: { in: dropIds } } });
+      await prisma.seasonScorer.deleteMany({ where: { playerId: { in: dropIds } } });
+      await prisma.seasonKeeper.deleteMany({ where: { playerId: { in: dropIds } } });
       await prisma.matchPlayerOverride.deleteMany({
         where: { playerId: { in: dropIds } },
       });

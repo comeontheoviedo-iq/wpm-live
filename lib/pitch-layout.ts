@@ -16,7 +16,7 @@ export const CARD_GAP_PX = 8;
 /** Honest unscaled pitch card height — real DOM is taller than CSS estimate. */
 export function baseCardHeight(settings: FieldSettings): number {
   // Slightly tighter than prior 152/118 so windowed desks aren't floored at -40%.
-  return settings.dataRows === 2 ? 136 : 108;
+  return settings.dataRows === 2 ? 128 : 102;
 }
 
 export function baseCardWidth(): number {

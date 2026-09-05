@@ -121,13 +121,13 @@ function StatCell({
   emphasize?: boolean;
 }) {
   return (
-    <div className="min-w-0 text-center leading-none" title={title || label}>
-      <div className="text-[6px] font-semibold uppercase tracking-wide text-slate-500 truncate">
+    <div className="min-w-0 px-px text-center leading-none" title={title || label}>
+      <div className="truncate text-[5.5px] font-semibold uppercase tracking-[0.05em] text-slate-500/85">
         {label}
       </div>
       <div
         className={cn(
-          "text-[9px] font-bold tabular-nums truncate",
+          "mt-px truncate text-[9px] font-extrabold tabular-nums tracking-tight",
           emphasize
             ? "text-emerald-700 dark:text-emerald-800"
             : "text-slate-900"
@@ -233,7 +233,7 @@ function PitchCardToken({
         : "-";
 
   const band = isHome
-    ? "bg-[#1a1a1a] text-white"
+    ? "bg-[#141414] text-white"
     : "bg-white text-slate-900";
   const borderStyle = isHome
     ? { borderColor: "#ffffff" }
@@ -324,14 +324,14 @@ function PitchCardToken({
     >
       <span
         className={cn(
-          "group relative flex flex-col overflow-hidden rounded-md border-[1.5px] shadow-md",
+          "group relative flex flex-col overflow-hidden rounded-[7px] border shadow-[0_2px_10px_rgba(0,0,0,0.32),0_0_0_1px_rgba(0,0,0,0.06)]",
           band,
           selected &&
             "ring-[3px] ring-blue-500 shadow-[0_0_14px_rgba(37,99,235,0.85)]",
           placing && "ring-2 ring-amber-400",
           player.subbedOff && "opacity-50 grayscale-[25%]"
         )}
-        style={{ ...borderStyle, width: baseW }}
+        style={{ ...borderStyle, width: baseW, borderWidth: 1.5 }}
         title={[
           player.displayName || player.name,
           player.isCaptain ? "Captain" : null,
@@ -347,19 +347,19 @@ function PitchCardToken({
         {/* Header: # + flag/pos */}
         <div
           className={cn(
-            "flex items-start justify-between gap-0.5 px-1 pt-0.5",
-            isHome ? "bg-[#1a1a1a]" : "bg-white"
+            "flex items-center justify-between gap-0.5 px-1 pb-px pt-0.5",
+            isHome ? "bg-[#141414]" : "bg-white"
           )}
         >
           <span
             className={cn(
-              "text-[15px] sm:text-[17px] font-black leading-none tabular-nums",
+              "text-[15px] sm:text-[16px] font-black leading-none tabular-nums tracking-tight",
               isHome ? "text-white" : "text-slate-900"
             )}
           >
             {shirt}
           </span>
-          <div className="flex flex-col items-end gap-px pt-0.5">
+          <div className="flex flex-col items-end gap-[1px]">
             <div className="flex items-center gap-px" title={flagTitle || undefined}>
               {flagNats.length ? (
                 flagNats.map((n) => <FlagImg key={n} nationality={n} />)
@@ -369,8 +369,8 @@ function PitchCardToken({
             </div>
             <span
               className={cn(
-                "text-[7px] font-bold uppercase leading-none tracking-wide",
-                isHome ? "text-white/90" : "text-slate-700"
+                "text-[6.5px] font-bold uppercase leading-none tracking-[0.06em]",
+                isHome ? "text-white/75" : "text-slate-500"
               )}
             >
               {pos}
@@ -381,14 +381,14 @@ function PitchCardToken({
         {/* Photo + name */}
         <div
           className={cn(
-            "flex flex-col items-center px-1 pb-1 pt-0.5",
-            isHome ? "bg-[#1a1a1a]" : "bg-neutral-50"
+            "flex flex-col items-center px-1 pb-0.5 pt-0.5",
+            isHome ? "bg-[#141414]" : "bg-[#f7f7f5]"
           )}
         >
           <span
             className={cn(
-              "relative flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center overflow-hidden rounded-sm",
-              isHome ? "bg-black/40 ring-1 ring-white/20" : "bg-slate-200 ring-1 ring-slate-300"
+              "relative flex h-8 w-8 sm:h-[34px] sm:w-[34px] items-center justify-center overflow-hidden rounded-[5px]",
+              isHome ? "bg-black/50 ring-1 ring-white/15" : "bg-slate-200/80 ring-1 ring-slate-300/80"
             )}
           >
             {photo ? (
@@ -396,7 +396,7 @@ function PitchCardToken({
               <img
                 src={photo}
                 alt=""
-                className="h-full w-full object-cover object-top"
+                className="h-full w-full object-cover object-[center_18%]"
                 loading="lazy"
                 onError={(e) => {
                   (e.target as HTMLImageElement).style.display = "none";
@@ -413,12 +413,12 @@ function PitchCardToken({
                 isHome ? "text-white/50" : "text-slate-400"
               )}
             >
-              <User className="h-5 w-5" strokeWidth={1.5} />
+              <User className="h-4 w-4" strokeWidth={1.5} />
             </span>
           </span>
           <span
             className={cn(
-              "mt-0.5 w-full truncate text-center font-extrabold uppercase leading-tight tracking-wide",
+              "mt-0.5 w-full truncate text-center font-extrabold uppercase leading-[1.05] tracking-[0.02em]",
               isHome ? "text-white" : "text-slate-900"
             )}
             style={{ fontSize: `${namePx}px` }}
@@ -429,9 +429,9 @@ function PitchCardToken({
         </div>
 
         {/* Cream stats table */}
-        <div className="bg-[#FFF8E7] px-0.5 py-0.5 border-t border-black/10">
+        <div className="border-t border-black/10 bg-[#F4EFE3] px-0.5 py-[3px]">
           <div
-            className="grid gap-px"
+            className="grid gap-y-0.5"
             style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
           >
             {row1.map(([label, value, tip, emph]) => (
@@ -446,7 +446,7 @@ function PitchCardToken({
           </div>
           {row2 ? (
             <div
-              className="mt-0.5 grid gap-px border-t border-black/5 pt-0.5"
+              className="mt-[3px] grid gap-y-0.5 border-t border-black/[0.06] pt-[3px]"
               style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
             >
               {row2.map(([label, value, tip, emph]) => (
@@ -463,7 +463,7 @@ function PitchCardToken({
         </div>
 
         {(player.matchYellow || player.matchRed) && (
-          <span className="absolute left-0.5 top-[22px] flex flex-col gap-px">
+          <span className="absolute left-0.5 top-[20px] flex flex-col gap-px">
             {player.matchYellow ? (
               <span className="h-2 w-1.5 rounded-[1px] bg-yellow-400 shadow" />
             ) : null}
@@ -498,16 +498,16 @@ function CoachChip({
       onClick={onClick}
       title={onClick ? `Open ${coach.name} profile` : undefined}
       className={cn(
-        "flex items-center gap-2 rounded-lg border bg-white/95 shadow-md px-1.5 py-1 max-w-[15rem] text-left",
-        isHome ? "border-slate-800" : "",
-        onClick && "pointer-events-auto cursor-pointer hover:ring-2 hover:ring-teal-400/60"
+        "pitch-overlay-chip flex max-w-[13.5rem] items-center gap-1.5 px-1.5 py-1 text-left",
+        isHome ? "border-slate-800/70" : "",
+        onClick && "pointer-events-auto cursor-pointer hover:ring-2 hover:ring-teal-400/50"
       )}
       style={!isHome ? { borderColor: teamColor } : undefined}
     >
       <span
         className={cn(
-          "relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-md",
-          "bg-slate-200 ring-1 ring-slate-300"
+          "relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md",
+          "bg-slate-200/90 ring-1 ring-slate-300/80"
         )}
       >
         {photo ? (
@@ -515,7 +515,7 @@ function CoachChip({
           <img
             src={photo}
             alt=""
-            className="h-full w-full object-cover object-top"
+            className="h-full w-full object-cover object-[center_15%]"
             loading="lazy"
             onError={(e) => {
               (e.target as HTMLImageElement).style.display = "none";
@@ -531,19 +531,19 @@ function CoachChip({
             photo ? "hidden" : "flex"
           )}
         >
-          <User className="h-6 w-6" strokeWidth={1.5} />
+          <User className="h-5 w-5" strokeWidth={1.5} />
         </span>
       </span>
       <div className="min-w-0 flex-1 pr-0.5">
         <div className="flex items-center gap-1">
-          <FlagImg nationality={coach.nationality} className="h-3.5 w-[1.15rem]" />
-          <div className="text-[10px] text-slate-500 leading-none truncate">
+          <FlagImg nationality={coach.nationality} className="h-3 w-[1.05rem]" />
+          <div className="truncate text-[9px] leading-none text-slate-500">
             {coach.age != null ? `${coach.age}y · Coach` : "Coach"}
           </div>
         </div>
         <div
           className={cn(
-            "text-[12px] font-bold leading-tight whitespace-nowrap truncate",
+            "truncate whitespace-nowrap text-[11px] font-bold leading-tight tracking-tight",
             isHome ? "text-slate-900" : ""
           )}
           style={!isHome ? { color: teamColor } : undefined}
@@ -1122,31 +1122,31 @@ export function PitchBoard({
         )}
         style={{
           background:
-            "repeating-linear-gradient(90deg, #1a7a3c 0 8%, #1f8a44 8% 16%)",
+            "linear-gradient(180deg, rgba(0,0,0,0.12), transparent 18%, transparent 82%, rgba(0,0,0,0.14)), linear-gradient(90deg, rgba(0,0,0,0.08), transparent 10%, transparent 90%, rgba(0,0,0,0.08)), repeating-linear-gradient(90deg, #176f38 0 7.5%, #1c8240 7.5% 15%)",
         }}
        onDragOver={(e) => { if (!locked && onFreePlace) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; } }} onDrop={handlePitchFreeDrop} title={onFreePlace ? "Drop on grass for free place · Alt+drop on slot also free-moves" : undefined}>
         {/* S / M legend — season vs match card stats */}
-        <div className="absolute bottom-1 left-1/2 z-20 -translate-x-1/2 pointer-events-none rounded bg-black/55 px-1.5 py-0.5 text-[8px] font-semibold tracking-wide text-white/90 whitespace-nowrap">
+        <div className="pointer-events-none absolute bottom-1.5 right-1.5 z-20 rounded bg-black/45 px-1.5 py-0.5 text-[7px] font-semibold tracking-wide text-white/80 whitespace-nowrap">
           S = season · M = this match
         </div>
 
         {/* Pitch markings — landscape goals left/right */}
-        <div className="absolute inset-2 sm:inset-3 border-2 border-white/70 rounded-sm pointer-events-none">
-          <div className="absolute top-0 bottom-0 left-1/2 w-0 border-l-2 border-white/70" />
-          <div className="absolute left-1/2 top-1/2 h-16 w-16 sm:h-24 sm:w-24 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/70" />
-          <div className="absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/80" />
-          <div className="absolute top-1/2 left-0 h-[55%] w-[14%] -translate-y-1/2 border-2 border-l-0 border-white/70" />
-          <div className="absolute top-1/2 right-0 h-[55%] w-[14%] -translate-y-1/2 border-2 border-r-0 border-white/70" />
-          <div className="absolute top-1/2 left-0 h-[28%] w-[6%] -translate-y-1/2 border-2 border-l-0 border-white/70" />
-          <div className="absolute top-1/2 right-0 h-[28%] w-[6%] -translate-y-1/2 border-2 border-r-0 border-white/70" />
+        <div className="pointer-events-none absolute inset-2 rounded-sm border-2 border-white/55 sm:inset-3">
+          <div className="absolute top-0 bottom-0 left-1/2 w-0 border-l-2 border-white/55" />
+          <div className="absolute left-1/2 top-1/2 h-16 w-16 sm:h-24 sm:w-24 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/55" />
+          <div className="absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/70" />
+          <div className="absolute top-1/2 left-0 h-[55%] w-[14%] -translate-y-1/2 border-2 border-l-0 border-white/55" />
+          <div className="absolute top-1/2 right-0 h-[55%] w-[14%] -translate-y-1/2 border-2 border-r-0 border-white/55" />
+          <div className="absolute top-1/2 left-0 h-[28%] w-[6%] -translate-y-1/2 border-2 border-l-0 border-white/55" />
+          <div className="absolute top-1/2 right-0 h-[28%] w-[6%] -translate-y-1/2 border-2 border-r-0 border-white/55" />
         </div>
 
         {/* Top chrome: formation | scoreboard | formation (respects Swap sides) */}
-        <div className="absolute top-1 left-1.5 right-1.5 z-20 flex items-start justify-between gap-1.5 pointer-events-none">
-          <div className="flex flex-col gap-1 items-start pointer-events-auto">
+        <div className="pointer-events-none absolute left-1.5 right-1.5 top-1.5 z-20 flex items-start justify-between gap-2">
+          <div className="pointer-events-auto flex flex-col items-start gap-1">
             <div
               className={cn(
-                "rounded shadow px-1.5 py-0.5 text-[10px] flex items-center gap-1 border",
+                "pitch-overlay-chip flex items-center gap-1 px-1.5 py-0.5 text-[10px]",
                 leftChrome.light
                   ? "bg-white/95 border-slate-300 text-slate-800"
                   : "text-white"
@@ -1188,7 +1188,7 @@ export function PitchBoard({
               if (!sw || sw.max <= 0) return null;
               return (
                 <div
-                  className="rounded bg-black/55 text-white px-1.5 py-0.5 text-[8px] font-semibold tracking-wide flex items-center gap-1"
+                  className="pitch-overlay-chip-dark flex items-center gap-1 px-1.5 py-0.5 text-[8px] font-semibold tracking-wide text-white"
                   title={
                     sw.windowsHeuristic
                       ? "Sub windows estimated from event minutes"
@@ -1224,7 +1224,7 @@ export function PitchBoard({
 
           <div className="flex flex-col items-center gap-0.5 pointer-events-none">
             {showScore && (
-              <div className="pointer-events-auto flex items-center gap-2 rounded-full bg-white/95 shadow-md border border-slate-200 px-2.5 py-1.5">
+              <div className="pitch-overlay-chip pointer-events-auto flex items-center gap-2 rounded-full px-2.5 py-1.5">
                 {leagueLogoUrl ? (
                   <button
                     type="button"
@@ -1304,7 +1304,7 @@ export function PitchBoard({
             )}
             <div className="flex items-center gap-1 pointer-events-auto">
               {statusShort && (
-                <span className="rounded bg-black/55 px-1.5 py-0.5 text-[10px] font-bold text-white tracking-wider tabular-nums">
+                <span className="pitch-overlay-chip-dark rounded px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-white tabular-nums">
                   {statusShort}
                 </span>
               )}
@@ -1312,7 +1312,7 @@ export function PitchBoard({
                 <button
                   type="button"
                   onClick={onToggleHomeOnLeft}
-                  className="inline-flex items-center gap-0.5 rounded bg-white/95 border border-slate-300 shadow px-1.5 py-0.5 text-[9px] font-semibold text-slate-800 hover:bg-white"
+                  className="pitch-overlay-chip inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] font-semibold text-slate-800 hover:bg-white"
                   title={
                     homeOnLeft
                       ? "Swap sides · home moves to right"
@@ -1340,7 +1340,7 @@ export function PitchBoard({
                 {badge}
               </div>
             )}
-            {lineupHintText && (
+            {!badge && lineupHintText && (
               <span
                 className="rounded bg-black/45 px-1.5 py-px text-[8px] text-white/90 max-w-[12rem] truncate"
                 title={lineupHintText}
@@ -1352,7 +1352,7 @@ export function PitchBoard({
               <div className="flex items-center gap-1">
                 {hasCustomPlacements && (
                   <span
-                    className="rounded bg-amber-500/95 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-white shadow"
+                    className="rounded-md bg-amber-500/90 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-white shadow-sm"
                     title="Manual pitch positions — survive Sync until Reset"
                   >
                     Custom positions
@@ -1361,7 +1361,7 @@ export function PitchBoard({
                 {hasCustomPlacements && onResetPlacements && (
                   <button
                     type="button"
-                    className="rounded bg-white/95 border border-amber-400 px-1.5 py-0.5 text-[8px] font-semibold text-amber-900 shadow hover:bg-amber-50"
+                    className="pitch-overlay-chip border-amber-400/80 px-1.5 py-0.5 text-[8px] font-semibold text-amber-900 hover:bg-amber-50"
                     disabled={formationBusy}
                     onClick={onResetPlacements}
                     title="Clear manual placements and restore official AF XI"
@@ -1372,7 +1372,7 @@ export function PitchBoard({
                 {onResetOfficial && (
                   <button
                     type="button"
-                    className="rounded bg-white/95 border border-slate-300 px-1.5 py-0.5 text-[8px] font-semibold text-slate-800 shadow hover:bg-white"
+                    className="pitch-overlay-chip px-1.5 py-0.5 text-[8px] font-semibold text-slate-800 hover:bg-white"
                     disabled={formationBusy}
                     onClick={onResetOfficial}
                   >
@@ -1383,12 +1383,12 @@ export function PitchBoard({
             )}
           </div>
 
-          <div className="flex flex-col gap-1 items-end pointer-events-auto">
+          <div className="pointer-events-auto flex flex-col items-end gap-1">
             {onOpenFieldSettings && (
               <button
                 type="button"
                 onClick={onOpenFieldSettings}
-                className="inline-flex items-center gap-1 rounded-md bg-white/95 border border-slate-300 shadow px-1.5 py-0.5 text-[10px] font-semibold text-slate-800 hover:bg-white"
+                className="pitch-overlay-chip inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-semibold text-slate-800 hover:bg-white"
                 title="Field Settings · Pitch Card"
                 aria-label="Field Settings"
               >
@@ -1398,7 +1398,7 @@ export function PitchBoard({
             )}
             <div
               className={cn(
-                "rounded shadow px-1.5 py-0.5 text-[10px] flex items-center gap-1 border",
+                "pitch-overlay-chip flex items-center gap-1 px-1.5 py-0.5 text-[10px]",
                 rightChrome.light
                   ? "bg-white/95 border-slate-300 text-slate-800"
                   : "text-white"
@@ -1440,7 +1440,7 @@ export function PitchBoard({
               if (!sw || sw.max <= 0) return null;
               return (
                 <div
-                  className="rounded bg-black/55 text-white px-1.5 py-0.5 text-[8px] font-semibold tracking-wide flex items-center gap-1"
+                  className="pitch-overlay-chip-dark flex items-center gap-1 px-1.5 py-0.5 text-[8px] font-semibold tracking-wide text-white"
                   title={
                     sw.windowsHeuristic
                       ? "Sub windows estimated from event minutes"
@@ -1503,7 +1503,7 @@ export function PitchBoard({
             <div
               key={key}
               className={cn(
-                "absolute z-10 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center",
+                "group/card absolute z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center",
                 !locked && onSlotDrop ? "drop-target" : ""
               )}
               data-pitch-card={player ? "1" : "0"}
@@ -1641,7 +1641,7 @@ export function PitchBoard({
                 <button
                   type="button"
                   aria-label={`Remove ${player.name} from XI`}
-                  className="absolute -right-1.5 -top-1 z-[3] flex h-4 w-4 items-center justify-center rounded-full bg-slate-900/85 text-white hover:bg-rose-600 shadow opacity-70 hover:opacity-100"
+                  className="absolute -right-1 -top-1 z-[3] flex h-3.5 w-3.5 items-center justify-center rounded-full bg-slate-900/80 text-white opacity-0 shadow transition-opacity hover:bg-rose-600 group-hover/card:opacity-90 focus-visible:opacity-100"
                   onClick={(e) => {
                     e.stopPropagation();
                     onClearSlot({
@@ -1659,20 +1659,12 @@ export function PitchBoard({
         })}
 
         {referee && (
-          <div className="absolute bottom-1.5 left-1/2 z-10 -translate-x-1/2 flex flex-col items-center pointer-events-none gap-0.5">
-            <div className="rounded-full bg-black/55 border border-white/25 px-2 py-0.5 text-[9px] font-semibold text-white shadow max-w-[14rem] truncate">
-              Ref · {referee}
-            </div>
-            <div className="flex flex-col items-center overflow-hidden rounded-md border border-sky-700 bg-white shadow w-[52px]">
-              <div className="w-full bg-sky-700 px-1 py-0.5 flex justify-center">
-                <FlagImg nationality={refereeNationality} className="h-2.5 w-3.5" />
-              </div>
-              <div className="flex h-7 w-full items-center justify-center bg-slate-100">
-                <User className="h-4 w-4 text-slate-400" strokeWidth={1.5} />
-              </div>
-              <div className="w-full truncate bg-sky-700 px-0.5 py-0.5 text-center text-[7px] font-bold text-white">
-                {lastNameOf(referee)}
-              </div>
+          <div className="pointer-events-none absolute bottom-1.5 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1.5">
+            <div className="pitch-overlay-chip-dark flex max-w-[16rem] items-center gap-1.5 rounded-full px-2 py-1">
+              <FlagImg nationality={refereeNationality} className="h-3 w-[1.05rem]" />
+              <span className="truncate text-[9px] font-semibold tracking-wide text-white">
+                Ref · {referee}
+              </span>
             </div>
           </div>
         )}

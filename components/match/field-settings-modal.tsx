@@ -98,7 +98,7 @@ function PreviewCard({
               SAMPLE
             </span>
           </div>
-          <div className="bg-[#FFF8E7] px-0.5 py-0.5 border-t border-black/10">
+          <div className="bg-[#F4EFE3] px-0.5 py-0.5 border-t border-black/10">
             <div
               className="grid gap-px"
               style={{

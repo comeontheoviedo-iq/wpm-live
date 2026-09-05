@@ -26,9 +26,24 @@ export async function POST(
     });
     return NextResponse.json(result);
   } catch (e) {
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : "Sync failed" },
-      { status: 400 }
-    );
+    const raw = e instanceof Error ? e.message : String(e || "Sync failed");
+    console.error("[POST /api/matches/:id/sync]", raw);
+    // Never leak Prisma / Turbopack dumps to the desk poll chip.
+    let error = "Sync failed";
+    if (/Unknown argument [`']?minuteExtra[`']?/i.test(raw)) {
+      error = "Schema drift — run prisma db push && generate, then restart";
+    } else if (/Unauthorized|session/i.test(raw)) {
+      error = "Unauthorized";
+    } else if (/not linked|fixture/i.test(raw) && raw.length < 120) {
+      error = raw;
+    } else if (
+      !/TURBOPACK|__TURBOPACK__|prisma\.|Invalid `prisma|at\s+\S+\s+\(/i.test(
+        raw
+      ) &&
+      raw.length <= 120
+    ) {
+      error = raw;
+    }
+    return NextResponse.json({ error }, { status: 400 });
   }
 }

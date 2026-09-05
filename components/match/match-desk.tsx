@@ -395,6 +395,17 @@ export function MatchDesk({
   /** Presentation mode: collapse notes/squad chrome → slim Relevant+last-event strip */
   const [onAirMode, setOnAirMode] = useState(false);
   const [hotkeyHelpOpen, setHotkeyHelpOpen] = useState(false);
+  const sanitizePollError = (raw: unknown): string => {
+    const s = typeof raw === "string" ? raw : String(raw || "Sync failed");
+    if (/Unknown argument [`']?minuteExtra[`']?/i.test(s)) {
+      return "Schema drift — restart after prisma generate";
+    }
+    if (/TURBOPACK|__TURBOPACK__|Invalid `prisma|prisma\.|at\s+\S+\s+\(/i.test(s) || s.length > 120) {
+      return "Sync failed";
+    }
+    return s;
+  };
+
   const [pollError, setPollError] = useState<string | null>(null);
   const lastGoalPopupRef = useRef<{
     kind: "goal" | "sub" | "fact";
@@ -862,7 +873,7 @@ export function MatchDesk({
         });
         const json = await res.json();
         if (!res.ok) {
-          const err = json.error || "Sync failed";
+          const err = sanitizePollError(json.error || "Sync failed");
           setMsg(err);
           setPollError(err);
         } else {

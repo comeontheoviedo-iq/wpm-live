@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { savePredictedLineup, snapshotPredictedSide } from "@/lib/sync-fixture";
+import { upsertPitchPlacement } from "@/lib/pitch-placement";
 
 /** Manual override / DnD predicted XI slot assignment. */
 export async function PATCH(
@@ -35,7 +36,7 @@ export async function PATCH(
   }
 
   // Place / clear a single player on a slot (DnD drop)
-  if (body.action === "place" || body.action === "clear") {
+  if (body.action === "place" || body.action === "clear" || body.action === "freePlace") {
     const match = await prisma.match.findUnique({ where: { id } });
     if (!match) return NextResponse.json({ error: "Not found" }, { status: 404 });
     // Official boards stay editable for commentary; Sync restores AF XI.
@@ -60,6 +61,30 @@ export async function PATCH(
       await prisma.player.update({
         where: { id: playerId },
         data: { isStarter: false, onPitch: false, formationSlot: null },
+      });
+      await upsertPitchPlacement({
+        matchId: id,
+        playerId,
+        clearPlacement: true,
+      });
+    } else if (body.action === "freePlace") {
+      const pitchX = body.pitchX;
+      const pitchY = body.pitchY;
+      const slot = body.formationSlot ? String(body.formationSlot) : player.formationSlot;
+      await prisma.player.update({
+        where: { id: playerId },
+        data: {
+          isStarter: true,
+          onPitch: true,
+          ...(slot ? { formationSlot: slot } : {}),
+        },
+      });
+      await upsertPitchPlacement({
+        matchId: id,
+        playerId,
+        formationSlot: slot || null,
+        pitchX: pitchX ?? null,
+        pitchY: pitchY ?? null,
       });
     } else {
       const slot = String(body.formationSlot || "");
@@ -87,6 +112,29 @@ export async function PATCH(
         where: { id: playerId },
         data: { isStarter: true, onPitch: true, formationSlot: slot },
       });
+      // Persist match-scoped slot so AF sync cannot wipe commentary DnD
+      await upsertPitchPlacement({
+        matchId: id,
+        playerId,
+        formationSlot: slot,
+        pitchX: null,
+        pitchY: null,
+      });
+      if (occupant && prevSlot) {
+        await upsertPitchPlacement({
+          matchId: id,
+          playerId: occupant.id,
+          formationSlot: prevSlot,
+          pitchX: null,
+          pitchY: null,
+        });
+      } else if (occupant && !prevSlot) {
+        await upsertPitchPlacement({
+          matchId: id,
+          playerId: occupant.id,
+          clearPlacement: true,
+        });
+      }
     }
 
     const json = await snapshotPredictedSide(

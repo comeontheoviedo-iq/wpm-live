@@ -15,6 +15,7 @@ export type AfFixture = {
   fixture: {
     id: number;
     date: string;
+    referee?: string | null;
     status: { short: string; long: string; elapsed: number | null };
     venue?: { id: number | null; name: string | null; city: string | null };
   };
@@ -88,6 +89,81 @@ export class ApiFootballError extends Error {
 export function isApiFootballConfigured() {
   return Boolean(getApiFootballKey());
 }
+
+
+/** True when fixture home/away AF team ids equal the expected pair (order-sensitive). */
+export function fixtureTeamsMatch(
+  fixture: AfFixture,
+  homeAfId: number,
+  awayAfId: number
+): boolean {
+  return (
+    fixture.teams?.home?.id === homeAfId &&
+    fixture.teams?.away?.id === awayAfId
+  );
+}
+
+export type FixtureCompatibility = {
+  ok: boolean;
+  reason?: string;
+};
+
+/**
+ * Guardrail: refuse linking/syncing a fixture that is not the desk's match.
+ * When both club AF ids are known, both must appear on the fixture in the same
+ * home/away order. When a league id is known, fixture.league.id must match
+ * (blocks Super Liga Slovakia vs Süper Lig Turkey name collisions).
+ */
+export function assertFixtureCompatible(opts: {
+  fixture: AfFixture;
+  homeAfId?: number | null;
+  awayAfId?: number | null;
+  leagueId?: number | null;
+}): FixtureCompatibility {
+  const { fixture, homeAfId, awayAfId, leagueId } = opts;
+  if (leagueId != null && fixture.league?.id !== leagueId) {
+    return {
+      ok: false,
+      reason:
+        `Fixture #${fixture.fixture.id} is ${fixture.league?.name || "?"} ` +
+        `(${fixture.league?.country || "?"}, league ${fixture.league?.id}) — ` +
+        `expected league id ${leagueId}.`,
+    };
+  }
+  if (homeAfId != null && awayAfId != null) {
+    if (!fixtureTeamsMatch(fixture, homeAfId, awayAfId)) {
+      return {
+        ok: false,
+        reason:
+          `Fixture #${fixture.fixture.id} is ${fixture.teams.home.name} vs ` +
+          `${fixture.teams.away.name} (AF ${fixture.teams.home.id}/${fixture.teams.away.id}) — ` +
+          `desk expects AF ${homeAfId} vs ${awayAfId}.`,
+      };
+    }
+  } else if (homeAfId != null) {
+    if (
+      fixture.teams.home.id !== homeAfId &&
+      fixture.teams.away.id !== homeAfId
+    ) {
+      return {
+        ok: false,
+        reason: `Fixture #${fixture.fixture.id} does not include home team AF ${homeAfId}.`,
+      };
+    }
+  } else if (awayAfId != null) {
+    if (
+      fixture.teams.home.id !== awayAfId &&
+      fixture.teams.away.id !== awayAfId
+    ) {
+      return {
+        ok: false,
+        reason: `Fixture #${fixture.fixture.id} does not include away team AF ${awayAfId}.`,
+      };
+    }
+  }
+  return { ok: true };
+}
+
 
 function formatApiErrors(errors: unknown): string {
   if (!errors) return "Unknown API-Football error";
@@ -260,11 +336,25 @@ export async function searchFixturesSmart(opts: {
   league?: number;
   season?: number;
   team?: number;
+  /** When both set, keep only fixtures with this exact home/away pair. */
+  homeTeam?: number;
+  awayTeam?: number;
   id?: number;
 }): Promise<SmartFixturesResult> {
+  const applyTeamPair = (list: AfFixture[]) => {
+    if (opts.homeTeam == null || opts.awayTeam == null) return list;
+    return list.filter((fx) =>
+      fixtureTeamsMatch(fx, opts.homeTeam!, opts.awayTeam!)
+    );
+  };
+  const applyLeague = (list: AfFixture[]) => {
+    if (opts.league == null) return list;
+    return list.filter((fx) => fx.league?.id === opts.league);
+  };
+
   // id / team lookups — pass through
   if (opts.id || (opts.team && !opts.date && !opts.league)) {
-    const fixtures = await searchFixtures(opts);
+    const fixtures = applyTeamPair(applyLeague(await searchFixtures(opts)));
     return { fixtures, strategy: "passthrough" };
   }
 
@@ -275,18 +365,21 @@ export async function searchFixturesSmart(opts: {
       team: opts.team,
     });
 
+    const leagueFiltered = applyLeague(all);
+    const filtered = applyTeamPair(leagueFiltered);
     if (!opts.league) {
-      return { fixtures: all, strategy: "date_only" };
+      return { fixtures: filtered, strategy: "date_only" };
     }
 
-    const filtered = all.filter((fx) => fx.league?.id === opts.league);
     if (filtered.length > 0) {
       return {
         fixtures: filtered,
         strategy: "date_filter_league",
         message:
           all.length !== filtered.length
-            ? `Showing ${filtered.length} of ${all.length} fixtures for selected league (date-only search, Free-plan safe).`
+            ? `Showing ${filtered.length} of ${all.length} fixtures for selected league` +
+              (opts.homeTeam && opts.awayTeam ? " + both teams" : "") +
+              ` (date-only search, Free-plan safe).`
             : undefined,
       };
     }
@@ -309,8 +402,9 @@ export async function searchFixturesSmart(opts: {
           season,
           team: opts.team,
         });
-        if (fixtures.length > 0) {
-          return { fixtures, seasonUsed: season, triedSeasons: tried, strategy: "league_season" };
+        const paired = applyTeamPair(fixtures);
+        if (paired.length > 0) {
+          return { fixtures: paired, seasonUsed: season, triedSeasons: tried, strategy: "league_season" };
         }
       } catch (e) {
         if (e instanceof ApiFootballError) {
@@ -370,8 +464,9 @@ export async function searchFixturesSmart(opts: {
           season,
           team: opts.team,
         });
-        if (fixtures.length > 0) {
-          return { fixtures, seasonUsed: season, triedSeasons: tried, strategy: "league_season" };
+        const paired = applyTeamPair(fixtures);
+        if (paired.length > 0) {
+          return { fixtures: paired, seasonUsed: season, triedSeasons: tried, strategy: "league_season" };
         }
       } catch (e) {
         if (e instanceof ApiFootballError) {

@@ -76,6 +76,9 @@ export type PitchPlayer = {
   /** primary | secondary | both | specific nationality label */
   pitchFlag?: string | null;
   jerseyNumber?: number | null;
+  /** Free-move landscape % (0–100) — overrides slot geometry when set */
+  pitchX?: number | null;
+  pitchY?: number | null;
 };
 
 type Coach = { name: string; nationality: string; age: number | null };
@@ -460,28 +463,35 @@ function CoachChip({
   coach,
   side,
   teamColor,
+  onClick,
 }: {
   coach: Coach;
   side: "home" | "away";
   teamColor: string;
+  onClick?: () => void;
 }) {
   const isHome = side === "home";
+  const Comp = onClick ? "button" : "div";
   return (
-    <div
+    <Comp
+      type={onClick ? "button" : undefined}
+      onClick={onClick}
+      title={onClick ? `Open ${coach.name} profile` : undefined}
       className={cn(
-        "pointer-events-none flex items-center gap-1 rounded-md border bg-white/95 shadow px-1 py-0.5 max-w-[9rem]",
-        isHome ? "border-slate-800" : ""
+        "flex items-center gap-1 rounded-md border bg-white/95 shadow px-1 py-0.5 max-w-[11rem] text-left",
+        isHome ? "border-slate-800" : "",
+        onClick && "pointer-events-auto cursor-pointer hover:ring-2 hover:ring-teal-400/60"
       )}
       style={!isHome ? { borderColor: teamColor } : undefined}
     >
       <FlagImg nationality={coach.nationality} className="h-3 w-4" />
       <div className="min-w-0">
         <div className="text-[8px] text-slate-500 leading-none">
-          {coach.age != null ? `${coach.age}y` : "Coach"}
+          {coach.age != null ? `${coach.age}y · Coach` : "Coach"}
         </div>
         <div
           className={cn(
-            "truncate text-[9px] font-bold leading-tight",
+            "text-[9px] font-bold leading-tight whitespace-nowrap",
             isHome ? "text-slate-900" : ""
           )}
           style={!isHome ? { color: teamColor } : undefined}
@@ -489,7 +499,7 @@ function CoachChip({
           {coach.name}
         </div>
       </div>
-    </div>
+    </Comp>
   );
 }
 
@@ -536,6 +546,10 @@ export function PitchBoard({
   homeOnLeft = true,
   onToggleHomeOnLeft,
   liveCompact,
+  onFreePlace,
+  onCoachClick,
+  hasCustomPlacements,
+  onResetPlacements,
 }: {
   homeName: string;
   awayName: string;
@@ -589,6 +603,16 @@ export function PitchBoard({
   onToggleHomeOnLeft?: () => void;
   /** LIVE: prefer smaller cards / less chrome. */
   liveCompact?: boolean;
+  /** Drop anywhere on pitch (free-move, not slot snap). */
+  onFreePlace?: (args: {
+    side: "home" | "away";
+    playerId: string;
+    pitchX: number;
+    pitchY: number;
+  }) => void;
+  onCoachClick?: (side: "home" | "away") => void;
+  hasCustomPlacements?: boolean;
+  onResetPlacements?: () => void;
 }) {
   const homeSlots = slotsFor(homeFormation);
   const awaySlots = slotsFor(awayFormation);
@@ -667,6 +691,9 @@ export function PitchBoard({
         x = 98 - depth * 46;
         y = 100 - width;
       }
+      // Manual free-move overrides formation geometry
+      if (p && p.pitchX != null && Number.isFinite(p.pitchX)) x = p.pitchX;
+      if (p && p.pitchY != null && Number.isFinite(p.pitchY)) y = p.pitchY;
       return { slot, player: p as PitchPlayer | undefined, x, y, side };
     });
 
@@ -683,6 +710,23 @@ export function PitchBoard({
       if (oi >= orphans.length) break;
       row.player = orphans[oi++];
       assigned.add(row.player.id);
+      if (row.player.pitchX != null && Number.isFinite(row.player.pitchX))
+        row.x = row.player.pitchX;
+      if (row.player.pitchY != null && Number.isFinite(row.player.pitchY))
+        row.y = row.player.pitchY;
+    }
+    // Free-placed players still not assigned (custom coords only)
+    for (const pl of orphans.slice(oi)) {
+      if (pl.pitchX == null || pl.pitchY == null) continue;
+      if (assigned.has(pl.id)) continue;
+      placed.push({
+        slot: { id: `free-${pl.id}`, label: "·", x: 50, y: 50 },
+        player: pl,
+        x: pl.pitchX,
+        y: pl.pitchY,
+        side,
+      });
+      assigned.add(pl.id);
     }
     return placed;
   }
@@ -889,7 +933,59 @@ export function PitchBoard({
       payload.playerId || e.dataTransfer.getData("text/plain");
     if (!playerId) return;
     if (payload.side && payload.side !== side) return;
+    // Alt/Option = free-move at drop point instead of slot snap
+    if (e.altKey && onFreePlace && pitchRef.current) {
+      const rect = pitchRef.current.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        const pitchX = Math.max(
+          0,
+          Math.min(100, ((e.clientX - rect.left) / rect.width) * 100)
+        );
+        const pitchY = Math.max(
+          0,
+          Math.min(100, ((e.clientY - rect.top) / rect.height) * 100)
+        );
+        onFreePlace({
+          side: (payload.side as "home" | "away") || side,
+          playerId,
+          pitchX,
+          pitchY,
+        });
+        return;
+      }
+    }
     onSlotDrop({ side, slotId, playerId });
+  }
+
+  function handlePitchFreeDrop(e: DragEvent) {
+    if (locked || !onFreePlace || !pitchRef.current) return;
+    // Only when dropping on the pitch itself (not a slot — those stopPropagation)
+    e.preventDefault();
+    setDragOverSlot(null);
+    let payload: { playerId?: string; side?: string } = {};
+    try {
+      payload = JSON.parse(
+        e.dataTransfer.getData("application/pitchline-player") || "{}"
+      );
+    } catch {
+      payload = {};
+    }
+    const playerId =
+      payload.playerId || e.dataTransfer.getData("text/plain");
+    if (!playerId) return;
+    const side = (payload.side as "home" | "away") || null;
+    if (!side) return;
+    const rect = pitchRef.current.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const pitchX = Math.max(
+      0,
+      Math.min(100, ((e.clientX - rect.left) / rect.width) * 100)
+    );
+    const pitchY = Math.max(
+      0,
+      Math.min(100, ((e.clientY - rect.top) / rect.height) * 100)
+    );
+    onFreePlace({ side, playerId, pitchX, pitchY });
   }
 
   const homeCode = (homeAbbr || homeName).slice(0, 3).toUpperCase();
@@ -948,7 +1044,7 @@ export function PitchBoard({
           background:
             "repeating-linear-gradient(90deg, #1a7a3c 0 8%, #1f8a44 8% 16%)",
         }}
-      >
+       onDragOver={(e) => { if (!locked && onFreePlace) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; } }} onDrop={handlePitchFreeDrop} title={onFreePlace ? "Drop on grass for free place · Alt+drop on slot also free-moves" : undefined}>
         {/* Pitch markings — landscape goals left/right */}
         <div className="absolute inset-2 sm:inset-3 border-2 border-white/70 rounded-sm pointer-events-none">
           <div className="absolute top-0 bottom-0 left-1/2 w-0 border-l-2 border-white/70" />
@@ -1007,6 +1103,11 @@ export function PitchBoard({
                 coach={leftChrome.coach}
                 side={leftChrome.side}
                 teamColor={leftChrome.color}
+                onClick={
+                  onCoachClick
+                    ? () => onCoachClick(leftChrome.side)
+                    : undefined
+                }
               />
             )}
           </div>
@@ -1071,15 +1172,38 @@ export function PitchBoard({
                 {lineupHintText}
               </span>
             )}
-            {onResetOfficial && (
-              <button
-                type="button"
-                className="pointer-events-auto text-[8px] font-semibold text-emerald-200 hover:text-white underline"
-                disabled={formationBusy}
-                onClick={onResetOfficial}
-              >
-                Reset official
-              </button>
+            {(hasCustomPlacements || onResetOfficial) && (
+              <div className="flex items-center gap-1">
+                {hasCustomPlacements && (
+                  <span
+                    className="rounded bg-amber-500/95 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-white shadow"
+                    title="Manual pitch positions — survive Sync until Reset"
+                  >
+                    Custom positions
+                  </span>
+                )}
+                {hasCustomPlacements && onResetPlacements && (
+                  <button
+                    type="button"
+                    className="rounded bg-white/95 border border-amber-400 px-1.5 py-0.5 text-[8px] font-semibold text-amber-900 shadow hover:bg-amber-50"
+                    disabled={formationBusy}
+                    onClick={onResetPlacements}
+                    title="Clear manual placements and restore official AF XI"
+                  >
+                    Reset placements
+                  </button>
+                )}
+                {onResetOfficial && (
+                  <button
+                    type="button"
+                    className="rounded bg-white/95 border border-slate-300 px-1.5 py-0.5 text-[8px] font-semibold text-slate-800 shadow hover:bg-white"
+                    disabled={formationBusy}
+                    onClick={onResetOfficial}
+                  >
+                    Reset official
+                  </button>
+                )}
+              </div>
             )}
           </div>
 
@@ -1140,6 +1264,11 @@ export function PitchBoard({
                 coach={rightChrome.coach}
                 side={rightChrome.side}
                 teamColor={rightChrome.color}
+                onClick={
+                  onCoachClick
+                    ? () => onCoachClick(rightChrome.side)
+                    : undefined
+                }
               />
             )}
           </div>
@@ -1329,7 +1458,10 @@ export function PitchBoard({
         })}
 
         {referee && (
-          <div className="absolute bottom-1.5 left-1/2 z-10 -translate-x-1/2 flex flex-col items-center pointer-events-none">
+          <div className="absolute bottom-1.5 left-1/2 z-10 -translate-x-1/2 flex flex-col items-center pointer-events-none gap-0.5">
+            <div className="rounded-full bg-black/55 border border-white/25 px-2 py-0.5 text-[9px] font-semibold text-white shadow max-w-[14rem] truncate">
+              Ref · {referee}
+            </div>
             <div className="flex flex-col items-center overflow-hidden rounded-md border border-sky-700 bg-white shadow w-[52px]">
               <div className="w-full bg-sky-700 px-1 py-0.5 flex justify-center">
                 <FlagImg nationality={refereeNationality} className="h-2.5 w-3.5" />

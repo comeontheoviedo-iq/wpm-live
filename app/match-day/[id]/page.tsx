@@ -128,6 +128,9 @@ export default async function MatchOverviewPage({
         pronunciation: o.pronunciation,
         pitchFlag: o.pitchFlag,
         jerseyNumber: o.jerseyNumber,
+        formationSlot: o.formationSlot,
+        pitchX: o.pitchX,
+        pitchY: o.pitchY,
       }))}
     />
   );

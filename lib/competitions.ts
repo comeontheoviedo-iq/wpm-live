@@ -118,3 +118,10 @@ export function broadcastLabelFor(competitionName: string): string {
   );
   return found?.broadcastName || competitionName;
 }
+
+/** AF league id for a priority competition name, or null if unknown / free-text. */
+export function leagueIdForCompetition(competitionName: string): number | null {
+  const found = findCompetition(competitionName);
+  return found?.apiFootballLeagueId ?? null;
+}
+

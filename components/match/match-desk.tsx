@@ -41,9 +41,18 @@ import {
   saveFieldSettings,
   effectiveMarkerPct,
 } from "@/lib/field-settings";
-import type { PlayerOverrideRow } from "@/lib/player-overrides";
+import {
+  hasManualPlacement,
+  type PlayerOverrideRow,
+} from "@/lib/player-overrides";
 
-type Coach = { name: string; nationality: string; age: number | null };
+type Coach = {
+  id?: string;
+  name: string;
+  nationality: string;
+  age: number | null;
+  role?: string | null;
+};
 
 type Predictions = {
   advice?: string | null;
@@ -315,6 +324,13 @@ export function MatchDesk({
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
+  const [liveToast, setLiveToast] = useState<{
+    kind: "goal" | "sub" | "fact";
+    title: string;
+    body: string;
+  } | null>(null);
+  const [coachSide, setCoachSide] = useState<"home" | "away" | null>(null);
+  const seenEventKeysRef = useRef<Set<string>>(new Set());
   const [configured, setConfigured] = useState<boolean | null>(null);
   const locked = false;
   const [homeForm, setHomeForm] = useState(homeFormation);
@@ -512,11 +528,15 @@ export function MatchDesk({
         const o = overrideById.get(p.id);
         return {
           ...p,
+          // Slot override wins for display until Reset official
+          formationSlot: o?.formationSlot || p.formationSlot,
           noteHook: noteHookByPlayer.get(p.id) || null,
           displayName: o?.displayName ?? null,
           pronunciation: o?.pronunciation ?? null,
           pitchFlag: o?.pitchFlag ?? null,
           jerseyNumber: o?.jerseyNumber ?? null,
+          pitchX: o?.pitchX ?? null,
+          pitchY: o?.pitchY ?? null,
         };
       }),
     [homePlayers, events, noteHookByPlayer, overrideById]
@@ -527,11 +547,14 @@ export function MatchDesk({
         const o = overrideById.get(p.id);
         return {
           ...p,
+          formationSlot: o?.formationSlot || p.formationSlot,
           noteHook: noteHookByPlayer.get(p.id) || null,
           displayName: o?.displayName ?? null,
           pronunciation: o?.pronunciation ?? null,
           pitchFlag: o?.pitchFlag ?? null,
           jerseyNumber: o?.jerseyNumber ?? null,
+          pitchX: o?.pitchX ?? null,
+          pitchY: o?.pitchY ?? null,
         };
       }),
     [awayPlayers, events, noteHookByPlayer, overrideById]
@@ -555,6 +578,9 @@ export function MatchDesk({
       })),
     ];
   }, [homeEnriched, awayEnriched, homeName, awayName, notes]);
+
+  const squadRef = useRef(squad);
+  squadRef.current = squad;
 
   useEffect(() => {
     if (!placing) return;
@@ -677,6 +703,72 @@ export function MatchDesk({
             if (actionable.length) {
               void loadSuggestions(actionable);
             }
+            // Rich goal / sub-on popups (factual AF event text + season bits)
+            for (const e of news) {
+              const key = `${e.minute}|${e.type}|${e.description}`;
+              if (seenEventKeysRef.current.has(key)) continue;
+              seenEventKeysRef.current.add(key);
+              if (/goal|penalty_goal|own_goal/i.test(e.type || "")) {
+                const scorer =
+                  squadRef.current.find((p) =>
+                    (e.description || "")
+                      .toLowerCase()
+                      .includes((p.name || "").toLowerCase().split(" ").pop() || "___")
+                  ) || null;
+                const seasonBits = scorer
+                  ? [
+                      scorer.goals != null ? `${scorer.goals} season goals` : null,
+                      scorer.appearances != null
+                        ? `${scorer.appearances} apps`
+                        : null,
+                      scorer.assists != null ? `${scorer.assists} assists` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")
+                  : "";
+                setLiveToast({
+                  kind: "goal",
+                  title: `GOAL ${e.minute}'`,
+                  body:
+                    `${e.description}` +
+                    (seasonBits ? ` · ${seasonBits}` : ""),
+                });
+                setTimeout(() => setLiveToast(null), 12_000);
+              } else if (/^sub$/i.test(e.type || "")) {
+                const inName = (e.description || "").match(/\(([^)]+)\)\s*$/)?.[1];
+                const onP =
+                  squadRef.current.find((p) =>
+                    inName
+                      ? (p.name || "")
+                          .toLowerCase()
+                          .includes(inName.toLowerCase().split(" ").pop() || "___")
+                      : false
+                  ) || null;
+                const seasonBits = onP
+                  ? [
+                      onP.appearances != null ? `${onP.appearances} apps` : null,
+                      onP.goals != null ? `${onP.goals} goals` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")
+                  : "";
+                setLiveToast({
+                  kind: "sub",
+                  title: `SUB ${e.minute}'`,
+                  body:
+                    `${e.description}` +
+                    (seasonBits ? ` · ${seasonBits}` : ""),
+                });
+                setTimeout(() => setLiveToast(null), 10_000);
+              } else if (/var|penalty_miss|red/i.test(e.type || "")) {
+                setLiveToast({
+                  kind: "fact",
+                  title: `${(e.type || "Event").replace("_", " ").toUpperCase()} ${e.minute}'`,
+                  body: e.description,
+                });
+                setTimeout(() => setLiveToast(null), 10_000);
+              }
+            }
           }
           if (!silent) {
             setMsg(
@@ -796,6 +888,82 @@ export function MatchDesk({
     if (placing?.id === args.playerId) setPlacing(null);
   }
 
+  async function onFreePlace(args: {
+    side: "home" | "away";
+    playerId: string;
+    pitchX: number;
+    pitchY: number;
+  }) {
+    const player = squad.find((p) => p.id === args.playerId);
+    if (!player) return;
+    if (player.side !== args.side) {
+      setMsg("Players can only be placed on their own team half.");
+      return;
+    }
+    await lineupAction({
+      action: "freePlace",
+      playerId: args.playerId,
+      formationSlot: player.formationSlot,
+      pitchX: args.pitchX,
+      pitchY: args.pitchY,
+    });
+    // Optimistic local override so coords stick before refresh
+    setOverrides((prev) => {
+      const others = prev.filter((o) => o.playerId !== args.playerId);
+      const existing = prev.find((o) => o.playerId === args.playerId);
+      return [
+        ...others,
+        {
+          playerId: args.playerId,
+          displayName: existing?.displayName ?? null,
+          pronunciation: existing?.pronunciation ?? null,
+          pitchFlag: existing?.pitchFlag ?? null,
+          jerseyNumber: existing?.jerseyNumber ?? null,
+          formationSlot: player.formationSlot,
+          pitchX: args.pitchX,
+          pitchY: args.pitchY,
+        },
+      ];
+    });
+    setPlacing(null);
+  }
+
+  async function resetPlacements() {
+    setBusy(true);
+    try {
+      await fetch(`/api/matches/${matchId}/overrides`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clearPlacements: true }),
+      });
+      setOverrides((prev) =>
+        prev
+          .map((o) => ({
+            ...o,
+            formationSlot: null,
+            pitchX: null,
+            pitchY: null,
+          }))
+          .filter(
+            (o) =>
+              o.displayName ||
+              o.pronunciation ||
+              o.pitchFlag ||
+              o.jerseyNumber != null
+          )
+      );
+      // Re-sync official XI without wiping again
+      await sync(false);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const hasCustomPlacements = useMemo(
+    () => overrides.some((o) => hasManualPlacement(o)),
+    [overrides]
+  );
+
   function onSquadClick(p: SquadPlayer) {
     setPlacing(p);
     setSelected(null);
@@ -847,6 +1015,9 @@ export function MatchDesk({
   );
   const shots = statistics.find((s) =>
     /^shots$/i.test(s.label) || /total shots/i.test(s.label)
+  );
+  const shotsOnTarget = statistics.find((s) =>
+    /shots on (goal|target)/i.test(s.label)
   );
   const corners = statistics.find((s) => /corner/i.test(s.label));
   const fouls = statistics.find((s) => /^fouls$/i.test(s.label) || /fouls committed/i.test(s.label));
@@ -940,6 +1111,11 @@ export function MatchDesk({
             {shots && (
               <span className="tabular-nums">
                 Shots {shots.homeValue}–{shots.awayValue}
+              </span>
+            )}
+            {shotsOnTarget && (
+              <span className="tabular-nums">
+                On target {shotsOnTarget.homeValue}–{shotsOnTarget.awayValue}
               </span>
             )}
             {corners && (
@@ -1117,6 +1293,40 @@ export function MatchDesk({
         </div>
       )}
 
+      {/* Live intel popup — goal / sub / fact; tap to dismiss */}
+      {liveToast && (
+        <button
+          type="button"
+          onClick={() => setLiveToast(null)}
+          className={cn(
+            "absolute left-1/2 top-14 z-[60] -translate-x-1/2 max-w-[min(92%,28rem)] rounded-xl border px-4 py-3 text-left shadow-2xl",
+            liveToast.kind === "goal" &&
+              "border-emerald-400 bg-emerald-50/98 dark:bg-emerald-950/98 dark:border-emerald-700",
+            liveToast.kind === "sub" &&
+              "border-sky-400 bg-sky-50/98 dark:bg-sky-950/98 dark:border-sky-700",
+            liveToast.kind === "fact" &&
+              "border-amber-400 bg-amber-50/98 dark:bg-amber-950/98 dark:border-amber-700"
+          )}
+        >
+          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+            {liveToast.kind === "goal"
+              ? "Goal"
+              : liveToast.kind === "sub"
+                ? "Substitution"
+                : "Live"}
+            <span className="ml-2 font-normal normal-case tracking-normal text-slate-400">
+              tap to dismiss
+            </span>
+          </div>
+          <div className="mt-0.5 text-sm font-bold text-slate-900 dark:text-white">
+            {liveToast.title}
+          </div>
+          <div className="mt-1 text-xs text-slate-700 dark:text-slate-200 whitespace-pre-wrap">
+            {liveToast.body}
+          </div>
+        </button>
+      )}
+
       {/* Placing toast */}
       {placing && (
         <div className="pointer-events-none absolute left-1/2 top-12 z-40 -translate-x-1/2 flex flex-wrap items-center gap-2 rounded-lg border border-sky-300 bg-sky-50/95 dark:bg-sky-950/95 dark:border-sky-800 px-3 py-1.5 text-xs shadow-lg [&>button]:pointer-events-auto">
@@ -1216,9 +1426,45 @@ export function MatchDesk({
               }
               onResetOfficial={
                 lineupStatus === "confirmed" && apiFootballFixtureId
-                  ? () => sync(false)
+                  ? () => {
+                      void (async () => {
+                        setBusy(true);
+                        try {
+                          await fetch(`/api/matches/${matchId}/sync`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ resetPlacements: true }),
+                          });
+                          setOverrides((prev) =>
+                            prev
+                              .map((o) => ({
+                                ...o,
+                                formationSlot: null,
+                                pitchX: null,
+                                pitchY: null,
+                              }))
+                              .filter(
+                                (o) =>
+                                  o.displayName ||
+                                  o.pronunciation ||
+                                  o.pitchFlag ||
+                                  o.jerseyNumber != null
+                              )
+                          );
+                          router.refresh();
+                        } finally {
+                          setBusy(false);
+                        }
+                      })();
+                    }
                   : undefined
               }
+              onFreePlace={onFreePlace}
+              hasCustomPlacements={hasCustomPlacements}
+              onResetPlacements={
+                hasCustomPlacements ? () => void resetPlacements() : undefined
+              }
+              onCoachClick={(side) => setCoachSide(side)}
               homeScore={homeScore}
               awayScore={awayScore}
               matchStatus={status}
@@ -1356,7 +1602,87 @@ export function MatchDesk({
         )}
       </div>
 
-      {dossierId && (
+      
+      {coachSide && (
+        <div className="fixed inset-y-0 right-0 z-50 w-full max-w-md shadow-2xl border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 flex flex-col">
+          <div className="shrink-0 flex items-start justify-between gap-3 border-b border-slate-200 dark:border-slate-800 px-4 py-3">
+            <div className="min-w-0">
+              <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                Coach profile
+              </div>
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+                {(coachSide === "home" ? homeCoach : awayCoach)?.name || "Coach"}
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {(coachSide === "home" ? homeFullName : awayFullName) ||
+                  (coachSide === "home" ? homeName : awayName)}
+                {(coachSide === "home" ? homeCoach : awayCoach)?.role
+                  ? ` · ${(coachSide === "home" ? homeCoach : awayCoach)?.role}`
+                  : " · Head Coach"}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="rounded-md border border-slate-200 dark:border-slate-700 px-2 py-1 text-xs"
+              onClick={() => setCoachSide(null)}
+            >
+              Close
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-4">
+            {(() => {
+              const c = coachSide === "home" ? homeCoach : awayCoach;
+              if (!c) {
+                return (
+                  <p className="text-sm text-slate-500">
+                    No coach on file for this side.
+                  </p>
+                );
+              }
+              return (
+                <>
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="h-14 w-14 rounded-md flex items-center justify-center text-white text-lg font-bold"
+                      style={{
+                        backgroundColor:
+                          coachSide === "home" ? homeColor : awayColor,
+                      }}
+                    >
+                      {(c.name || "?").split(" ").map((w) => w[0]).slice(0, 2).join("")}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="font-bold text-base">{c.name}</div>
+                      <div className="text-xs text-slate-500">
+                        {c.nationality}
+                        {c.age != null ? ` · ${c.age}y` : ""}
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    Factual club staff only — no invented bio.
+                  </p>
+                  <NotesPanel
+                    matchId={matchId}
+                    entityType="coach"
+                    entityId={c.id || `${coachSide}-coach`}
+                    entityLabel={c.name}
+                    initialNotes={notes.filter(
+                      (n) =>
+                        n.entityId === c.id ||
+                        (n.entityType === "coach" &&
+                          (n.title || "").includes(c.name))
+                    )}
+                    fillHeight
+                  />
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
+{dossierId && (
         <PlayerDossier
           matchId={matchId}
           playerId={dossierId}

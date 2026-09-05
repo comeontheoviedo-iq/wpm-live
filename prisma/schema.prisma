@@ -336,6 +336,11 @@ model MatchPlayerOverride {
   /// primary | secondary | both | or a nationality label
   pitchFlag     String?
   jerseyNumber  Int?
+  /// Manual pitch placement — survives AF sync until Reset official
+  formationSlot String?
+  /// Free-move landscape coords (0–100). When set, overrides slot snap geometry.
+  pitchX        Float?
+  pitchY        Float?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

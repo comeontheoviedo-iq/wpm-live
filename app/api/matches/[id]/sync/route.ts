@@ -4,7 +4,7 @@ import { isApiFootballConfigured } from "@/lib/api-football";
 import { syncMatchFromApiFootball } from "@/lib/sync-fixture";
 
 export async function POST(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getSession();
@@ -19,8 +19,11 @@ export async function POST(
     );
   }
   const { id } = await params;
+  const body = await req.json().catch(() => ({}));
   try {
-    const result = await syncMatchFromApiFootball(id);
+    const result = await syncMatchFromApiFootball(id, {
+      resetPlacements: Boolean(body?.resetPlacements),
+    });
     return NextResponse.json(result);
   } catch (e) {
     return NextResponse.json(

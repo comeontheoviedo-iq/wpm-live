@@ -1,6 +1,11 @@
 import { prisma } from "./prisma";
+import {
+  clearAllPitchPlacements,
+  reapplyPitchPlacements,
+} from "./pitch-placement";
 import { slotsFor } from "./formations";
 import {
+  assertFixtureCompatible,
   assignSlotsFromStartXI,
   getEvents,
   getFixture,
@@ -24,6 +29,7 @@ import {
   type AfLineup,
   type AfSquadPlayer,
 } from "./api-football";
+import { leagueIdForCompetition } from "./competitions";
 import { resolveWeatherForVenue } from "./weather";
 import { nationalityToIso } from "./flags";
 import { maybeAutoGenerateLineupPack } from "./pack-generate";
@@ -234,13 +240,19 @@ async function findClubPlayer(
 }
 
 
-export async function syncSquadForClub(clubId: string, teamAfId: number) {
+export async function syncSquadForClub(
+  clubId: string,
+  teamAfId: number,
+  opts?: { purgeForeignAfPlayers?: boolean }
+) {
   const rows = await getSquads(teamAfId);
   const squad = rows[0];
-  if (!squad?.players?.length) return { upserted: 0 };
+  if (!squad?.players?.length) return { upserted: 0, purged: 0 };
 
+  const keepAfIds = new Set<number>();
   let upserted = 0;
   for (const p of squad.players as AfSquadPlayer[]) {
+    if (p.id) keepAfIds.add(p.id);
     const existing = await findClubPlayer(clubId, {
       apiId: p.id,
       name: p.name,
@@ -270,7 +282,40 @@ export async function syncSquadForClub(clubId: string, teamAfId: number) {
     }
     upserted++;
   }
-  return { upserted };
+
+  let purged = 0;
+  if (opts?.purgeForeignAfPlayers !== false && keepAfIds.size) {
+    const foreigners = await prisma.player.findMany({
+      where: {
+        clubId,
+        apiFootballPlayerId: { not: null },
+      },
+      select: { id: true, apiFootballPlayerId: true },
+    });
+    const dropIds = foreigners
+      .filter(
+        (p) =>
+          p.apiFootballPlayerId != null &&
+          !keepAfIds.has(p.apiFootballPlayerId)
+      )
+      .map((p) => p.id);
+    if (dropIds.length) {
+      // Clear FKs that would block delete, then remove wrong-league pollution
+      await prisma.matchEvent.updateMany({
+        where: { playerId: { in: dropIds } },
+        data: { playerId: null },
+      });
+      await prisma.injury.deleteMany({ where: { playerId: { in: dropIds } } });
+      await prisma.matchPlayerOverride.deleteMany({
+        where: { playerId: { in: dropIds } },
+      });
+      const del = await prisma.player.deleteMany({
+        where: { id: { in: dropIds } },
+      });
+      purged = del.count;
+    }
+  }
+  return { upserted, purged };
 }
 
 async function upsertLineupSide(
@@ -1248,7 +1293,47 @@ async function syncSeasonScorers(
   return { scorers, keepers, bios };
 }
 
-export async function syncMatchFromApiFootball(matchId: string) {
+
+/** Persist AF fixture.referee when present — never invent a name. */
+async function syncRefereeFromFixture(matchId: string, refereeName?: string | null) {
+  const name = (refereeName || "").trim();
+  if (!name) return null;
+  // AF often returns "Name, Country"
+  const parts = name.split(",").map((s) => s.trim()).filter(Boolean);
+  const display = parts[0] || name;
+  const nationality = parts[1] || "UNK";
+
+  let official = await prisma.official.findFirst({
+    where: { name: display, role: "Referee" },
+  });
+  if (!official) {
+    official = await prisma.official.create({
+      data: {
+        name: display,
+        role: "Referee",
+        nationality: nationality.length <= 24 ? nationality : "UNK",
+      },
+    });
+  } else if (nationality !== "UNK" && official.nationality === "UNK") {
+    official = await prisma.official.update({
+      where: { id: official.id },
+      data: { nationality },
+    });
+  }
+
+  await prisma.matchOfficial.deleteMany({
+    where: { matchId, role: "Referee" },
+  });
+  await prisma.matchOfficial.create({
+    data: { matchId, officialId: official.id, role: "Referee" },
+  });
+  return display;
+}
+
+export async function syncMatchFromApiFootball(
+  matchId: string,
+  opts?: { resetPlacements?: boolean }
+) {
   const match = await prisma.match.findUnique({
     where: { id: matchId },
     include: { homeClub: true, awayClub: true },
@@ -1258,11 +1343,44 @@ export async function syncMatchFromApiFootball(matchId: string) {
     throw new Error("Match has no apiFootballFixtureId linked");
   }
 
+  if (opts?.resetPlacements) {
+    await clearAllPitchPlacements(matchId);
+  }
+
   const fixture = await getFixture(match.apiFootballFixtureId);
   if (!fixture) throw new Error("Fixture not found on API-Football");
 
-  const homeAfId = fixture.teams.home.id;
-  const awayAfId = fixture.teams.away.id;
+  const deskHomeAf = match.homeClub.apiFootballTeamId ?? null;
+  const deskAwayAf = match.awayClub.apiFootballTeamId ?? null;
+  const matchDay = await prisma.matchDay.findUnique({
+    where: { id: match.matchDayId },
+    select: { competition: true },
+  });
+  const expectedLeagueId = matchDay?.competition
+    ? leagueIdForCompetition(matchDay.competition)
+    : null;
+
+  const compat = assertFixtureCompatible({
+    fixture,
+    homeAfId: deskHomeAf,
+    awayAfId: deskAwayAf,
+    leagueId: expectedLeagueId,
+  });
+  if (!compat.ok) {
+    throw new Error(
+      compat.reason ||
+        "Linked fixture does not match this desk's clubs/competition — unlink or pick the correct AF fixture."
+    );
+  }
+
+  await syncRefereeFromFixture(
+    matchId,
+    fixture.fixture.referee
+  ).catch(() => null);
+
+  // Prefer desk club AF ids once known; only fill missing from a *validated* fixture.
+  const homeAfId = deskHomeAf ?? fixture.teams.home.id;
+  const awayAfId = deskAwayAf ?? fixture.teams.away.id;
 
   if (!match.homeClub.apiFootballTeamId) {
     await prisma.club.update({
@@ -1277,12 +1395,12 @@ export async function syncMatchFromApiFootball(matchId: string) {
     });
   }
 
-  const squadHome = await syncSquadForClub(match.homeClubId, homeAfId).catch(
-    () => ({ upserted: 0 })
-  );
-  const squadAway = await syncSquadForClub(match.awayClubId, awayAfId).catch(
-    () => ({ upserted: 0 })
-  );
+  const squadHome = await syncSquadForClub(match.homeClubId, homeAfId, {
+    purgeForeignAfPlayers: true,
+  }).catch(() => ({ upserted: 0, purged: 0 }));
+  const squadAway = await syncSquadForClub(match.awayClubId, awayAfId, {
+    purgeForeignAfPlayers: true,
+  }).catch(() => ({ upserted: 0, purged: 0 }));
 
   const injuryCount = await syncInjuriesForMatch(
     matchId,
@@ -1516,6 +1634,11 @@ export async function syncMatchFromApiFootball(matchId: string) {
     await dedupeClubSlots(match.awayClubId, awayFormation);
   }
 
+  // After AF XI + live subs + dedupe: re-apply commentary DnD placements
+  await reapplyPitchPlacements(matchId).catch((err) =>
+    console.error("[sync] reapply placements failed", matchId, err)
+  );
+
   const updated = await prisma.match.update({
     where: { id: matchId },
     data: {
@@ -1581,6 +1704,32 @@ export async function linkFixtureToMatch(
   matchId: string,
   apiFootballFixtureId: number
 ) {
+  const match = await prisma.match.findUnique({
+    where: { id: matchId },
+    include: {
+      homeClub: true,
+      awayClub: true,
+      matchDay: { select: { competition: true } },
+    },
+  });
+  if (!match) throw new Error("Match not found");
+
+  const fixture = await getFixture(apiFootballFixtureId);
+  if (!fixture) throw new Error(`Fixture #${apiFootballFixtureId} not found on API-Football`);
+
+  const expectedLeagueId = match.matchDay?.competition
+    ? leagueIdForCompetition(match.matchDay.competition)
+    : null;
+  const compat = assertFixtureCompatible({
+    fixture,
+    homeAfId: match.homeClub.apiFootballTeamId,
+    awayAfId: match.awayClub.apiFootballTeamId,
+    leagueId: expectedLeagueId,
+  });
+  if (!compat.ok) {
+    throw new Error(compat.reason || "Fixture does not match this desk");
+  }
+
   return prisma.match.update({
     where: { id: matchId },
     data: { apiFootballFixtureId },

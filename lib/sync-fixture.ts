@@ -938,16 +938,33 @@ async function syncSeasonScorers(
   // Team /players pages omit national-team rows; fetch /players?id= when we still
   // need NT detection (England-listed dual nationals) or missing birth country.
   async function hydrateFromPlayerId(apiId: number, clubId: string, fallbackName: string) {
-    const rows = await getPlayerById(apiId, season).catch(() => []);
-    const row = rows[0];
-    if (!row?.player) return false;
+    // Current season profile. If no NT caps here, peek prior season —
+    // AF often parks Africa Cup / friendlies on the previous europeanSeasonYear.
+    const cur = await getPlayerById(apiId, season).catch(() => []);
     const prev = byApi.get(apiId);
+    let nt =
+      pickNationalTeamCountry(cur[0]?.statistics) || prev?.nationalTeam || null;
+    let prevSeasonRow: (typeof cur)[0] | undefined;
+    const afNat = cur[0]?.player?.nationality || prev?.nationality || null;
+    if (
+      !nt &&
+      /^(england|eng|unk|unknown)?$/i.test((afNat || "").trim())
+    ) {
+      const prevSeason = await getPlayerById(apiId, season - 1).catch(() => []);
+      prevSeasonRow = prevSeason[0];
+      nt =
+        pickNationalTeamCountry(prevSeasonRow?.statistics) ||
+        prev?.nationalTeam ||
+        null;
+    }
+    const row = cur[0] || prevSeasonRow;
+    if (!row?.player) return false;
     await upsertPlayerBioFromAf(clubId, {
       apiId: row.player.id,
       name: row.player.name || fallbackName,
       nationality: row.player.nationality || prev?.nationality,
       birthCountry: row.player.birth?.country || prev?.birthCountry || null,
-      nationalTeam: pickNationalTeamCountry(row.statistics) || prev?.nationalTeam || null,
+      nationalTeam: nt,
       photo: row.player.photo || prev?.photo,
       height: row.player.height || prev?.height,
       weight: row.player.weight || prev?.weight,
@@ -1009,6 +1026,21 @@ async function syncSeasonScorers(
     if (await hydrateFromPlayerId(apiId, p.clubId, p.name)) bios++;
   }
 
+  // Final pass: anyone still England/ENG with an AF id — ensure NT promotion
+  // survives even if an earlier team-page upsert missed NT rows.
+  const stillEngland = await prisma.player.findMany({
+    where: {
+      clubId: { in: [homeClubId, awayClubId] },
+      apiFootballPlayerId: { not: null },
+      nationality: { in: ["UNK", "ENG", "UNKNOWN", "", "England"] },
+    },
+    select: { clubId: true, apiFootballPlayerId: true, name: true },
+  });
+  for (const p of stillEngland) {
+    if (!p.apiFootballPlayerId) continue;
+    if (await hydrateFromPlayerId(p.apiFootballPlayerId, p.clubId, p.name)) bios++;
+  }
+
   let scorers = 0;
   let keepers = 0;
 
@@ -1031,7 +1063,10 @@ async function syncSeasonScorers(
           position: posGuess(row.position),
           apiFootballPlayerId: row.apiId,
           age: row.age ?? null,
-          nationality: row.nationality || "UNK",
+          nationality: (row.nationalTeam &&
+            (!row.nationality || !sameCountryLabel(row.nationality, row.nationalTeam))
+              ? row.nationalTeam
+              : row.nationality) || "UNK",
           birthCountry: row.birthCountry || null,
           photoUrl: row.photo || null,
           heightCm: parseCm(row.height),
@@ -1058,10 +1093,10 @@ async function syncSeasonScorers(
             ? { weightKg: parseKg(row.weight) }
             : {}),
           ...(row.birth && !player.birthDate ? { birthDate: row.birth } : {}),
-          ...(row.nationality &&
-          (isUnsetNationality(player.nationality) ||
-            player.nationality !== row.nationality)
-            ? { nationality: row.nationality }
+          // Do not overwrite nationality here — scorer rows omit NT and would
+          // clobber Zimbabwe/etc. promoted during bio hydrate.
+          ...(row.birthCountry && !player.birthCountry
+            ? { birthCountry: row.birthCountry }
             : {}),
           ...(row.age && !player.age ? { age: row.age } : {}),
           ...(row.rating != null ? { rating: row.rating } : {}),

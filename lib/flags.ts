@@ -281,8 +281,9 @@ export function nationalityToIso(nationality?: string | null): string | null {
  * Up to 2 distinct nationality labels for SportsCom-style dual flags.
  * Sources (AF-only today): citizenship (`nationality`) + birth.country when different.
  * Sync may also promote national-team caps over a stale England/etc. citizenship.
- * AF limit: many dual nationals (e.g. E. Fernandez / Oluwasegun — Yoruba given name)
- * only expose England/England with no NT row; we do not invent a second flag.
+ * National-team caps (current or prior AF season) can promote citizenship
+ * when AF nationality stays England (e.g. Fernandez → Nigeria friendlies 2026,
+ * Maswanhise → Zimbabwe AFCON on 2025 season rows).
  * Future: optional manual override field on Player if AF stays incomplete.
  */
 export function dualNationalities(

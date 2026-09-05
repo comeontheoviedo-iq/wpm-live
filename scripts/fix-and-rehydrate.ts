@@ -13,6 +13,7 @@ for (const line of readFileSync(envPath, "utf8").split("\n")) {
 import { PrismaClient } from "@prisma/client";
 import { getPlayerById } from "../lib/api-football";
 import { nationalityToIso } from "../lib/flags";
+import { europeanSeasonYear } from "../lib/season";
 
 function pickNationalTeamCountry(statistics: any[] | undefined) {
   if (!statistics?.length) return null;
@@ -20,7 +21,12 @@ function pickNationalTeamCountry(statistics: any[] | undefined) {
   for (const s of statistics) {
     const teamName = s.team?.name?.trim();
     if (!teamName) continue;
-    if (/\b(fc|cf|sc|afc|united|city|athletic|rovers|wanderers|albion|hotspur|town|borough)\b/i.test(teamName)) continue;
+    if (
+      /\b(fc|cf|sc|afc|united|city|athletic|rovers|wanderers|albion|hotspur|town|borough)\b/i.test(
+        teamName
+      )
+    )
+      continue;
     if (!nationalityToIso(teamName)) continue;
     const league = s.league?.name || "";
     const intl =
@@ -43,20 +49,25 @@ function sameCountryLabel(a?: string | null, b?: string | null) {
 }
 
 async function enrichOne(apiId: number) {
-  const rows = await getPlayerById(apiId, 2025);
-  const row = rows[0];
+  const season = europeanSeasonYear(new Date());
+  const cur = await getPlayerById(apiId, season);
+  const prev = await getPlayerById(apiId, season - 1).catch(() => []);
+  const row = cur[0] || prev[0];
   if (!row?.player) {
     console.log("no AF row", apiId);
     return null;
   }
   const afNat = row.player.nationality?.trim() || null;
-  const nt = pickNationalTeamCountry(row.statistics);
+  const nt =
+    pickNationalTeamCountry(cur[0]?.statistics) ||
+    pickNationalTeamCountry(prev[0]?.statistics);
   let nat = afNat;
   if (nt && (!afNat || !sameCountryLabel(afNat, nt))) nat = nt;
   const birthCountry = row.player.birth?.country?.trim() || null;
   console.log({
     apiId,
     name: row.player.name,
+    season,
     afNat,
     nt,
     chosenNat: nat,
@@ -68,8 +79,7 @@ async function enrichOne(apiId: number) {
 
 async function main() {
   const prisma = new PrismaClient();
-  // Fix Fernandez + Maswanhise + Dessers explicitly from AF
-  for (const apiId of [322882, 278116, 37186]) {
+  for (const apiId of [322882, 278116, 37186, 20143]) {
     const info = await enrichOne(apiId);
     if (!info) continue;
     const updated = await prisma.player.updateMany({

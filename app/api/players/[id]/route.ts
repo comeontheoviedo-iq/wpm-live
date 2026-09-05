@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { europeanSeasonYear } from "@/lib/season";
 import { getPlayerById } from "@/lib/api-football";
+import { nationalityToIso } from "@/lib/flags";
 
 function parseCm(h?: string | null) {
   if (!h) return null;
@@ -136,9 +137,17 @@ export async function GET(
         // Prefer AF nationality, but national-team caps override stale England/etc.
         const afNat = row.player?.nationality?.trim() || null;
         let nt: string | null = null;
+        let bestApps = 0;
         for (const s of row.statistics || []) {
           const teamName = s.team?.name?.trim();
           if (!teamName) continue;
+          if (
+            /\b(fc|cf|sc|afc|united|city|athletic|rovers|wanderers|albion|hotspur|town|borough)\b/i.test(
+              teamName
+            )
+          )
+            continue;
+          if (!nationalityToIso(teamName)) continue;
           const league = s.league?.name || "";
           const intl =
             /world cup|friendlies|nations|africa cup|afcon|\beuro\b|copa|asian cup|gold cup|olympics|qualification|confederations|uefa nations|african nations/i.test(
@@ -146,10 +155,10 @@ export async function GET(
             );
           const apps = s.games?.appearences ?? 0;
           if (!intl || apps <= 0) continue;
-          // country-named sides only (Ivory Coast, Zimbabwe, …)
-          if (/\b(fc|cf|sc|afc|united|city|athletic)\b/i.test(teamName)) continue;
-          nt = teamName;
-          break;
+          if (apps > bestApps) {
+            bestApps = apps;
+            nt = teamName;
+          }
         }
         const nat = nt || afNat;
         if (nat) {

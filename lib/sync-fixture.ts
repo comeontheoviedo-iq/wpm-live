@@ -27,6 +27,7 @@ import {
 import { resolveWeatherForVenue } from "./weather";
 import { nationalityToIso } from "./flags";
 import { maybeAutoGenerateLineupPack } from "./pack-generate";
+import { namesLooselyMatch } from "./player-name";
 
 
 /**
@@ -206,12 +207,32 @@ async function findClubPlayer(
       },
     });
     if (byName) return byName;
-    if (opts.number == null) {
-      return prisma.player.findFirst({ where: { clubId, name: opts.name } });
+    if (opts.number != null) {
+      const byNum = await prisma.player.findFirst({
+        where: { clubId, shirtNumber: opts.number },
+      });
+      if (byNum && namesLooselyMatch(byNum.name, opts.name)) return byNum;
+    }
+    // Fuzzy: "Lawrence Shankland" ↔ "L. Shankland" / last-name match within club
+    const clubPlayers = await prisma.player.findMany({ where: { clubId } });
+    const loose = clubPlayers.filter((p) => namesLooselyMatch(p.name, opts.name));
+    if (loose.length === 1) return loose[0];
+    if (loose.length > 1 && opts.number != null) {
+      const byNum = loose.find((p) => p.shirtNumber === opts.number);
+      if (byNum) return byNum;
+    }
+    if (loose.length > 1) {
+      // Prefer currently on pitch / starter when ambiguous
+      return (
+        loose.find((p) => p.onPitch || p.isStarter) ||
+        loose.find((p) => p.formationSlot) ||
+        loose[0]
+      );
     }
   }
   return null;
 }
+
 
 export async function syncSquadForClub(clubId: string, teamAfId: number) {
   const rows = await getSquads(teamAfId);
@@ -633,9 +654,10 @@ async function applySubEvent(
   const inName = ev.assist?.name;
 
   let inheritedSlot: string | null = null;
-  if (outName) {
-    const outP = await prisma.player.findFirst({
-      where: { clubId, name: outName },
+  if (outName || ev.player?.id) {
+    const outP = await findClubPlayer(clubId, {
+      apiId: ev.player?.id,
+      name: outName,
     });
     if (outP) {
       inheritedSlot = outP.formationSlot;
@@ -645,9 +667,10 @@ async function applySubEvent(
       });
     }
   }
-  if (inName) {
-    const inP = await prisma.player.findFirst({
-      where: { clubId, name: inName },
+  if (inName || ev.assist?.id) {
+    const inP = await findClubPlayer(clubId, {
+      apiId: ev.assist?.id ?? null,
+      name: inName,
     });
     if (inP) {
       let slot = inheritedSlot || inP.formationSlot;
@@ -678,6 +701,7 @@ async function applySubEvent(
     }
   }
 }
+
 function mapEventType(ev: AfEvent): string {
   const t = (ev.type || "").toLowerCase();
   const d = (ev.detail || "").toLowerCase();

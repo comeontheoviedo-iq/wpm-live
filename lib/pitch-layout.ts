@@ -96,7 +96,8 @@ export function fitMarkerPctForContainer(
   containerH: number,
   desiredPct: number,
   settings: FieldSettings,
-  rawPlaced?: PlacedSlot[]
+  rawPlaced?: PlacedSlot[],
+  homeOnLeft = true
 ): number {
   if (!containerW || !containerH) return desiredPct;
   const geoMax = geometricMaxMarkerPct(containerW, containerH, settings);
@@ -117,7 +118,8 @@ export function fitMarkerPctForContainer(
       containerH,
       w,
       h,
-      CARD_GAP_PX
+      CARD_GAP_PX,
+      homeOnLeft
     );
     return (
       countAabbOverlaps(resolved, containerW, containerH, w, h, CARD_GAP_PX) ===
@@ -155,7 +157,9 @@ export function resolveCardOverlaps<T extends PlacedSlot>(
   containerH: number,
   cardW: number,
   cardH: number,
-  gapPx = CARD_GAP_PX
+  gapPx = CARD_GAP_PX,
+  /** When false, home occupies the right half (Swap sides). */
+  homeOnLeft = true
 ): T[] {
   if (!containerW || !containerH || placed.length < 2) return placed;
 
@@ -194,8 +198,12 @@ export function resolveCardOverlaps<T extends PlacedSlot>(
     }
   }
 
+  const sideOnLeft = (side: "home" | "away") =>
+    side === "home" ? homeOnLeft : !homeOnLeft;
+
   const clampItem = (it: Item, padBottom: number) => {
-    if (it.side === "home") {
+    const onLeft = sideOnLeft(it.side);
+    if (onLeft) {
       it.px = Math.min(it.px, midX - halfGuard);
       it.px = Math.max(halfW + 2, Math.min(containerW * 0.48, it.px));
     } else {
@@ -206,7 +214,7 @@ export function resolveCardOverlaps<T extends PlacedSlot>(
     if (band) {
       it.px = Math.max(band.lo, Math.min(band.hi, it.px));
     }
-    if (it.side === "home") {
+    if (onLeft) {
       it.px = Math.min(it.px, midX - halfGuard);
       it.px = Math.max(halfW + 2, Math.min(containerW * 0.48, it.px));
     } else {
@@ -266,7 +274,13 @@ export function resolveCardOverlaps<T extends PlacedSlot>(
         pushDepthPreserving(a, b, push);
       } else {
         const sign =
-          dx === 0 ? (a.side === "home" ? -1 : 1) : dx > 0 ? 1 : -1;
+          dx === 0
+            ? sideOnLeft(a.side)
+              ? -1
+              : 1
+            : dx > 0
+              ? 1
+              : -1;
         a.px -= push * sign;
         b.px += push * sign;
       }
@@ -339,7 +353,13 @@ export function resolveCardOverlaps<T extends PlacedSlot>(
           } else if (overlapX > 0) {
             const pushX = overlapX / 2 + 1.25;
             const signX =
-              dx === 0 ? (a.side === "home" ? -1 : 1) : dx > 0 ? 1 : -1;
+              dx === 0
+                ? sideOnLeft(a.side)
+                  ? -1
+                  : 1
+                : dx > 0
+                  ? 1
+                  : -1;
             a.px -= pushX * signX;
             b.px += pushX * signX;
           }

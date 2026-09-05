@@ -7,7 +7,7 @@ import {
   useState,
   type DragEvent,
 } from "react";
-import { User, X, SlidersHorizontal } from "lucide-react";
+import { User, X, SlidersHorizontal, ArrowLeftRight } from "lucide-react";
 import { slotsFor } from "@/lib/formations";
 import { cn } from "@/lib/utils";
 import {
@@ -533,6 +533,9 @@ export function PitchBoard({
   cardSettings,
   markerPct,
   onOpenFieldSettings,
+  homeOnLeft = true,
+  onToggleHomeOnLeft,
+  liveCompact,
 }: {
   homeName: string;
   awayName: string;
@@ -581,6 +584,11 @@ export function PitchBoard({
   cardSettings?: FieldSettings;
   markerPct?: number;
   onOpenFieldSettings?: () => void;
+  /** Home team on left of screen (kick L→R). False = home on right. */
+  homeOnLeft?: boolean;
+  onToggleHomeOnLeft?: () => void;
+  /** LIVE: prefer smaller cards / less chrome. */
+  liveCompact?: boolean;
 }) {
   const homeSlots = slotsFor(homeFormation);
   const awaySlots = slotsFor(awayFormation);
@@ -627,24 +635,32 @@ export function PitchBoard({
   function placeLandscape(
     players: PitchPlayer[],
     slots: ReturnType<typeof slotsFor>,
-    side: "home" | "away"
+    side: "home" | "away",
+    /** When false, this team's geometry is mirrored to the opposite half. */
+    onLeft: boolean
   ) {
     const assigned = new Set<string>();
+    const eligible = (pl: PitchPlayer) =>
+      !pl.subbedOff && (pl.onPitch || pl.isStarter);
     const placed = slots.map((slot) => {
-      const p = players.find(
+      // Prefer current on-pitch occupant of the slot (sub-ons), then starter.
+      const candidates = players.filter(
         (pl) =>
           pl.formationSlot === slot.id &&
-          (pl.onPitch || pl.isStarter) &&
+          eligible(pl) &&
           !assigned.has(pl.id)
       );
+      const p =
+        candidates.find((pl) => pl.onPitch) ||
+        candidates[0] ||
+        undefined;
       if (p) assigned.add(p.id);
       const depth = (100 - slot.y) / 100;
       const width = slot.x;
       let x: number;
       let y: number;
-      // Expanded depth bands (~46% span): home 2→48, away 52→98.
-      // Gives formation lines real horizontal room for ~76×152 cards.
-      if (side === "home") {
+      // Expanded depth bands (~46% span): left half 2→48, right half 52→98.
+      if (onLeft) {
         x = 2 + depth * 46;
         y = width;
       } else {
@@ -657,7 +673,7 @@ export function PitchBoard({
     const validIds = new Set(slots.map((s) => s.id));
     const orphans = players.filter(
       (pl) =>
-        (pl.isStarter || pl.onPitch) &&
+        eligible(pl) &&
         !assigned.has(pl.id) &&
         (!pl.formationSlot || !validIds.has(pl.formationSlot))
     );
@@ -672,49 +688,75 @@ export function PitchBoard({
   }
 
   const rawPlaced = useMemo(() => {
-    const homePlaced = placeLandscape(homePlayers, homeSlots, "home");
-    const awayPlaced = placeLandscape(awayPlayers, awaySlots, "away");
+    const homePlaced = placeLandscape(
+      homePlayers,
+      homeSlots,
+      "home",
+      homeOnLeft
+    );
+    const awayPlaced = placeLandscape(
+      awayPlayers,
+      awaySlots,
+      "away",
+      !homeOnLeft
+    );
     return [...homePlaced, ...awayPlaced];
-  }, [homePlayers, awayPlayers, homeSlots, awaySlots]);
+  }, [homePlayers, awayPlayers, homeSlots, awaySlots, homeOnLeft]);
 
   // Fit marker to the measured pitch box first (auto-fit when user has not
   // touched Field Settings). Once userAdjusted, honor the slider exactly —
   // size only changes card width/height; anchors stay on formation slots.
+  // LIVE desk: prefer smaller cards so XI stays readable without a wall of overlaps.
+  const liveDesiredPct = liveCompact
+    ? Math.min(resolvedMarkerPct, -35)
+    : resolvedMarkerPct;
+  const liveSettings = useMemo(() => {
+    if (!liveCompact) return resolvedSettings;
+    if (resolvedSettings.userAdjusted) return resolvedSettings;
+    return {
+      ...resolvedSettings,
+      dataRows: 1 as const,
+      markerSizePct: liveDesiredPct,
+    };
+  }, [liveCompact, resolvedSettings, liveDesiredPct]);
+
   const layoutFittedPct = useMemo(() => {
-    if (resolvedSettings.userAdjusted) {
-      return clampPct(resolvedMarkerPct);
+    if (liveSettings.userAdjusted) {
+      return clampPct(liveDesiredPct);
     }
     return fitMarkerPctForContainer(
       pitchSize.w,
       pitchSize.h,
-      resolvedMarkerPct,
-      resolvedSettings,
-      rawPlaced
+      liveDesiredPct,
+      liveSettings,
+      rawPlaced,
+      homeOnLeft
     );
-  }, [pitchSize.w, pitchSize.h, resolvedMarkerPct, resolvedSettings, rawPlaced]);
+  }, [pitchSize.w, pitchSize.h, liveDesiredPct, liveSettings, rawPlaced, homeOnLeft]);
 
   // DOM truth: if real card boxes still overlap after paint, shrink by 5%
   // until clean or floor (-40). Skipped when user owns the size slider.
   const [domShrinkPct, setDomShrinkPct] = useState(0);
   useEffect(() => {
     setDomShrinkPct(0);
-  }, [layoutFittedPct, pitchSize.w, pitchSize.h, rawPlaced, resolvedSettings]);
+  }, [layoutFittedPct, pitchSize.w, pitchSize.h, rawPlaced, liveSettings]);
 
   const fittedMarkerPct = clampPct(layoutFittedPct + domShrinkPct);
-  const cardPx = estimateCardSizePx(fittedMarkerPct, resolvedSettings);
+  const cardPx = estimateCardSizePx(fittedMarkerPct, liveSettings);
   const all = useMemo(() => {
     if (!pitchSize.w || !pitchSize.h) return rawPlaced;
     // CRITICAL: marker size must NOT reposition the XI. When the user owns
     // the slider, keep formation slot centres (rawPlaced). Prefer overlap /
     // clip over pushing cards into the wrong depth band or lateral slot.
-    if (resolvedSettings.userAdjusted) return rawPlaced;
+    if (liveSettings.userAdjusted) return rawPlaced;
     return resolveCardOverlaps(
       rawPlaced,
       pitchSize.w,
       pitchSize.h,
       cardPx.w,
       cardPx.h,
-      CARD_GAP_PX
+      CARD_GAP_PX,
+      homeOnLeft
     );
   }, [
     rawPlaced,
@@ -722,7 +764,8 @@ export function PitchBoard({
     pitchSize.h,
     cardPx.w,
     cardPx.h,
-    resolvedSettings.userAdjusted,
+    liveSettings.userAdjusted,
+    homeOnLeft,
   ]);
 
   useEffect(() => {
@@ -733,7 +776,7 @@ export function PitchBoard({
     const measureAndShrink = () => {
       if (cancelled) return;
       // User-controlled marker size must not be silently crushed by DOM shrink.
-      if (resolvedSettings.userAdjusted) return;
+      if (liveSettings.userAdjusted) return;
       const nodes = [
         ...root.querySelectorAll('[data-pitch-card="1"]'),
       ] as HTMLElement[];
@@ -788,8 +831,8 @@ export function PitchBoard({
     layoutFittedPct,
     pitchSize.w,
     pitchSize.h,
-    resolvedSettings.dataRows,
-    resolvedSettings.userAdjusted,
+    liveSettings.dataRows,
+    liveSettings.userAdjusted,
   ]);
 
   const placing = Boolean(placingPlayerId && !locked);
@@ -848,6 +891,41 @@ export function PitchBoard({
 
   const homeCode = (homeAbbr || homeName).slice(0, 3).toUpperCase();
   const awayCode = (awayAbbr || awayName).slice(0, 3).toUpperCase();
+  const leftCode = homeOnLeft ? homeCode : awayCode;
+  const rightCode = homeOnLeft ? awayCode : homeCode;
+  const leftScore = homeOnLeft ? homeScore : awayScore;
+  const rightScore = homeOnLeft ? awayScore : homeScore;
+
+  const leftChrome = homeOnLeft
+    ? {
+        side: "home" as const,
+        formation: homeFormation,
+        coach: homeCoach,
+        color: homeColor,
+        light: true,
+      }
+    : {
+        side: "away" as const,
+        formation: awayFormation,
+        coach: awayCoach,
+        color: awayColor,
+        light: false,
+      };
+  const rightChrome = homeOnLeft
+    ? {
+        side: "away" as const,
+        formation: awayFormation,
+        coach: awayCoach,
+        color: awayColor,
+        light: false,
+      }
+    : {
+        side: "home" as const,
+        formation: homeFormation,
+        coach: homeCoach,
+        color: homeColor,
+        light: true,
+      };
 
   return (
     <div
@@ -879,30 +957,54 @@ export function PitchBoard({
           <div className="absolute top-1/2 right-0 h-[28%] w-[6%] -translate-y-1/2 border-2 border-r-0 border-white/70" />
         </div>
 
-        {/* Top chrome: formation | scoreboard | formation */}
+        {/* Top chrome: formation | scoreboard | formation (respects Swap sides) */}
         <div className="absolute top-1 left-1.5 right-1.5 z-20 flex items-start justify-between gap-1.5 pointer-events-none">
           <div className="flex flex-col gap-1 items-start pointer-events-auto">
-            <div className="rounded bg-white/95 border border-slate-300 shadow px-1.5 py-0.5 text-[10px] flex items-center gap-1 text-slate-800">
+            <div
+              className={cn(
+                "rounded shadow px-1.5 py-0.5 text-[10px] flex items-center gap-1 border",
+                leftChrome.light
+                  ? "bg-white/95 border-slate-300 text-slate-800"
+                  : "text-white"
+              )}
+              style={
+                leftChrome.light
+                  ? undefined
+                  : {
+                      backgroundColor: leftChrome.color,
+                      borderColor: leftChrome.color,
+                    }
+              }
+            >
               {formationOptions && onFormationChange ? (
                 <select
-                  className="bg-transparent font-semibold max-w-[4.5rem] outline-none"
-                  value={homeFormation}
+                  className={cn(
+                    "bg-transparent font-semibold max-w-[4.5rem] outline-none",
+                    !leftChrome.light && "text-white"
+                  )}
+                  value={leftChrome.formation}
                   disabled={formationBusy || locked}
-                  onChange={(e) => onFormationChange("home", e.target.value)}
-                  aria-label="Home formation"
+                  onChange={(e) =>
+                    onFormationChange(leftChrome.side, e.target.value)
+                  }
+                  aria-label={`${leftChrome.side} formation`}
                 >
                   {formationOptions.map((k) => (
-                    <option key={k} value={k}>
+                    <option key={k} value={k} className="text-slate-900">
                       {k}
                     </option>
                   ))}
                 </select>
               ) : (
-                <span className="font-semibold">{homeFormation}</span>
+                <span className="font-semibold">{leftChrome.formation}</span>
               )}
             </div>
-            {homeCoach && (
-              <CoachChip coach={homeCoach} side="home" teamColor={homeColor} />
+            {leftChrome.coach && (
+              <CoachChip
+                coach={leftChrome.coach}
+                side={leftChrome.side}
+                teamColor={leftChrome.color}
+              />
             )}
           </div>
 
@@ -910,21 +1012,39 @@ export function PitchBoard({
             {showScore && (
               <div className="flex items-center gap-1.5 rounded-full bg-white/95 shadow-md border border-slate-200 px-2.5 py-1">
                 <span className="text-[10px] font-bold text-slate-700 tracking-wide">
-                  {homeCode}
+                  {leftCode}
                 </span>
                 <span className="text-sm font-black tabular-nums text-slate-900">
-                  {homeScore}-{awayScore}
+                  {leftScore}-{rightScore}
                 </span>
                 <span className="text-[10px] font-bold text-slate-700 tracking-wide">
-                  {awayCode}
+                  {rightCode}
                 </span>
               </div>
             )}
-            {statusShort && (
-              <span className="rounded bg-black/55 px-1.5 py-px text-[8px] font-bold text-white tracking-wider">
-                {statusShort}
-              </span>
-            )}
+            <div className="flex items-center gap-1 pointer-events-auto">
+              {statusShort && (
+                <span className="rounded bg-black/55 px-1.5 py-px text-[8px] font-bold text-white tracking-wider">
+                  {statusShort}
+                </span>
+              )}
+              {onToggleHomeOnLeft && (
+                <button
+                  type="button"
+                  onClick={onToggleHomeOnLeft}
+                  className="inline-flex items-center gap-0.5 rounded bg-white/95 border border-slate-300 shadow px-1.5 py-0.5 text-[9px] font-semibold text-slate-800 hover:bg-white"
+                  title={
+                    homeOnLeft
+                      ? "Swap sides · home moves to right"
+                      : "Swap sides · home moves to left"
+                  }
+                  aria-label="Swap sides"
+                >
+                  <ArrowLeftRight className="h-3 w-3" />
+                  Swap sides
+                </button>
+              )}
+            </div>
             {badge && (
               <div
                 className={cn(
@@ -974,16 +1094,33 @@ export function PitchBoard({
               </button>
             )}
             <div
-              className="rounded shadow px-1.5 py-0.5 text-[10px] flex items-center gap-1 text-white border"
-              style={{ backgroundColor: awayColor, borderColor: awayColor }}
+              className={cn(
+                "rounded shadow px-1.5 py-0.5 text-[10px] flex items-center gap-1 border",
+                rightChrome.light
+                  ? "bg-white/95 border-slate-300 text-slate-800"
+                  : "text-white"
+              )}
+              style={
+                rightChrome.light
+                  ? undefined
+                  : {
+                      backgroundColor: rightChrome.color,
+                      borderColor: rightChrome.color,
+                    }
+              }
             >
               {formationOptions && onFormationChange ? (
                 <select
-                  className="bg-transparent font-semibold max-w-[4.5rem] outline-none"
-                  value={awayFormation}
+                  className={cn(
+                    "bg-transparent font-semibold max-w-[4.5rem] outline-none",
+                    !rightChrome.light && "text-white"
+                  )}
+                  value={rightChrome.formation}
                   disabled={formationBusy || locked}
-                  onChange={(e) => onFormationChange("away", e.target.value)}
-                  aria-label="Away formation"
+                  onChange={(e) =>
+                    onFormationChange(rightChrome.side, e.target.value)
+                  }
+                  aria-label={`${rightChrome.side} formation`}
                 >
                   {formationOptions.map((k) => (
                     <option key={k} value={k} className="text-slate-900">
@@ -992,11 +1129,15 @@ export function PitchBoard({
                   ))}
                 </select>
               ) : (
-                <span className="font-semibold">{awayFormation}</span>
+                <span className="font-semibold">{rightChrome.formation}</span>
               )}
             </div>
-            {awayCoach && (
-              <CoachChip coach={awayCoach} side="away" teamColor={awayColor} />
+            {rightChrome.coach && (
+              <CoachChip
+                coach={rightChrome.coach}
+                side={rightChrome.side}
+                teamColor={rightChrome.color}
+              />
             )}
           </div>
         </div>
@@ -1148,7 +1289,7 @@ export function PitchBoard({
                     slotLabel={slot.label}
                     selected={isSelected}
                     placing={isPlacingHere}
-                    cardSettings={resolvedSettings}
+                    cardSettings={liveSettings}
                     markerPct={fittedMarkerPct}
                   />
                 ) : (

@@ -111,14 +111,16 @@ function enrichPlayers(
     ).length;
     const matchYellow = mine.some((e) => e.type === "yellow");
     const matchRed = mine.some((e) => e.type === "red");
+    const subEvent = mine.find(
+      (e) =>
+        e.type === "sub" &&
+        (e.playerId === p.id ||
+          e.description.toLowerCase().includes(p.name.toLowerCase()))
+    );
     const subbedOff =
       subbedOutIds.has(p.id) ||
       subbedOutNames.has(p.name.toLowerCase()) ||
-      mine.some(
-        (e) =>
-          e.type === "sub" &&
-          e.playerId === p.id
-      );
+      Boolean(subEvent);
     return {
       ...p,
       matchGoals: matchGoals || undefined,
@@ -126,6 +128,7 @@ function enrichPlayers(
       matchYellow: matchYellow || undefined,
       matchRed: matchRed || undefined,
       subbedOff: subbedOff || undefined,
+      subMinute: subEvent?.minute ?? null,
     };
   });
 }
@@ -136,6 +139,8 @@ export function MatchDesk({
   awayName,
   homeFullName,
   awayFullName,
+  homeAbbr,
+  awayAbbr,
   homeColor,
   awayColor,
   homeFormation,
@@ -145,6 +150,7 @@ export function MatchDesk({
   homeCoach,
   awayCoach,
   referee,
+  refereeNationality,
   lineupStatus,
   apiFootballFixtureId,
   lastFeedSyncAt,
@@ -179,6 +185,8 @@ export function MatchDesk({
   awayName: string;
   homeFullName: string;
   awayFullName: string;
+  homeAbbr?: string;
+  awayAbbr?: string;
   homeColor: string;
   awayColor: string;
   homeFormation: string;
@@ -188,6 +196,7 @@ export function MatchDesk({
   homeCoach?: Coach | null;
   awayCoach?: Coach | null;
   referee?: string;
+  refereeNationality?: string | null;
   lineupStatus: string;
   apiFootballFixtureId: number | null;
   lastFeedSyncAt: string | Date | null;
@@ -689,6 +698,13 @@ export function MatchDesk({
                     Match intel
                   </div>
                   <Link
+                    href={`/match-day/${matchId}/stats`}
+                    className="block rounded-md px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-900 font-semibold text-teal-700 dark:text-teal-300"
+                    onClick={() => setIntelOpen(false)}
+                  >
+                    Match Statistics
+                  </Link>
+                  <Link
                     href={`/match-day/${matchId}/scorers`}
                     className="block rounded-md px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-900"
                     onClick={() => setIntelOpen(false)}
@@ -846,6 +862,7 @@ export function MatchDesk({
               homeCoach={homeCoach}
               awayCoach={awayCoach}
               referee={referee}
+              refereeNationality={refereeNationality}
               lineupStatus={lineupStatus}
               onPlayerClick={openPlayer}
               onSlotDrop={onSlotDrop}
@@ -853,6 +870,7 @@ export function MatchDesk({
               onClearSlot={onClearSlot}
               placingPlayerId={placing?.id}
               placingSide={placing?.side}
+              selectedPlayerId={dossierId || selected?.id || null}
               locked={false}
               compact
               formationOptions={Object.keys(FORMATIONS)}
@@ -868,6 +886,11 @@ export function MatchDesk({
                   ? () => sync(false)
                   : undefined
               }
+              homeScore={homeScore}
+              awayScore={awayScore}
+              matchStatus={status}
+              homeAbbr={homeAbbr || homeName}
+              awayAbbr={awayAbbr || awayName}
             />
           </div>
 
@@ -948,7 +971,7 @@ export function MatchDesk({
         <PlayerDossier
           matchId={matchId}
           playerId={dossierId}
-          initialTab="notes"
+          initialTab="profile"
           initialNotes={notes.filter((n) => n.entityId === dossierId)}
           playerName={squad.find((s) => s.id === dossierId)?.name}
           onClose={() => {

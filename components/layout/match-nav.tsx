@@ -26,6 +26,7 @@ const items = [
   { slug: "scripts", label: "Scripts", icon: Mic2 },
   { slug: "packs", label: "Packs", icon: Sparkles },
   { slug: "prep", label: "Prep", icon: ClipboardList },
+  { slug: "stats", label: "Stats", icon: Target },
   { slug: "notes", label: "Notes", icon: StickyNote },
   { slug: "injuries", label: "Injuries", icon: HeartPulse },
   { slug: "scorers", label: "Scorers", icon: Target },

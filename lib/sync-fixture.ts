@@ -649,6 +649,7 @@ async function syncSeasonScorers(
     height?: string;
     weight?: string;
     birth?: string | null;
+    rating?: number | null;
   };
   const byApi = new Map<number, Acc>();
 
@@ -661,6 +662,11 @@ async function syncSeasonScorers(
     const apps = row.statistics?.[0]?.games?.appearences ?? 0;
     const saves = row.statistics?.[0]?.goals?.saves ?? 0;
     const conceded = row.statistics?.[0]?.goals?.conceded ?? 0;
+    const rawRating = row.statistics?.[0]?.games?.rating;
+    const ratingNum =
+      rawRating != null && rawRating !== ""
+        ? Number(rawRating)
+        : null;
     const prev = byApi.get(row.player.id);
     byApi.set(row.player.id, {
       clubId,
@@ -679,6 +685,10 @@ async function syncSeasonScorers(
       height: row.player.height || prev?.height,
       weight: row.player.weight || prev?.weight,
       birth: row.player.birth?.date || prev?.birth || null,
+      rating:
+        ratingNum != null && Number.isFinite(ratingNum)
+          ? ratingNum
+          : prev?.rating ?? null,
     });
   }
 
@@ -726,6 +736,7 @@ async function syncSeasonScorers(
           goals: row.goals,
           assists: row.assists,
           appearances: row.apps || 0,
+          ...(row.rating != null ? { rating: row.rating } : {}),
         },
       });
     } else {
@@ -750,6 +761,7 @@ async function syncSeasonScorers(
             ? { nationality: row.nationality }
             : {}),
           ...(row.age && !player.age ? { age: row.age } : {}),
+          ...(row.rating != null ? { rating: row.rating } : {}),
         },
       });
     }

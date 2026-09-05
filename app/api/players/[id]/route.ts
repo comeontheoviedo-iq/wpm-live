@@ -107,6 +107,18 @@ export async function GET(
             age?: number;
             birth?: { date?: string };
           };
+          statistics?: {
+            games?: {
+              appearences?: number | null;
+              rating?: string | number | null;
+              position?: string | null;
+            };
+            goals?: {
+              total?: number | null;
+              assists?: number | null;
+              saves?: number | null;
+            };
+          }[];
         };
         const patch: Record<string, unknown> = {};
         if (row.player?.photo && !player.photoUrl) patch.photoUrl = row.player.photo;
@@ -119,6 +131,17 @@ export async function GET(
         if (row.player?.nationality && (!player.nationality || player.nationality === "ENG" || player.nationality === "UNK"))
           patch.nationality = row.player.nationality;
         if (row.player?.age && !player.age) patch.age = row.player.age;
+        const af = row.statistics?.[0];
+        const rt = af?.games?.rating;
+        if (rt != null && rt !== "") {
+          const n = Number(rt);
+          if (Number.isFinite(n)) patch.rating = n;
+        }
+        if (af?.games?.appearences != null && !player.appearances)
+          patch.appearances = af.games.appearences;
+        if (af?.goals?.total != null && !player.goals) patch.goals = af.goals.total;
+        if (af?.goals?.assists != null && !player.assists)
+          patch.assists = af.goals.assists;
         if (Object.keys(patch).length) {
           player = await prisma.player.update({
             where: { id: player.id },
@@ -167,6 +190,7 @@ export async function GET(
       cleanSheets: player.cleanSheets,
       yellowCards: player.yellowCards,
       redCards: player.redCards,
+      rating: player.rating ?? null,
       apiFootballPlayerId: player.apiFootballPlayerId,
       club: {
         id: player.club.id,

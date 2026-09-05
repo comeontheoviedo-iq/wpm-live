@@ -13,8 +13,9 @@ export default async function MatchOverviewPage({
   const match = await getMatchFull(id);
   if (!match) notFound();
 
-  const referee = match.officials.find((o) => o.role === "Referee")?.official
-    .name;
+  const refOfficial = match.officials.find((o) => o.role === "Referee")?.official;
+  const referee = refOfficial?.name;
+  const refereeNationality = refOfficial?.nationality ?? null;
 
   const packCount = await prisma.packSection.count({ where: { matchId: id } });
 
@@ -45,6 +46,8 @@ export default async function MatchOverviewPage({
       awayName={match.awayClub.shortName}
       homeFullName={match.homeClub.name}
       awayFullName={match.awayClub.name}
+      homeAbbr={match.homeClub.abbreviation}
+      awayAbbr={match.awayClub.abbreviation}
       homeColor={match.homeClub.primaryColor}
       awayColor={match.awayClub.primaryColor}
       homeFormation={match.homeFormation}
@@ -54,6 +57,7 @@ export default async function MatchOverviewPage({
       homeCoach={match.homeClub.coaches[0]}
       awayCoach={match.awayClub.coaches[0]}
       referee={referee}
+      refereeNationality={refereeNationality}
       lineupStatus={match.lineupStatus}
       apiFootballFixtureId={match.apiFootballFixtureId}
       lastFeedSyncAt={match.lastFeedSyncAt}

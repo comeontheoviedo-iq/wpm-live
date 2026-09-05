@@ -1,9 +1,19 @@
 "use client";
 
 import { useState, type DragEvent } from "react";
-import { X } from "lucide-react";
+import { User, X } from "lucide-react";
 import { slotsFor } from "@/lib/formations";
 import { cn } from "@/lib/utils";
+import {
+  flagUrl,
+  formatFoot,
+  formatHeight,
+  formatRating,
+  formatWeight,
+  lastNameOf,
+  playerPhotoUrl,
+  posCode,
+} from "@/lib/flags";
 
 export type PitchPlayer = {
   id: string;
@@ -16,17 +26,28 @@ export type PitchPlayer = {
   position?: string;
   nationality?: string | null;
   age?: number | null;
-  /** Compact card facts (goals/assists/cards from events or season) */
+  photoUrl?: string | null;
+  apiFootballPlayerId?: number | null;
+  heightCm?: number | null;
+  weightKg?: number | null;
+  preferredFoot?: string | null;
+  /** Season */
   goals?: number;
   assists?: number;
   appearances?: number;
+  rating?: number | string | null;
+  saves?: number;
   yellowCards?: number;
   redCards?: number;
+  cleanSheets?: number;
+  /** Match-level */
   matchGoals?: number;
   matchAssists?: number;
   matchYellow?: boolean;
   matchRed?: boolean;
+  matchSaves?: number;
   subbedOff?: boolean;
+  subMinute?: number | null;
   /** Optional 1-line hook from pinned player note title */
   noteHook?: string | null;
 };
@@ -38,6 +59,282 @@ function lineupBadgeLabel(status?: string) {
   if (status === "predicted") return "Your predicted XI";
   if (status === "expected") return "Expected (last XI)";
   return status ? status : null;
+}
+
+function StatCell({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | number;
+}) {
+  return (
+    <div className="min-w-0 text-center leading-none">
+      <div className="text-[6px] font-semibold uppercase tracking-wide text-slate-500 truncate">
+        {label}
+      </div>
+      <div className="text-[9px] font-bold tabular-nums text-slate-900 truncate">
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function FlagImg({ nationality, className }: { nationality?: string | null; className?: string }) {
+  const src = flagUrl(nationality, 20);
+  if (!src) {
+    return (
+      <span
+        className={cn(
+          "inline-block h-2.5 w-3.5 rounded-[1px] bg-slate-300/80",
+          className
+        )}
+      />
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt=""
+      className={cn("h-2.5 w-3.5 object-cover rounded-[1px] shadow-sm", className)}
+      loading="lazy"
+    />
+  );
+}
+
+function SportsComToken({
+  player,
+  side,
+  teamColor,
+  slotLabel,
+  selected,
+  placing,
+}: {
+  player: PitchPlayer;
+  side: "home" | "away";
+  teamColor: string;
+  slotLabel: string;
+  selected?: boolean;
+  placing?: boolean;
+}) {
+  const isHome = side === "home";
+  const isGk =
+    posCode(player.position, slotLabel) === "GK" ||
+    (player.position || "").toUpperCase() === "GK";
+  const last = lastNameOf(player.name).toUpperCase();
+  const pos = posCode(player.position, slotLabel);
+  const photo = playerPhotoUrl({
+    photoUrl: player.photoUrl,
+    apiFootballPlayerId: player.apiFootballPlayerId,
+  });
+  const apps = player.appearances ?? 0;
+  const seasonG = player.goals ?? 0;
+  const seasonA = player.assists ?? 0;
+  const rating = formatRating(player.rating);
+  const age = player.age != null ? String(player.age) : "—";
+  const matchG = player.matchGoals ?? 0;
+  const matchA = player.matchAssists ?? 0;
+  const sub =
+    player.subMinute != null
+      ? `${player.subMinute}'`
+      : player.subbedOff
+        ? "OUT"
+        : "-";
+
+  const band = isHome
+    ? "bg-[#1a1a1a] text-white"
+    : "bg-white text-slate-900";
+  const borderStyle = isHome
+    ? { borderColor: "#ffffff" }
+    : { borderColor: teamColor };
+
+  return (
+    <span
+      className={cn(
+        "group relative flex w-[70px] sm:w-[76px] flex-col overflow-hidden rounded-md border-[1.5px] shadow-md",
+        band,
+        selected &&
+          "ring-[3px] ring-blue-500 shadow-[0_0_14px_rgba(37,99,235,0.85)]",
+        placing && "ring-2 ring-amber-400",
+        player.subbedOff && "opacity-50 grayscale-[25%]"
+      )}
+      style={borderStyle}
+      title={[
+        player.name,
+        player.isCaptain ? "Captain" : null,
+        pos,
+        player.nationality || null,
+        player.age != null ? `Age ${player.age}` : null,
+        player.noteHook || null,
+      ]
+        .filter(Boolean)
+        .join(" · ")}
+    >
+      {/* Header: # + flag/pos */}
+      <div
+        className={cn(
+          "flex items-start justify-between gap-0.5 px-1 pt-0.5",
+          isHome ? "bg-[#1a1a1a]" : "bg-white"
+        )}
+      >
+        <span
+          className={cn(
+            "text-[15px] sm:text-[17px] font-black leading-none tabular-nums",
+            isHome ? "text-white" : "text-slate-900"
+          )}
+        >
+          {player.shirtNumber}
+        </span>
+        <div className="flex flex-col items-end gap-px pt-0.5">
+          <FlagImg nationality={player.nationality} />
+          <span
+            className={cn(
+              "text-[7px] font-bold uppercase leading-none tracking-wide",
+              isHome ? "text-white/90" : "text-slate-700"
+            )}
+          >
+            {pos}
+          </span>
+        </div>
+      </div>
+
+      {/* Photo + name */}
+      <div
+        className={cn(
+          "flex flex-col items-center px-1 pb-1 pt-0.5",
+          isHome ? "bg-[#1a1a1a]" : "bg-neutral-50"
+        )}
+      >
+        <span
+          className={cn(
+            "relative flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center overflow-hidden rounded-sm",
+            isHome ? "bg-black/40 ring-1 ring-white/20" : "bg-slate-200 ring-1 ring-slate-300"
+          )}
+        >
+          {photo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={photo}
+              alt=""
+              className="h-full w-full object-cover object-top"
+              loading="lazy"
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = "none";
+                const sib = (e.target as HTMLImageElement)
+                  .nextElementSibling as HTMLElement | null;
+                if (sib) sib.style.display = "flex";
+              }}
+            />
+          ) : null}
+          <span
+            className={cn(
+              "absolute inset-0 items-center justify-center",
+              photo ? "hidden" : "flex",
+              isHome ? "text-white/50" : "text-slate-400"
+            )}
+          >
+            <User className="h-5 w-5" strokeWidth={1.5} />
+          </span>
+        </span>
+        <span
+          className={cn(
+            "mt-0.5 w-full truncate text-center text-[8px] sm:text-[9px] font-extrabold uppercase leading-tight tracking-wide",
+            isHome ? "text-white" : "text-slate-900"
+          )}
+        >
+          {player.isCaptain ? "© " : ""}
+          {last}
+        </span>
+      </div>
+
+      {/* Cream stats table */}
+      <div className="bg-[#FFF8E7] px-0.5 py-0.5 border-t border-black/10">
+        {isGk ? (
+          <>
+            <div className="grid grid-cols-4 gap-px">
+              <StatCell label="AGE" value={age} />
+              <StatCell label="HGT" value={formatHeight(player.heightCm)} />
+              <StatCell label="WGT" value={formatWeight(player.weightKg)} />
+              <StatCell label="FOT" value={formatFoot(player.preferredFoot)} />
+            </div>
+            <div className="mt-0.5 grid grid-cols-4 gap-px border-t border-black/5 pt-0.5">
+              <StatCell
+                label="SV"
+                value={player.matchSaves ?? player.saves ?? 0}
+              />
+              <StatCell label="CS" value={player.cleanSheets ?? 0} />
+              <StatCell label="APP" value={apps || "—"} />
+              <StatCell label="RTG" value={rating} />
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="grid grid-cols-4 gap-px">
+              <StatCell label="APP" value={apps || "—"} />
+              <StatCell label="GOL" value={seasonG} />
+              <StatCell label="AST" value={seasonA} />
+              <StatCell label="RTG" value={rating} />
+            </div>
+            <div className="mt-0.5 grid grid-cols-4 gap-px border-t border-black/5 pt-0.5">
+              <StatCell label="AGE" value={age} />
+              <StatCell label="GOL" value={matchG} />
+              <StatCell label="AST" value={matchA} />
+              <StatCell label="SUB" value={sub} />
+            </div>
+          </>
+        )}
+      </div>
+
+      {(player.matchYellow || player.matchRed) && (
+        <span className="absolute left-0.5 top-[22px] flex flex-col gap-px">
+          {player.matchYellow ? (
+            <span className="h-2 w-1.5 rounded-[1px] bg-yellow-400 shadow" />
+          ) : null}
+          {player.matchRed ? (
+            <span className="h-2 w-1.5 rounded-[1px] bg-rose-600 shadow" />
+          ) : null}
+        </span>
+      )}
+    </span>
+  );
+}
+
+function CoachChip({
+  coach,
+  side,
+  teamColor,
+}: {
+  coach: Coach;
+  side: "home" | "away";
+  teamColor: string;
+}) {
+  const isHome = side === "home";
+  return (
+    <div
+      className={cn(
+        "pointer-events-none flex items-center gap-1 rounded-md border bg-white/95 shadow px-1 py-0.5 max-w-[9rem]",
+        isHome ? "border-slate-800" : ""
+      )}
+      style={!isHome ? { borderColor: teamColor } : undefined}
+    >
+      <FlagImg nationality={coach.nationality} className="h-3 w-4" />
+      <div className="min-w-0">
+        <div className="text-[8px] text-slate-500 leading-none">
+          {coach.age != null ? `${coach.age}y` : "Coach"}
+        </div>
+        <div
+          className={cn(
+            "truncate text-[9px] font-bold leading-tight",
+            isHome ? "text-slate-900" : ""
+          )}
+          style={!isHome ? { color: teamColor } : undefined}
+        >
+          {coach.name}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -56,6 +353,7 @@ export function PitchBoard({
   homeCoach,
   awayCoach,
   referee,
+  refereeNationality,
   lineupStatus,
   onPlayerClick,
   onSlotDrop,
@@ -63,6 +361,7 @@ export function PitchBoard({
   onClearSlot,
   placingPlayerId,
   placingSide,
+  selectedPlayerId,
   locked,
   compact,
   formationOptions,
@@ -70,6 +369,11 @@ export function PitchBoard({
   formationBusy,
   lineupHintText,
   onResetOfficial,
+  homeScore,
+  awayScore,
+  matchStatus,
+  homeAbbr,
+  awayAbbr,
 }: {
   homeName: string;
   awayName: string;
@@ -82,21 +386,19 @@ export function PitchBoard({
   homeCoach?: Coach | null;
   awayCoach?: Coach | null;
   referee?: string;
+  refereeNationality?: string | null;
   lineupStatus?: string;
   onPlayerClick?: (player: PitchPlayer) => void;
-  /** DnD: drop a squad player onto a formation slot */
   onSlotDrop?: (args: {
     side: "home" | "away";
     slotId: string;
     playerId: string;
   }) => void;
-  /** Click-to-place: tap a formation slot while placing */
   onSlotClick?: (args: {
     side: "home" | "away";
     slotId: string;
     occupantId?: string | null;
   }) => void;
-  /** Remove occupant from XI (× button) */
   onClearSlot?: (args: {
     side: "home" | "away";
     slotId: string;
@@ -104,6 +406,7 @@ export function PitchBoard({
   }) => void;
   placingPlayerId?: string | null;
   placingSide?: "home" | "away" | null;
+  selectedPlayerId?: string | null;
   locked?: boolean;
   compact?: boolean;
   formationOptions?: string[];
@@ -111,6 +414,11 @@ export function PitchBoard({
   formationBusy?: boolean;
   lineupHintText?: string;
   onResetOfficial?: () => void;
+  homeScore?: number;
+  awayScore?: number;
+  matchStatus?: string;
+  homeAbbr?: string;
+  awayAbbr?: string;
 }) {
   const homeSlots = slotsFor(homeFormation);
   const awaySlots = slotsFor(awayFormation);
@@ -131,24 +439,20 @@ export function PitchBoard({
           !assigned.has(pl.id)
       );
       if (p) assigned.add(p.id);
-      // slot.y: 92 GK → 18 ST (own goal → attack). Map to horizontal depth.
-      // slot.x: 0–100 width → vertical on landscape pitch.
-      const depth = (100 - slot.y) / 100; // 0 at GK, ~0.8 at ST
-      const width = slot.x; // 0 left touch → 100 right touch
+      const depth = (100 - slot.y) / 100;
+      const width = slot.x;
       let x: number;
       let y: number;
       if (side === "home") {
-        x = 4 + depth * 42; // left goal → midfield
+        x = 4 + depth * 42;
         y = width;
       } else {
-        x = 96 - depth * 42; // right goal → midfield
+        x = 96 - depth * 42;
         y = 100 - width;
       }
       return { slot, player: p as PitchPlayer | undefined, x, y, side };
     });
 
-    // Orphans only fill EMPTY slots — never steal a good slot match.
-    // Only consider players whose formationSlot is missing or not in this formation.
     const validIds = new Set(slots.map((s) => s.id));
     const orphans = players.filter(
       (pl) =>
@@ -170,6 +474,23 @@ export function PitchBoard({
   const awayPlaced = placeLandscape(awayPlayers, awaySlots, "away");
   const all = [...homePlaced, ...awayPlaced];
   const placing = Boolean(placingPlayerId && !locked);
+
+  const showScore =
+    homeScore != null &&
+    awayScore != null &&
+    (matchStatus === "Live" ||
+      matchStatus === "Full Time" ||
+      homeScore > 0 ||
+      awayScore > 0);
+
+  const statusShort =
+    matchStatus === "Full Time"
+      ? "FT"
+      : matchStatus === "Live"
+        ? "LIVE"
+        : matchStatus === "Half Time"
+          ? "HT"
+          : null;
 
   function handleDragOver(e: DragEvent, key: string) {
     if (locked || !onSlotDrop) return;
@@ -206,6 +527,9 @@ export function PitchBoard({
     onSlotDrop({ side, slotId, playerId });
   }
 
+  const homeCode = (homeAbbr || homeName).slice(0, 3).toUpperCase();
+  const awayCode = (awayAbbr || awayName).slice(0, 3).toUpperCase();
+
   return (
     <div
       className={cn(
@@ -221,7 +545,7 @@ export function PitchBoard({
         )}
         style={{
           background:
-            "repeating-linear-gradient(0deg, #15803d 0 12.5%, #16a34a 12.5% 25%)",
+            "repeating-linear-gradient(90deg, #1a7a3c 0 8%, #1f8a44 8% 16%)",
         }}
       >
         {/* Pitch markings — landscape goals left/right */}
@@ -235,28 +559,52 @@ export function PitchBoard({
           <div className="absolute top-1/2 right-0 h-[28%] w-[6%] -translate-y-1/2 border-2 border-r-0 border-white/70" />
         </div>
 
+        {/* Top chrome: formation | scoreboard | formation */}
         <div className="absolute top-1 left-1.5 right-1.5 z-20 flex items-start justify-between gap-1.5 pointer-events-none">
-          <div className="rounded-md bg-black/55 backdrop-blur px-1.5 py-0.5 text-white text-[10px] flex items-center gap-1 pointer-events-auto">
-            <span className="font-semibold truncate max-w-[5.5rem]">{homeName}</span>
-            {formationOptions && onFormationChange ? (
-              <select
-                className="rounded bg-black/40 border border-white/25 px-1 py-0 text-[10px] font-semibold max-w-[4.5rem]"
-                value={homeFormation}
-                disabled={formationBusy || locked}
-                onChange={(e) => onFormationChange("home", e.target.value)}
-                aria-label="Home formation"
-              >
-                {formationOptions.map((k) => (
-                  <option key={k} value={k} className="text-slate-900">
-                    {k}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <span className="opacity-80">{homeFormation}</span>
+          <div className="flex flex-col gap-1 items-start pointer-events-auto">
+            <div className="rounded bg-white/95 border border-slate-300 shadow px-1.5 py-0.5 text-[10px] flex items-center gap-1 text-slate-800">
+              {formationOptions && onFormationChange ? (
+                <select
+                  className="bg-transparent font-semibold max-w-[4.5rem] outline-none"
+                  value={homeFormation}
+                  disabled={formationBusy || locked}
+                  onChange={(e) => onFormationChange("home", e.target.value)}
+                  aria-label="Home formation"
+                >
+                  {formationOptions.map((k) => (
+                    <option key={k} value={k}>
+                      {k}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="font-semibold">{homeFormation}</span>
+              )}
+            </div>
+            {homeCoach && (
+              <CoachChip coach={homeCoach} side="home" teamColor={homeColor} />
             )}
           </div>
+
           <div className="flex flex-col items-center gap-0.5 pointer-events-none">
+            {showScore && (
+              <div className="flex items-center gap-1.5 rounded-full bg-white/95 shadow-md border border-slate-200 px-2.5 py-1">
+                <span className="text-[10px] font-bold text-slate-700 tracking-wide">
+                  {homeCode}
+                </span>
+                <span className="text-sm font-black tabular-nums text-slate-900">
+                  {homeScore}-{awayScore}
+                </span>
+                <span className="text-[10px] font-bold text-slate-700 tracking-wide">
+                  {awayCode}
+                </span>
+              </div>
+            )}
+            {statusShort && (
+              <span className="rounded bg-black/55 px-1.5 py-px text-[8px] font-bold text-white tracking-wider">
+                {statusShort}
+              </span>
+            )}
             {badge && (
               <div
                 className={cn(
@@ -273,7 +621,10 @@ export function PitchBoard({
               </div>
             )}
             {lineupHintText && (
-              <span className="rounded bg-black/45 px-1.5 py-px text-[8px] text-white/90 max-w-[12rem] truncate" title={lineupHintText}>
+              <span
+                className="rounded bg-black/45 px-1.5 py-px text-[8px] text-white/90 max-w-[12rem] truncate"
+                title={lineupHintText}
+              >
                 {lineupHintText}
               </span>
             )}
@@ -288,25 +639,33 @@ export function PitchBoard({
               </button>
             )}
           </div>
-          <div className="rounded-md bg-black/55 backdrop-blur px-1.5 py-0.5 text-white text-[10px] flex items-center gap-1 justify-end pointer-events-auto">
-            {formationOptions && onFormationChange ? (
-              <select
-                className="rounded bg-black/40 border border-white/25 px-1 py-0 text-[10px] font-semibold max-w-[4.5rem]"
-                value={awayFormation}
-                disabled={formationBusy || locked}
-                onChange={(e) => onFormationChange("away", e.target.value)}
-                aria-label="Away formation"
-              >
-                {formationOptions.map((k) => (
-                  <option key={k} value={k} className="text-slate-900">
-                    {k}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <span className="opacity-80">{awayFormation}</span>
+
+          <div className="flex flex-col gap-1 items-end pointer-events-auto">
+            <div
+              className="rounded shadow px-1.5 py-0.5 text-[10px] flex items-center gap-1 text-white border"
+              style={{ backgroundColor: awayColor, borderColor: awayColor }}
+            >
+              {formationOptions && onFormationChange ? (
+                <select
+                  className="bg-transparent font-semibold max-w-[4.5rem] outline-none"
+                  value={awayFormation}
+                  disabled={formationBusy || locked}
+                  onChange={(e) => onFormationChange("away", e.target.value)}
+                  aria-label="Away formation"
+                >
+                  {formationOptions.map((k) => (
+                    <option key={k} value={k} className="text-slate-900">
+                      {k}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="font-semibold">{awayFormation}</span>
+              )}
+            </div>
+            {awayCoach && (
+              <CoachChip coach={awayCoach} side="away" teamColor={awayColor} />
             )}
-            <span className="font-semibold truncate max-w-[5.5rem]">{awayName}</span>
           </div>
         </div>
 
@@ -316,33 +675,10 @@ export function PitchBoard({
           const isDragOver = dragOverSlot === key;
           const sideOk = !placingSide || placingSide === side;
           const highlightPlace = placing && sideOk;
-          const isPlacingHere =
-            placing && player?.id === placingPlayerId;
-
-          const shortName = player
-            ? player.name.split(" ").slice(-1)[0]
-            : "";
-          const seasonGa =
-            player && (player.goals || player.assists)
-              ? [
-                  player.goals ? `${player.goals}G` : null,
-                  player.assists ? `${player.assists}A` : null,
-                ]
-                  .filter(Boolean)
-                  .join(" ")
-              : null;
-          const appsLabel =
-            player && player.appearances && player.appearances > 0
-              ? `${player.appearances}apps`
-              : null;
-          const factsLine = [
-            player?.matchGoals ? `${player.matchGoals}G` : null,
-            player?.matchAssists ? `${player.matchAssists}A` : null,
-            !player?.matchGoals && !player?.matchAssists ? seasonGa : null,
-            appsLabel && !player?.matchGoals ? appsLabel : null,
-          ]
-            .filter(Boolean)
-            .join(" · ");
+          const isPlacingHere = placing && player?.id === placingPlayerId;
+          const isSelected = Boolean(
+            player && selectedPlayerId && player.id === selectedPlayerId
+          );
 
           function slotActivate() {
             if (placing && onSlotClick && !locked) {
@@ -369,10 +705,9 @@ export function PitchBoard({
               onDragLeave={() => handleDragLeave(key)}
               onDrop={(e) => handleDrop(e, side, slot.id)}
             >
-              {/* ~44px hit target — receives drops even when token button is present */}
               <div
                 className={cn(
-                  "absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-11 w-11 rounded-lg z-0",
+                  "absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[88px] w-[76px] rounded-md z-0",
                   isDragOver && "bg-sky-400/20"
                 )}
                 style={{ touchAction: "manipulation" }}
@@ -408,7 +743,7 @@ export function PitchBoard({
               {(isDragOver || highlightPlace) && (
                 <div
                   className={cn(
-                    "pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-11 w-11 rounded-lg border-2 z-[1]",
+                    "pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[88px] w-[76px] rounded-md border-2 z-[1]",
                     isDragOver
                       ? "border-sky-300 bg-sky-400/25 shadow-[0_0_12px_rgba(56,189,248,0.55)]"
                       : "border-white/50 border-dashed bg-white/10"
@@ -466,85 +801,18 @@ export function PitchBoard({
                 }}
               >
                 {player ? (
-                  <span
-                    className={cn(
-                      "group relative flex w-[52px] flex-col items-center gap-px",
-                      isPlacingHere && "drop-shadow-[0_0_6px_rgba(251,191,36,0.9)]",
-                      player.subbedOff && "opacity-45 grayscale-[30%]"
-                    )}
-                    title={[
-                      player.name,
-                      player.isCaptain ? "Captain" : null,
-                      player.position || slot.label,
-                      factsLine || null,
-                      player.matchYellow || player.matchRed
-                        ? `Cards${player.matchYellow ? " Y" : ""}${player.matchRed ? " R" : ""}`
-                        : null,
-                      player.subbedOff ? "Subbed off" : null,
-                      player.noteHook || null,
-                      player.nationality || null,
-                      player.age != null ? `Age ${player.age}` : null,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  >
-                    <span className="relative">
-                      <span
-                        className="flex h-6 w-6 sm:h-7 sm:w-7 items-center justify-center rounded-full text-[9px] sm:text-[10px] font-bold text-white shadow ring-1 ring-white/60"
-                        style={{ backgroundColor: color }}
-                      >
-                        {player.shirtNumber}
-                      </span>
-                      <span className="absolute -right-2 -top-1.5 flex items-center gap-px">
-                        {player.matchGoals ||
-                        (!player.matchGoals && player.goals) ? (
-                          <span className="rounded bg-emerald-600 px-0.5 text-[7px] font-bold text-white leading-none">
-                            {player.matchGoals || player.goals}G
-                          </span>
-                        ) : null}
-                        {player.matchAssists ||
-                        (!player.matchAssists &&
-                          player.assists &&
-                          player.assists > 0) ? (
-                          <span className="rounded bg-sky-600 px-0.5 text-[7px] font-bold text-white leading-none">
-                            {player.matchAssists || player.assists}A
-                          </span>
-                        ) : null}
-                        {player.matchYellow ||
-                        (player.yellowCards && player.yellowCards > 0) ? (
-                          <span className="h-2 w-1.5 rounded-[1px] bg-yellow-400" />
-                        ) : null}
-                        {player.matchRed ||
-                        (player.redCards && player.redCards > 0) ? (
-                          <span className="h-2 w-1.5 rounded-[1px] bg-rose-600" />
-                        ) : null}
-                      </span>
-                    </span>
-                    <span className="max-w-[52px] truncate rounded bg-black/75 px-0.5 text-[8px] font-semibold leading-tight text-white">
-                      {player.isCaptain ? "© " : ""}
-                      {shortName}
-                    </span>
-                    <span className="max-w-[52px] truncate text-[7px] font-medium leading-none text-white/85 drop-shadow">
-                      {slot.label}
-                      {player.position && player.position !== slot.label
-                        ? ` · ${player.position}`
-                        : ""}
-                    </span>
-                    {factsLine ? (
-                      <span className="max-w-[52px] truncate rounded bg-black/55 px-0.5 text-[7px] font-semibold leading-none text-emerald-200">
-                        {factsLine}
-                      </span>
-                    ) : null}
-                    {player.noteHook ? (
-                      <span className="max-w-[56px] truncate rounded bg-violet-900/80 px-0.5 text-[6px] font-medium leading-tight text-violet-100">
-                        {player.noteHook}
-                      </span>
-                    ) : null}
-                  </span>
+                  <SportsComToken
+                    player={player}
+                    side={side}
+                    teamColor={color}
+                    slotLabel={slot.label}
+                    selected={isSelected}
+                    placing={isPlacingHere}
+                  />
                 ) : (
                   <span
                     className={cn(
-                      "flex h-6 w-6 sm:h-7 sm:w-7 items-center justify-center rounded-full text-[8px] font-bold text-white/80 shadow ring-1 ring-white/30 border border-dashed border-white/40 bg-black/25",
+                      "flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-md text-[8px] font-bold text-white/80 shadow ring-1 ring-white/30 border border-dashed border-white/40 bg-black/25",
                       highlightPlace && "ring-sky-200/80"
                     )}
                   >
@@ -557,7 +825,7 @@ export function PitchBoard({
                 <button
                   type="button"
                   aria-label={`Remove ${player.name} from XI`}
-                  className="absolute -right-2 -top-1 z-[3] flex h-4 w-4 items-center justify-center rounded-full bg-slate-900/85 text-white hover:bg-rose-600 shadow opacity-80"
+                  className="absolute -right-1.5 -top-1 z-[3] flex h-4 w-4 items-center justify-center rounded-full bg-slate-900/85 text-white hover:bg-rose-600 shadow opacity-70 hover:opacity-100"
                   onClick={(e) => {
                     e.stopPropagation();
                     onClearSlot({
@@ -576,27 +844,17 @@ export function PitchBoard({
 
         {referee && (
           <div className="absolute bottom-1.5 left-1/2 z-10 -translate-x-1/2 flex flex-col items-center pointer-events-none">
-            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-yellow-400 text-[8px] font-bold text-slate-900 ring-2 ring-white/60">
-              REF
+            <div className="flex flex-col items-center overflow-hidden rounded-md border border-sky-700 bg-white shadow w-[52px]">
+              <div className="w-full bg-sky-700 px-1 py-0.5 flex justify-center">
+                <FlagImg nationality={refereeNationality} className="h-2.5 w-3.5" />
+              </div>
+              <div className="flex h-7 w-full items-center justify-center bg-slate-100">
+                <User className="h-4 w-4 text-slate-400" strokeWidth={1.5} />
+              </div>
+              <div className="w-full truncate bg-sky-700 px-0.5 py-0.5 text-center text-[7px] font-bold text-white">
+                {lastNameOf(referee)}
+              </div>
             </div>
-            <span className="mt-0.5 rounded bg-black/55 px-1 text-[8px] text-white">
-              {referee}
-            </span>
-          </div>
-        )}
-
-        {(homeCoach || awayCoach) && (
-          <div className="absolute bottom-1 left-2 right-2 z-10 flex justify-between gap-2 pointer-events-none">
-            {homeCoach && (
-              <div className="rounded bg-black/55 px-1.5 py-0.5 text-[8px] sm:text-[9px] text-white max-w-[40%]">
-                <div className="font-semibold truncate">{homeCoach.name}</div>
-              </div>
-            )}
-            {awayCoach && (
-              <div className="rounded bg-black/55 px-1.5 py-0.5 text-[8px] sm:text-[9px] text-white text-right max-w-[40%] ml-auto">
-                <div className="font-semibold truncate">{awayCoach.name}</div>
-              </div>
-            )}
           </div>
         )}
       </div>

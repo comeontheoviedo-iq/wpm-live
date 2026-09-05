@@ -71,6 +71,7 @@ model Player {
   cleanSheets      Int             @default(0)
   yellowCards      Int             @default(0)
   redCards         Int             @default(0)
+  rating           Float?
   injuries         Injury[]
   events           MatchEvent[]
   scorers          SeasonScorer[]

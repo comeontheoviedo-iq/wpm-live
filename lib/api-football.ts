@@ -901,7 +901,7 @@ export type AfTopScorer = {
   statistics: {
     team: { id: number; name: string; logo?: string };
     league?: { id: number; name: string; country: string; season: number };
-    games?: { appearences?: number | null; lineups?: number | null; minutes?: number | null; position?: string | null };
+    games?: { appearences?: number | null; lineups?: number | null; minutes?: number | null; position?: string | null; rating?: string | number | null };
     goals?: { total?: number | null; assists?: number | null; conceded?: number | null; saves?: number | null };
     cards?: { yellow?: number | null; red?: number | null };
   }[];

@@ -51,6 +51,7 @@ function StatBar({
 }
 
 const PREFERRED = [
+  /expected goals|\bxg\b/i,
   /possession/i,
   /corner/i,
   /total shots|shots total/i,

@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { getMatchFull } from "@/lib/match-data";
 import { formatKickoff } from "@/lib/utils";
 import { MatchStatisticsView } from "@/components/match/match-statistics";
+import { AdvancedStatsCard } from "@/components/match/advanced-stats-card";
 
 export default async function MatchStatsPage({
   params,
@@ -17,9 +18,20 @@ export default async function MatchStatsPage({
       <div>
         <h1 className="text-lg font-bold">Match Statistics</h1>
         <p className="text-xs text-slate-500">
-          Possession, shots, corners and the event timeline — SportsCom-style.
+          Possession, shots, corners, free xG where covered, and the event
+          timeline.
         </p>
       </div>
+
+      <AdvancedStatsCard
+        matchId={match.id}
+        homeName={match.homeClub.shortName}
+        awayName={match.awayClub.shortName}
+        homeColor={match.homeClub.primaryColor}
+        awayColor={match.awayClub.primaryColor}
+        showCoverage
+      />
+
       <MatchStatisticsView
         homeName={match.homeClub.shortName}
         awayName={match.awayClub.shortName}

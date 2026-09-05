@@ -122,6 +122,8 @@ export default async function MatchOverviewPage({
       }))}
       homeClubId={match.homeClubId}
       awayClubId={match.awayClubId}
+      homeTeamAfId={match.homeClub.apiFootballTeamId}
+      awayTeamAfId={match.awayClub.apiFootballTeamId}
       playerOverrides={match.playerOverrides.map((o) => ({
         playerId: o.playerId,
         displayName: o.displayName,

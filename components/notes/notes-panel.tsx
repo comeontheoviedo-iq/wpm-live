@@ -28,6 +28,7 @@ export type NotesFilterScope =
   | "club"
   | "hooks"
   | "bio"
+  | "relevant"
   | string;
 
 export function NotesPanel({
@@ -47,6 +48,8 @@ export function NotesPanel({
   liveMode,
   playerNameById,
   onNotePlayerClick,
+  relevantNoteIds,
+  relevantLoading,
 }: {
   matchId: string;
   entityType?: string | null;
@@ -67,6 +70,10 @@ export function NotesPanel({
   playerNameById?: Record<string, string>;
   /** Click player-linked note → highlight on pitch / open dossier */
   onNotePlayerClick?: (playerId: string) => void;
+  /** LIVE: note ids ranked relevant to current match events */
+  relevantNoteIds?: string[];
+  /** Show loading pulse on Relevant now chip */
+  relevantLoading?: boolean;
 }) {
   const router = useRouter();
   const [notes, setNotes] = useState(initialNotes);
@@ -117,6 +124,10 @@ export function NotesPanel({
     () => new Set(awayPlayerIds || []),
     [awayPlayerIds]
   );
+  const relevantSet = useMemo(
+    () => new Set(relevantNoteIds || []),
+    [relevantNoteIds]
+  );
 
   function matchesScope(n: NoteRow, scope: NotesFilterScope) {
     if (entityId && entityType === "player") {
@@ -151,6 +162,8 @@ export function NotesPanel({
       if (!n.pinned) return false;
     } else if (scope === "bio") {
       if (n.category !== "Bio" && n.category !== "Career") return false;
+    } else if (scope === "relevant") {
+      if (!relevantSet.has(n.id)) return false;
     } else if (scope !== "all") {
       if (n.category !== scope) return false;
     }
@@ -169,6 +182,7 @@ export function NotesPanel({
   }
 
   function noteRank(n: NoteRow): number {
+    if (relevantSet.has(n.id)) return -1;
     if (n.pinned) return 0;
     if (isLiveEventNote(n)) return 1;
     if (n.category === "Hook" || n.category === "Funfact") return 2;
@@ -179,6 +193,7 @@ export function NotesPanel({
   const counts = useMemo(() => {
     const scopes: NotesFilterScope[] = [
       "all",
+      "relevant",
       "pinned",
       "match",
       "home",
@@ -194,7 +209,7 @@ export function NotesPanel({
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [notes, entityId, entityType, homeSet, awaySet, homeClubId, awayClubId]);
+  }, [notes, entityId, entityType, homeSet, awaySet, homeClubId, awayClubId, relevantSet]);
 
   const visible = useMemo(() => {
     const needle = search.trim().toLowerCase();
@@ -226,6 +241,7 @@ export function NotesPanel({
     awayClubId,
     search,
     playerNameById,
+    relevantSet,
   ]);
 
   const grouped = useMemo(() => {
@@ -303,6 +319,12 @@ export function NotesPanel({
 
   const scopeChips: { key: NotesFilterScope; label: string }[] = [
     { key: "all", label: "All" },
+    {
+      key: "relevant",
+      label: relevantLoading
+        ? "Relevant…"
+        : `Relevant now${relevantSet.size ? ` (${relevantSet.size})` : ""}`,
+    },
     { key: "pinned", label: "Pinned" },
     { key: "match", label: "Match" },
     { key: "home", label: "Home" },
@@ -324,7 +346,9 @@ export function NotesPanel({
           "rounded-md border border-slate-100 dark:border-slate-800 px-2 py-1.5 cursor-pointer",
           liveMode && "py-1",
           n.pinned && "border-amber-200/80 dark:border-amber-900/50 bg-amber-50/40 dark:bg-amber-950/20",
-          isLiveEventNote(n) && !n.pinned && "border-rose-100 dark:border-rose-900/40",
+          relevantSet.has(n.id) &&
+            "border-violet-300 dark:border-violet-700 bg-violet-50/50 dark:bg-violet-950/30",
+          isLiveEventNote(n) && !n.pinned && !relevantSet.has(n.id) && "border-rose-100 dark:border-rose-900/40",
           expanded && "border-teal-300 dark:border-teal-700 bg-teal-50/30 dark:bg-teal-950/20",
           playerLinked && "hover:border-teal-300 dark:hover:border-teal-700"
         )}
@@ -348,6 +372,7 @@ export function NotesPanel({
               <span className="ml-1.5 text-[9px] font-normal text-slate-400">
                 {n.category}
                 {n.pinned ? " · pin" : ""}
+                {relevantSet.has(n.id) ? " · now" : ""}
                 {playerName ? ` · ${playerName}` : ""}
               </span>
             </div>
@@ -456,8 +481,12 @@ export function NotesPanel({
                 className={cn(
                   "shrink-0 rounded-full px-1.5 py-0.5 text-[9px] border inline-flex items-center gap-0.5",
                   activeFilter === c.key
-                    ? "bg-teal-600 text-white border-teal-600"
-                    : "border-slate-200 dark:border-slate-700"
+                    ? c.key === "relevant"
+                      ? "bg-violet-600 text-white border-violet-600"
+                      : "bg-teal-600 text-white border-teal-600"
+                    : c.key === "relevant"
+                      ? "border-violet-300 text-violet-700 dark:border-violet-700 dark:text-violet-300"
+                      : "border-slate-200 dark:border-slate-700"
                 )}
               >
                 {c.label}

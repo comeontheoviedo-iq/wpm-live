@@ -113,7 +113,7 @@ function parseKg(w?: string | null) {
 /**
  * Prefer AF nationality (citizenship). When AF lists a national team with apps,
  * prefer that over a stale England/club-country citizenship.
- * Store birth.country separately for SportsCom-style dual flags.
+ * Store birth.country separately for dual nationality flags.
  */
 async function upsertPlayerBioFromAf(
   clubId: string,
@@ -389,7 +389,7 @@ async function upsertLineupSide(
         data: {
           isStarter: false,
           onPitch: false,
-          formationSlot: null,
+          formationSlot: "BENCH",
           apiFootballPlayerId: p.id || existing.apiFootballPlayerId,
           shirtNumber: p.number || existing.shirtNumber,
           position: posGuess(p.pos) || existing.position,
@@ -405,6 +405,7 @@ async function upsertLineupSide(
           nationality: "UNK",
           isStarter: false,
           onPitch: false,
+          formationSlot: "BENCH",
           apiFootballPlayerId: p.id || null,
         },
       });
@@ -627,6 +628,15 @@ async function syncInjuriesForMatch(
       : /suspend/i.test(reason)
         ? "suspended"
         : "out";
+    const outSince =
+      inj.fixture?.date != null
+        ? String(inj.fixture.date).slice(0, 10)
+        : null;
+    // AF sometimes embeds return hints in reason ("Expected back 12/09", "Return Date: …")
+    const returnHint =
+      reason.match(
+        /(?:expected(?:\s+back)?|return(?:\s+date)?|back(?:\s+on)?)[:\s]+([A-Za-z0-9/.-]{4,20})/i
+      )?.[1] || null;
 
     await prisma.injury.create({
       data: {
@@ -635,7 +645,13 @@ async function syncInjuriesForMatch(
         playerId: player.id,
         status,
         injuryType: reason,
-        notes: inj.player?.type || null,
+        expectedReturn: returnHint,
+        notes: [
+          inj.player?.type || null,
+          outSince ? `Out since ${outSince}` : null,
+        ]
+          .filter(Boolean)
+          .join(" · ") || null,
       },
     });
     count++;
@@ -714,7 +730,7 @@ async function applySubEvent(
       inheritedSlot = outP.formationSlot;
       await prisma.player.update({
         where: { id: outP.id },
-        data: { onPitch: false, isStarter: false, formationSlot: null },
+        data: { onPitch: false, isStarter: false, formationSlot: "BENCH" },
       });
     }
   }
@@ -820,6 +836,37 @@ async function dedupeClubSlots(clubId: string, formation?: string | null) {
   }
 }
 
+
+
+/** Collapse duplicate AF goal/card rows (same minute+type+player) keeping richest description. */
+async function dedupeMatchEvents(matchId: string) {
+  const events = await prisma.matchEvent.findMany({
+    where: { matchId },
+    orderBy: { createdAt: "asc" },
+  });
+  const groups = new Map<string, typeof events>();
+  for (const e of events) {
+    const key = `${e.minute}|${e.type}|${e.playerId || e.description.split("(")[0].trim()}`;
+    const list = groups.get(key) || [];
+    list.push(e);
+    groups.set(key, list);
+  }
+  let removed = 0;
+  for (const list of groups.values()) {
+    if (list.length < 2) continue;
+    const sorted = [...list].sort(
+      (a, b) => (b.description?.length || 0) - (a.description?.length || 0)
+    );
+    const keep = sorted[0];
+    for (const d of sorted.slice(1)) {
+      await prisma.matchEvent.delete({ where: { id: d.id } });
+      removed++;
+    }
+    // If a shorter duplicate was kept earlier, ensure keep has richest text (already)
+    void keep;
+  }
+  return removed;
+}
 
 async function syncVenueAndWeather(
   matchId: string,
@@ -1540,7 +1587,12 @@ export async function syncMatchFromApiFootball(
   const minute = fixture.fixture.status.elapsed ?? match.minute;
   const status = mapAfStatus(fixture.fixture.status.short);
 
-  const newEvents: { type: string; minute: number; description: string }[] = [];
+  const newEvents: {
+    type: string;
+    minute: number;
+    description: string;
+    playerId?: string | null;
+  }[] = [];
 
   for (const ev of events) {
     const elapsed = ev.time?.elapsed ?? 0;
@@ -1566,14 +1618,23 @@ export async function syncMatchFromApiFootball(
       playerId = pl?.id ?? null;
     }
 
-    const existing = await prisma.matchEvent.findFirst({
+    // Prefer same minute+type+player (description can grow when assist arrives)
+    let existing = await prisma.matchEvent.findFirst({
       where: {
         matchId,
         minute: elapsed,
         type,
-        description: desc,
+        ...(playerId
+          ? { playerId }
+          : { description: desc }),
       },
+      orderBy: { createdAt: "asc" },
     });
+    if (!existing) {
+      existing = await prisma.matchEvent.findFirst({
+        where: { matchId, minute: elapsed, type, description: desc },
+      });
+    }
     if (!existing) {
       await prisma.matchEvent.create({
         data: {
@@ -1585,7 +1646,12 @@ export async function syncMatchFromApiFootball(
           playerId,
         },
       });
-      newEvents.push({ type, minute: elapsed, description: desc });
+      newEvents.push({
+        type,
+        minute: elapsed,
+        description: desc,
+        playerId,
+      });
 
       // Auto-pin short note for goals/cards
       if (
@@ -1614,11 +1680,27 @@ export async function syncMatchFromApiFootball(
           });
         }
       }
-    } else if (playerId && !existing.playerId) {
-      await prisma.matchEvent.update({
-        where: { id: existing.id },
-        data: { playerId },
-      });
+    } else {
+      const patch: {
+        playerId?: string;
+        description?: string;
+        teamSide?: string | null;
+      } = {};
+      if (playerId && !existing.playerId) patch.playerId = playerId;
+      if (
+        desc &&
+        desc !== existing.description &&
+        desc.length > (existing.description || "").length
+      ) {
+        patch.description = desc;
+      }
+      if (teamSide && !existing.teamSide) patch.teamSide = teamSide;
+      if (Object.keys(patch).length) {
+        await prisma.matchEvent.update({
+          where: { id: existing.id },
+          data: patch,
+        });
+      }
     }
 
     if (type === "sub" && lineupStatus === "confirmed") {
@@ -1634,6 +1716,10 @@ export async function syncMatchFromApiFootball(
       );
     }
   }
+
+  await dedupeMatchEvents(matchId).catch((err) =>
+    console.error("[sync] dedupe events failed", matchId, err)
+  );
 
   if (lineupStatus === "confirmed") {
     await dedupeClubSlots(match.homeClubId, homeFormation);

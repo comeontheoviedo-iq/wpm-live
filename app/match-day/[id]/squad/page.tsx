@@ -47,6 +47,8 @@ export default async function SquadPage({
         "away",
         match.awayClub.shortName
       )}
+      homeFormation={match.homeFormation}
+      awayFormation={match.awayFormation}
     />
   );
 }

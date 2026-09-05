@@ -32,6 +32,7 @@ import { EventTimeline } from "@/components/match/event-timeline";
 import { EventComposer } from "@/components/live/event-composer";
 import { Button } from "@/components/ui/button";
 import { FORMATIONS } from "@/lib/formations";
+import { leagueIdForCompetition } from "@/lib/competitions";
 import { namesLooselyMatch, parseSubDescription } from "@/lib/player-name";
 import { cn } from "@/lib/utils";
 import {
@@ -183,33 +184,63 @@ function applyLiveSubsToXi(
   return list();
 }
 
+/** Scorer name from AF desc: "Normal Goal — Milan Škriniar (Assist Name)". */
+function parseGoalScorerName(description: string): string | null {
+  const m = description.match(/—\s*([^(\n]+)/);
+  return m?.[1]?.trim() || null;
+}
+
+function parseAssistName(description: string): string | null {
+  const m = description.match(/\(([^)]+)\)\s*$/);
+  const name = m?.[1]?.trim() || null;
+  if (!name) return null;
+  // Subs also use parentheses — ignore non-goal contexts upstream.
+  return name;
+}
+
+function eventInvolvesPlayer(e: MatchEventRow, p: PitchPlayer): boolean {
+  if (e.playerId && e.playerId === p.id) return true;
+  if (!e.description) return false;
+  const scorer = parseGoalScorerName(e.description);
+  if (scorer && namesLooselyMatch(p.name, scorer)) return true;
+  const { outName, inName } = parseSubDescription(e.description);
+  if (outName && namesLooselyMatch(p.name, outName)) return true;
+  if (inName && namesLooselyMatch(p.name, inName)) return true;
+  return false;
+}
+
 function enrichPlayers(
   players: PitchPlayer[],
   events: MatchEventRow[]
 ): PitchPlayer[] {
   const withMatchStats = players.map((p) => {
-    const mine = events.filter(
-      (e) =>
-        e.playerId === p.id ||
-        (e.description &&
-          (e.description.includes(p.name) ||
-            namesLooselyMatch(
-              p.name,
-              parseSubDescription(e.description).outName
-            ) ||
-            namesLooselyMatch(
-              p.name,
-              parseSubDescription(e.description).inName
-            )))
-    );
-    const matchGoals = mine.filter((e) =>
-      ["goal", "penalty_goal", "own_goal"].includes(e.type)
-    ).length;
-    const matchAssists = mine.filter(
-      (e) =>
-        e.description.toLowerCase().includes(`(${p.name.toLowerCase()})`) ||
-        (e.type === "goal" && e.description.toLowerCase().includes("assist"))
-    ).length;
+    const goalTypes = new Set(["goal", "penalty_goal", "own_goal"]);
+    // Dedupe AF goal rows that reappear when assist text is appended.
+    const goalKeys = new Set<string>();
+    let matchGoals = 0;
+    for (const e of events) {
+      if (!goalTypes.has(e.type)) continue;
+      const scorer =
+        (e.playerId && e.playerId === p.id) ||
+        namesLooselyMatch(p.name, parseGoalScorerName(e.description || ""));
+      if (!scorer) continue;
+      const key = `${e.minute}|${e.type}|${e.playerId || p.id}`;
+      if (goalKeys.has(key)) continue;
+      goalKeys.add(key);
+      matchGoals += 1;
+    }
+    let matchAssists = 0;
+    const assistKeys = new Set<string>();
+    for (const e of events) {
+      if (!goalTypes.has(e.type)) continue;
+      const assistName = parseAssistName(e.description || "");
+      if (!assistName || !namesLooselyMatch(p.name, assistName)) continue;
+      const key = `${e.minute}|assist|${assistName.toLowerCase()}`;
+      if (assistKeys.has(key)) continue;
+      assistKeys.add(key);
+      matchAssists += 1;
+    }
+    const mine = events.filter((e) => eventInvolvesPlayer(e, p));
     const matchYellow = mine.some((e) => e.type === "yellow");
     const matchRed = mine.some((e) => e.type === "red");
     return {
@@ -269,6 +300,8 @@ export function MatchDesk({
   keepers = [],
   homeClubId,
   awayClubId,
+  homeTeamAfId = null,
+  awayTeamAfId = null,
   playerOverrides: initialOverrides = [],
 }: {
   matchId: string;
@@ -316,6 +349,8 @@ export function MatchDesk({
   keepers?: KeeperRow[];
   homeClubId?: string;
   awayClubId?: string;
+  homeTeamAfId?: number | null;
+  awayTeamAfId?: number | null;
   playerOverrides?: PlayerOverrideRow[];
 }) {
   const router = useRouter();
@@ -324,11 +359,17 @@ export function MatchDesk({
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
-  const [liveToast, setLiveToast] = useState<{
+  type LivePopup = {
+    id: string;
     kind: "goal" | "sub" | "fact";
     title: string;
-    body: string;
-  } | null>(null);
+    subtitle?: string;
+    lines: string[];
+    scoreline?: string;
+    pinned?: boolean;
+    createdAt: number;
+  };
+  const [livePopups, setLivePopups] = useState<LivePopup[]>([]);
   const [coachSide, setCoachSide] = useState<"home" | "away" | null>(null);
   const seenEventKeysRef = useRef<Set<string>>(new Set());
   const [configured, setConfigured] = useState<boolean | null>(null);
@@ -336,6 +377,10 @@ export function MatchDesk({
   const [homeForm, setHomeForm] = useState(homeFormation);
   const [awayForm, setAwayForm] = useState(awayFormation);
   const [notesFilter, setNotesFilter] = useState<NotesFilterScope>("all");
+  const [relevantNoteIds, setRelevantNoteIds] = useState<string[]>([]);
+  const [relevantLoading, setRelevantLoading] = useState(false);
+  const relevantFetchedAtRef = useRef(0);
+  const relevantInFlightRef = useRef(false);
   const [dossierId, setDossierId] = useState<string | null>(null);
   const [onAirOpen, setOnAirOpen] = useState(false);
   const [suggestions, setSuggestions] = useState<OnAirSuggestion[]>([]);
@@ -581,6 +626,10 @@ export function MatchDesk({
 
   const squadRef = useRef(squad);
   squadRef.current = squad;
+  const noteHookByPlayerRef = useRef<Record<string, string>>({});
+  noteHookByPlayerRef.current = Object.fromEntries(noteHookByPlayer.entries());
+  const scoreRef = useRef({ home: homeScore, away: awayScore });
+  scoreRef.current = { home: homeScore, away: awayScore };
 
   useEffect(() => {
     if (!placing) return;
@@ -644,6 +693,53 @@ export function MatchDesk({
     [matchId]
   );
 
+  const notesFilterRef = useRef(notesFilter);
+  notesFilterRef.current = notesFilter;
+
+  const loadRelevantNotes = useCallback(
+    async (
+      news?: {
+        type: string;
+        minute: number;
+        description: string;
+        playerId?: string | null;
+      }[],
+      opts?: { force?: boolean; autoSwitch?: boolean }
+    ) => {
+      if (status !== "Live" && status !== "Full Time" && !opts?.force) return;
+      const now = Date.now();
+      // Throttle: skip if fetched < 45s ago unless forced by a live event
+      if (!opts?.force && now - relevantFetchedAtRef.current < 45_000) {
+        return;
+      }
+      if (relevantInFlightRef.current) return;
+      relevantInFlightRef.current = true;
+      setRelevantLoading(true);
+      try {
+        const res = await fetch(`/api/matches/${matchId}/notes/relevant`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ events: news || [], limit: 10 }),
+        });
+        const json = await res.json();
+        if (!res.ok) return;
+        const ids = (json.noteIds || []) as string[];
+        setRelevantNoteIds(ids);
+        relevantFetchedAtRef.current = Date.now();
+        const f = notesFilterRef.current;
+        if (opts?.autoSwitch && ids.length && (f === "all" || f === "relevant")) {
+          setNotesFilter("relevant");
+        }
+      } catch {
+        /* ignore */
+      } finally {
+        relevantInFlightRef.current = false;
+        setRelevantLoading(false);
+      }
+    },
+    [matchId, status]
+  );
+
   const pinSuggestion = useCallback(
     async (s: OnAirSuggestion) => {
       try {
@@ -685,6 +781,21 @@ export function MatchDesk({
         if (!res.ok) {
           setMsg(json.error || "Sync failed");
         } else {
+          const syncedHome =
+            typeof json.homeScore === "number"
+              ? json.homeScore
+              : typeof json.match?.homeScore === "number"
+                ? json.match.homeScore
+                : null;
+          const syncedAway =
+            typeof json.awayScore === "number"
+              ? json.awayScore
+              : typeof json.match?.awayScore === "number"
+                ? json.match.awayScore
+                : null;
+          if (syncedHome != null && syncedAway != null) {
+            scoreRef.current = { home: syncedHome, away: syncedAway };
+          }
           const news = (json.newEvents || []) as {
             type: string;
             minute: number;
@@ -702,71 +813,130 @@ export function MatchDesk({
             );
             if (actionable.length) {
               void loadSuggestions(actionable);
+              void loadRelevantNotes(actionable, {
+                force: true,
+                autoSwitch: /goal|sub/i.test(
+                  actionable.map((a) => a.type).join(" ")
+                ),
+              });
             }
-            // Rich goal / sub-on popups (factual AF event text + season bits)
+            // Rich goal / sub popups — commentary desk cards (stackable)
             for (const e of news) {
               const key = `${e.minute}|${e.type}|${e.description}`;
               if (seenEventKeysRef.current.has(key)) continue;
               seenEventKeysRef.current.add(key);
+
+              const pushPopup = (
+                popup: Omit<LivePopup, "id" | "createdAt" | "pinned">
+              ) => {
+                const id = `${key}|${Date.now()}`;
+                setLivePopups((prev) =>
+                  [
+                    ...prev,
+                    { ...popup, id, createdAt: Date.now(), pinned: false },
+                  ].slice(-5)
+                );
+                window.setTimeout(() => {
+                  setLivePopups((prev) =>
+                    prev.filter((p) => p.id !== id || p.pinned)
+                  );
+                }, popup.kind === "goal" ? 15_000 : 12_000);
+              };
+
+              const newsPlayerId =
+                (e as { playerId?: string | null }).playerId || null;
+
               if (/goal|penalty_goal|own_goal/i.test(e.type || "")) {
+                const scorerName = parseGoalScorerName(e.description || "");
+                const assistName = parseAssistName(e.description || "");
                 const scorer =
-                  squadRef.current.find((p) =>
-                    (e.description || "")
-                      .toLowerCase()
-                      .includes((p.name || "").toLowerCase().split(" ").pop() || "___")
+                  squadRef.current.find(
+                    (p) =>
+                      (newsPlayerId && newsPlayerId === p.id) ||
+                      namesLooselyMatch(p.name, scorerName)
                   ) || null;
+                const assister =
+                  (assistName &&
+                    squadRef.current.find((p) =>
+                      namesLooselyMatch(p.name, assistName)
+                    )) ||
+                  null;
+                const hook = scorer
+                  ? noteHookByPlayerRef.current[scorer.id] || null
+                  : null;
                 const seasonBits = scorer
                   ? [
-                      scorer.goals != null ? `${scorer.goals} season goals` : null,
                       scorer.appearances != null
-                        ? `${scorer.appearances} apps`
+                        ? `${scorer.appearances} season apps`
                         : null,
-                      scorer.assists != null ? `${scorer.assists} assists` : null,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")
-                  : "";
-                setLiveToast({
+                      scorer.goals != null
+                        ? `${scorer.goals} season goals`
+                        : null,
+                      scorer.assists != null
+                        ? `${scorer.assists} season assists`
+                        : null,
+                    ].filter(Boolean)
+                  : [];
+                const lines = [
+                  scorerName
+                    ? `Scorer: ${scorer?.name || scorerName}`
+                    : e.description,
+                  assistName
+                    ? `Assist: ${assister?.name || assistName}`
+                    : null,
+                  ...seasonBits,
+                  hook ? `Note: ${hook}` : null,
+                ].filter(Boolean) as string[];
+                pushPopup({
                   kind: "goal",
                   title: `GOAL ${e.minute}'`,
-                  body:
-                    `${e.description}` +
-                    (seasonBits ? ` · ${seasonBits}` : ""),
+                  subtitle: scorer?.name || scorerName || undefined,
+                  lines: [...new Set(lines)].slice(0, 6),
+                  scoreline: `${homeName} ${scoreRef.current.home}–${scoreRef.current.away} ${awayName}`,
                 });
-                setTimeout(() => setLiveToast(null), 12_000);
               } else if (/^sub$/i.test(e.type || "")) {
-                const inName = (e.description || "").match(/\(([^)]+)\)\s*$/)?.[1];
+                const { outName, inName } = parseSubDescription(
+                  e.description || ""
+                );
                 const onP =
                   squadRef.current.find((p) =>
-                    inName
-                      ? (p.name || "")
-                          .toLowerCase()
-                          .includes(inName.toLowerCase().split(" ").pop() || "___")
-                      : false
+                    namesLooselyMatch(p.name, inName)
+                  ) || null;
+                const offP =
+                  squadRef.current.find((p) =>
+                    namesLooselyMatch(p.name, outName)
                   ) || null;
                 const seasonBits = onP
                   ? [
-                      onP.appearances != null ? `${onP.appearances} apps` : null,
-                      onP.goals != null ? `${onP.goals} goals` : null,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")
-                  : "";
-                setLiveToast({
+                      onP.appearances != null
+                        ? `${onP.appearances} season apps`
+                        : null,
+                      onP.goals != null ? `${onP.goals} season goals` : null,
+                      onP.assists != null
+                        ? `${onP.assists} season assists`
+                        : null,
+                    ].filter(Boolean)
+                  : [];
+                const lines = [
+                  onP || inName ? `ON: ${onP?.name || inName}` : null,
+                  offP || outName ? `OFF: ${offP?.name || outName}` : null,
+                  ...seasonBits,
+                  e.description,
+                ].filter(Boolean) as string[];
+                pushPopup({
                   kind: "sub",
                   title: `SUB ${e.minute}'`,
-                  body:
-                    `${e.description}` +
-                    (seasonBits ? ` · ${seasonBits}` : ""),
+                  subtitle: onP?.name || inName || undefined,
+                  lines: [...new Set(lines)].slice(0, 6),
                 });
-                setTimeout(() => setLiveToast(null), 10_000);
               } else if (/var|penalty_miss|red/i.test(e.type || "")) {
-                setLiveToast({
+                pushPopup({
                   kind: "fact",
-                  title: `${(e.type || "Event").replace("_", " ").toUpperCase()} ${e.minute}'`,
-                  body: e.description,
+                  title: `${(e.type || "Event")
+                    .replace(/_/g, " ")
+                    .toUpperCase()} ${e.minute}'`,
+                  lines: [e.description].filter(Boolean),
                 });
-                setTimeout(() => setLiveToast(null), 10_000);
               }
             }
           }
@@ -785,7 +955,7 @@ export function MatchDesk({
         setBusy(false);
       }
     },
-    [apiFootballFixtureId, matchId, router, loadSuggestions]
+    [apiFootballFixtureId, matchId, router, loadSuggestions, loadRelevantNotes, homeName, awayName]
   );
 
   useEffect(() => {
@@ -810,6 +980,16 @@ export function MatchDesk({
     const t = setInterval(() => sync(true), 18_000);
     return () => clearInterval(t);
   }, [configured, apiFootballFixtureId, status, sync]);
+
+  // Relevant notes: initial + throttled refresh while LIVE (not every poll)
+  useEffect(() => {
+    if (status !== "Live") return;
+    void loadRelevantNotes(undefined, { force: true });
+    const t = setInterval(() => {
+      void loadRelevantNotes(undefined, { force: false });
+    }, 90_000);
+    return () => clearInterval(t);
+  }, [status, loadRelevantNotes]);
 
   async function lineupAction(body: Record<string, unknown>) {
     setBusy(true);
@@ -1025,7 +1205,18 @@ export function MatchDesk({
     ["penalty_goal", "penalty_miss"].includes(e.type)
   );
 
-  const deskNotes = useMemo(() => {
+  const homeLogoUrl = homeTeamAfId
+    ? `https://media.api-sports.io/football/teams/${homeTeamAfId}.png`
+    : null;
+  const awayLogoUrl = awayTeamAfId
+    ? `https://media.api-sports.io/football/teams/${awayTeamAfId}.png`
+    : null;
+  const leagueAfId = leagueIdForCompetition(competition);
+  const leagueLogoUrl = leagueAfId
+    ? `https://media.api-sports.io/football/leagues/${leagueAfId}.png`
+    : null;
+
+    const deskNotes = useMemo(() => {
     if (dossierId) {
       return notes.filter((n) => n.entityId === dossierId);
     }
@@ -1300,38 +1491,96 @@ export function MatchDesk({
         </div>
       )}
 
-      {/* Live intel popup — goal / sub / fact; tap to dismiss */}
-      {liveToast && (
-        <button
-          type="button"
-          onClick={() => setLiveToast(null)}
-          className={cn(
-            "absolute left-1/2 top-14 z-[60] -translate-x-1/2 max-w-[min(92%,28rem)] rounded-xl border px-4 py-3 text-left shadow-2xl",
-            liveToast.kind === "goal" &&
-              "border-emerald-400 bg-emerald-50/98 dark:bg-emerald-950/98 dark:border-emerald-700",
-            liveToast.kind === "sub" &&
-              "border-sky-400 bg-sky-50/98 dark:bg-sky-950/98 dark:border-sky-700",
-            liveToast.kind === "fact" &&
-              "border-amber-400 bg-amber-50/98 dark:bg-amber-950/98 dark:border-amber-700"
-          )}
-        >
-          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-            {liveToast.kind === "goal"
-              ? "Goal"
-              : liveToast.kind === "sub"
-                ? "Substitution"
-                : "Live"}
-            <span className="ml-2 font-normal normal-case tracking-normal text-slate-400">
-              tap to dismiss
-            </span>
-          </div>
-          <div className="mt-0.5 text-sm font-bold text-slate-900 dark:text-white">
-            {liveToast.title}
-          </div>
-          <div className="mt-1 text-xs text-slate-700 dark:text-slate-200 whitespace-pre-wrap">
-            {liveToast.body}
-          </div>
-        </button>
+      {/* Live intel popups — prominent stacked cards; click pin or dismiss */}
+      {livePopups.length > 0 && (
+        <div className="absolute left-1/2 top-12 z-[60] flex w-[min(94%,26rem)] -translate-x-1/2 flex-col gap-2">
+          {livePopups.map((popup) => (
+            <div
+              key={popup.id}
+              role="dialog"
+              aria-label={popup.title}
+              className={cn(
+                "rounded-2xl border-2 px-4 py-3 text-left shadow-2xl ring-1 ring-black/5",
+                popup.kind === "goal" &&
+                  "border-emerald-500 bg-emerald-50/98 dark:bg-emerald-950/98 dark:border-emerald-500",
+                popup.kind === "sub" &&
+                  "border-sky-500 bg-sky-50/98 dark:bg-sky-950/98 dark:border-sky-500",
+                popup.kind === "fact" &&
+                  "border-amber-500 bg-amber-50/98 dark:bg-amber-950/98 dark:border-amber-500",
+                popup.pinned && "ring-2 ring-amber-400"
+              )}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                    {popup.kind === "goal"
+                      ? "Goal"
+                      : popup.kind === "sub"
+                        ? "Substitution"
+                        : "Live"}
+                    {popup.pinned ? " · pinned" : ""}
+                  </div>
+                  <div className="mt-0.5 text-base font-black text-slate-900 dark:text-white">
+                    {popup.title}
+                    {popup.subtitle ? (
+                      <span className="ml-2 text-sm font-bold text-slate-700 dark:text-slate-200">
+                        {popup.subtitle}
+                      </span>
+                    ) : null}
+                  </div>
+                  {popup.scoreline ? (
+                    <div className="mt-0.5 text-sm font-semibold tabular-nums text-slate-800 dark:text-slate-100">
+                      {popup.scoreline}
+                    </div>
+                  ) : null}
+                </div>
+                <div className="flex shrink-0 gap-1">
+                  <button
+                    type="button"
+                    className="rounded-md border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 hover:text-amber-600"
+                    title={popup.pinned ? "Unpin" : "Pin (keep open)"}
+                    onClick={() =>
+                      setLivePopups((prev) =>
+                        prev.map((p) =>
+                          p.id === popup.id ? { ...p, pinned: !p.pinned } : p
+                        )
+                      )
+                    }
+                  >
+                    <Pin
+                      className={cn(
+                        "h-3 w-3",
+                        popup.pinned && "fill-amber-400 text-amber-500"
+                      )}
+                    />
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-md border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 hover:text-rose-600"
+                    title="Dismiss"
+                    onClick={() =>
+                      setLivePopups((prev) =>
+                        prev.filter((p) => p.id !== popup.id)
+                      )
+                    }
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              </div>
+              <ul className="mt-2 space-y-1 text-xs text-slate-800 dark:text-slate-100">
+                {popup.lines.map((line, i) => (
+                  <li key={i} className="leading-snug">
+                    {line}
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-2 text-[9px] text-slate-400">
+                Auto-hides · pin to keep
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
       {/* Placing toast */}
@@ -1395,6 +1644,8 @@ export function MatchDesk({
               const p = squad.find((s) => s.id === playerId);
               if (p) openPlayer(p);
             }}
+            relevantNoteIds={relevantNoteIds}
+            relevantLoading={relevantLoading}
           />
         </aside>
 
@@ -1477,6 +1728,12 @@ export function MatchDesk({
               matchStatus={status}
               homeAbbr={homeAbbr || homeName}
               awayAbbr={awayAbbr || awayName}
+              homeLogoUrl={homeLogoUrl}
+              awayLogoUrl={awayLogoUrl}
+              leagueLogoUrl={leagueLogoUrl}
+              onHomeLogoClick={() => setNotesFilter("home")}
+              onAwayLogoClick={() => setNotesFilter("away")}
+              onLeagueLogoClick={() => setNotesFilter("match")}
               cardSettings={fieldSettings}
               markerPct={markerPct}
               onOpenFieldSettings={() => setFieldSettingsOpen(true)}

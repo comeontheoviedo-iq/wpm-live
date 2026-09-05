@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { getMatchFull } from "@/lib/match-data";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { MapPin, Users, Ruler, ExternalLink, CloudSun } from "lucide-react";
+import { splitVenueNames } from "@/lib/venue-name";
 
 export default async function VenuePage({
   params,
@@ -12,6 +13,7 @@ export default async function VenuePage({
   const match = await getMatchFull(id);
   if (!match) notFound();
   const v = match.venue;
+  const names = v ? splitVenueNames(v.name) : null;
   const osm =
     v?.lat != null && v?.lon != null
       ? `https://www.openstreetmap.org/?mlat=${v.lat}&mlon=${v.lon}#map=16/${v.lat}/${v.lon}`
@@ -37,7 +39,7 @@ export default async function VenuePage({
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <MapPin className="h-4 w-4 text-teal-600" />
-                {v.name}
+                {names?.primary || v.name}
               </CardTitle>
             </CardHeader>
             <CardBody className="space-y-4 text-sm">
@@ -49,6 +51,33 @@ export default async function VenuePage({
                   className="w-full max-h-56 object-cover rounded-xl border border-slate-100 dark:border-slate-800"
                 />
               )}
+
+              {(names?.sponsored || names?.historic) && (
+                <div className="grid sm:grid-cols-2 gap-3 rounded-xl border border-teal-100 dark:border-teal-900 bg-teal-50/60 dark:bg-teal-950/30 p-3">
+                  <div>
+                    <div className="text-[10px] font-bold uppercase tracking-wide text-teal-700 dark:text-teal-300">
+                      Sponsored name
+                    </div>
+                    <div className="font-semibold mt-0.5">
+                      {names?.sponsored || "—"}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-bold uppercase tracking-wide text-teal-700 dark:text-teal-300">
+                      Original / historic name
+                    </div>
+                    <div className="font-semibold mt-0.5">
+                      {names?.historic || "—"}
+                    </div>
+                  </div>
+                  {names?.sponsored && names?.historic ? null : (
+                    <p className="sm:col-span-2 text-[11px] text-slate-500">
+                      Full AF name: {v.name}
+                    </p>
+                  )}
+                </div>
+              )}
+
               <div className="grid sm:grid-cols-2 gap-3">
                 <Info label="City" value={v.city} />
                 <Info label="Address" value={v.address || "—"} />

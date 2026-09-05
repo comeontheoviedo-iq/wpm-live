@@ -78,3 +78,8 @@ See `lib/live-stat-triggers.ts` + `lib/game-state-notes.ts`.
 - Stacked **live intel popups** (goal / sub / fact) top-right on Match desk
 - Threshold + momentum → `fact` popups; optional data-viz when shots/poss/xG exist
 - Matching prep notes → **Relevant now** filter + `Note:` lines inside popups via `enrichFlashLines`
+
+## Data-viz flashes
+
+Expanded catalogue (15 kinds), sources, rotation, and gaps: see
+[`DATA_VIZ_FLASH.md`](./DATA_VIZ_FLASH.md).

@@ -69,7 +69,18 @@ export type StatTriggerFlash = {
   playerId?: string | null;
   teamSide?: "home" | "away";
   /** Optional viz preference when numbers support it */
-  vizHint?: "possession" | "shot_map" | "xg_race" | null;
+  vizHint?:
+    | "possession"
+    | "shot_map"
+    | "xg_race"
+    | "shots_compare"
+    | "leaderboard"
+    | "gk_saves"
+    | "momentum_proxy"
+    | "corners_fouls"
+    | null;
+  /** Stat field for leaderboard focus */
+  focusStat?: string;
   /** Field that crossed (for logging / UI) */
   stat: string;
   value: number;
@@ -183,6 +194,15 @@ export function evaluatePlayerThresholds(
       const id = `thr|${r.afPlayerId}|${d.stat}|${d.threshold}`;
       if (fired.has(id)) continue;
       fired.add(id);
+      const vizByStat: Record<string, NonNullable<StatTriggerFlash["vizHint"]>> = {
+        shotsOn: "leaderboard",
+        keyPasses: "leaderboard",
+        saves: "gk_saves",
+        duelsWon: "leaderboard",
+        tackles: "leaderboard",
+        dribblesSuccess: "leaderboard",
+        foulsCommitted: "corners_fouls",
+      };
       out.push({
         id,
         kind: "player_threshold",
@@ -190,7 +210,8 @@ export function evaluatePlayerThresholds(
         lines: [d.line(r, v)],
         playerId: r.playerId,
         teamSide: r.teamSide,
-        vizHint: d.stat === "shotsOn" ? "shot_map" : null,
+        vizHint: vizByStat[d.stat] ?? null,
+        focusStat: d.stat,
         stat: d.stat,
         value: v,
       });
@@ -287,7 +308,7 @@ export function evaluateMomentumProxy(opts: {
             "Proxy from team shot counts (no AF momentum/xG on free plan for this fixture)",
           ].filter(Boolean) as string[],
           teamSide: side,
-          vizHint: "shot_map",
+          vizHint: "shots_compare",
           stat: "shotDiff",
           value: Math.abs(diff),
         });

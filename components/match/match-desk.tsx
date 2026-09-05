@@ -18,6 +18,7 @@ import {
   X,
   Pin,
   SlidersHorizontal,
+  History,
 } from "lucide-react";
 import { PitchBoard, type PitchPlayer } from "@/components/match/pitch";
 import { SquadRail, type SquadPlayer } from "@/components/match/squad-rail";
@@ -56,6 +57,11 @@ import {
   type ShotPoint,
   type VizFlashKind,
 } from "@/components/match/data-viz-flash";
+import {
+  pickViz,
+  type MomentumSample,
+  type VizPayload,
+} from "@/lib/viz-build";
 import { DeskLiveExtras } from "@/components/match/world-class/desk-live-extras";
 import {
   type FieldSettings,
@@ -420,15 +426,13 @@ export function MatchDesk({
     scoreline?: string;
     pinned?: boolean;
     createdAt: number;
-    viz?: {
-      kind: VizFlashKind;
-      shots?: ShotPoint[];
-      homeXg?: number | null;
-      awayXg?: number | null;
-      possessionSamples?: number[];
-    } | null;
+    viz?: VizPayload | null;
   };
   const [livePopups, setLivePopups] = useState<LivePopup[]>([]);
+  /** Passive archive of dismissed/expired live intel — newest first, capped */
+  const INTEL_HISTORY_CAP = 40;
+  const [intelHistory, setIntelHistory] = useState<LivePopup[]>([]);
+  const [intelHistoryOpen, setIntelHistoryOpen] = useState(false);
   const [coachSide, setCoachSide] = useState<"home" | "away" | null>(null);
   const seenEventKeysRef = useRef<Set<string>>(new Set());
   const [configured, setConfigured] = useState<boolean | null>(null);
@@ -469,7 +473,15 @@ export function MatchDesk({
   /** Once-per-crossing keys for live stat / momentum flashes */
   const firedStatTriggersRef = useRef<Set<string>>(new Set());
   const htVizEmittedRef = useRef(false);
+  const ftVizPreviewRef = useRef(false);
   const possessionSamplesRef = useRef<number[]>([]);
+  const momentumSamplesRef = useRef<MomentumSample[]>([]);
+  const livePlayerStatsRef = useRef<LivePlayerStatRow[]>([]);
+  const recentVizKindsRef = useRef<VizFlashKind[]>([]);
+  const eventsRef = useRef(events);
+  eventsRef.current = events;
+  const scoreSampleRef = useRef({ home: homeScore, away: awayScore });
+  scoreSampleRef.current = { home: homeScore, away: awayScore };
   const advStatsCacheRef = useRef<{
     homeXg: number | null;
     awayXg: number | null;
@@ -482,16 +494,51 @@ export function MatchDesk({
   relevantNoteIdsRef.current = relevantNoteIds;
   const statisticsRef = useRef(statistics);
   statisticsRef.current = statistics;
-  // Sample home possession % for sparkline (cap length — no spam)
+  // Sample home possession % + momentum proxy (cap length — no spam)
   useEffect(() => {
     const poss = statistics.find((s) => /possession/i.test(s.label));
-    if (!poss) return;
-    const h = Number(String(poss.homeValue).replace("%", ""));
-    if (!Number.isFinite(h)) return;
-    const arr = possessionSamplesRef.current;
-    const last = arr[arr.length - 1];
-    if (last != null && Math.abs(last - h) < 1) return;
-    possessionSamplesRef.current = [...arr, h].slice(-24);
+    const shots =
+      statistics.find((s) => /^shots$/i.test(s.label) || /total shots/i.test(s.label)) ||
+      null;
+    const parse = (v: string | number | null | undefined) => {
+      if (v == null) return null;
+      const n = Number(String(v).replace("%", "").replace(/[^\d.-]/g, ""));
+      return Number.isFinite(n) ? n : null;
+    };
+    const hPoss = poss ? parse(poss.homeValue) : null;
+    if (hPoss != null) {
+      const arr = possessionSamplesRef.current;
+      const last = arr[arr.length - 1];
+      if (last == null || Math.abs(last - hPoss) >= 1) {
+        possessionSamplesRef.current = [...arr, hPoss].slice(-24);
+      }
+    }
+    const hShots = shots ? parse(shots.homeValue) : null;
+    const aShots = shots ? parse(shots.awayValue) : null;
+    if (hPoss != null || (hShots != null && aShots != null)) {
+      const mom = momentumSamplesRef.current;
+      const prev = mom[mom.length - 1];
+      const same =
+        prev &&
+        prev.homePoss === hPoss &&
+        prev.homeShots === hShots &&
+        prev.awayShots === aShots &&
+        prev.homeScore === scoreSampleRef.current.home &&
+        prev.awayScore === scoreSampleRef.current.away;
+      if (!same) {
+        momentumSamplesRef.current = [
+          ...mom,
+          {
+            at: Date.now(),
+            homePoss: hPoss,
+            homeShots: hShots,
+            awayShots: aShots,
+            homeScore: scoreSampleRef.current.home,
+            awayScore: scoreSampleRef.current.away,
+          },
+        ].slice(-24);
+      }
+    }
   }, [statistics]);
   const [suggestions, setSuggestions] = useState<OnAirSuggestion[]>([]);
   const [dismissedSuggestions, setDismissedSuggestions] = useState<string[]>([]);
@@ -846,37 +893,113 @@ export function MatchDesk({
   const attachVizToPopup = useCallback(
     async (
       popupId: string,
-      prefer: VizFlashKind
+      prefer: VizFlashKind | null,
+      context: string = "default",
+      extra?: { focusStat?: string | null; focusAfPlayerId?: number | null }
     ) => {
       const adv = await fetchAdvancedViz();
-      const poss = possessionSamplesRef.current;
-      let viz: LivePopup["viz"] = null;
-      if (prefer === "shot_map" && adv?.shots?.length) {
-        viz = { kind: "shot_map", shots: adv.shots, homeXg: adv.homeXg, awayXg: adv.awayXg };
-      } else if (
-        (prefer === "xg_race" || prefer === "shot_map") &&
-        adv?.homeXg != null &&
-        adv?.awayXg != null
-      ) {
-        viz = {
-          kind: "xg_race",
-          homeXg: adv.homeXg,
-          awayXg: adv.awayXg,
-          shots: adv.shots,
-        };
-      } else if (prefer === "possession" && poss.length >= 2) {
-        viz = { kind: "possession", possessionSamples: [...poss] };
-      } else if (adv?.homeXg != null && adv?.awayXg != null) {
-        viz = { kind: "xg_race", homeXg: adv.homeXg, awayXg: adv.awayXg };
-      } else if (poss.length >= 2) {
-        viz = { kind: "possession", possessionSamples: [...poss] };
-      }
+      const bags = {
+        shots: adv?.shots || [],
+        homeXg: adv?.homeXg ?? null,
+        awayXg: adv?.awayXg ?? null,
+        homeGoals: scoreSampleRef.current.home,
+        awayGoals: scoreSampleRef.current.away,
+        possessionSamples: [...possessionSamplesRef.current],
+        statistics: statisticsRef.current,
+        events: eventsRef.current.map((e) => ({
+          minute: e.minute,
+          type: e.type,
+          teamSide: e.teamSide,
+          description: e.description,
+        })),
+        livePlayerStats: livePlayerStatsRef.current,
+        momentumSamples: [...momentumSamplesRef.current],
+        focusStat: extra?.focusStat ?? null,
+        focusAfPlayerId: extra?.focusAfPlayerId ?? null,
+      };
+      const viz = pickViz({
+        prefer,
+        context,
+        bags,
+        recentKinds: recentVizKindsRef.current,
+      });
       if (!viz) return;
+      recentVizKindsRef.current = [...recentVizKindsRef.current, viz.kind].slice(-6);
       setLivePopups((prev) =>
         prev.map((p) => (p.id === popupId ? { ...p, viz } : p))
       );
     },
     [fetchAdvancedViz]
+  );
+
+  const pushIntelHistory = useCallback((popup: LivePopup) => {
+    setIntelHistory((prev) => {
+      if (prev.some((p) => p.id === popup.id)) return prev;
+      return [{ ...popup, pinned: false }, ...prev].slice(0, INTEL_HISTORY_CAP);
+    });
+  }, []);
+
+  /** Remove a live popup and archive it (skip archive if still pinned unless force). */
+  const dismissLivePopup = useCallback(
+    (id: string, opts?: { force?: boolean }) => {
+      setLivePopups((prev) => {
+        const hit = prev.find((p) => p.id === id);
+        if (!hit) return prev;
+        if (hit.pinned && !opts?.force) return prev;
+        // Capture current payload (incl. viz) before removal
+        queueMicrotask(() => pushIntelHistory(hit));
+        return prev.filter((p) => p.id !== id);
+      });
+    },
+    [pushIntelHistory]
+  );
+
+  const pushLivePopup = useCallback(
+    (popup: Omit<LivePopup, "id" | "createdAt" | "pinned"> & { id?: string }, ttlMs: number) => {
+      const id = popup.id || `live|${Date.now()}`;
+      const full: LivePopup = {
+        ...popup,
+        id,
+        createdAt: Date.now(),
+        pinned: false,
+      };
+      setLivePopups((prev) => {
+        const next = [...prev, full];
+        if (next.length > 5) {
+          const overflow = next.slice(0, next.length - 5);
+          for (const o of overflow) {
+            queueMicrotask(() => pushIntelHistory(o));
+          }
+          return next.slice(-5);
+        }
+        return next;
+      });
+      if (ttlMs > 0) {
+        window.setTimeout(() => dismissLivePopup(id), ttlMs);
+      }
+      return id;
+    },
+    [dismissLivePopup, pushIntelHistory]
+  );
+
+  const reopenIntelHistory = useCallback(
+    (item: LivePopup) => {
+      const id = `${item.id}|reopen|${Date.now()}`;
+      setLivePopups((prev) =>
+        [
+          ...prev,
+          {
+            ...item,
+            id,
+            createdAt: Date.now(),
+            pinned: true,
+          },
+        ].slice(-5)
+      );
+      setIntelHistoryOpen(false);
+      setMsg(`Reopened: ${item.title}`);
+    },
+    []
   );
 
     const loadSuggestions = useCallback(
@@ -1106,17 +1229,10 @@ export function MatchDesk({
                 popup: Omit<LivePopup, "id" | "createdAt" | "pinned">
               ) => {
                 const id = `${key}|${Date.now()}`;
-                setLivePopups((prev) =>
-                  [
-                    ...prev,
-                    { ...popup, id, createdAt: Date.now(), pinned: false },
-                  ].slice(-5)
+                pushLivePopup(
+                  { ...popup, id },
+                  popup.kind === "goal" ? 15_000 : 12_000
                 );
-                window.setTimeout(() => {
-                  setLivePopups((prev) =>
-                    prev.filter((p) => p.id !== id || p.pinned)
-                  );
-                }, popup.kind === "goal" ? 15_000 : 12_000);
               };
 
               const newsPlayerId =
@@ -1295,14 +1411,14 @@ export function MatchDesk({
                 };
                 lastGoalPopupRef.current = goalPopup;
                 pushPopup(goalPopup);
-                // Live data-viz flash on goal (shot map / xG race when available)
+                // Live data-viz flash on goal — rotate shot map / timeline / xG
                 window.setTimeout(() => {
                   const idGuess = `${key}|`;
                   setLivePopups((prev) => {
                     const hit = [...prev].reverse().find((p) =>
                       p.id.startsWith(idGuess) && p.kind === "goal"
                     );
-                    if (hit) void attachVizToPopup(hit.id, "shot_map");
+                    if (hit) void attachVizToPopup(hit.id, "shot_map", "goal");
                     return prev;
                   });
                 }, 50);
@@ -1346,8 +1462,8 @@ export function MatchDesk({
                   .filter((n) => relevantNoteIdsRef.current.includes(n.id))
                   .slice(0, 2)
                   .map((n) => ({ id: n.id, title: n.title, body: n.body }));
-                pushPopup({
-                  kind: "fact",
+                const cardPopup = {
+                  kind: "fact" as const,
                   title: `${(e.type || "Event")
                     .replace(/_/g, " ")
                     .toUpperCase()} ${e.minute}'`,
@@ -1357,7 +1473,20 @@ export function MatchDesk({
                     relevantNotes: relevantSnips,
                     statistics: statisticsRef.current,
                   }).slice(0, 8),
-                });
+                };
+                pushPopup(cardPopup);
+                if (/red|yellow/i.test(e.type || "")) {
+                  window.setTimeout(() => {
+                    const idGuess = `${key}|`;
+                    setLivePopups((prev) => {
+                      const hit = [...prev].reverse().find((p) =>
+                        p.id.startsWith(idGuess) && p.kind === "fact"
+                      );
+                      if (hit) void attachVizToPopup(hit.id, "card_timeline", "card");
+                      return prev;
+                    });
+                  }, 50);
+                }
               }
             }
           }
@@ -1365,6 +1494,7 @@ export function MatchDesk({
           // Threshold / momentum flashes from AF fixture players + team stats
           try {
             const liveStats = (json.livePlayerStats || []) as LivePlayerStatRow[];
+            livePlayerStatsRef.current = liveStats;
             const fired = firedStatTriggersRef.current;
             const thr = evaluatePlayerThresholds(liveStats, fired);
             const mom = evaluateMomentumProxy({
@@ -1390,30 +1520,50 @@ export function MatchDesk({
             );
             for (const fl of flashes.slice(0, 4)) {
               const id = `${fl.id}|${Date.now()}`;
-              setLivePopups((prev) =>
-                [
-                  ...prev,
-                  {
-                    id,
-                    kind: "fact" as const,
-                    title: fl.title,
-                    lines: fl.lines.slice(0, 6),
-                    scoreline: `${homeName} ${scoreRef.current.home}–${scoreRef.current.away} ${awayName}`,
-                    createdAt: Date.now(),
-                    pinned: false,
-                  },
-                ].slice(-5)
+              pushLivePopup(
+                {
+                  id,
+                  kind: "fact" as const,
+                  title: fl.title,
+                  lines: fl.lines.slice(0, 6),
+                  scoreline: `${homeName} ${scoreRef.current.home}–${scoreRef.current.away} ${awayName}`,
+                },
+                12_000
               );
-              if (fl.vizHint) {
-                window.setTimeout(() => {
-                  void attachVizToPopup(id, fl.vizHint!);
-                }, 80);
-              }
               window.setTimeout(() => {
-                setLivePopups((prev) =>
-                  prev.filter((p) => p.id !== id || p.pinned)
+                void attachVizToPopup(
+                  id,
+                  fl.vizHint || null,
+                  fl.stat || "default",
+                  { focusStat: fl.focusStat || fl.stat }
                 );
-              }, 12_000);
+              }, 80);
+            }
+
+            // FT preview: once per desk session, attach a rich viz sample so Chris
+            // can see the library without waiting for a live goal/HT.
+            if (
+              (status === "Full Time" || status === "Finished") &&
+              !ftVizPreviewRef.current
+            ) {
+              ftVizPreviewRef.current = true;
+              const id = `ft-viz|${Date.now()}`;
+              pushLivePopup(
+                {
+                  id,
+                  kind: "fact" as const,
+                  title: "Full-time · data viz",
+                  lines: [
+                    `${homeName} ${scoreRef.current.home}–${scoreRef.current.away} ${awayName}`,
+                    "Sample chart from available team / advanced stats",
+                  ],
+                  scoreline: `${homeName} ${scoreRef.current.home}–${scoreRef.current.away} ${awayName}`,
+                },
+                18_000
+              );
+              window.setTimeout(() => {
+                void attachVizToPopup(id, "match_dna", "ht");
+              }, 100);
             }
           } catch {
             /* soft-fail triggers */
@@ -1721,7 +1871,7 @@ export function MatchDesk({
         },
       ].slice(-5)
     );
-    window.setTimeout(() => void attachVizToPopup(id, "xg_race"), 100);
+    window.setTimeout(() => void attachVizToPopup(id, "xg_race", "ht"), 100);
     window.setTimeout(() => {
       setLivePopups((prev) => prev.filter((p) => p.id !== id || p.pinned));
     }, 16_000);
@@ -1774,9 +1924,13 @@ export function MatchDesk({
         },
       ].slice(-5)
     );
-    // Intelligent viz: HT → xG race; otherwise possession sparkline if we have samples
+    // Rotate viz: HT chain vs moment chain (soft-fail + dedupe recent kinds)
     window.setTimeout(() => {
-      void attachVizToPopup(id, isHt ? "xg_race" : "possession");
+      void attachVizToPopup(
+        id,
+        isHt ? "xg_race" : "possession",
+        isHt ? "ht" : "moment"
+      );
     }, 80);
     window.setTimeout(() => {
       setLivePopups((prevPop) =>
@@ -1791,6 +1945,7 @@ export function MatchDesk({
     shotsOnTarget,
     homeName,
     awayName,
+    attachVizToPopup,
   ]);
 
 
@@ -2226,11 +2381,24 @@ export function MatchDesk({
                   shots={popup.viz.shots}
                   homeXg={popup.viz.homeXg}
                   awayXg={popup.viz.awayXg}
+                  homeGoals={popup.viz.homeGoals}
+                  awayGoals={popup.viz.awayGoals}
                   homeName={homeName}
                   awayName={awayName}
                   homeColor={homeColor}
                   awayColor={awayColor}
                   possessionSamples={popup.viz.possessionSamples}
+                  compare={popup.viz.compare}
+                  compareTitle={popup.viz.compareTitle}
+                  dna={popup.viz.dna}
+                  leaderboard={popup.viz.leaderboard}
+                  leaderboardTitle={popup.viz.leaderboardTitle}
+                  gkName={popup.viz.gkName}
+                  gkSaves={popup.viz.gkSaves}
+                  gkSide={popup.viz.gkSide}
+                  timelineEvents={popup.viz.timelineEvents}
+                  timelineTitle={popup.viz.timelineTitle}
+                  momentumSamples={popup.viz.momentumSamples}
                 />
               ) : null}
               <div className="mt-2 text-[9px] text-slate-400">
@@ -2412,6 +2580,7 @@ export function MatchDesk({
               homeOnLeft={homeOnLeft}
               onToggleHomeOnLeft={toggleHomeOnLeft}
               liveCompact={isLive}
+              onAirMode={onAirMode}
             />
           </div>
 

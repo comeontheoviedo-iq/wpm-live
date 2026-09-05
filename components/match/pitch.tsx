@@ -706,10 +706,12 @@ export function PitchBoard({
   // Fit marker to the measured pitch box first (auto-fit when user has not
   // touched Field Settings). Once userAdjusted, honor the slider exactly —
   // size only changes card width/height; anchors stay on formation slots.
-  // LIVE desk: prefer smaller cards so XI stays readable without a wall of overlaps.
-  const liveDesiredPct = liveCompact
-    ? Math.min(resolvedMarkerPct, -35)
-    : resolvedMarkerPct;
+  // LIVE desk: quieter default cards only when the user has NOT touched Field
+  // Settings. Never clamp userAdjusted markerSizePct (slider −40…+40 must show).
+  const liveDesiredPct =
+    liveCompact && !resolvedSettings.userAdjusted
+      ? Math.min(resolvedMarkerPct, -35)
+      : resolvedMarkerPct;
   const liveSettings = useMemo(() => {
     if (!liveCompact) return resolvedSettings;
     if (resolvedSettings.userAdjusted) return resolvedSettings;
@@ -722,7 +724,8 @@ export function PitchBoard({
 
   const layoutFittedPct = useMemo(() => {
     if (liveSettings.userAdjusted) {
-      return clampPct(liveDesiredPct);
+      // Use the user's marker % (and prop/effectiveMarkerPct), never the LIVE cap.
+      return clampPct(resolvedMarkerPct);
     }
     return fitMarkerPctForContainer(
       pitchSize.w,
@@ -732,7 +735,7 @@ export function PitchBoard({
       rawPlaced,
       homeOnLeft
     );
-  }, [pitchSize.w, pitchSize.h, liveDesiredPct, liveSettings, rawPlaced, homeOnLeft]);
+  }, [pitchSize.w, pitchSize.h, liveDesiredPct, liveSettings, rawPlaced, homeOnLeft, resolvedMarkerPct]);
 
   // DOM truth: if real card boxes still overlap after paint, shrink by 5%
   // until clean or floor (-40). Skipped when user owns the size slider.

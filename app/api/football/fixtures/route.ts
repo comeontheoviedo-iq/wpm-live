@@ -28,6 +28,8 @@ export async function GET(req: Request) {
   const league = searchParams.get("league");
   const seasonParam = searchParams.get("season");
   const team = searchParams.get("team");
+  const homeTeam = searchParams.get("homeTeam") || searchParams.get("home");
+  const awayTeam = searchParams.get("awayTeam") || searchParams.get("away");
   const id = searchParams.get("id");
 
   // Season hint only for smart fallback; primary path is date-only (Free-plan safe).
@@ -44,6 +46,8 @@ export async function GET(req: Request) {
       league: league ? Number(league) : undefined,
       season: Number.isFinite(season as number) ? (season as number) : undefined,
       team: team ? Number(team) : undefined,
+      homeTeam: homeTeam ? Number(homeTeam) : undefined,
+      awayTeam: awayTeam ? Number(awayTeam) : undefined,
       id: id ? Number(id) : undefined,
     });
 

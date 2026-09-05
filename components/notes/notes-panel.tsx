@@ -76,6 +76,7 @@ export function NotesPanel({
   const [filter, setFilter] = useState<NotesFilterScope>("all");
   const [search, setSearch] = useState("");
   const [pending, setPending] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const activeFilter = externalFilter ?? filter;
@@ -316,30 +317,30 @@ export function NotesPanel({
       n.entityType === "player" && n.entityId && onNotePlayerClick;
     const playerName =
       (n.entityId && playerNameById?.[n.entityId]) || null;
+    const expanded = expandedId === n.id;
     return (
       <div
         className={cn(
-          "rounded-md border border-slate-100 dark:border-slate-800 px-2 py-1.5",
+          "rounded-md border border-slate-100 dark:border-slate-800 px-2 py-1.5 cursor-pointer",
           liveMode && "py-1",
           n.pinned && "border-amber-200/80 dark:border-amber-900/50 bg-amber-50/40 dark:bg-amber-950/20",
           isLiveEventNote(n) && !n.pinned && "border-rose-100 dark:border-rose-900/40",
-          playerLinked && "cursor-pointer hover:border-teal-300 dark:hover:border-teal-700"
+          expanded && "border-teal-300 dark:border-teal-700 bg-teal-50/30 dark:bg-teal-950/20",
+          playerLinked && "hover:border-teal-300 dark:hover:border-teal-700"
         )}
         onClick={() => {
-          if (playerLinked && n.entityId) onNotePlayerClick(n.entityId);
+          setExpandedId((cur) => (cur === n.id ? null : n.id));
         }}
-        role={playerLinked ? "button" : undefined}
-        title={
-          playerLinked
-            ? `Open ${playerName || "player"} on pitch`
-            : undefined
-        }
+        role="button"
+        aria-expanded={expanded}
+        title={expanded ? "Collapse note" : "Expand note"}
       >
         <div className="flex items-start justify-between gap-1.5">
           <div className="min-w-0 flex-1">
             <div
               className={cn(
-                "font-semibold text-teal-700 dark:text-teal-300 truncate",
+                "font-semibold text-teal-700 dark:text-teal-300",
+                expanded ? "whitespace-normal" : "truncate",
                 liveMode ? "text-[11px] leading-tight" : "text-xs"
               )}
             >
@@ -354,12 +355,25 @@ export function NotesPanel({
               className={cn(
                 "text-slate-700 dark:text-slate-300 whitespace-pre-wrap",
                 liveMode
-                  ? "mt-0.5 text-[10px] leading-snug line-clamp-3"
-                  : "mt-1 text-xs"
+                  ? "mt-0.5 text-[10px] leading-snug"
+                  : "mt-1 text-xs",
+                !expanded && (liveMode ? "line-clamp-2" : "line-clamp-3")
               )}
             >
               {n.body}
             </p>
+            {expanded && playerLinked && n.entityId && (
+              <button
+                type="button"
+                className="mt-1.5 text-[10px] font-semibold text-teal-700 dark:text-teal-300 hover:underline"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onNotePlayerClick?.(n.entityId!);
+                }}
+              >
+                Open player profile
+              </button>
+            )}
           </div>
           <div
             className="flex gap-0.5 shrink-0"

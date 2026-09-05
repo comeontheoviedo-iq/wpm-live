@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
+import { PlayerDossier } from "@/components/match/player-dossier";
 
 type Row = {
   id: string;
@@ -40,6 +41,7 @@ export function SquadPageClient({
 }) {
   const [side, setSide] = useState<"home" | "away">("home");
   const [q, setQ] = useState("");
+  const [dossierId, setDossierId] = useState<string | null>(null);
   const players = side === "home" ? homePlayers : awayPlayers;
   const color = side === "home" ? homeColor : awayColor;
 
@@ -64,6 +66,30 @@ export function SquadPageClient({
 
   const xi = filtered.filter((p) => p.onPitch || p.isStarter);
   const bench = filtered.filter((p) => !(p.onPitch || p.isStarter));
+  const dossierPlayer = [...homePlayers, ...awayPlayers].find(
+    (p) => p.id === dossierId
+  );
+
+  function PlayerRow({ p }: { p: Row }) {
+    return (
+      <button
+        type="button"
+        onClick={() => setDossierId(p.id)}
+        className="w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-slate-50 dark:hover:bg-slate-900 text-left"
+        title={`Open ${p.name} profile`}
+      >
+        <span className="w-7 text-right tabular-nums font-bold text-slate-500">
+          {p.shirtNumber}
+        </span>
+        <span className="min-w-0 flex-1 font-medium truncate text-teal-800 dark:text-teal-300 hover:underline">
+          {p.name}
+        </span>
+        <span className="text-[10px] uppercase tracking-wide text-slate-400 w-10 text-right">
+          {p.formationSlot || p.position || "—"}
+        </span>
+      </button>
+    );
+  }
 
   return (
     <div className="space-y-3">
@@ -72,7 +98,8 @@ export function SquadPageClient({
           <h2 className="text-xl font-bold">Squad</h2>
           <p className="text-sm text-slate-500">
             {homeName} & {awayName}
-            {status ? ` · ${status}` : ""} — full lists; place XI on{" "}
+            {status ? ` · ${status}` : ""} — click a name for profile · place XI
+            on{" "}
             <Link
               href={`/match-day/${matchId}`}
               className="text-teal-700 dark:text-teal-300 hover:underline"
@@ -97,7 +124,9 @@ export function SquadPageClient({
               onClick={() => setSide(key)}
               className={cn(
                 "px-3 py-1.5 text-sm font-semibold transition",
-                side === key ? "text-white" : "bg-transparent text-slate-600 dark:text-slate-300"
+                side === key
+                  ? "text-white"
+                  : "bg-transparent text-slate-600 dark:text-slate-300"
               )}
               style={side === key ? { backgroundColor: c } : undefined}
             >
@@ -132,20 +161,7 @@ export function SquadPageClient({
             {xi.length === 0 ? (
               <p className="text-sm text-slate-500 py-4 text-center">No XI set.</p>
             ) : (
-              xi.map((p) => (
-                <div
-                  key={p.id}
-                  className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-slate-50 dark:hover:bg-slate-900"
-                >
-                  <span className="w-7 text-right tabular-nums font-bold text-slate-500">
-                    {p.shirtNumber}
-                  </span>
-                  <span className="min-w-0 flex-1 font-medium truncate">{p.name}</span>
-                  <span className="text-[10px] uppercase tracking-wide text-slate-400 w-10 text-right">
-                    {p.formationSlot || p.position || "—"}
-                  </span>
-                </div>
-              ))
+              xi.map((p) => <PlayerRow key={p.id} p={p} />)
             )}
           </CardBody>
         </Card>
@@ -155,26 +171,25 @@ export function SquadPageClient({
           </CardHeader>
           <CardBody className="pt-0 space-y-0.5 max-h-[28rem] overflow-y-auto">
             {bench.length === 0 ? (
-              <p className="text-sm text-slate-500 py-4 text-center">No bench listed.</p>
+              <p className="text-sm text-slate-500 py-4 text-center">
+                No bench listed.
+              </p>
             ) : (
-              bench.map((p) => (
-                <div
-                  key={p.id}
-                  className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-slate-50 dark:hover:bg-slate-900"
-                >
-                  <span className="w-7 text-right tabular-nums font-bold text-slate-500">
-                    {p.shirtNumber}
-                  </span>
-                  <span className="min-w-0 flex-1 font-medium truncate">{p.name}</span>
-                  <span className="text-[10px] uppercase tracking-wide text-slate-400 w-10 text-right">
-                    {p.position || "—"}
-                  </span>
-                </div>
-              ))
+              bench.map((p) => <PlayerRow key={p.id} p={p} />)
             )}
           </CardBody>
         </Card>
       </div>
+
+      {dossierId && (
+        <PlayerDossier
+          matchId={matchId}
+          playerId={dossierId}
+          playerName={dossierPlayer?.name}
+          onClose={() => setDossierId(null)}
+          initialTab="profile"
+        />
+      )}
     </div>
   );
 }

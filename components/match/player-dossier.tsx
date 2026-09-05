@@ -361,7 +361,7 @@ export function PlayerDossier({
           )}
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-lg font-bold truncate">{displayName}</h2>
+              <h2 className="text-lg font-bold leading-tight break-words">{displayName}</h2>
               <Star className="h-3.5 w-3.5 text-amber-400" />
             </div>
             {p && (

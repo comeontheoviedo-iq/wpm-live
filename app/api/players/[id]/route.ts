@@ -356,10 +356,28 @@ export async function GET(
       ? `https://media.api-sports.io/football/players/${player.apiFootballPlayerId}.png`
       : null);
 
+  // Prefer AF firstname+lastname when DB only has "L. Shankland"-style short name
+  const afPlayer = (afStats as { player?: { firstname?: string; lastname?: string; name?: string } } | null)
+    ?.player;
+  const afFull = [afPlayer?.firstname, afPlayer?.lastname]
+    .map((s) => (s || "").trim())
+    .filter(Boolean)
+    .join(" ");
+  const looksInitial =
+    /^[A-Z]\.?\s/.test(player.name.trim()) ||
+    /^[A-Z]\.\s*[A-Z]/.test(player.name.trim());
+  const fullName =
+    afFull ||
+    (looksInitial && afPlayer?.name && afPlayer.name.length > player.name.length
+      ? afPlayer.name
+      : null) ||
+    player.name;
+
   return NextResponse.json({
     player: {
       id: player.id,
-      name: player.name,
+      name: fullName,
+      shortName: player.name,
       shirtNumber: player.shirtNumber,
       position: player.position,
       nationality: player.nationality,

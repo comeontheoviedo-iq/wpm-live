@@ -13,7 +13,6 @@ import {
   Building2,
   CloudSun,
   Users,
-  Radio,
   LayoutGrid,
   Printer,
   StickyNote,
@@ -28,6 +27,7 @@ const items = [
   { slug: "prep", label: "Prep", icon: ClipboardList },
   { slug: "stats", label: "Stats", icon: Target },
   { slug: "notes", label: "Notes", icon: StickyNote },
+  { slug: "squad", label: "Squad", icon: Users },
   { slug: "injuries", label: "Injuries", icon: HeartPulse },
   { slug: "scorers", label: "Scorers", icon: Target },
   { slug: "keepers", label: "Keepers", icon: Shield },
@@ -35,8 +35,6 @@ const items = [
   { slug: "venue", label: "Venue", icon: MapPin },
   { slug: "clubs", label: "Clubs", icon: Building2 },
   { slug: "weather", label: "Weather", icon: CloudSun },
-  { slug: "squad", label: "Squad", icon: Users },
-  { slug: "live", label: "Live", icon: Radio },
   { slug: "print", label: "Export", icon: Printer },
 ];
 

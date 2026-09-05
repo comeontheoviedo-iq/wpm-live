@@ -15,9 +15,16 @@ export async function POST(
   if (!fixtureId) {
     return NextResponse.json({ error: "fixtureId required" }, { status: 400 });
   }
-  const match = await linkFixtureToMatch(id, fixtureId);
-  return NextResponse.json({
-    match,
-    configured: isApiFootballConfigured(),
-  });
+  try {
+    const match = await linkFixtureToMatch(id, fixtureId);
+    return NextResponse.json({
+      match,
+      configured: isApiFootballConfigured(),
+    });
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : "Link failed" },
+      { status: 400 }
+    );
+  }
 }

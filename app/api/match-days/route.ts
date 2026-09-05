@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { DEFAULT_CHECKLIST, DEFAULT_SCRIPT_SLOTS } from "@/lib/defaults";
 import { ensureClub, parseAfTeamId } from "@/lib/ensure-club";
+import { getFixture, assertFixtureCompatible } from "@/lib/api-football";
+import { leagueIdForCompetition } from "@/lib/competitions";
 
 function sanitizeCreateError(e: unknown): { status: number; error: string } {
   if (
@@ -122,6 +124,33 @@ export async function POST(req: Request) {
           },
           { status: 409 }
         );
+      }
+
+      // Refuse wrong-league / wrong-team attaches at create time
+      try {
+        const fx = await getFixture(apiFootballFixtureId);
+        if (!fx) {
+          return NextResponse.json(
+            { error: `API-Football fixture #${apiFootballFixtureId} not found` },
+            { status: 400 }
+          );
+        }
+        const expectedLeague = leagueIdForCompetition(competition);
+        const compat = assertFixtureCompatible({
+          fixture: fx,
+          homeAfId: homeAf,
+          awayAfId: awayAf,
+          leagueId: expectedLeague,
+        });
+        if (!compat.ok) {
+          return NextResponse.json(
+            { error: compat.reason || "Fixture does not match selected clubs/competition" },
+            { status: 400 }
+          );
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Fixture lookup failed";
+        return NextResponse.json({ error: msg }, { status: 400 });
       }
     }
 

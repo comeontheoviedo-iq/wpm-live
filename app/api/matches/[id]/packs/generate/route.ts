@@ -21,6 +21,13 @@ export async function POST(
       templateKey,
       userId: session.id,
       sources: body.sources,
+      useDraft: Boolean(body.useDraft),
+      draftContent:
+        typeof body.draftContent === "string"
+          ? body.draftContent
+          : typeof body.content === "string"
+            ? body.content
+            : undefined,
     });
 
     return NextResponse.json(result);

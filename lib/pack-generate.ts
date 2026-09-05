@@ -33,7 +33,7 @@ function parseOptionalSources(raw: unknown): { urls: string[]; notes: string } {
     }
   }
   notes = String(o.notes || o.text || "").trim();
-  return { urls: [...new Set(urls)].slice(0, 20), notes: notes.slice(0, 8000) };
+  return { urls: [...new Set(urls)].slice(0, 20), notes: notes.slice(0, 100_000) };
 }
 
 
@@ -334,6 +334,10 @@ export async function generatePackForMatch(args: {
   templateKey: string;
   userId: string;
   sources?: unknown;
+  /** Keep existing/pasted pack content and re-distribute only (no Gemini overwrite). */
+  useDraft?: boolean;
+  /** Live draft from client (Notebook paste) — preferred over DB when useDraft. */
+  draftContent?: string;
 }): Promise<GeneratePackResult> {
   const { matchId, templateKey, userId } = args;
   const userSources = parseOptionalSources(args.sources);
@@ -500,6 +504,61 @@ export async function generatePackForMatch(args: {
     keyPlayerStats: templateKey === "lineup" ? keyPlayerStats : undefined,
   });
 
+  // Use-my-draft / Notebook paste: save + distribute without Gemini overwrite
+  if (args.useDraft) {
+    const existingSection = await prisma.packSection.findUnique({
+      where: { matchId_templateKey: { matchId, templateKey } },
+    });
+    const draft =
+      (typeof args.draftContent === "string" && args.draftContent.trim()) ||
+      existingSection?.content?.trim() ||
+      "";
+    if (!draft) {
+      throw new Error(
+        "No draft content to keep — paste Notebook research into this section first."
+      );
+    }
+    const section = await prisma.packSection.upsert({
+      where: { matchId_templateKey: { matchId, templateKey } },
+      create: {
+        matchId,
+        templateKey,
+        title: template.title,
+        content: draft,
+        status: "edited",
+      },
+      update: {
+        title: template.title,
+        content: draft,
+        status: "edited",
+      },
+    });
+    let distributed = emptyDistributed();
+    try {
+      distributed = await applyPackDistribution({
+        matchId,
+        userId,
+        templateKey,
+        templateTitle: template.title,
+        content: draft,
+        homeClub: { id: match.homeClub.id, name: match.homeClub.name },
+        awayClub: { id: match.awayClub.id, name: match.awayClub.name },
+        allPlayers,
+      });
+    } catch (distErr) {
+      console.error("[pack-generate] useDraft distribute failed", templateKey, distErr);
+      throw distErr;
+    }
+    return {
+      section,
+      stub: false,
+      gemini: isGeminiConfigured(),
+      grounded: false,
+      searchQueries: [],
+      distributed,
+    };
+  }
+
   const deepResearchBlock = [
     "=== DEEP RESEARCH CONTEXT (auto — from match desk / API-Football) ===",
     `Fixture ID: ${match.apiFootballFixtureId ?? "unlinked"}`,
@@ -522,7 +581,7 @@ export async function generatePackForMatch(args: {
           "=== OPTIONAL USER STEERING SOURCES (append — do not require) ===",
           ...userSources.urls.map((u) => `URL: ${u}`),
           userSources.notes ? `Notes:\n${userSources.notes}` : "",
-          "Weigh these alongside search grounding when relevant.",
+          "USER NOTES / NOTEBOOK PASTE are primary facts — preserve them; do not invent over them; do not drop bullets.",
         ]
           .filter(Boolean)
           .join("\n")
@@ -544,26 +603,32 @@ export async function generatePackForMatch(args: {
   let result;
   try {
     let researchSpine = "";
+    // Long Notebook paste in Extra notes → factual spine (do not invent over it)
+    if (userSources.notes && userSources.notes.length > 200) {
+      researchSpine = userSources.notes;
+    }
     if (templateKey === "intro" || templateKey === "research") {
-      try {
-        const brief = await generateWithGemini(
-          systemPrompt,
-          `${RESEARCH_BRIEF_PROMPT}\n\n${baseUser}`,
-          {
-            googleSearch: true,
-            maxOutputTokens: 8192,
-            timeoutMs: 150_000,
+      if (!researchSpine) {
+        try {
+          const brief = await generateWithGemini(
+            systemPrompt,
+            `${RESEARCH_BRIEF_PROMPT}\n\n${baseUser}`,
+            {
+              googleSearch: true,
+              maxOutputTokens: 8192,
+              timeoutMs: 150_000,
+            }
+          );
+          if (!brief.stub && brief.text && brief.text.length > 80) {
+            researchSpine = brief.text;
           }
-        );
-        if (!brief.stub && brief.text && brief.text.length > 80) {
-          researchSpine = brief.text;
+        } catch (briefErr) {
+          console.error(
+            "[pack-generate] research brief step failed",
+            templateKey,
+            briefErr
+          );
         }
-      } catch (briefErr) {
-        console.error(
-          "[pack-generate] research brief step failed",
-          templateKey,
-          briefErr
-        );
       }
     }
 

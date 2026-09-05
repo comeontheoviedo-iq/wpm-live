@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -71,6 +71,7 @@ export function PacksClient({ matchId }: { matchId: string }) {
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const [sourceUrls, setSourceUrls] = useState("");
   const [sourceNotes, setSourceNotes] = useState("");
+  const draftDirty = useRef(false);
 
   const sourcesPayload = useMemo(() => {
     const urls = sourceUrls
@@ -104,33 +105,72 @@ export function PacksClient({ matchId }: { matchId: string }) {
   }, [matchId]);
 
   useEffect(() => {
+    if (draftDirty.current) return;
     const existing = sections.find((s) => s.templateKey === active);
     setDraft(existing?.content || "");
   }, [active, sections]);
 
-  async function generateOne(templateKey: string) {
+  async function generateOne(
+    templateKey: string,
+    opts?: { useDraft?: boolean; draftContent?: string }
+  ) {
     const res = await fetch(`/api/matches/${matchId}/packs/generate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         templateKey,
         ...(sourcesPayload ? { sources: sourcesPayload } : {}),
+        ...(opts?.useDraft
+          ? { useDraft: true, draftContent: opts.draftContent ?? draft }
+          : {}),
       }),
     });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.error || "Generate failed");
+    const text = await res.text();
+    let json: Record<string, unknown>;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      throw new Error(
+        res.ok
+          ? "Unexpected response from generate"
+          : `Generate failed (${res.status}) — server returned a page instead of JSON.`
+      );
+    }
+    if (!res.ok) throw new Error(String(json.error || "Generate failed"));
     return json;
   }
 
+  function confirmOverwriteDraft(label: string): boolean {
+    if (!draftDirty.current && !draft.trim()) return true;
+    const existing = sections.find((s) => s.templateKey === active);
+    const hasPaste =
+      draftDirty.current ||
+      existing?.status === "edited" ||
+      (draft.trim().length > 0 && draft !== (existing?.content || ""));
+    if (!hasPaste) return true;
+    return window.confirm(
+      `“${label}” has your pasted/edited Notebook content.\n\nGenerate will REPLACE it with AI output.\n\nOK = replace\nCancel = keep your draft (use “Use my draft → desk notes” instead)`
+    );
+  }
+
   async function generate() {
+    const label = templates.find((t) => t.key === active)?.title || active;
+    if (!confirmOverwriteDraft(label)) {
+      setMsg(
+        "Kept your draft — click “Use my draft → desk notes” to send Notebook content without regenerating."
+      );
+      return;
+    }
     setBusy(true);
     setMsg(null);
     try {
       const json = await generateOne(active);
-      setDraft(json.section.content);
+      const section = json.section as Section;
+      draftDirty.current = false;
+      setDraft(section.content);
       setSections((prev) => {
         const others = prev.filter((s) => s.templateKey !== active);
-        return [json.section, ...others];
+        return [section, ...others];
       });
       const d = (json.distributed || {
         scripts: 0,
@@ -157,7 +197,64 @@ export function PacksClient({ matchId }: { matchId: string }) {
     }
   }
 
+  /** Paste path: keep Notebook body, save, distribute to desk notes (no Gemini). */
+  async function useMyDraft() {
+    const label = templates.find((t) => t.key === active)?.title || active;
+    if (!draft.trim()) {
+      setMsg(
+        `No content for “${label}” — paste Notebook research into the editor first.`
+      );
+      return;
+    }
+    setBusy(true);
+    setMsg(null);
+    try {
+      const json = await generateOne(active, {
+        useDraft: true,
+        draftContent: draft,
+      });
+      const section = json.section as Section;
+      draftDirty.current = false;
+      setDraft(section.content);
+      setSections((prev) => {
+        const others = prev.filter((s) => s.templateKey !== active);
+        return [section, ...others];
+      });
+      const d = (json.distributed || {
+        scripts: 0,
+        playerNotes: 0,
+        clubNotes: 0,
+        matchNotes: 0,
+      }) as Distributed;
+      setLastDistributed(d);
+      setMsg(
+        `Kept your Notebook draft for “${label}” · sent to desk notes · ${formatDistributed(d)}`
+      );
+      router.refresh();
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "Use my draft failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function generateResearchPack() {
+    const researchSection = sections.find((s) => s.templateKey === "research");
+    const researchHasPaste =
+      (active === "research" && draftDirty.current && draft.trim()) ||
+      researchSection?.status === "edited" ||
+      Boolean(researchSection?.content?.trim());
+    if (researchHasPaste && active === "research" && draftDirty.current) {
+      const ok = window.confirm(
+        "Research pack has your pasted Notebook content.\n\nRegenerating will REPLACE it.\n\nOK = replace all sections\nCancel = keep paste (use “Use my draft → desk notes”)"
+      );
+      if (!ok) {
+        setMsg(
+          "Kept your Notebook draft — use “Use my draft → desk notes” or “Send to desk notes”."
+        );
+        return;
+      }
+    }
     setPackBusy(true);
     setMsg(null);
     const keys = ["research", "intro", "profiles", "referee", "hooks"];
@@ -171,12 +268,16 @@ export function PacksClient({ matchId }: { matchId: string }) {
         const json = await generateOne(key);
         stub = stub || Boolean(json.stub);
         grounded = grounded || Boolean(json.grounded);
-        if (json.distributed) dists.push(json.distributed);
+        if (json.distributed) dists.push(json.distributed as Distributed);
+        const section = json.section as Section;
         setSections((prev) => {
           const others = prev.filter((s) => s.templateKey !== key);
-          return [json.section, ...others];
+          return [section, ...others];
         });
-        if (key === active) setDraft(json.section.content);
+        if (key === active) {
+          draftDirty.current = false;
+          setDraft(section.content);
+        }
       }
       const total = sumDistributed(dists);
       setLastDistributed(total);
@@ -227,6 +328,7 @@ export function PacksClient({ matchId }: { matchId: string }) {
       }
       if (!saveRes.ok) throw new Error(saveJson.error || "Save draft failed");
       if (saveJson.section) {
+        draftDirty.current = false;
         setSections((prev) => {
           const others = prev.filter((s) => s.templateKey !== active);
           return [saveJson.section!, ...others];
@@ -266,8 +368,8 @@ export function PacksClient({ matchId }: { matchId: string }) {
       }) as Distributed;
       setLastDistributed(d);
       setMsg(
-        json.emptyDistribution && json.message
-          ? json.message
+        json.message
+          ? `${json.message} · ${formatDistributed(d)}`
           : `Sent “${label}” to desk notes · ${formatDistributed(d)}`
       );
       router.refresh();
@@ -293,6 +395,7 @@ export function PacksClient({ matchId }: { matchId: string }) {
       });
       const json = await res.json();
       if (json.section) {
+        draftDirty.current = false;
         setSections((prev) => {
           const others = prev.filter((s) => s.templateKey !== active);
           return [json.section, ...others];
@@ -314,9 +417,9 @@ export function PacksClient({ matchId }: { matchId: string }) {
         <div>
           <h2 className="text-xl font-bold">Broadcast packs</h2>
           <p className="text-sm text-slate-500">
-            Generate research pack fills Scripts, player notes, and match notes.
-            Deep research runs automatically. Add sources only if you want to
-            steer it.
+            Paste Gemini Notebook research into a section, then Use my draft /
+            Send to desk notes. Generate overwrites paste (you’ll get a confirm).
+            Optional sources steer AI only — prefer pasting into the editor.
           </p>
         </div>
         <Button
@@ -416,6 +519,17 @@ export function PacksClient({ matchId }: { matchId: string }) {
                 key={t.key}
                 type="button"
                 onClick={() => {
+                  if (
+                    t.key !== active &&
+                    draftDirty.current &&
+                    draft.trim() &&
+                    !window.confirm(
+                      "Discard unsaved paste in this section and switch?"
+                    )
+                  ) {
+                    return;
+                  }
+                  draftDirty.current = false;
                   setActive(t.key);
                   const existing = sections.find((s) => s.templateKey === t.key);
                   setDraft(existing?.content || "");
@@ -466,6 +580,15 @@ export function PacksClient({ matchId }: { matchId: string }) {
               >
                 Send to desk notes
               </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy || packBusy || !draft.trim()}
+                onClick={useMyDraft}
+                title="Keep this pasted Notebook body and distribute it to desk notes (no AI overwrite)"
+              >
+                Use my draft → desk notes
+              </Button>
               <Button size="sm" disabled={busy || packBusy} onClick={generate}>
                 <Sparkles className="h-3.5 w-3.5 mr-1" />
                 {busy ? "Working…" : "Generate"}
@@ -492,11 +615,20 @@ export function PacksClient({ matchId }: { matchId: string }) {
                 desk notes unlocks.
               </p>
             )}
+            <p className="text-[11px] text-slate-500">
+              Notebook path: paste Gemini Notebook research into this editor →
+              <span className="font-medium"> Use my draft → desk notes</span> or
+              <span className="font-medium"> Send to desk notes</span>. Avoid
+              Generate if you want to keep your paste.
+            </p>
             <textarea
               className="w-full min-h-[420px] rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent px-3 py-2 text-sm leading-relaxed font-mono"
               value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder="Generate or paste pack content…"
+              onChange={(e) => {
+                draftDirty.current = true;
+                setDraft(e.target.value);
+              }}
+              placeholder="Paste Gemini Notebook research here, or Generate…"
             />
           </CardBody>
         </Card>

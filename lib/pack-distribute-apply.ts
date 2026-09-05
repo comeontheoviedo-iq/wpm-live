@@ -10,6 +10,31 @@ import {
   type SquadMember,
 } from "./pack-distribute";
 
+
+/** Pull body under a heading whose title matches `re` (inclusive of bullets). */
+function extractNamedSection(text: string, re: RegExp): string | null {
+  const sections = text.replace(/\r\n/g, "\n").split("\n");
+  let capturing = false;
+  const lines: string[] = [];
+  for (const raw of sections) {
+    const md = /^(#{1,4})\s+(.+)$/.exec(raw.trimEnd());
+    const bold = /^\*\*(.+?)\*\*\s*:?\s*$/.exec(raw.trim());
+    const heading = md ? md[2].trim() : bold ? bold[1].trim() : null;
+    if (heading) {
+      if (capturing) break;
+      if (re.test(heading)) {
+        capturing = true;
+        continue;
+      }
+    } else if (capturing) {
+      lines.push(raw);
+    }
+  }
+  const body = lines.join("\n").trim();
+  return body || null;
+}
+
+
 async function upsertEntityNote(args: {
   matchId: string;
   userId: string;
@@ -20,12 +45,13 @@ async function upsertEntityNote(args: {
   entityId: string;
   pinned?: boolean;
 }) {
+  // Key on title too — Research / Referee / Must-mention all share match entity.
   const existing = await prisma.note.findFirst({
     where: {
       matchId: args.matchId,
       entityType: args.entityType,
       entityId: args.entityId,
-      category: args.category,
+      title: args.title,
     },
   });
   if (existing) {
@@ -159,6 +185,7 @@ export async function applyPackDistribution(
         category: "Match",
         entityType: "match",
         entityId: matchId,
+        pinned: true,
       });
       distributed.matchNotes += 1;
 
@@ -174,6 +201,25 @@ export async function applyPackDistribution(
           entityId: cs.clubId,
         });
         distributed.clubNotes += 1;
+      }
+
+      // Promote Must-mention / Notebook hooks into a pinned Hook note (full bullets)
+      const hooksBody = extractNamedSection(
+        text,
+        /must[- ]?mention|key facts|air[- ]?ready facts|commentary hooks|dead-?air|goldmines|fillers/i
+      );
+      if (hooksBody && hooksBody.length >= 40) {
+        await upsertEntityNote({
+          matchId,
+          userId,
+          title: "Notebook hooks & must-mention",
+          body: hooksBody,
+          category: "Hook",
+          entityType: "match",
+          entityId: matchId,
+          pinned: true,
+        });
+        distributed.matchNotes += 1;
       }
     }
 
@@ -205,6 +251,29 @@ export async function applyPackDistribution(
         });
         distributed.matchNotes += 1;
       }
+    }
+    // Unknown / custom section (or paste into a key we don't special-case):
+    // still land the FULL body on the match desk so Notebook content is never dropped.
+    const handled = new Set([
+      "intro",
+      "lineup",
+      "hooks",
+      "referee",
+      "research",
+      "profiles",
+    ]);
+    if (!handled.has(templateKey)) {
+      await upsertEntityNote({
+        matchId,
+        userId,
+        title: templateTitle || templateKey,
+        body: text,
+        category: "Match",
+        entityType: "match",
+        entityId: matchId,
+        pinned: true,
+      });
+      distributed.matchNotes += 1;
     }
   } catch (e) {
     console.error("[pack-distribute-apply]", templateKey, e);

@@ -96,12 +96,13 @@ export async function POST(
       ok: true,
       templateKey,
       title: section.title || title,
+      contentLength: section.content.length,
       distributed,
       emptyDistribution: total === 0,
       message:
         total === 0
           ? `“${label}” was saved but nothing mapped into Scripts/Notes (check headings).`
-          : undefined,
+          : `Sent “${label}” (${section.content.length} chars) → desk notes.`,
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);

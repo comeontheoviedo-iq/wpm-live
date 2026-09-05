@@ -38,6 +38,7 @@ export function splitByHeadings(text: string): { heading: string; body: string }
     const line = raw.trimEnd();
     const md = /^(#{1,4})\s+(.+)$/.exec(line);
     const numbered = /^(\d+)[.)]\s+(.+)$/.exec(line.trim());
+    const roman = /^(?:[IVXLCDM]+)[.)]\s+(.+)$/i.exec(line.trim());
     const bold = /^\*\*(.+?)\*\*\s*:?\s*$/.exec(line.trim());
     const plainCaps =
       /^([A-Z][A-Za-zÀ-ÿ.'\-]+(?:\s+[A-Z][A-Za-zÀ-ÿ.'\-]+){0,4})\s*:?\s*$/.exec(
@@ -49,6 +50,7 @@ export function splitByHeadings(text: string): { heading: string; body: string }
     let heading: string | null = null;
     if (md) heading = md[2].trim();
     else if (bold) heading = bold[1].trim();
+    else if (roman && roman[1].length < 100) heading = roman[1].trim();
     else if (numbered && numbered[2].length < 80) heading = numbered[2].trim();
     else if (plainCaps && /[A-Za-z]{2,}/.test(plainCaps)) heading = plainCaps;
 
@@ -147,7 +149,7 @@ export function extractClubSections(
   const awayN = normalize(away.name);
   const homeChunks: string[] = [];
   const awayChunks: string[] = [];
-  let bucket: "home" | "away" | null = null;
+  const sharedChunks: string[] = [];
 
   for (const s of sections) {
     const h = normalize(s.heading);
@@ -158,17 +160,21 @@ export function extractClubSections(
       h.includes(awayN) ||
       awayN.split(" ").some((t) => t.length >= 4 && h.includes(t));
 
-    if (homeHit && !awayHit) bucket = "home";
-    else if (awayHit && !homeHit) bucket = "away";
-    else if (homeHit && awayHit) bucket = null;
+    // Per-heading assignment only — do NOT sticky-bucket later shared
+    // sections (Venue, Team news, Must-mention, …) onto one club.
+    let dest: "home" | "away" | "shared" = "shared";
+    if (homeHit && !awayHit) dest = "home";
+    else if (awayHit && !homeHit) dest = "away";
+    else dest = "shared";
 
     const chunk = `## ${s.heading}\n${s.body}`.trim();
-    if (bucket === "home") homeChunks.push(chunk);
-    else if (bucket === "away") awayChunks.push(chunk);
+    if (dest === "home") homeChunks.push(chunk);
+    else if (dest === "away") awayChunks.push(chunk);
+    else sharedChunks.push(chunk);
   }
 
   if (homeChunks.length === 0 && awayChunks.length === 0) {
-    // Duplicate full summary onto both clubs
+    // No club-tagged headings — full Notebook/research brief on both clubs
     const body = text.trim();
     return [
       {
@@ -186,43 +192,24 @@ export function extractClubSections(
     ];
   }
 
-  const result: {
-    clubId: string;
-    clubName: string;
-    title: string;
-    body: string;
-  }[] = [];
-  if (homeChunks.length) {
-    result.push({
+  const join = (clubChunks: string[]) =>
+    [...sharedChunks, ...clubChunks].filter(Boolean).join("\n\n").trim() ||
+    text.trim();
+
+  return [
+    {
       clubId: home.id,
       clubName: home.name,
       title: `${home.name} — Research`,
-      body: homeChunks.join("\n\n"),
-    });
-  } else {
-    result.push({
-      clubId: home.id,
-      clubName: home.name,
-      title: `${home.name} — Research`,
-      body: text.trim(),
-    });
-  }
-  if (awayChunks.length) {
-    result.push({
+      body: join(homeChunks),
+    },
+    {
       clubId: away.id,
       clubName: away.name,
       title: `${away.name} — Research`,
-      body: awayChunks.join("\n\n"),
-    });
-  } else {
-    result.push({
-      clubId: away.id,
-      clubName: away.name,
-      title: `${away.name} — Research`,
-      body: text.trim(),
-    });
-  }
-  return result;
+      body: join(awayChunks),
+    },
+  ];
 }
 
 /** Pull hook bullets that mention a player name onto that player. */

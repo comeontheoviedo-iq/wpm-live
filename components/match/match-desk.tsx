@@ -27,6 +27,7 @@ import {
   type NotesFilterScope,
 } from "@/components/notes/notes-panel";
 import { PlayerDossier } from "@/components/match/player-dossier";
+import { ClubDossier } from "@/components/match/club-dossier";
 import { FieldSettingsModal } from "@/components/match/field-settings-modal";
 import { EventTimeline } from "@/components/match/event-timeline";
 import { EventComposer } from "@/components/live/event-composer";
@@ -430,6 +431,7 @@ export function MatchDesk({
   const relevantFetchedAtRef = useRef(0);
   const relevantInFlightRef = useRef(false);
   const [dossierId, setDossierId] = useState<string | null>(null);
+  const [clubDossierId, setClubDossierId] = useState<string | null>(null);
   const [onAirOpen, setOnAirOpen] = useState(false);
   /** Presentation mode: collapse notes/squad chrome → slim Relevant+last-event strip */
   const [onAirMode, setOnAirMode] = useState(false);
@@ -2244,8 +2246,14 @@ export function MatchDesk({
               homeLogoUrl={homeLogoUrl}
               awayLogoUrl={awayLogoUrl}
               leagueLogoUrl={leagueLogoUrl}
-              onHomeLogoClick={() => setNotesFilter("home")}
-              onAwayLogoClick={() => setNotesFilter("away")}
+              onHomeLogoClick={() => {
+                if (homeClubId) setClubDossierId(homeClubId);
+                else setNotesFilter("home");
+              }}
+              onAwayLogoClick={() => {
+                if (awayClubId) setClubDossierId(awayClubId);
+                else setNotesFilter("away");
+              }}
               onLeagueLogoClick={() => setNotesFilter("match")}
               cardSettings={fieldSettings}
               markerPct={markerPct}
@@ -2474,6 +2482,18 @@ export function MatchDesk({
             })()}
           </div>
         </div>
+      )}
+
+{clubDossierId && (
+        <ClubDossier
+          matchId={matchId}
+          clubId={clubDossierId}
+          onClose={() => setClubDossierId(null)}
+          onPlayerClick={(pid) => {
+            setClubDossierId(null);
+            setDossierId(pid);
+          }}
+        />
       )}
 
 {dossierId && (

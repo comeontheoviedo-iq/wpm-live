@@ -14,7 +14,10 @@ export async function GET(
 
   const { id } = await params;
   const { searchParams } = new URL(req.url);
-  const force = searchParams.get("refresh") === "1" || searchParams.get("force") === "1";
+  const force =
+    searchParams.get("refresh") === "1" || searchParams.get("force") === "1";
+  // RSS-first: brief off by default. Pass brief=1 to enrich / Gemini.
+  const brief = searchParams.get("brief") === "1";
 
   const match = await prisma.match.findUnique({
     where: { id },
@@ -87,8 +90,13 @@ export async function GET(
   };
 
   try {
-    const payload = await getMatchNews(ctx, { force });
-    return NextResponse.json(payload);
+    const payload = await getMatchNews(ctx, { force, brief });
+    const headers: Record<string, string> = {
+      "Cache-Control": "private, max-age=0, must-revalidate",
+    };
+    if (payload.stale) headers["X-News-Stale"] = "1";
+    if (!payload.briefIncluded) headers["X-News-Brief"] = "pending";
+    return NextResponse.json(payload, { headers });
   } catch (e) {
     return NextResponse.json(
       {
@@ -97,7 +105,8 @@ export async function GET(
         items: [],
         feeds: [],
         warnings: ["News pipeline error"],
-        gemini: { configured: false, used: false },
+        gemini: { configured: false, used: false, pending: false },
+        briefIncluded: false,
         fetchedAt: new Date().toISOString(),
         cached: false,
         cacheTtlMs: 0,

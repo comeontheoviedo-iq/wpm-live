@@ -1,6 +1,7 @@
 /**
  * Match-scoped News: curated RSS (league-aware) + Gemini grounded web brief.
- * Soft-fail per feed; in-memory cache ~7 min. Never invent headlines.
+ * RSS-first by default (tight per-feed timeouts); Gemini brief optional / background.
+ * Soft-fail per feed; ~7 min cache with stale-while-revalidate. Never invent headlines.
  */
 
 import { generateWithGemini, isGeminiConfigured } from "@/lib/gemini";
@@ -60,18 +61,26 @@ export type NewsPayload = {
   matchId: string;
   fetchedAt: string;
   cached: boolean;
+  /** True when serving an expired cache entry while a refresh runs in the background */
+  stale?: boolean;
   cacheTtlMs: number;
   items: NewsItem[];
   feeds: NewsFeedStatus[];
-  gemini: { configured: boolean; used: boolean; grounded?: boolean; error?: string };
+  gemini: { configured: boolean; used: boolean; grounded?: boolean; error?: string; pending?: boolean };
+  /** False when response is RSS-only (brief not requested / not yet merged) */
+  briefIncluded: boolean;
   warnings: string[];
   regionsActive: NewsRegion[];
 };
 
 const CACHE_TTL_MS = 7 * 60_000;
+/** Per-feed RSS abort — keep first paint snappy even if a source hangs */
+const RSS_TIMEOUT_MS = 2_500;
 
 type CacheEntry = { at: number; payload: NewsPayload };
 const cache = new Map<string, CacheEntry>();
+/** In-flight revalidations keyed by matchId (+brief flag) to avoid stampedes */
+const revalidating = new Map<string, Promise<void>>();
 
 type LeagueBucket = "pl" | "la_liga" | "serie_a" | "bundesliga" | "ligue1" | "super_lig" | "scotland" | "other";
 
@@ -440,7 +449,7 @@ async function fetchRssFeed(
     };
   }
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 12_000);
+  const timer = setTimeout(() => controller.abort(), RSS_TIMEOUT_MS);
   try {
     const res = await fetch(feed.rssUrl, {
       signal: controller.signal,
@@ -1023,29 +1032,49 @@ export function groupNewsByRegion(
   }));
 }
 
-export async function getMatchNews(
-  ctx: NewsMatchContext,
-  opts?: { force?: boolean }
-): Promise<NewsPayload> {
-  const cacheKey = ctx.matchId;
-  const hit = cache.get(cacheKey);
-  if (!opts?.force && hit && Date.now() - hit.at < CACHE_TTL_MS) {
-    return { ...hit.payload, cached: true };
-  }
+export type GetMatchNewsOpts = {
+  force?: boolean;
+  /** When true, also run Gemini match + domain briefs (slow). Default false = RSS-only. */
+  brief?: boolean;
+};
 
+async function collectRssNews(ctx: NewsMatchContext): Promise<{
+  items: NewsItem[];
+  feeds: NewsFeedStatus[];
+  warnings: string[];
+  regionsActive: NewsRegion[];
+}> {
   const warnings: string[] = [];
   const feeds: NewsFeedStatus[] = [];
   const collected: NewsItem[] = [];
   const selected = feedsForCompetition(ctx.competition);
   const regionsActive = [...new Set(selected.map((f) => f.region))];
-
   const rssFeeds = selected.filter((f) => f.rssUrl);
-  const webOnlyFeeds = selected.filter((f) => f.webBrief && !f.rssUrl);
 
-  const rssResults = await Promise.all(rssFeeds.map((f) => fetchRssFeed(f)));
+  // Soft-fail: fetchRssFeed never throws, but allSettled guards future changes
+  const settled = await Promise.allSettled(rssFeeds.map((f) => fetchRssFeed(f)));
   for (let i = 0; i < rssFeeds.length; i++) {
     const feed = rssFeeds[i];
-    const { items, status } = rssResults[i];
+    const result = settled[i];
+    if (result.status === "rejected") {
+      const err =
+        result.reason instanceof Error
+          ? result.reason.message.slice(0, 120)
+          : "Fetch failed";
+      feeds.push({
+        key: feed.key,
+        label: feed.label,
+        region: feed.region,
+        lang: feed.lang,
+        ok: false,
+        count: 0,
+        mode: "rss",
+        error: err,
+      });
+      warnings.push(`${feed.label}: ${err}`);
+      continue;
+    }
+    const { items, status } = result.value;
     feeds.push(status);
     if (!status.ok) {
       warnings.push(`${feed.label}: ${status.error || "failed"}`);
@@ -1054,86 +1083,245 @@ export async function getMatchNews(
     collected.push(...filterRssForMatch(items, feed, ctx));
   }
 
-  const clubHitsSoFar = collected.filter(
+  // Record web-only catalogue entries as pending/skipped until brief runs
+  const webOnlyFeeds = selected.filter((f) => f.webBrief && !f.rssUrl);
+  for (const feed of webOnlyFeeds) {
+    feeds.push({
+      key: feed.key,
+      label: feed.label,
+      region: feed.region,
+      lang: feed.lang,
+      ok: true,
+      count: 0,
+      mode: "skipped",
+      error: "Awaiting brief enrich",
+    });
+  }
+
+  return { items: collected, feeds, warnings, regionsActive };
+}
+
+async function collectBriefNews(
+  ctx: NewsMatchContext,
+  rssItems: NewsItem[]
+): Promise<{
+  items: NewsItem[];
+  feeds: NewsFeedStatus[];
+  warnings: string[];
+  gemini: NewsPayload["gemini"];
+}> {
+  const warnings: string[] = [];
+  const feeds: NewsFeedStatus[] = [];
+  const collected: NewsItem[] = [];
+  const selected = feedsForCompetition(ctx.competition);
+  const webOnlyFeeds = selected.filter((f) => f.webBrief && !f.rssUrl);
+
+  const clubHitsSoFar = rssItems.filter(
     (it) => it.scopes.includes("home") || it.scopes.includes("away")
   ).length;
 
-  // Domain-only sources (no RSS). Skip broad Goal.com brief when RSS already
-  // has solid club coverage — keeps desk refresh snappy.
-  for (const feed of webOnlyFeeds) {
+  const domainJobs = webOnlyFeeds.map(async (feed) => {
     if (feed.key === "goal_com" && clubHitsSoFar >= 3) {
-      feeds.push({
-        key: feed.key,
-        label: feed.label,
-        region: feed.region,
-        lang: feed.lang,
-        ok: true,
-        count: 0,
-        mode: "skipped",
-        error: "Skipped — RSS club coverage sufficient",
-      });
+      return {
+        items: [] as NewsItem[],
+        status: {
+          key: feed.key,
+          label: feed.label,
+          region: feed.region,
+          lang: feed.lang,
+          ok: true,
+          count: 0,
+          mode: "skipped" as const,
+          error: "Skipped — RSS club coverage sufficient",
+        },
+      };
+    }
+    return fetchGeminiDomainBrief(ctx, feed);
+  });
+
+  const domainSettled = await Promise.allSettled(domainJobs);
+  for (const result of domainSettled) {
+    if (result.status === "rejected") {
+      warnings.push(
+        result.reason instanceof Error
+          ? result.reason.message.slice(0, 120)
+          : "Domain brief failed"
+      );
       continue;
     }
-    const fb = await fetchGeminiDomainBrief(ctx, feed);
-    feeds.push(fb.status);
-    collected.push(...fb.items);
-    if (!fb.status.ok && fb.status.error) {
-      warnings.push(`${feed.label}: ${fb.status.error}`);
+    feeds.push(result.value.status);
+    collected.push(...result.value.items);
+    if (!result.value.status.ok && result.value.status.error) {
+      warnings.push(`${result.value.status.label}: ${result.value.status.error}`);
     }
   }
 
   const geminiConfigured = isGeminiConfigured();
-  let geminiUsed = false;
-  let geminiGrounded: boolean | undefined;
-  let geminiError: string | undefined;
-
   const brief = await fetchGeminiMatchBrief(ctx);
-  geminiUsed = geminiConfigured && !brief.error?.includes("not set");
-  geminiGrounded = brief.grounded;
+  const geminiUsed = geminiConfigured && !brief.error?.includes("not set");
   if (brief.error) {
-    geminiError = brief.error;
     if (geminiConfigured) warnings.push(`Web brief: ${brief.error}`);
   }
   collected.push(...brief.items);
 
-  const clubHit = collected.some(
+  return {
+    items: collected,
+    feeds,
+    warnings,
+    gemini: {
+      configured: geminiConfigured,
+      used: geminiUsed,
+      grounded: brief.grounded,
+      error: brief.error,
+      pending: false,
+    },
+  };
+}
+
+function finalizePayload(
+  ctx: NewsMatchContext,
+  parts: {
+    items: NewsItem[];
+    feeds: NewsFeedStatus[];
+    warnings: string[];
+    regionsActive: NewsRegion[];
+    gemini: NewsPayload["gemini"];
+    briefIncluded: boolean;
+    cached?: boolean;
+    stale?: boolean;
+  }
+): NewsPayload {
+  const clubHit = parts.items.some(
     (it) =>
       it.scopes.includes("home") ||
       it.scopes.includes("away") ||
       it.provenance === "web_brief"
   );
+  const warnings = [...parts.warnings];
   const bucket = competitionBucket(ctx.competition);
   if (!clubHit) {
     warnings.push(
       bucket === "super_lig"
         ? `UK global RSS is often thin for Süper Lig clubs — Turkish Football + Web brief are the main coverage paths for ${ctx.homeClub.shortName} / ${ctx.awayClub.shortName}.`
-        : `Few club-specific hits for ${ctx.homeClub.shortName} / ${ctx.awayClub.shortName}. Try Refresh or check Web brief when Gemini is configured.`
+        : `Few club-specific hits for ${ctx.homeClub.shortName} / ${ctx.awayClub.shortName}. Try Enrich or Refresh when Gemini is configured.`
     );
   }
 
-  const items = dedupeItems(collected).sort((a, b) => {
+  const items = dedupeItems(parts.items).sort((a, b) => {
     const ta = a.publishedAt ? Date.parse(a.publishedAt) : 0;
     const tb = b.publishedAt ? Date.parse(b.publishedAt) : 0;
     return tb - ta;
   });
 
-  const payload: NewsPayload = {
+  return {
     matchId: ctx.matchId,
     fetchedAt: new Date().toISOString(),
-    cached: false,
+    cached: Boolean(parts.cached),
+    stale: parts.stale,
     cacheTtlMs: CACHE_TTL_MS,
     items,
-    feeds,
-    gemini: {
-      configured: geminiConfigured,
-      used: geminiUsed,
-      grounded: geminiGrounded,
-      error: geminiError,
-    },
+    feeds: parts.feeds,
+    gemini: parts.gemini,
+    briefIncluded: parts.briefIncluded,
     warnings,
-    regionsActive,
+    regionsActive: parts.regionsActive,
   };
+}
 
+async function buildFreshNews(
+  ctx: NewsMatchContext,
+  wantBrief: boolean
+): Promise<NewsPayload> {
+  const rss = await collectRssNews(ctx);
+  if (!wantBrief) {
+    return finalizePayload(ctx, {
+      items: rss.items,
+      feeds: rss.feeds,
+      warnings: rss.warnings,
+      regionsActive: rss.regionsActive,
+      gemini: {
+        configured: isGeminiConfigured(),
+        used: false,
+        pending: isGeminiConfigured(),
+      },
+      briefIncluded: false,
+    });
+  }
+
+  const brief = await collectBriefNews(ctx, rss.items);
+  // Replace "Awaiting brief enrich" placeholders with real domain statuses
+  const feedByKey = new Map(rss.feeds.map((f) => [f.key, f]));
+  for (const f of brief.feeds) feedByKey.set(f.key, f);
+  const feeds = [...feedByKey.values()];
+
+  return finalizePayload(ctx, {
+    items: [...rss.items, ...brief.items],
+    feeds,
+    warnings: [...rss.warnings, ...brief.warnings],
+    regionsActive: rss.regionsActive,
+    gemini: brief.gemini,
+    briefIncluded: true,
+  });
+}
+
+function scheduleBackgroundRevalidate(ctx: NewsMatchContext, wantBrief: boolean) {
+  const key = `${ctx.matchId}:brief=${wantBrief ? 1 : 0}`;
+  if (revalidating.has(key)) return;
+  const job = (async () => {
+    try {
+      const payload = await buildFreshNews(ctx, wantBrief);
+      cache.set(ctx.matchId, { at: Date.now(), payload });
+    } catch {
+      /* soft-fail background refresh */
+    } finally {
+      revalidating.delete(key);
+    }
+  })();
+  revalidating.set(key, job);
+}
+
+export async function getMatchNews(
+  ctx: NewsMatchContext,
+  opts?: GetMatchNewsOpts
+): Promise<NewsPayload> {
+  const wantBrief = opts?.brief === true;
+  const force = opts?.force === true;
+  const cacheKey = ctx.matchId;
+  const hit = cache.get(cacheKey);
+  const age = hit ? Date.now() - hit.at : Infinity;
+  const fresh = Boolean(hit && age < CACHE_TTL_MS);
+
+  if (!force && hit && fresh) {
+    // Warm cache: paint immediately. If caller wants brief but cache is RSS-only, enrich.
+    if (wantBrief && !hit.payload.briefIncluded && isGeminiConfigured()) {
+      const rssItems = hit.payload.items.filter((i) => i.provenance === "rss");
+      const brief = await collectBriefNews(ctx, rssItems);
+      const feedByKey = new Map(hit.payload.feeds.map((f) => [f.key, f]));
+      for (const f of brief.feeds) feedByKey.set(f.key, f);
+      const payload = finalizePayload(ctx, {
+        items: [...hit.payload.items, ...brief.items],
+        feeds: [...feedByKey.values()],
+        warnings: [
+          ...hit.payload.warnings.filter((w) => !w.startsWith("Web brief:")),
+          ...brief.warnings,
+        ],
+        regionsActive: hit.payload.regionsActive,
+        gemini: brief.gemini,
+        briefIncluded: true,
+      });
+      cache.set(cacheKey, { at: Date.now(), payload });
+      return payload;
+    }
+    return { ...hit.payload, cached: true, stale: false };
+  }
+
+  // Stale-while-revalidate: serve expired cache instantly, refresh in background
+  if (!force && hit) {
+    scheduleBackgroundRevalidate(ctx, wantBrief || hit.payload.briefIncluded);
+    return { ...hit.payload, cached: true, stale: true };
+  }
+
+  const payload = await buildFreshNews(ctx, wantBrief);
   cache.set(cacheKey, { at: Date.now(), payload });
   return payload;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import {
   Plus,
   RefreshCw,
   AlertTriangle,
+  Sparkles,
 } from "lucide-react";
 import {
   groupNewsByRegion,
@@ -56,6 +57,23 @@ function LangBadge({ lang }: { lang: string }) {
     <span className="rounded border border-slate-200 dark:border-slate-700 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-slate-500">
       {lang}
     </span>
+  );
+}
+
+function NewsSkeleton() {
+  return (
+    <div className="space-y-2 animate-pulse" aria-hidden>
+      {[0, 1, 2, 3].map((i) => (
+        <div
+          key={i}
+          className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/40 p-3 space-y-2"
+        >
+          <div className="h-4 w-[85%] rounded bg-slate-200 dark:bg-slate-700" />
+          <div className="h-3 w-full rounded bg-slate-200/80 dark:bg-slate-800" />
+          <div className="h-3 w-[60%] rounded bg-slate-200/60 dark:bg-slate-800/80" />
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -171,6 +189,27 @@ function NewsCard({
   );
 }
 
+function mergeNewsPayload(base: NewsPayload, enrich: NewsPayload): NewsPayload {
+  const byId = new Map<string, NewsItem>();
+  for (const it of base.items) byId.set(it.id, it);
+  for (const it of enrich.items) byId.set(it.id, it);
+  const feedByKey = new Map(base.feeds.map((f) => [f.key, f]));
+  for (const f of enrich.feeds) feedByKey.set(f.key, f);
+  const items = [...byId.values()].sort((a, b) => {
+    const ta = a.publishedAt ? Date.parse(a.publishedAt) : 0;
+    const tb = b.publishedAt ? Date.parse(b.publishedAt) : 0;
+    return tb - ta;
+  });
+  return {
+    ...enrich,
+    items,
+    feeds: [...feedByKey.values()],
+    briefIncluded: enrich.briefIncluded || base.briefIncluded,
+    cached: false,
+    stale: false,
+  };
+}
+
 export function NewsPanel({
   matchId,
   homeName,
@@ -189,34 +228,68 @@ export function NewsPanel({
   const router = useRouter();
   const [data, setData] = useState<NewsPayload | null>(null);
   const [busy, setBusy] = useState(true);
+  const [briefBusy, setBriefBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [scope, setScope] = useState<NewsScope>("all");
   const [addingId, setAddingId] = useState<string | null>(null);
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
   const [toast, setToast] = useState<string | null>(null);
+  const briefReqRef = useRef(0);
 
-  const load = useCallback(
+  const enrichBrief = useCallback(
     async (force = false) => {
-      setBusy(true);
-      setErr(null);
+      const reqId = ++briefReqRef.current;
+      setBriefBusy(true);
       try {
-        const qs = force ? "?refresh=1" : "";
-        const res = await fetch(`/api/matches/${matchId}/news${qs}`);
+        const qs = new URLSearchParams({ brief: "1" });
+        if (force) qs.set("refresh", "1");
+        const res = await fetch(`/api/matches/${matchId}/news?${qs}`);
         const json = (await res.json()) as NewsPayload & { error?: string };
-        if (!res.ok) throw new Error(json.error || "Failed to load news");
-        setData(json);
+        if (!res.ok) throw new Error(json.error || "Brief enrich failed");
+        if (reqId !== briefReqRef.current) return;
+        setData((prev) => (prev ? mergeNewsPayload(prev, json) : json));
       } catch (e) {
-        setErr(e instanceof Error ? e.message : "Failed to load news");
+        if (reqId !== briefReqRef.current) return;
+        setToast(e instanceof Error ? e.message : "Brief enrich failed");
+        window.setTimeout(() => setToast(null), 3200);
       } finally {
-        setBusy(false);
+        if (reqId === briefReqRef.current) setBriefBusy(false);
       }
     },
     [matchId]
   );
 
+  const loadRss = useCallback(
+    async (force = false, autoEnrich = true) => {
+      setBusy(true);
+      setErr(null);
+      try {
+        const qs = new URLSearchParams({ brief: "0" });
+        if (force) qs.set("refresh", "1");
+        const res = await fetch(`/api/matches/${matchId}/news?${qs}`);
+        const json = (await res.json()) as NewsPayload & { error?: string };
+        if (!res.ok) throw new Error(json.error || "Failed to load news");
+        setData(json);
+        setBusy(false);
+        // Progressive: headlines first, then auto-follow-up brief when Gemini is available
+        if (
+          autoEnrich &&
+          json.gemini?.configured &&
+          (!json.briefIncluded || json.gemini.pending)
+        ) {
+          void enrichBrief(false);
+        }
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : "Failed to load news");
+        setBusy(false);
+      }
+    },
+    [matchId, enrichBrief]
+  );
+
   useEffect(() => {
-    void load(false);
-  }, [load]);
+    void loadRss(false, true);
+  }, [loadRss]);
 
   const scopeLabels = useMemo(() => {
     return SCOPES.map((s) => {
@@ -309,21 +382,43 @@ export function NewsPanel({
             News
           </h1>
           <p className="text-xs text-slate-500">
-            League-aware curated feeds plus grounded web brief for {homeName} vs{" "}
-            {awayName}. Cache ~7 min. No invented headlines.
+            RSS headlines first for {homeName} vs {awayName}, then optional web
+            brief. Cache ~7 min (stale-while-revalidate). No invented headlines.
           </p>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="h-8 text-xs"
-          disabled={busy}
-          onClick={() => void load(true)}
-        >
-          <RefreshCw className={cn("h-3.5 w-3.5 mr-1", busy && "animate-spin")} />
-          Refresh
-        </Button>
+        <div className="flex flex-wrap gap-1.5">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs"
+            disabled={briefBusy || !data?.gemini?.configured}
+            onClick={() => void enrichBrief(false)}
+            title={
+              data?.gemini?.configured
+                ? "Pull Gemini grounded brief without blocking headlines"
+                : "GEMINI_API_KEY not set"
+            }
+          >
+            {briefBusy ? (
+              <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+            ) : (
+              <Sparkles className="h-3.5 w-3.5 mr-1" />
+            )}
+            Enrich
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs"
+            disabled={busy}
+            onClick={() => void loadRss(true, true)}
+          >
+            <RefreshCw className={cn("h-3.5 w-3.5 mr-1", busy && "animate-spin")} />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-1">
@@ -344,36 +439,48 @@ export function NewsPanel({
         ))}
       </div>
 
+      {briefBusy && (
+        <div className="flex items-center gap-2 rounded-md border border-violet-200 bg-violet-50 dark:border-violet-900 dark:bg-violet-950/30 px-2.5 py-1.5 text-[11px] text-violet-800 dark:text-violet-200">
+          <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
+          Updating brief… headlines stay available.
+        </div>
+      )}
+
       {data && (
         <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-slate-500">
-          {data.feeds.map((f) => (
-            <span
-              key={f.key}
-              className={
-                f.ok
-                  ? "text-emerald-700 dark:text-emerald-400"
-                  : "text-amber-700 dark:text-amber-400"
-              }
-            >
-              {f.label}
-              {f.mode === "web_brief" ? " (brief)" : ""}:{" "}
-              {f.ok ? `${f.count}` : f.error || "failed"}
-            </span>
-          ))}
+          {data.feeds
+            .filter((f) => f.mode !== "skipped" || f.error !== "Awaiting brief enrich")
+            .map((f) => (
+              <span
+                key={f.key}
+                className={
+                  f.ok
+                    ? "text-emerald-700 dark:text-emerald-400"
+                    : "text-amber-700 dark:text-amber-400"
+                }
+              >
+                {f.label}
+                {f.mode === "web_brief" ? " (brief)" : ""}:{" "}
+                {f.ok ? `${f.count}` : f.error || "failed"}
+              </span>
+            ))}
           <span>
             Web brief:{" "}
             {data.gemini.configured
-              ? data.gemini.error
-                ? data.gemini.error.slice(0, 80)
-                : data.gemini.grounded
-                  ? "grounded"
-                  : data.gemini.used
-                    ? "ok"
-                    : "idle"
+              ? briefBusy || data.gemini.pending
+                ? "updating…"
+                : data.gemini.error
+                  ? data.gemini.error.slice(0, 80)
+                  : data.gemini.grounded
+                    ? "grounded"
+                    : data.gemini.used
+                      ? "ok"
+                      : "idle"
               : "GEMINI_API_KEY not set"}
           </span>
           <span>
-            {data.cached ? "Cached" : "Fresh"} · {formatPublished(data.fetchedAt)}
+            {data.stale ? "Stale (refreshing)" : data.cached ? "Cached" : "Fresh"} ·{" "}
+            {formatPublished(data.fetchedAt)}
           </span>
         </div>
       )}
@@ -405,9 +512,12 @@ export function NewsPanel({
       ) : null}
 
       {busy && !data ? (
-        <div className="flex items-center gap-2 text-sm text-slate-500 py-8 justify-center">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Fetching feeds…
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 text-sm text-slate-500 py-2 justify-center">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Fetching feeds…
+          </div>
+          <NewsSkeleton />
         </div>
       ) : visible.length === 0 ? (
         <Card>
@@ -418,7 +528,7 @@ export function NewsPanel({
             <p className="mt-1 text-xs max-w-md mx-auto">
               Curated UK football RSS is often thin for non-Premier League clubs.
               League-specialist feeds and Web brief fill gaps when available — try
-              All or Refresh.
+              Enrich, All, or Refresh.
             </p>
           </CardBody>
         </Card>

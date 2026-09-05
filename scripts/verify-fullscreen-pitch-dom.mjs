@@ -27,10 +27,11 @@ await page.goto(`http://localhost:3000/match-day/${matchId}`, {
   waitUntil: "networkidle",
 });
 await page.evaluate(() => {
+  try { localStorage.removeItem("pitchline.fieldSettings.v1"); } catch {}
   localStorage.setItem(
-    "pitchline.fieldSettings.v1",
+    "pitchline.fieldSettings.v2",
     JSON.stringify({
-      markerSizePct: 0,
+      markerSizePct: -25,
       nameSizePct: 0,
       dataRows: 2,
       fieldsPerRow: 4,
@@ -120,15 +121,16 @@ if (!fsOk) {
   console.log("requestFullscreen unavailable — simulating large container");
   await page.evaluate(() => {
     localStorage.setItem(
-      "pitchline.fieldSettings.v1",
+      "pitchline.fieldSettings.v2",
       JSON.stringify({
-        markerSizePct: 40,
+        markerSizePct: -25,
         nameSizePct: 0,
         dataRows: 2,
         fieldsPerRow: 4,
-        userAdjusted: true,
+        userAdjusted: false,
       })
     );
+    try { localStorage.removeItem("pitchline.fieldSettings.v1"); } catch {}
   });
   await page.reload({ waitUntil: "networkidle" });
   await page.waitForSelector('[data-pitch-card="1"]', { timeout: 20000 });
@@ -180,5 +182,24 @@ for (const [label, result] of [
     console.log(`${label}: PASS 0 DOM AABB overlaps`);
   }
 }
+// Cards must look reasonably small — not edge-to-edge columns spanning pitch height.
+// Base SportsCom ~76x152; at -25% scale ≈ 57x114. Fail if sample taller than ~45% of pitch height
+// or wider than ~18% of pitch width (would look like oversized columns).
+for (const [label, result] of [
+  ["windowed", windowed],
+  ["fullscreen", fullscreen],
+]) {
+  if (!result.sampleCard || !result.pitch) continue;
+  const { w: cw, h: ch } = result.sampleCard;
+  const { w: pw, h: ph } = result.pitch;
+  const tooTall = ch > ph * 0.45;
+  const tooWide = cw > pw * 0.18;
+  console.log(`${label}: sampleCard ${cw}x${ch} vs pitch ${pw}x${ph} (hRatio=${(ch / ph).toFixed(2)} wRatio=${(cw / pw).toFixed(2)})`);
+  if (tooTall || tooWide) {
+    console.error(`${label}: FAIL cards too large (want clearly smaller than edge-to-edge)`);
+    failed = true;
+  }
+}
+
 if (failed) process.exit(1);
-console.log("PASS: windowed + fullscreen 0 real DOM overlaps");
+console.log("PASS: windowed + fullscreen 0 real DOM overlaps + cards reasonably small");

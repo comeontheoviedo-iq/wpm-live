@@ -28,7 +28,7 @@ await page.waitForTimeout(1500);
 // bump field settings in localStorage then reload so cards enlarge
 await page.evaluate(() => {
   localStorage.setItem(
-    "pitchline.fieldSettings.v1",
+    "pitchline.fieldSettings.v2",
     JSON.stringify({
       markerSizePct: 20,
       nameSizePct: 10,

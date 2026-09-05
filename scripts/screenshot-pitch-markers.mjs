@@ -23,7 +23,7 @@ for (const pct of [20, 40]) {
   });
   await page.evaluate((markerSizePct) => {
     localStorage.setItem(
-      "pitchline.fieldSettings.v1",
+      "pitchline.fieldSettings.v2",
       JSON.stringify({
         markerSizePct,
         nameSizePct: 10,

@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import {
   type FieldSettings,
   type FieldSettingsTab,
+  DEFAULT_FIELD_SETTINGS,
   formatPctLabel,
   scaleFactor,
 } from "@/lib/field-settings";
@@ -308,21 +309,15 @@ export function FieldSettingsModal({
               </div>
             </div>
             {!settings.userAdjusted && isFullscreen && (
-              <p className="text-[10px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 rounded-md px-2 py-1.5">
-                Fullscreen auto-fits marker size (up to +40%) so cards never overlap — until you change a control (then we remember).
+              <p className="text-[10px] text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/40 rounded-md px-2 py-1.5">
+                Fullscreen uses the same size as windowed (no auto-inflate). Pitch still shrinks cards if needed so they never overlap.
               </p>
             )}
             <button
               type="button"
               className="text-[11px] font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 underline"
               onClick={() =>
-                onChange({
-                  markerSizePct: 0,
-                  nameSizePct: 0,
-                  dataRows: 2,
-                  fieldsPerRow: 4,
-                  userAdjusted: false,
-                })
+                onChange({ ...DEFAULT_FIELD_SETTINGS, userAdjusted: false })
               }
             >
               Reset to defaults

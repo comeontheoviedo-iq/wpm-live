@@ -15,10 +15,12 @@ export type FieldSettings = {
   userAdjusted: boolean;
 };
 
-export const FIELD_SETTINGS_STORAGE_KEY = "pitchline.fieldSettings.v1";
+/** Bumped to v2 so inflated v1 localStorage (userAdjusted huge sizes) is ignored. */
+export const FIELD_SETTINGS_STORAGE_KEY = "pitchline.fieldSettings.v2";
+const FIELD_SETTINGS_STORAGE_KEY_V1 = "pitchline.fieldSettings.v1";
 
 export const DEFAULT_FIELD_SETTINGS: FieldSettings = {
-  markerSizePct: 0,
+  markerSizePct: -25,
   nameSizePct: 0,
   dataRows: 2,
   fieldsPerRow: 4,
@@ -26,10 +28,10 @@ export const DEFAULT_FIELD_SETTINGS: FieldSettings = {
 };
 
 /**
- * Fullscreen auto-fit ceiling when user never adjusted Field Settings.
- * PitchBoard fits down from this so 22 cards never overlap (was blind +20).
+ * Fullscreen desired marker % when user never adjusted Field Settings.
+ * Was +40 (auto-inflate — broke Full view). Now 0 — no auto bump; PitchBoard still fits down.
  */
-export const FULLSCREEN_DEFAULT_MARKER_PCT = 40;
+export const FULLSCREEN_DEFAULT_MARKER_PCT = 0;
 
 export function clampPct(n: number): number {
   if (!Number.isFinite(n)) return 0;
@@ -55,9 +57,27 @@ export function normalizeFieldSettings(
 export function loadFieldSettings(): FieldSettings {
   if (typeof window === "undefined") return { ...DEFAULT_FIELD_SETTINGS };
   try {
-    const raw = window.localStorage.getItem(FIELD_SETTINGS_STORAGE_KEY);
-    if (!raw) return { ...DEFAULT_FIELD_SETTINGS };
-    return normalizeFieldSettings(JSON.parse(raw) as Partial<FieldSettings>);
+    const rawV2 = window.localStorage.getItem(FIELD_SETTINGS_STORAGE_KEY);
+    if (rawV2) {
+      return normalizeFieldSettings(JSON.parse(rawV2) as Partial<FieldSettings>);
+    }
+
+    // Migrate off v1: drop inflated userAdjusted from broken sessions;
+    // everyone gets fresh smaller defaults on v2.
+    const hadV1 = window.localStorage.getItem(FIELD_SETTINGS_STORAGE_KEY_V1) != null;
+    if (hadV1) {
+      try {
+        window.localStorage.removeItem(FIELD_SETTINGS_STORAGE_KEY_V1);
+      } catch {
+        /* ignore */
+      }
+    }
+    const fresh = { ...DEFAULT_FIELD_SETTINGS };
+    window.localStorage.setItem(
+      FIELD_SETTINGS_STORAGE_KEY,
+      JSON.stringify(fresh)
+    );
+    return fresh;
   } catch {
     return { ...DEFAULT_FIELD_SETTINGS };
   }
@@ -70,6 +90,12 @@ export function saveFieldSettings(settings: FieldSettings): void {
       FIELD_SETTINGS_STORAGE_KEY,
       JSON.stringify(normalizeFieldSettings(settings))
     );
+    // Keep v1 cleared so old code paths / stale tabs don't revive huge sizes.
+    try {
+      window.localStorage.removeItem(FIELD_SETTINGS_STORAGE_KEY_V1);
+    } catch {
+      /* ignore */
+    }
   } catch {
     /* quota / private mode */
   }
@@ -77,7 +103,8 @@ export function saveFieldSettings(settings: FieldSettings): void {
 
 /**
  * Desired marker % before container fit/clamp.
- * Fullscreen + !userAdjusted → auto-fit ceiling (+40); PitchBoard fits down.
+ * Fullscreen + !userAdjusted → FULLSCREEN_DEFAULT_MARKER_PCT (0, no inflate);
+ * PitchBoard still fits down so 22 cards never overlap.
  * userAdjusted → user value (still clamped by fit so overlaps never win).
  */
 export function effectiveMarkerPct(
@@ -85,7 +112,11 @@ export function effectiveMarkerPct(
   isFullscreen: boolean
 ): number {
   if (settings.userAdjusted) return settings.markerSizePct;
-  if (isFullscreen) return FULLSCREEN_DEFAULT_MARKER_PCT;
+  // Fullscreen used to return FULLSCREEN_DEFAULT_MARKER_PCT (+40) and inflate cards.
+  // Cap at that constant (now 0) so Full never auto-grows above windowed default.
+  if (isFullscreen) {
+    return Math.min(FULLSCREEN_DEFAULT_MARKER_PCT, settings.markerSizePct);
+  }
   return settings.markerSizePct;
 }
 

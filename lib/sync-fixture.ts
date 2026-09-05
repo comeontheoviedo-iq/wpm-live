@@ -25,6 +25,53 @@ import {
   type AfSquadPlayer,
 } from "./api-football";
 import { resolveWeatherForVenue } from "./weather";
+import { nationalityToIso } from "./flags";
+
+
+/**
+ * From AF /players statistics, pick a national-team country when the player
+ * has appearances for a country side in international competitions.
+ * AF often keeps citizenship as England while birth/NT is African (e.g. Maswanhise → Zimbabwe).
+ */
+function pickNationalTeamCountry(
+  statistics?: {
+    team?: { id?: number; name?: string } | null;
+    league?: { name?: string; country?: string | null } | null;
+    games?: { appearences?: number | null } | null;
+  }[]
+): string | null {
+  if (!statistics?.length) return null;
+  let best: { country: string; apps: number } | null = null;
+  for (const s of statistics) {
+    const teamName = s.team?.name?.trim();
+    if (!teamName) continue;
+    if (
+      /\b(fc|cf|sc|afc|united|city|athletic|rovers|wanderers|albion|hotspur|town|borough)\b/i.test(
+        teamName
+      )
+    ) {
+      continue;
+    }
+    if (!nationalityToIso(teamName)) continue;
+    const league = s.league?.name || "";
+    const intl =
+      /world cup|friendlies|nations|africa cup|afcon|\beuro\b|copa|asian cup|gold cup|olympics|qualification|confederations|uefa nations|african nations/i.test(
+        league
+      );
+    if (!intl) continue;
+    const apps = s.games?.appearences ?? 0;
+    if (apps <= 0) continue;
+    if (!best || apps > best.apps) best = { country: teamName, apps };
+  }
+  return best?.country || null;
+}
+
+function sameCountryLabel(a?: string | null, b?: string | null) {
+  const ia = nationalityToIso(a);
+  const ib = nationalityToIso(b);
+  if (ia && ib) return ia === ib;
+  return (a || "").trim().toLowerCase() === (b || "").trim().toLowerCase();
+}
 
 function posGuess(pos?: string | null) {
   if (!pos) return "MID";
@@ -56,8 +103,9 @@ function parseKg(w?: string | null) {
 }
 
 /**
- * Always prefer API-Football `player.nationality` (citizenship), never birth country.
- * Overwrites ENG/UNK defaults and any stale wrong value when AF sends a nationality.
+ * Prefer AF nationality (citizenship). When AF lists a national team with apps,
+ * prefer that over a stale England/club-country citizenship.
+ * Store birth.country separately for SportsCom-style dual flags.
  */
 async function upsertPlayerBioFromAf(
   clubId: string,
@@ -65,6 +113,8 @@ async function upsertPlayerBioFromAf(
     apiId: number;
     name: string;
     nationality?: string;
+    birthCountry?: string | null;
+    nationalTeam?: string | null;
     photo?: string;
     height?: string;
     weight?: string;
@@ -81,7 +131,15 @@ async function upsertPlayerBioFromAf(
     apiId: row.apiId,
     name: row.name,
   });
-  const nat = row.nationality?.trim() || null;
+  const afNat = row.nationality?.trim() || null;
+  const nt = row.nationalTeam?.trim() || null;
+  // Citizenship: national team with caps wins when it differs from AF nationality
+  let nat = afNat;
+  if (nt && (!afNat || !sameCountryLabel(afNat, nt))) {
+    nat = nt;
+  }
+  const birthCountry = row.birthCountry?.trim() || null;
+
   if (!existing) {
     await prisma.player.create({
       data: {
@@ -92,6 +150,7 @@ async function upsertPlayerBioFromAf(
         apiFootballPlayerId: row.apiId,
         age: row.age ?? null,
         nationality: nat || "UNK",
+        birthCountry: birthCountry,
         photoUrl: row.photo || null,
         heightCm: parseCm(row.height),
         weightKg: parseKg(row.weight),
@@ -107,6 +166,9 @@ async function upsertPlayerBioFromAf(
   const data: Record<string, unknown> = {};
   if (nat && (isUnsetNationality(existing.nationality) || existing.nationality !== nat)) {
     data.nationality = nat;
+  }
+  if (birthCountry && existing.birthCountry !== birthCountry) {
+    data.birthCountry = birthCountry;
   }
   if (row.photo && !existing.photoUrl) data.photoUrl = row.photo;
   const h = parseCm(row.height);
@@ -817,6 +879,8 @@ async function syncSeasonScorers(
     position?: string | null;
     age?: number | null;
     nationality?: string;
+    birthCountry?: string | null;
+    nationalTeam?: string | null;
     photo?: string;
     height?: string;
     weight?: string;
@@ -840,6 +904,7 @@ async function syncSeasonScorers(
         ? Number(rawRating)
         : null;
     const prev = byApi.get(row.player.id);
+    const nt = pickNationalTeamCountry(row.statistics) || prev?.nationalTeam || null;
     byApi.set(row.player.id, {
       clubId,
       apiId: row.player.id,
@@ -853,6 +918,9 @@ async function syncSeasonScorers(
       position: row.statistics?.[0]?.games?.position || prev?.position,
       age: row.player.age ?? prev?.age,
       nationality: row.player.nationality || prev?.nationality,
+      birthCountry:
+        row.player.birth?.country || prev?.birthCountry || null,
+      nationalTeam: nt,
       photo: row.player.photo || prev?.photo,
       height: row.player.height || prev?.height,
       weight: row.player.weight || prev?.weight,
@@ -867,48 +935,78 @@ async function syncSeasonScorers(
   for (const row of tops) ingest(row);
   for (const row of teamPages) ingest(row);
 
-  // Enrich EVERY squad player from /players (nationality, photo, bio) — not only scorers/keepers.
-  // Squads endpoint has no nationality; schema default ENG left most flags wrong.
+  // Team /players pages omit national-team rows; fetch /players?id= when we still
+  // need NT detection (England-listed dual nationals) or missing birth country.
+  async function hydrateFromPlayerId(apiId: number, clubId: string, fallbackName: string) {
+    const rows = await getPlayerById(apiId, season).catch(() => []);
+    const row = rows[0];
+    if (!row?.player) return false;
+    const prev = byApi.get(apiId);
+    await upsertPlayerBioFromAf(clubId, {
+      apiId: row.player.id,
+      name: row.player.name || fallbackName,
+      nationality: row.player.nationality || prev?.nationality,
+      birthCountry: row.player.birth?.country || prev?.birthCountry || null,
+      nationalTeam: pickNationalTeamCountry(row.statistics) || prev?.nationalTeam || null,
+      photo: row.player.photo || prev?.photo,
+      height: row.player.height || prev?.height,
+      weight: row.player.weight || prev?.weight,
+      birth: row.player.birth?.date || prev?.birth || null,
+      age: row.player.age ?? prev?.age ?? null,
+      position: row.statistics?.[0]?.games?.position || prev?.position,
+      rating: prev?.rating ?? null,
+      goals: prev?.goals || 0,
+      assists: prev?.assists || 0,
+      apps: prev?.apps || 0,
+    });
+    return true;
+  }
+
+  // Enrich EVERY squad player from team /players pages first.
   let bios = 0;
   for (const row of byApi.values()) {
     await upsertPlayerBioFromAf(row.clubId, row);
     bios++;
   }
 
-  // Second pass: remaining UNK/ENG players with AF ids — /players?id=
-  const stillUnset = await prisma.player.findMany({
+  // Full profile for anyone still missing NT while listed as England (AF quirk),
+  // or missing birthCountry / unset nationality.
+  const needsFullProfile = await prisma.player.findMany({
     where: {
       clubId: { in: [homeClubId, awayClubId] },
-      nationality: { in: ["UNK", "ENG", "UNKNOWN", ""] },
       apiFootballPlayerId: { not: null },
+      OR: [
+        { nationality: { in: ["UNK", "ENG", "UNKNOWN", "", "England"] } },
+        { birthCountry: null },
+      ],
     },
-    select: { id: true, clubId: true, apiFootballPlayerId: true, name: true },
+    select: {
+      id: true,
+      clubId: true,
+      apiFootballPlayerId: true,
+      name: true,
+      nationality: true,
+      birthCountry: true,
+    },
   });
-  for (const p of stillUnset) {
+  for (const p of needsFullProfile) {
     const apiId = p.apiFootballPlayerId;
     if (!apiId) continue;
-    // Prefer already-ingested team page row
     const fromPages = byApi.get(apiId);
-    if (fromPages?.nationality) {
-      await upsertPlayerBioFromAf(p.clubId, fromPages);
-      bios++;
+    // Team pages never include other-nation NT rows — always hydrate England / unset.
+    const needsNt =
+      !fromPages?.nationalTeam &&
+      /^(england|eng|unk|unknown)?$/i.test((p.nationality || "").trim());
+    const needsBirth = !p.birthCountry && !fromPages?.birthCountry;
+    const needsNat = isUnsetNationality(p.nationality) && !fromPages?.nationality;
+    if (!needsNt && !needsBirth && !needsNat) {
+      if (fromPages) {
+        await upsertPlayerBioFromAf(p.clubId, fromPages);
+        bios++;
+      }
       continue;
     }
-    const rows = await getPlayerById(apiId, season).catch(() => []);
-    const row = rows[0];
-    if (!row?.player) continue;
-    await upsertPlayerBioFromAf(p.clubId, {
-      apiId: row.player.id,
-      name: row.player.name || p.name,
-      nationality: row.player.nationality,
-      photo: row.player.photo,
-      height: row.player.height,
-      weight: row.player.weight,
-      birth: row.player.birth?.date || null,
-      age: row.player.age ?? null,
-      position: row.statistics?.[0]?.games?.position,
-    });
-    bios++;
+    if (await hydrateFromPlayerId(apiId, p.clubId, p.name)) bios++;
   }
 
   let scorers = 0;
@@ -934,6 +1032,7 @@ async function syncSeasonScorers(
           apiFootballPlayerId: row.apiId,
           age: row.age ?? null,
           nationality: row.nationality || "UNK",
+          birthCountry: row.birthCountry || null,
           photoUrl: row.photo || null,
           heightCm: parseCm(row.height),
           weightKg: parseKg(row.weight),

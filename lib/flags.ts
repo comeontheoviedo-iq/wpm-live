@@ -276,6 +276,34 @@ export function nationalityToIso(nationality?: string | null): string | null {
   return null;
 }
 
+
+/**
+ * Up to 2 distinct nationality labels for SportsCom-style dual flags.
+ * Sources (AF-only today): citizenship (`nationality`) + birth.country when different.
+ * Sync may also promote national-team caps over a stale England/etc. citizenship.
+ * AF limit: many dual nationals (e.g. E. Fernandez / Oluwasegun — Yoruba given name)
+ * only expose England/England with no NT row; we do not invent a second flag.
+ * Future: optional manual override field on Player if AF stays incomplete.
+ */
+export function dualNationalities(
+  citizenship?: string | null,
+  birthCountry?: string | null
+): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of [citizenship, birthCountry]) {
+    const v = raw?.trim();
+    if (!v || v.toUpperCase() === "UNK" || v.toUpperCase() === "UNKNOWN") continue;
+    const iso = nationalityToIso(v);
+    const key = (iso || v).toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(v);
+    if (out.length >= 2) break;
+  }
+  return out;
+}
+
 export function flagUrl(nationality?: string | null, w = 16): string | null {
   const iso = nationalityToIso(nationality);
   if (!iso) return null;

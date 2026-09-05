@@ -5,6 +5,7 @@ import { User, X } from "lucide-react";
 import { slotsFor } from "@/lib/formations";
 import { cn } from "@/lib/utils";
 import {
+  dualNationalities,
   flagUrl,
   formatFoot,
   formatHeight,
@@ -25,6 +26,7 @@ export type PitchPlayer = {
   onPitch?: boolean;
   position?: string;
   nationality?: string | null;
+  birthCountry?: string | null;
   age?: number | null;
   photoUrl?: string | null;
   apiFootballPlayerId?: number | null;
@@ -124,6 +126,10 @@ function SportsComToken({
     (player.position || "").toUpperCase() === "GK";
   const last = lastNameOf(player.name).toUpperCase();
   const pos = posCode(player.position, slotLabel);
+  const flagNats = dualNationalities(player.nationality, player.birthCountry);
+  const flagTitle = flagNats.length
+    ? flagNats.join(" / ")
+    : player.nationality || null;
   const photo = playerPhotoUrl({
     photoUrl: player.photoUrl,
     apiFootballPlayerId: player.apiFootballPlayerId,
@@ -164,7 +170,7 @@ function SportsComToken({
         player.name,
         player.isCaptain ? "Captain" : null,
         pos,
-        player.nationality || null,
+        flagTitle,
         player.age != null ? `Age ${player.age}` : null,
         player.noteHook || null,
       ]
@@ -187,7 +193,13 @@ function SportsComToken({
           {player.shirtNumber}
         </span>
         <div className="flex flex-col items-end gap-px pt-0.5">
-          <FlagImg nationality={player.nationality} />
+          <div className="flex items-center gap-px" title={flagTitle || undefined}>
+            {flagNats.length ? (
+              flagNats.map((n) => <FlagImg key={n} nationality={n} />)
+            ) : (
+              <FlagImg nationality={player.nationality} />
+            )}
+          </div>
           <span
             className={cn(
               "text-[7px] font-bold uppercase leading-none tracking-wide",

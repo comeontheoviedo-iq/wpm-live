@@ -21,6 +21,7 @@ type DossierPayload = {
     shirtNumber: number;
     position: string;
     nationality: string;
+    birthCountry?: string | null;
     age: number | null;
     heightCm: number | null;
     weightKg: number | null;
@@ -184,7 +185,10 @@ export function PlayerDossier({
     data?.afStats?.player?.photo ||
     playerPhotoUrl({ apiFootballPlayerId: p?.apiFootballPlayerId ?? null });
 
-  const birthCountry = data?.afStats?.player?.birth?.country || null;
+  const birthCountry =
+    p?.birthCountry ||
+    data?.afStats?.player?.birth?.country ||
+    null;
   const rating =
     formatRating(p?.rating) !== "—"
       ? formatRating(p?.rating)
@@ -237,9 +241,13 @@ export function PlayerDossier({
             {p && (
               <>
                 <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <Flag nationality={p.nationality} label="Citizenship" />
-                  {birthCountry && birthCountry !== p.nationality ? (
-                    <Flag nationality={birthCountry} label="Birth" />
+                  <Flag nationality={p.nationality} label={`Citizenship: ${p.nationality}`} />
+                  {birthCountry &&
+                  birthCountry.trim().toLowerCase() !== p.nationality.trim().toLowerCase() ? (
+                    <Flag
+                      nationality={birthCountry}
+                      label={`Country of birth: ${birthCountry}`}
+                    />
                   ) : null}
                 </div>
                 <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-600 dark:text-slate-300">

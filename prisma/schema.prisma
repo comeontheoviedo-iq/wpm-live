@@ -60,6 +60,7 @@ model Player {
   photoUrl         String?
   weightKg         Int?
   birthDate        String?
+  birthCountry     String?
   isCaptain        Boolean         @default(false)
   isStarter        Boolean         @default(false)
   formationSlot    String?

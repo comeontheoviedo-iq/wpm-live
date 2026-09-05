@@ -105,9 +105,11 @@ export async function GET(
             weight?: string;
             nationality?: string;
             age?: number;
-            birth?: { date?: string };
+            birth?: { date?: string; country?: string | null };
           };
           statistics?: {
+            team?: { name?: string } | null;
+            league?: { name?: string; country?: string | null } | null;
             games?: {
               appearences?: number | null;
               rating?: string | number | null;
@@ -128,11 +130,31 @@ export async function GET(
         if (w && !player.weightKg) patch.weightKg = w;
         if (row.player?.birth?.date && !player.birthDate)
           patch.birthDate = row.player.birth.date;
-        // Always prefer AF citizenship nationality over ENG/UNK defaults or stale values
-        if (row.player?.nationality) {
-          const nat = row.player.nationality.trim();
+        const birthCountry = row.player?.birth?.country?.trim() || null;
+        if (birthCountry && player.birthCountry !== birthCountry)
+          patch.birthCountry = birthCountry;
+        // Prefer AF nationality, but national-team caps override stale England/etc.
+        const afNat = row.player?.nationality?.trim() || null;
+        let nt: string | null = null;
+        for (const s of row.statistics || []) {
+          const teamName = s.team?.name?.trim();
+          if (!teamName) continue;
+          const league = s.league?.name || "";
+          const intl =
+            /world cup|friendlies|nations|africa cup|afcon|\beuro\b|copa|asian cup|gold cup|olympics|qualification|confederations|uefa nations|african nations/i.test(
+              league
+            );
+          const apps = s.games?.appearences ?? 0;
+          if (!intl || apps <= 0) continue;
+          // country-named sides only (Ivory Coast, Zimbabwe, …)
+          if (/\b(fc|cf|sc|afc|united|city|athletic)\b/i.test(teamName)) continue;
+          nt = teamName;
+          break;
+        }
+        const nat = nt || afNat;
+        if (nat) {
           const cur = (player.nationality || "").trim().toUpperCase();
-          if (nat && (cur === "" || cur === "ENG" || cur === "UNK" || player.nationality !== nat))
+          if (cur === "" || cur === "ENG" || cur === "UNK" || player.nationality !== nat)
             patch.nationality = nat;
         }
         if (row.player?.age && !player.age) patch.age = row.player.age;
@@ -182,6 +204,7 @@ export async function GET(
       shirtNumber: player.shirtNumber,
       position: player.position,
       nationality: player.nationality,
+      birthCountry: player.birthCountry,
       age: player.age,
       heightCm: player.heightCm,
       weightKg: player.weightKg,

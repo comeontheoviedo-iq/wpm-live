@@ -2,7 +2,15 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { europeanSeasonYear } from "@/lib/season";
-import { getPlayerById, getPlayerTeams } from "@/lib/api-football";
+import {
+  getPlayerById,
+  getPlayerTeams,
+  getPlayerTransfers,
+  getPlayerSidelined,
+  getPlayerRecentFixtures,
+  getFixturePlayers,
+  getPlayerTrophies,
+} from "@/lib/api-football";
 import { nationalityToIso } from "@/lib/flags";
 
 function parseCm(h?: string | null) {
@@ -194,8 +202,40 @@ export async function GET(
       assists: number | null;
       minutes: number | null;
       rating: string | number | null;
+      yellow?: number | null;
+      red?: number | null;
+      lineups?: number | null;
+      leagueLogo?: string | null;
     }[];
   }[] = [];
+  let recentForm: {
+    date: string;
+    opponent: string;
+    opponentLogo?: string | null;
+    league?: string | null;
+    leagueLogo?: string | null;
+    result: "W" | "D" | "L" | null;
+    homeAway: "H" | "A" | null;
+    score: string;
+    rating: string | null;
+    started: boolean | null;
+    minutes: number | null;
+    goals: number | null;
+    assists: number | null;
+    yellow: number | null;
+    red: number | null;
+  }[] = [];
+  let transfers: {
+    date: string;
+    type: string | null;
+    from: { id?: number; name: string; logo?: string | null };
+    to: { id?: number; name: string; logo?: string | null };
+  }[] = [];
+  let afSidelined: { type: string; start: string | null; end: string | null }[] = [];
+  let matchPlayerStats: Record<string, unknown> | null = null;
+  let trophies: { league: string; country?: string | null; season?: string | null; place?: string | null }[] = [];
+  let opponentClub: { id: string; name: string; shortName: string; apiFootballTeamId: number | null } | null = null;
+
 
   if (player.apiFootballPlayerId) {
     try {
@@ -325,6 +365,189 @@ export async function GET(
           });
         }
       }
+
+      // Soft enrichments — never fail the dossier for these
+      try {
+        const tr = await withTimeout(getPlayerTransfers(afId), 3000).catch(() => []);
+        const flat: typeof transfers = [];
+        for (const row of tr || []) {
+          for (const x of row.transfers || []) {
+            flat.push({
+              date: x.date || "",
+              type: x.type || null,
+              from: {
+                id: x.teams?.out?.id,
+                name: x.teams?.out?.name || "—",
+                logo: x.teams?.out?.logo || null,
+              },
+              to: {
+                id: x.teams?.in?.id,
+                name: x.teams?.in?.name || "—",
+                logo: x.teams?.in?.logo || null,
+              },
+            });
+          }
+        }
+        transfers = flat
+          .filter((x) => x.date)
+          .sort((a, b) => b.date.localeCompare(a.date))
+          .slice(0, 12);
+      } catch { /* soft */ }
+
+      try {
+        const sid = await withTimeout(getPlayerSidelined(afId), 2500).catch(() => []);
+        afSidelined = (sid || [])
+          .map((s) => ({
+            type: s.type || "Sidelined",
+            start: s.start || null,
+            end: s.end || null,
+          }))
+          .slice(0, 20);
+      } catch { /* soft */ }
+
+      try {
+        const trop = await withTimeout(getPlayerTrophies(afId), 2500).catch(() => []);
+        trophies = (trop || [])
+          .map((x) => ({
+            league: x.league || "Trophy",
+            country: x.country || null,
+            season: x.season || null,
+            place: x.place || null,
+          }))
+          .slice(0, 40);
+      } catch { /* soft */ }
+
+      try {
+        const fxList = await withTimeout(getPlayerRecentFixtures(afId, 6), 3500).catch(
+          () => []
+        );
+        const finished = (fxList || [])
+          .filter((fx) =>
+            /FT|AET|PEN/i.test(fx.fixture?.status?.short || "")
+          )
+          .slice(0, 5);
+        for (const fx of finished) {
+          const home = fx.teams?.home;
+          const away = fx.teams?.away;
+          const gh = fx.goals?.home;
+          const ga = fx.goals?.away;
+          // Determine player's side via team id match against career clubs / current club later — use events soft
+          let homeAway: "H" | "A" | null = null;
+          let result: "W" | "D" | "L" | null = null;
+          let opponent = "—";
+          let opponentLogo: string | null = null;
+          // Prefer matching club AF id
+          const clubAf = player.club.apiFootballTeamId;
+          if (clubAf && home?.id === clubAf) {
+            homeAway = "H";
+            opponent = away?.name || "—";
+            opponentLogo = away?.logo || null;
+            if (gh != null && ga != null) {
+              result = gh > ga ? "W" : gh < ga ? "L" : "D";
+            }
+          } else if (clubAf && away?.id === clubAf) {
+            homeAway = "A";
+            opponent = home?.name || "—";
+            opponentLogo = home?.logo || null;
+            if (gh != null && ga != null) {
+              result = ga > gh ? "W" : ga < gh ? "L" : "D";
+            }
+          } else {
+            opponent = `${home?.name || "?"} vs ${away?.name || "?"}`;
+          }
+          let rating: string | null = null;
+          let started: boolean | null = null;
+          let minutes: number | null = null;
+          let goals: number | null = null;
+          let assists: number | null = null;
+          let yellow: number | null = null;
+          let red: number | null = null;
+          try {
+            const fp = await withTimeout(getFixturePlayers(fx.fixture.id), 2500).catch(
+              () => null
+            );
+            if (fp) {
+              for (const teamBlock of fp) {
+                for (const pl of teamBlock.players || []) {
+                  if (pl.player?.id !== afId) continue;
+                  const st = pl.statistics?.[0];
+                  rating = st?.games?.rating != null ? String(st.games.rating) : null;
+                  started = st?.games?.substitute === true ? false : st?.games?.minutes != null ? true : null;
+                  if (st?.games?.substitute === false) started = true;
+                  minutes = st?.games?.minutes ?? null;
+                  goals = st?.goals?.total ?? null;
+                  assists = st?.goals?.assists ?? null;
+                  yellow = st?.cards?.yellow ?? null;
+                  red = st?.cards?.red ?? null;
+                  if (teamBlock.team?.id === home?.id) homeAway = "H";
+                  if (teamBlock.team?.id === away?.id) homeAway = "A";
+                  if (gh != null && ga != null && homeAway) {
+                    if (homeAway === "H") result = gh > ga ? "W" : gh < ga ? "L" : "D";
+                    else result = ga > gh ? "W" : ga < gh ? "L" : "D";
+                    opponent = homeAway === "H" ? away?.name || "—" : home?.name || "—";
+                    opponentLogo = homeAway === "H" ? away?.logo || null : home?.logo || null;
+                  }
+                }
+              }
+            }
+          } catch { /* soft */ }
+          recentForm.push({
+            date: fx.fixture?.date || "",
+            opponent,
+            opponentLogo,
+            league: fx.league?.name || null,
+            leagueLogo: (fx.league as { logo?: string } | undefined)?.logo || null,
+            result,
+            homeAway,
+            score:
+              gh != null && ga != null ? `${gh}-${ga}` : "—",
+            rating,
+            started,
+            minutes,
+            goals,
+            assists,
+            yellow,
+            red,
+          });
+        }
+      } catch { /* soft */ }
+
+      if (matchId) {
+        try {
+          const m = await prisma.match.findUnique({
+            where: { id: matchId },
+            include: { homeClub: true, awayClub: true },
+          });
+          if (m) {
+            const isHome = m.homeClubId === player.clubId;
+            opponentClub = {
+              id: isHome ? m.awayClub.id : m.homeClub.id,
+              name: isHome ? m.awayClub.name : m.homeClub.name,
+              shortName: isHome ? m.awayClub.shortName : m.homeClub.shortName,
+              apiFootballTeamId: isHome
+                ? m.awayClub.apiFootballTeamId
+                : m.homeClub.apiFootballTeamId,
+            };
+            if (m.apiFootballFixtureId) {
+              const fp = await withTimeout(
+                getFixturePlayers(m.apiFootballFixtureId),
+                3000
+              ).catch(() => null);
+              if (fp) {
+                for (const teamBlock of fp) {
+                  for (const pl of teamBlock.players || []) {
+                    if (pl.player?.id === afId) {
+                      matchPlayerStats = pl.statistics?.[0] || null;
+                    }
+                  }
+                }
+              }
+            }
+          }
+        } catch { /* soft */ }
+      }
+
+
       careerClubs = aggregateCareer(teams || [], seasonRows);
       careerSeasons = seasonRows
         .map((block) => ({
@@ -338,6 +561,10 @@ export async function GET(
             assists: s.goals?.assists ?? null,
             minutes: s.games?.minutes ?? null,
             rating: s.games?.rating ?? null,
+            yellow: s.cards?.yellow ?? null,
+            red: s.cards?.red ?? null,
+            lineups: s.games?.lineups ?? null,
+            leagueLogo: (s.league as { logo?: string } | undefined)?.logo || null,
           })),
         }))
         .filter((b) => b.competitions.length > 0)
@@ -421,5 +648,14 @@ export async function GET(
       clubs: careerClubs,
       seasons: careerSeasons,
     },
+    recentForm,
+    transfers,
+    afSidelined,
+    matchPlayerStats,
+    trophies,
+    opponentClub,
+    clubLogoUrl: player.club.apiFootballTeamId
+      ? `https://media.api-sports.io/football/teams/${player.club.apiFootballTeamId}.png`
+      : null,
   });
 }

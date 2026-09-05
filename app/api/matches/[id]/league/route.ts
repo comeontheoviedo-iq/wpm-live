@@ -5,6 +5,7 @@ import { leagueIdForCompetition } from "@/lib/competitions";
 import { europeanSeasonYear, todayDateInput } from "@/lib/season";
 import {
   ApiFootballError,
+  getLeagueById,
   getLeagueLive,
   getLeagueRecentResults,
   getLeagueUpcoming,
@@ -14,6 +15,7 @@ import {
   type AfFixture,
   type AfStandingTeam,
 } from "@/lib/api-football";
+import { PRIORITY_COMPETITIONS } from "@/lib/competitions";
 
 function slimFixture(fx: AfFixture) {
   return {
@@ -212,6 +214,90 @@ export async function GET(
     );
   }
 
+  let leagueMeta: {
+    name: string;
+    logo: string | null;
+    country: string | null;
+    countryFlag: string | null;
+    type: string | null;
+    seasonsTracked: { year: number; current?: boolean; start?: string; end?: string }[];
+  } | null = null;
+  let hallOfFame: { season: number; champion: string | null; runnerUp: string | null; championLogo?: string | null; runnerUpLogo?: string | null }[] = [];
+  let lastChampion: { season: number; name: string; logo?: string | null } | null = null;
+  let lastRunnerUp: { season: number; name: string; logo?: string | null } | null = null;
+
+  try {
+    const info = await getLeagueById(leagueId!).catch(() => null);
+    if (info) {
+      leagueMeta = {
+        name: info.league?.name || competition,
+        logo: info.league?.logo || (leagueId ? `https://media.api-sports.io/football/leagues/${leagueId}.png` : null),
+        country: info.country?.name || PRIORITY_COMPETITIONS.find((c) => c.apiFootballLeagueId === leagueId)?.country || null,
+        countryFlag: info.country?.flag || null,
+        type: info.league?.type || "League",
+        seasonsTracked: (info.seasons || [])
+          .slice()
+          .sort((a, b) => b.year - a.year)
+          .slice(0, 12)
+          .map((s) => ({
+            year: s.year,
+            current: s.current,
+            start: s.start,
+            end: s.end,
+          })),
+      };
+      // Hall of fame from prior seasons standings (soft, limited)
+      const years = (info.seasons || [])
+        .map((s) => s.year)
+        .sort((a, b) => b - a)
+        .filter((y) => y < season)
+        .slice(0, 6);
+      for (const y of years) {
+        try {
+          const rows = await getStandings(leagueId!, y);
+          const table = rows[0]?.league?.standings?.[0] || [];
+          const champ = table.find((r) => r.rank === 1);
+          const runner = table.find((r) => r.rank === 2);
+          hallOfFame.push({
+            season: y,
+            champion: champ?.team?.name || null,
+            runnerUp: runner?.team?.name || null,
+            championLogo: champ?.team?.logo || null,
+            runnerUpLogo: runner?.team?.logo || null,
+          });
+        } catch {
+          /* soft per season */
+        }
+      }
+      if (hallOfFame[0]?.champion) {
+        lastChampion = {
+          season: hallOfFame[0].season,
+          name: hallOfFame[0].champion!,
+          logo: hallOfFame[0].championLogo,
+        };
+      }
+      if (hallOfFame[0]?.runnerUp) {
+        lastRunnerUp = {
+          season: hallOfFame[0].season,
+          name: hallOfFame[0].runnerUp!,
+          logo: hallOfFame[0].runnerUpLogo,
+        };
+      }
+    } else {
+      const opt = PRIORITY_COMPETITIONS.find((c) => c.apiFootballLeagueId === leagueId);
+      leagueMeta = {
+        name: competition,
+        logo: leagueId ? `https://media.api-sports.io/football/leagues/${leagueId}.png` : null,
+        country: opt?.country || null,
+        countryFlag: null,
+        type: "League",
+        seasonsTracked: [],
+      };
+    }
+  } catch {
+    /* soft */
+  }
+
   const homeAf = match.homeClub.apiFootballTeamId;
   const awayAf = match.awayClub.apiFootballTeamId;
 
@@ -235,5 +321,9 @@ export async function GET(
       standings.length || recent.length || live.length || todayFixtures.length
         ? null
         : warnings[0] || "No league intel returned — check API plan / season.",
+    leagueMeta,
+    hallOfFame,
+    lastChampion,
+    lastRunnerUp,
   });
 }

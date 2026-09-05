@@ -1,6 +1,6 @@
 /** Pixel collision resolution for SportsCom-style pitch cards. */
 
-import { type FieldSettings, scaleFactor } from "./field-settings";
+import { type FieldSettings, scaleFactor, clampPct } from "./field-settings";
 
 export type PlacedSlot<TSlot = { id: string; label: string }> = {
   slot: TSlot;
@@ -18,7 +18,7 @@ export function estimateCardSizePx(
   const scale = scaleFactor(markerPct);
   const baseW = 76;
   // header + photo/name + 1–2 cream stat rows (slightly tight vs CSS to leave room)
-  const baseH = settings.dataRows === 2 ? 98 : 80;
+  const baseH = settings.dataRows === 2 ? 125 : 100;
   return { w: baseW * scale, h: baseH * scale };
 }
 
@@ -27,6 +27,31 @@ export function estimateCardSizePx(
  * Prefer lateral (y%) spread within a team half; nudge depth (x%) when needed.
  * Preserves relative attack depth as much as possible.
  */
+
+/**
+ * Cap marker % so 11+11 SportsCom cards can physically fit the pitch box.
+ * Desk middle column is often ~700–1000px even on a 1440 viewport.
+ */
+export function fitMarkerPctForContainer(
+  containerW: number,
+  containerH: number,
+  desiredPct: number,
+  settings: FieldSettings
+): number {
+  if (!containerW || !containerH) return desiredPct;
+  const baseW = 76;
+  const baseH = settings.dataRows === 2 ? 125 : 100;
+  const usableH = Math.max(120, containerH - 36);
+  const halfW = Math.max(120, containerW * 0.46);
+  // Worst case bands: ~5 cards along the short (lateral) axis; ~4 depth bands per half
+  const maxScaleH = usableH / (5.15 * baseH + 4 * 4);
+  const maxScaleW = halfW / (3.8 * baseW);
+  const maxScale = Math.max(0.6, Math.min(maxScaleH, maxScaleW, 1.4));
+  const desired = scaleFactor(desiredPct);
+  const fitted = Math.min(desired, maxScale);
+  return clampPct(Math.round((fitted - 1) * 100));
+}
+
 export function resolveCardOverlaps<T extends PlacedSlot>(
   placed: T[],
   containerW: number,
@@ -149,9 +174,12 @@ export function resolveCardOverlaps<T extends PlacedSlot>(
     if (!moved) break;
   }
 
-  return items.map(({ px, py, ox: _ox, oy: _oy, ...rest }) => ({
-    ...(rest as T),
-    x: (px / containerW) * 100,
-    y: (py / containerH) * 100,
-  }));
+  return items.map((it) => {
+    const { px, py, ox: _ox, oy: _oy, ...rest } = it;
+    return {
+      ...(rest as unknown as T),
+      x: (px / containerW) * 100,
+      y: (py / containerH) * 100,
+    };
+  });
 }

@@ -28,6 +28,7 @@ import {
 } from "@/lib/field-settings";
 import {
   estimateCardSizePx,
+  fitMarkerPctForContainer,
   resolveCardOverlaps,
 } from "@/lib/pitch-layout";
 
@@ -645,7 +646,17 @@ export function PitchBoard({
     return placed;
   }
 
-  const cardPx = estimateCardSizePx(resolvedMarkerPct, resolvedSettings);
+  const fittedMarkerPct = useMemo(
+    () =>
+      fitMarkerPctForContainer(
+        pitchSize.w,
+        pitchSize.h,
+        resolvedMarkerPct,
+        resolvedSettings
+      ),
+    [pitchSize.w, pitchSize.h, resolvedMarkerPct, resolvedSettings]
+  );
+  const cardPx = estimateCardSizePx(fittedMarkerPct, resolvedSettings);
   const all = useMemo(() => {
     const homePlaced = placeLandscape(homePlayers, homeSlots, "home");
     const awayPlaced = placeLandscape(awayPlayers, awaySlots, "away");
@@ -657,7 +668,7 @@ export function PitchBoard({
       pitchSize.h,
       cardPx.w,
       cardPx.h,
-      6
+      4
     );
   }, [
     homePlayers,
@@ -1023,7 +1034,7 @@ export function PitchBoard({
                     selected={isSelected}
                     placing={isPlacingHere}
                     cardSettings={resolvedSettings}
-                    markerPct={resolvedMarkerPct}
+                    markerPct={fittedMarkerPct}
                   />
                 ) : (
                   <span

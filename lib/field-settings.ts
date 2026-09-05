@@ -23,10 +23,26 @@ export type CardStatField =
 export type HeightUnit = "cm" | "ftin";
 export type CurrencyCode = "GBP" | "EUR" | "USD";
 
+/** Slim coach chip chrome — never re-bloates corner layout. */
+export type CoachCardSettings = {
+  showPhoto: boolean;
+  showFlag: boolean;
+  /** Inline age next to name (still one-line slim chip). */
+  showAge: boolean;
+  nameSizePct: number;
+};
+
+export type RefereeCardSettings = {
+  showFlag: boolean;
+  /** Show "Ref ·" prefix before the name. */
+  showPrefix: boolean;
+  nameSizePct: number;
+};
+
 export type FieldSettings = {
   /** Marker size percent offset: -40 … +40 */
   markerSizePct: number;
-  /** Name text size percent offset: -40 … +40 */
+  /** Name text size percent offset: -40 … +40 (player + keeper cards) */
   nameSizePct: number;
   /** Stat rows under the name */
   dataRows: 1 | 2;
@@ -34,14 +50,19 @@ export type FieldSettings = {
   fieldsPerRow: 3 | 4 | 5;
   /** True once user moves any slider (stops auto fullscreen bump) */
   userAdjusted: boolean;
-  /** Which outfield/gk stats appear on the card (order = priority) */
+  /** Outfield (Player tab) stats — order = priority */
   visibleFields: CardStatField[];
+  /** Keeper tab stats — independent of outfield list */
+  keeperVisibleFields: CardStatField[];
   heightUnit: HeightUnit;
   currency: CurrencyCode;
+  coach: CoachCardSettings;
+  referee: RefereeCardSettings;
 };
 
-/** Bumped to v3 for visibleFields / units / currency. */
-export const FIELD_SETTINGS_STORAGE_KEY = "pitchline.fieldSettings.v3";
+/** Bumped to v4 for keeper/coach/referee card chrome. */
+export const FIELD_SETTINGS_STORAGE_KEY = "pitchline.fieldSettings.v4";
+const FIELD_SETTINGS_STORAGE_KEY_V3 = "pitchline.fieldSettings.v3";
 const FIELD_SETTINGS_STORAGE_KEY_V2 = "pitchline.fieldSettings.v2";
 const FIELD_SETTINGS_STORAGE_KEY_V1 = "pitchline.fieldSettings.v1";
 
@@ -81,6 +102,30 @@ export const DEFAULT_VISIBLE_FIELDS: CardStatField[] = [
   "SUB",
 ];
 
+export const DEFAULT_KEEPER_VISIBLE_FIELDS: CardStatField[] = [
+  "APP",
+  "SV",
+  "CS",
+  "M_APP",
+  "M_MIN",
+  "RTG",
+  "AGE",
+  "HGT",
+];
+
+export const DEFAULT_COACH_CARD: CoachCardSettings = {
+  showPhoto: true,
+  showFlag: true,
+  showAge: false,
+  nameSizePct: 0,
+};
+
+export const DEFAULT_REFEREE_CARD: RefereeCardSettings = {
+  showFlag: true,
+  showPrefix: true,
+  nameSizePct: 0,
+};
+
 export const DEFAULT_FIELD_SETTINGS: FieldSettings = {
   markerSizePct: -25,
   nameSizePct: 0,
@@ -88,8 +133,11 @@ export const DEFAULT_FIELD_SETTINGS: FieldSettings = {
   fieldsPerRow: 4,
   userAdjusted: false,
   visibleFields: [...DEFAULT_VISIBLE_FIELDS],
+  keeperVisibleFields: [...DEFAULT_KEEPER_VISIBLE_FIELDS],
   heightUnit: "cm",
   currency: "EUR",
+  coach: { ...DEFAULT_COACH_CARD },
+  referee: { ...DEFAULT_REFEREE_CARD },
 };
 
 /**
@@ -151,9 +199,12 @@ export function formatMarketValue(
   return `${sym}${Math.round(raw)}`;
 }
 
-function normalizeVisibleFields(raw: unknown): CardStatField[] {
+function normalizeVisibleFields(
+  raw: unknown,
+  fallback: CardStatField[]
+): CardStatField[] {
   const allowed = new Set(ALL_CARD_FIELDS.map((f) => f.id));
-  if (!Array.isArray(raw)) return [...DEFAULT_VISIBLE_FIELDS];
+  if (!Array.isArray(raw)) return [...fallback];
   const out: CardStatField[] = [];
   for (const x of raw) {
     const id = String(x) as CardStatField;
@@ -161,14 +212,62 @@ function normalizeVisibleFields(raw: unknown): CardStatField[] {
     if (out.includes(id)) continue;
     out.push(id);
   }
-  return out.length ? out : [...DEFAULT_VISIBLE_FIELDS];
+  return out.length ? out : [...fallback];
+}
+
+function deriveKeeperFieldsFromLegacy(
+  visible: CardStatField[]
+): CardStatField[] {
+  const gkMeta = new Set(
+    ALL_CARD_FIELDS.filter((f) => f.gk).map((f) => f.id)
+  );
+  const fromPlayer = visible.filter((id) => gkMeta.has(id));
+  // Prefer defaults when legacy list had almost no GK-capable fields
+  if (fromPlayer.length < 2) return [...DEFAULT_KEEPER_VISIBLE_FIELDS];
+  // Ensure SV/CS stay available near the front if user never had them
+  const out = [...fromPlayer];
+  for (const id of ["SV", "CS"] as CardStatField[]) {
+    if (!out.includes(id)) out.push(id);
+  }
+  return out;
+}
+
+function normalizeCoach(
+  raw: Partial<CoachCardSettings> | null | undefined
+): CoachCardSettings {
+  if (!raw || typeof raw !== "object") return { ...DEFAULT_COACH_CARD };
+  return {
+    showPhoto: raw.showPhoto !== false,
+    showFlag: raw.showFlag !== false,
+    showAge: Boolean(raw.showAge),
+    nameSizePct: clampPct(Number(raw.nameSizePct ?? 0)),
+  };
+}
+
+function normalizeReferee(
+  raw: Partial<RefereeCardSettings> | null | undefined
+): RefereeCardSettings {
+  if (!raw || typeof raw !== "object") return { ...DEFAULT_REFEREE_CARD };
+  return {
+    showFlag: raw.showFlag !== false,
+    showPrefix: raw.showPrefix !== false,
+    nameSizePct: clampPct(Number(raw.nameSizePct ?? 0)),
+  };
 }
 
 export function normalizeFieldSettings(
   raw: Partial<FieldSettings> | null | undefined
 ): FieldSettings {
   const base = { ...DEFAULT_FIELD_SETTINGS };
-  if (!raw || typeof raw !== "object") return { ...base, visibleFields: [...base.visibleFields] };
+  if (!raw || typeof raw !== "object") {
+    return {
+      ...base,
+      visibleFields: [...base.visibleFields],
+      keeperVisibleFields: [...base.keeperVisibleFields],
+      coach: { ...base.coach },
+      referee: { ...base.referee },
+    };
+  }
   const rows = Number(raw.dataRows);
   const cols = Number(raw.fieldsPerRow);
   const heightUnit: HeightUnit =
@@ -177,16 +276,43 @@ export function normalizeFieldSettings(
     raw.currency === "GBP" || raw.currency === "USD" || raw.currency === "EUR"
       ? raw.currency
       : "EUR";
+  const visibleFields = normalizeVisibleFields(
+    raw.visibleFields,
+    DEFAULT_VISIBLE_FIELDS
+  );
+  const keeperVisibleFields =
+    raw.keeperVisibleFields != null
+      ? normalizeVisibleFields(
+          raw.keeperVisibleFields,
+          DEFAULT_KEEPER_VISIBLE_FIELDS
+        )
+      : deriveKeeperFieldsFromLegacy(visibleFields);
   return {
     markerSizePct: clampPct(Number(raw.markerSizePct ?? base.markerSizePct)),
     nameSizePct: clampPct(Number(raw.nameSizePct ?? base.nameSizePct)),
     dataRows: rows === 1 ? 1 : 2,
     fieldsPerRow: cols === 3 || cols === 5 ? (cols as 3 | 5) : 4,
     userAdjusted: Boolean(raw.userAdjusted),
-    visibleFields: normalizeVisibleFields(raw.visibleFields),
+    visibleFields,
+    keeperVisibleFields,
     heightUnit,
     currency,
+    coach: normalizeCoach(raw.coach),
+    referee: normalizeReferee(raw.referee),
   };
+}
+
+function persistFresh(settings: FieldSettings): FieldSettings {
+  if (typeof window === "undefined") return settings;
+  try {
+    window.localStorage.setItem(
+      FIELD_SETTINGS_STORAGE_KEY,
+      JSON.stringify(settings)
+    );
+  } catch {
+    /* ignore */
+  }
+  return settings;
 }
 
 export function loadFieldSettings(): FieldSettings {
@@ -194,25 +320,33 @@ export function loadFieldSettings(): FieldSettings {
     return {
       ...DEFAULT_FIELD_SETTINGS,
       visibleFields: [...DEFAULT_VISIBLE_FIELDS],
+      keeperVisibleFields: [...DEFAULT_KEEPER_VISIBLE_FIELDS],
+      coach: { ...DEFAULT_COACH_CARD },
+      referee: { ...DEFAULT_REFEREE_CARD },
     };
   }
   try {
-    const rawV3 = window.localStorage.getItem(FIELD_SETTINGS_STORAGE_KEY);
-    if (rawV3) {
-      return normalizeFieldSettings(JSON.parse(rawV3) as Partial<FieldSettings>);
+    const rawV4 = window.localStorage.getItem(FIELD_SETTINGS_STORAGE_KEY);
+    if (rawV4) {
+      return normalizeFieldSettings(JSON.parse(rawV4) as Partial<FieldSettings>);
     }
 
-    // Migrate v2 → v3 (keep size/rows; add new defaults)
+    // Migrate v3 → v4 (keep player prefs; add keeper/coach/ref defaults)
+    const rawV3 = window.localStorage.getItem(FIELD_SETTINGS_STORAGE_KEY_V3);
+    if (rawV3) {
+      const migrated = normalizeFieldSettings(
+        JSON.parse(rawV3) as Partial<FieldSettings>
+      );
+      return persistFresh(migrated);
+    }
+
+    // Migrate v2 → v4
     const rawV2 = window.localStorage.getItem(FIELD_SETTINGS_STORAGE_KEY_V2);
     if (rawV2) {
       const migrated = normalizeFieldSettings(
         JSON.parse(rawV2) as Partial<FieldSettings>
       );
-      window.localStorage.setItem(
-        FIELD_SETTINGS_STORAGE_KEY,
-        JSON.stringify(migrated)
-      );
-      return migrated;
+      return persistFresh(migrated);
     }
 
     const hadV1 =
@@ -227,16 +361,18 @@ export function loadFieldSettings(): FieldSettings {
     const fresh = {
       ...DEFAULT_FIELD_SETTINGS,
       visibleFields: [...DEFAULT_VISIBLE_FIELDS],
+      keeperVisibleFields: [...DEFAULT_KEEPER_VISIBLE_FIELDS],
+      coach: { ...DEFAULT_COACH_CARD },
+      referee: { ...DEFAULT_REFEREE_CARD },
     };
-    window.localStorage.setItem(
-      FIELD_SETTINGS_STORAGE_KEY,
-      JSON.stringify(fresh)
-    );
-    return fresh;
+    return persistFresh(fresh);
   } catch {
     return {
       ...DEFAULT_FIELD_SETTINGS,
       visibleFields: [...DEFAULT_VISIBLE_FIELDS],
+      keeperVisibleFields: [...DEFAULT_KEEPER_VISIBLE_FIELDS],
+      coach: { ...DEFAULT_COACH_CARD },
+      referee: { ...DEFAULT_REFEREE_CARD },
     };
   }
 }
@@ -249,6 +385,7 @@ export function saveFieldSettings(settings: FieldSettings): void {
       JSON.stringify(normalizeFieldSettings(settings))
     );
     try {
+      window.localStorage.removeItem(FIELD_SETTINGS_STORAGE_KEY_V3);
       window.localStorage.removeItem(FIELD_SETTINGS_STORAGE_KEY_V2);
       window.localStorage.removeItem(FIELD_SETTINGS_STORAGE_KEY_V1);
     } catch {
@@ -287,8 +424,10 @@ export function pickVisibleFields(
 ): CardStatField[] {
   const meta = new Map(ALL_CARD_FIELDS.map((f) => [f.id, f]));
   const budget = settings.dataRows * settings.fieldsPerRow;
+  const source =
+    kind === "gk" ? settings.keeperVisibleFields : settings.visibleFields;
   const out: CardStatField[] = [];
-  for (const id of settings.visibleFields) {
+  for (const id of source) {
     const m = meta.get(id);
     if (!m) continue;
     if (kind === "gk" && !m.gk) continue;

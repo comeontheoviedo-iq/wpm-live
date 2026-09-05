@@ -23,6 +23,7 @@ import {
 } from "@/lib/flags";
 import {
   type FieldSettings,
+  type FieldSettingsTab,
   type CardStatField,
   DEFAULT_FIELD_SETTINGS,
   scaleFactor,
@@ -493,6 +494,7 @@ function CoachChip({
   teamColor,
   onClick,
   compact,
+  chrome,
 }: {
   coach: Coach;
   side: "home" | "away";
@@ -500,11 +502,16 @@ function CoachChip({
   onClick?: () => void;
   /** One-line avatar + name — less corner height. */
   compact?: boolean;
+  chrome?: FieldSettings["coach"];
 }) {
   const isHome = side === "home";
   const Comp = onClick ? "button" : "div";
+  const showPhoto = chrome?.showPhoto !== false;
+  const showFlag = chrome?.showFlag !== false;
+  const showAge = Boolean(chrome?.showAge);
+  const namePct = chrome?.nameSizePct ?? 0;
   // Only AF-stored photoUrl — never invent a media URL from coach id.
-  const photo = coach.photoUrl?.trim() || null;
+  const photo = showPhoto ? coach.photoUrl?.trim() || null : null;
   const tip = [
     coach.name,
     "Coach",
@@ -513,6 +520,7 @@ function CoachChip({
   ]
     .filter(Boolean)
     .join(" · ");
+  const namePx = (compact ? 10 : 11) * scaleFactor(namePct);
   return (
     <Comp
       type={onClick ? "button" : undefined}
@@ -528,51 +536,60 @@ function CoachChip({
       )}
       style={!isHome ? { borderColor: teamColor } : undefined}
     >
-      <span
-        className={cn(
-          "relative flex shrink-0 items-center justify-center overflow-hidden rounded",
-          compact ? "h-5 w-5 rounded-sm" : "h-9 w-9 rounded-md",
-          "bg-slate-200/90 ring-1 ring-slate-300/80"
-        )}
-      >
-        {photo ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={photo}
-            alt=""
-            className="h-full w-full object-cover object-[center_15%]"
-            loading="lazy"
-            onError={(e) => {
-              (e.target as HTMLImageElement).style.display = "none";
-              const sib = (e.target as HTMLImageElement)
-                .nextElementSibling as HTMLElement | null;
-              if (sib) sib.style.display = "flex";
-            }}
-          />
-        ) : null}
+      {showPhoto ? (
         <span
           className={cn(
-            "absolute inset-0 items-center justify-center text-slate-400",
-            photo ? "hidden" : "flex"
+            "relative flex shrink-0 items-center justify-center overflow-hidden rounded",
+            compact ? "h-5 w-5 rounded-sm" : "h-9 w-9 rounded-md",
+            "bg-slate-200/90 ring-1 ring-slate-300/80"
           )}
         >
-          <User className={compact ? "h-3 w-3" : "h-5 w-5"} strokeWidth={1.5} />
+          {photo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={photo}
+              alt=""
+              className="h-full w-full object-cover object-[center_15%]"
+              loading="lazy"
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = "none";
+                const sib = (e.target as HTMLImageElement)
+                  .nextElementSibling as HTMLElement | null;
+                if (sib) sib.style.display = "flex";
+              }}
+            />
+          ) : null}
+          <span
+            className={cn(
+              "absolute inset-0 items-center justify-center text-slate-400",
+              photo ? "hidden" : "flex"
+            )}
+          >
+            <User className={compact ? "h-3 w-3" : "h-5 w-5"} strokeWidth={1.5} />
+          </span>
         </span>
-      </span>
+      ) : null}
       <div className="min-w-0 flex-1 flex items-center gap-1 pr-0.5">
-        <FlagImg
-          nationality={coach.nationality}
-          className={compact ? "h-2.5 w-3.5" : "h-3 w-[1.05rem]"}
-        />
+        {showFlag ? (
+          <FlagImg
+            nationality={coach.nationality}
+            className={compact ? "h-2.5 w-3.5" : "h-3 w-[1.05rem]"}
+          />
+        ) : null}
         <div
           className={cn(
             "truncate whitespace-nowrap font-bold leading-none tracking-tight",
-            compact ? "text-[10px]" : "text-[11px]",
             isHome ? "text-slate-900" : ""
           )}
-          style={!isHome ? { color: teamColor } : undefined}
+          style={{
+            fontSize: `${namePx}px`,
+            ...(!isHome ? { color: teamColor } : {}),
+          }}
         >
           {coach.name}
+          {showAge && coach.age != null && Number.isFinite(coach.age)
+            ? ` · ${Math.round(coach.age)}y`
+            : ""}
         </div>
       </div>
     </Comp>
@@ -696,7 +713,7 @@ export function PitchBoard({
   onLeagueLogoClick?: () => void;
   cardSettings?: FieldSettings;
   markerPct?: number;
-  onOpenFieldSettings?: () => void;
+  onOpenFieldSettings?: (tab?: FieldSettingsTab) => void;
   /** Home team on left of screen (kick L→R). False = home on right. */
   homeOnLeft?: boolean;
   onToggleHomeOnLeft?: () => void;
@@ -1262,10 +1279,13 @@ export function PitchBoard({
                     side={chrome.side}
                     teamColor={chrome.color}
                     compact
+                    chrome={liveSettings.coach}
                     onClick={
                       onCoachClick
                         ? () => onCoachClick(chrome.side)
-                        : undefined
+                        : onOpenFieldSettings
+                          ? () => onOpenFieldSettings("coach")
+                          : undefined
                     }
                   />
                 ) : null}
@@ -1383,7 +1403,7 @@ export function PitchBoard({
                 {onOpenFieldSettings && (
                   <button
                     type="button"
-                    onClick={onOpenFieldSettings}
+                    onClick={() => onOpenFieldSettings("player")}
                     className="inline-flex h-5 w-5 items-center justify-center rounded text-slate-800 hover:bg-white/90"
                     title="Field Settings · Pitch Card"
                     aria-label="Field Settings"
@@ -1652,13 +1672,48 @@ export function PitchBoard({
         })}
 
         {referee && (
-          <div className="pointer-events-none absolute bottom-1.5 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1.5">
-            <div className="pitch-overlay-chip-dark flex max-w-[16rem] items-center gap-1.5 rounded-full px-2 py-1">
-              <FlagImg nationality={refereeNationality} className="h-3 w-[1.05rem]" />
-              <span className="truncate text-[9px] font-semibold tracking-wide text-white">
-                Ref · {referee}
-              </span>
-            </div>
+          <div className="absolute bottom-1.5 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1.5">
+            {(() => {
+              const rc = liveSettings.referee;
+              const showFlag = rc.showFlag !== false;
+              const showPrefix = rc.showPrefix !== false;
+              const namePx = 9 * scaleFactor(rc.nameSizePct ?? 0);
+              const Comp = onOpenFieldSettings ? "button" : "div";
+              return (
+                <Comp
+                  type={onOpenFieldSettings ? "button" : undefined}
+                  onClick={
+                    onOpenFieldSettings
+                      ? () => onOpenFieldSettings("referee")
+                      : undefined
+                  }
+                  title={
+                    onOpenFieldSettings
+                      ? `Edit referee card · ${referee}`
+                      : referee
+                  }
+                  className={cn(
+                    "pitch-overlay-chip-dark flex max-w-[16rem] items-center gap-1.5 rounded-full px-2 py-1",
+                    onOpenFieldSettings &&
+                      "pointer-events-auto cursor-pointer hover:ring-2 hover:ring-teal-400/50"
+                  )}
+                >
+                  {showFlag ? (
+                    <FlagImg
+                      nationality={refereeNationality}
+                      className="h-3 w-[1.05rem]"
+                    />
+                  ) : null}
+                  <span
+                    className="truncate font-semibold tracking-wide text-white"
+                    style={{ fontSize: `${namePx}px` }}
+                  >
+                    {showPrefix ? "Ref · " : ""}
+                    {referee}
+                  </span>
+                </Comp>
+              );
+            })()}
           </div>
         )}
       </div>

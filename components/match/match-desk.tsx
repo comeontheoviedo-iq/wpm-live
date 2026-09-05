@@ -65,6 +65,7 @@ import {
 import { DeskLiveExtras } from "@/components/match/world-class/desk-live-extras";
 import {
   type FieldSettings,
+  type FieldSettingsTab,
   DEFAULT_FIELD_SETTINGS,
   loadFieldSettings,
   saveFieldSettings,
@@ -550,6 +551,12 @@ export function MatchDesk({
     DEFAULT_FIELD_SETTINGS
   );
   const [fieldSettingsOpen, setFieldSettingsOpen] = useState(false);
+  const [fieldSettingsTab, setFieldSettingsTab] =
+    useState<FieldSettingsTab>("player");
+  const openFieldSettings = useCallback((tab: FieldSettingsTab = "player") => {
+    setFieldSettingsTab(tab);
+    setFieldSettingsOpen(true);
+  }, []);
   const [overrides, setOverrides] = useState<PlayerOverrideRow[]>(initialOverrides);
   const [homeOnLeft, setHomeOnLeft] = useState(true);
   const isLive = status === "Live" || status === "Half Time";
@@ -2297,7 +2304,7 @@ export function MatchDesk({
           <button
             type="button"
             className="inline-flex items-center gap-1 rounded-md border border-slate-200 dark:border-slate-700 px-2 py-1 text-[11px] font-medium hover:bg-slate-50 dark:hover:bg-slate-900"
-            onClick={() => setFieldSettingsOpen(true)}
+            onClick={() => openFieldSettings("player")}
             title="Field Settings · Pitch Card"
           >
             <SlidersHorizontal className="h-3 w-3" />
@@ -2664,7 +2671,7 @@ export function MatchDesk({
               onLeagueLogoClick={() => setNotesFilter("match")}
               cardSettings={fieldSettings}
               markerPct={markerPct}
-              onOpenFieldSettings={() => setFieldSettingsOpen(true)}
+              onOpenFieldSettings={openFieldSettings}
               homeOnLeft={homeOnLeft}
               onToggleHomeOnLeft={toggleHomeOnLeft}
               liveCompact={isLive}
@@ -2814,13 +2821,26 @@ export function MatchDesk({
                   : " · Head Coach"}
               </p>
             </div>
-            <button
-              type="button"
-              className="rounded-md border border-slate-200 dark:border-slate-700 px-2 py-1 text-xs"
-              onClick={() => setCoachSide(null)}
-            >
-              Close
-            </button>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                className="rounded-md border border-teal-200 dark:border-teal-900 bg-teal-50 dark:bg-teal-950/40 px-2 py-1 text-xs font-semibold text-teal-800 dark:text-teal-200"
+                onClick={() => {
+                  setCoachSide(null);
+                  openFieldSettings("coach");
+                }}
+                title="Edit coach card chrome (Field Settings)"
+              >
+                Edit card
+              </button>
+              <button
+                type="button"
+                className="rounded-md border border-slate-200 dark:border-slate-700 px-2 py-1 text-xs"
+                onClick={() => setCoachSide(null)}
+              >
+                Close
+              </button>
+            </div>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-4">
             {(() => {
@@ -2927,6 +2947,7 @@ export function MatchDesk({
         markerPct={markerPct}
         onChange={updateFieldSettings}
         isFullscreen={isFullscreen}
+        initialTab={fieldSettingsTab}
       />
     </div>
   );

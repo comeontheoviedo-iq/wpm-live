@@ -29,7 +29,7 @@ export function FtPackOffer({
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "FT summary failed");
       setScript(json.script || "");
-      setMsg(json.saved ? "Saved to Speaks + Packs" : "Generated (not saved)");
+      setMsg(json.saved ? "Saved to Speaks + Research" : "Generated (not saved)");
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "Failed");
     } finally {

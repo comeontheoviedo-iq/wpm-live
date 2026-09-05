@@ -23,7 +23,7 @@ export const DEFAULT_SCRIPT_SLOTS: {
 }[] = [
   {
     title: "Cold open",
-    body: "Placeholder — generate from Packs or write your open.",
+    body: "Placeholder — generate from Research or write your open.",
     timing: "pre-match",
     order: 1,
   },

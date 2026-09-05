@@ -486,7 +486,7 @@ export function PacksClient({ matchId }: { matchId: string }) {
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold">Broadcast packs</h2>
+          <h2 className="text-xl font-bold">Research</h2>
           <p className="text-sm text-slate-500">
             Gemini Notebook is the research source of truth: paste → Use my draft
             → desk notes (organise/tag). Do not full re-Generate on top of paste —

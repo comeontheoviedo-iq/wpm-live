@@ -1888,7 +1888,7 @@ export function MatchDesk({
             className="inline-flex items-center gap-1 rounded-md bg-violet-600 hover:bg-violet-500 text-white px-2 py-1 text-[11px] font-semibold"
           >
             <Sparkles className="h-3 w-3" />
-            Packs{packCount ? ` (${packCount})` : ""}
+            Research{packCount ? ` (${packCount})` : ""}
           </Link>
           {!apiFootballFixtureId && (
             <Link

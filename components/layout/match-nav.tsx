@@ -21,8 +21,8 @@ import { cn } from "@/lib/utils";
 
 const items = [
   { slug: "", label: "Desk", icon: LayoutGrid },
+  { slug: "packs", label: "Research", icon: Sparkles },
   { slug: "scripts", label: "Scripts", icon: Mic2 },
-  { slug: "packs", label: "Packs", icon: Sparkles },
   { slug: "stats", label: "Stats", icon: Target },
   { slug: "league", label: "League", icon: Trophy },
   { slug: "news", label: "News", icon: Newspaper },

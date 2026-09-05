@@ -28,7 +28,7 @@ export default async function ScriptsPage({
           href={`/match-day/${match.id}/packs`}
           className="text-sm text-teal-700 dark:text-teal-300 hover:underline"
         >
-          Generate from Packs →
+          Generate from Research →
         </Link>
       </div>
       <div className="grid md:grid-cols-2 gap-4">

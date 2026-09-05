@@ -25,6 +25,10 @@ type Distributed = {
   playerNotes: number;
   clubNotes: number;
   matchNotes: number;
+  coachNotes?: number;
+  hookNotes?: number;
+  intro?: number;
+  lineup?: number;
 };
 
 function sumDistributed(parts: Distributed[]): Distributed {
@@ -34,22 +38,43 @@ function sumDistributed(parts: Distributed[]): Distributed {
       playerNotes: a.playerNotes + (b?.playerNotes || 0),
       clubNotes: a.clubNotes + (b?.clubNotes || 0),
       matchNotes: a.matchNotes + (b?.matchNotes || 0),
+      coachNotes: (a.coachNotes || 0) + (b?.coachNotes || 0),
+      hookNotes: (a.hookNotes || 0) + (b?.hookNotes || 0),
+      intro: (a.intro || 0) + (b?.intro || 0),
+      lineup: (a.lineup || 0) + (b?.lineup || 0),
     }),
-    { scripts: 0, playerNotes: 0, clubNotes: 0, matchNotes: 0 }
+    {
+      scripts: 0,
+      playerNotes: 0,
+      clubNotes: 0,
+      matchNotes: 0,
+      coachNotes: 0,
+      hookNotes: 0,
+      intro: 0,
+      lineup: 0,
+    }
   );
 }
 
 function formatDistributed(d: Distributed) {
   const bits = [
-    d.scripts ? `${d.scripts} script${d.scripts === 1 ? "" : "s"}` : null,
     d.playerNotes
       ? `${d.playerNotes} player note${d.playerNotes === 1 ? "" : "s"}`
       : null,
+    d.coachNotes ? `${d.coachNotes} coach` : null,
+    d.hookNotes
+      ? `${d.hookNotes} hook${d.hookNotes === 1 ? "" : "s"}`
+      : null,
+    d.intro ? "intro" : null,
+    d.lineup ? "lineup" : null,
     d.clubNotes
       ? `${d.clubNotes} club note${d.clubNotes === 1 ? "" : "s"}`
       : null,
     d.matchNotes
       ? `${d.matchNotes} match note${d.matchNotes === 1 ? "" : "s"}`
+      : null,
+    !d.intro && !d.lineup && d.scripts
+      ? `${d.scripts} script${d.scripts === 1 ? "" : "s"}`
       : null,
   ].filter(Boolean);
   return bits.length ? bits.join(" · ") : "pack section only";

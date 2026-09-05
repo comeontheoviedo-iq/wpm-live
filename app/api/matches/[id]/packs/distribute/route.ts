@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { PACK_TEMPLATE_SEEDS } from "@/lib/pack-templates";
 import { applyPackDistribution } from "@/lib/pack-distribute-apply";
+import { formatDistributeSummary } from "@/lib/pack-distribute";
 
 export async function POST(
   req: Request,
@@ -28,8 +29,18 @@ export async function POST(
     const match = await prisma.match.findUnique({
       where: { id },
       include: {
-        homeClub: { include: { players: { select: { id: true, name: true } } } },
-        awayClub: { include: { players: { select: { id: true, name: true } } } },
+        homeClub: {
+          include: {
+            players: { select: { id: true, name: true } },
+            coaches: { select: { id: true, name: true, clubId: true } },
+          },
+        },
+        awayClub: {
+          include: {
+            players: { select: { id: true, name: true } },
+            coaches: { select: { id: true, name: true, clubId: true } },
+          },
+        },
       },
     });
     if (!match) return NextResponse.json({ error: "Match not found" }, { status: 404 });
@@ -74,6 +85,20 @@ export async function POST(
       ...match.homeClub.players.map((p) => ({ id: p.id, name: p.name })),
       ...match.awayClub.players.map((p) => ({ id: p.id, name: p.name })),
     ];
+    const coaches = [
+      ...match.homeClub.coaches.map((c) => ({
+        id: c.id,
+        name: c.name,
+        clubId: c.clubId,
+        side: "home" as const,
+      })),
+      ...match.awayClub.coaches.map((c) => ({
+        id: c.id,
+        name: c.name,
+        clubId: c.clubId,
+        side: "away" as const,
+      })),
+    ];
 
     const distributed = await applyPackDistribution({
       matchId: id,
@@ -84,13 +109,17 @@ export async function POST(
       homeClub: { id: match.homeClub.id, name: match.homeClub.name },
       awayClub: { id: match.awayClub.id, name: match.awayClub.name },
       allPlayers,
+      coaches,
     });
 
     const total =
       (distributed.scripts || 0) +
       (distributed.playerNotes || 0) +
       (distributed.clubNotes || 0) +
-      (distributed.matchNotes || 0);
+      (distributed.matchNotes || 0) +
+      (distributed.coachNotes || 0) +
+      (distributed.hookNotes || 0);
+    const summary = formatDistributeSummary(distributed);
 
     return NextResponse.json({
       ok: true,
@@ -98,11 +127,12 @@ export async function POST(
       title: section.title || title,
       contentLength: section.content.length,
       distributed,
+      summary,
       emptyDistribution: total === 0,
       message:
         total === 0
           ? `“${label}” was saved but nothing mapped into Scripts/Notes (check headings).`
-          : `Sent “${label}” (${section.content.length} chars) → desk notes.`,
+          : `Organised “${label}” → ${summary}.`,
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);

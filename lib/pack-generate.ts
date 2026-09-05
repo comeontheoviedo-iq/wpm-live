@@ -345,8 +345,8 @@ export async function generatePackForMatch(args: {
   const match = await prisma.match.findUnique({
     where: { id: matchId },
     include: {
-      homeClub: { include: { players: true } },
-      awayClub: { include: { players: true } },
+      homeClub: { include: { players: true, coaches: true } },
+      awayClub: { include: { players: true, coaches: true } },
       matchDay: true,
       venue: true,
       notes: true,
@@ -437,6 +437,20 @@ export async function generatePackForMatch(args: {
   const allPlayers = [
     ...homePlayers.map((p) => ({ id: p.id, name: p.name })),
     ...awayPlayers.map((p) => ({ id: p.id, name: p.name })),
+  ];
+  const coaches = [
+    ...(match.homeClub.coaches || []).map((c) => ({
+      id: c.id,
+      name: c.name,
+      clubId: c.clubId,
+      side: "home" as const,
+    })),
+    ...(match.awayClub.coaches || []).map((c) => ({
+      id: c.id,
+      name: c.name,
+      clubId: c.clubId,
+      side: "away" as const,
+    })),
   ];
 
   let predictionsBlock = match.predictionsAdvice || "";
@@ -544,6 +558,7 @@ export async function generatePackForMatch(args: {
         homeClub: { id: match.homeClub.id, name: match.homeClub.name },
         awayClub: { id: match.awayClub.id, name: match.awayClub.name },
         allPlayers,
+        coaches,
       });
     } catch (distErr) {
       console.error("[pack-generate] useDraft distribute failed", templateKey, distErr);
@@ -682,6 +697,7 @@ export async function generatePackForMatch(args: {
         homeClub: { id: match.homeClub.id, name: match.homeClub.name },
         awayClub: { id: match.awayClub.id, name: match.awayClub.name },
         allPlayers,
+        coaches,
       });
     } catch (distErr) {
       console.error("[pack-generate] distribute failed", templateKey, distErr);

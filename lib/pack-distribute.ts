@@ -1,3 +1,5 @@
+import { namesLooselyMatch, normalizePlayerKey } from "./player-name";
+
 /** Parse Gemini pack text into per-entity notes. Resilient: partial matches OK. */
 
 export type SquadMember = { id: string; name: string };
@@ -7,10 +9,39 @@ export type DistributedCounts = {
   playerNotes: number;
   clubNotes: number;
   matchNotes: number;
+  coachNotes: number;
+  hookNotes: number;
+  intro: number;
+  lineup: number;
 };
 
 export function emptyDistributed(): DistributedCounts {
-  return { scripts: 0, playerNotes: 0, clubNotes: 0, matchNotes: 0 };
+  return {
+    scripts: 0,
+    playerNotes: 0,
+    clubNotes: 0,
+    matchNotes: 0,
+    coachNotes: 0,
+    hookNotes: 0,
+    intro: 0,
+    lineup: 0,
+  };
+}
+
+/** Short human summary e.g. "12 player notes · 2 coach · 8 hooks · intro · lineup". */
+export function formatDistributeSummary(d: DistributedCounts): string {
+  const bits: string[] = [];
+  if (d.playerNotes) bits.push(`${d.playerNotes} player note${d.playerNotes === 1 ? "" : "s"}`);
+  if (d.coachNotes) bits.push(`${d.coachNotes} coach`);
+  if (d.hookNotes) bits.push(`${d.hookNotes} hook${d.hookNotes === 1 ? "" : "s"}`);
+  if (d.intro) bits.push("intro");
+  if (d.lineup) bits.push("lineup");
+  if (d.clubNotes) bits.push(`${d.clubNotes} club`);
+  if (d.matchNotes) bits.push(`${d.matchNotes} match`);
+  if (d.scripts && !d.intro && !d.lineup) {
+    bits.push(`${d.scripts} script${d.scripts === 1 ? "" : "s"}`);
+  }
+  return bits.length ? bits.join(" · ") : "nothing mapped";
 }
 
 function normalize(s: string) {
@@ -65,26 +96,44 @@ export function splitByHeadings(text: string): { heading: string; body: string }
   return sections;
 }
 
+function cleanHeadingName(heading: string): string {
+  return heading
+    .replace(/^#+\s*/, "")
+    .replace(/^\*\*|\*\*$/g, "")
+    .replace(/^(?:[IVXLCDM]+)[.)]\s+/i, "")
+    .replace(/^\d{1,3}[.)]?\s+/, "")
+    .replace(/\s*\([^)]*\)\s*$/, "")
+    .replace(/\s*[—–-]\s*(INJURED|SUSPENDED|DOUBTFUL|OUT).*$/i, "")
+    .trim();
+}
+
 function matchPlayer(
   heading: string,
   players: SquadMember[]
 ): SquadMember | null {
-  const h = normalize(heading);
-  // Prefer longest full-name match
+  const cleaned = cleanHeadingName(heading);
+  const h = normalize(cleaned);
   let best: SquadMember | null = null;
   let bestScore = 0;
   for (const p of players) {
-    const full = normalize(p.name);
-    const sur = normalize(surname(p.name));
-    if (full.length >= 3 && (h === full || h.includes(full) || full.includes(h))) {
-      const score = full.length + 100;
+    if (namesLooselyMatch(cleaned, p.name) || namesLooselyMatch(heading, p.name)) {
+      const score = normalizePlayerKey(p.name).length + 100;
       if (score > bestScore) {
         best = p;
         bestScore = score;
       }
       continue;
     }
-    // Surname-only if distinctive enough (>=4 chars) and appears as whole token
+    const full = normalize(p.name);
+    const sur = normalize(surname(p.name));
+    if (full.length >= 3 && (h === full || h.includes(full) || full.includes(h))) {
+      const score = full.length + 80;
+      if (score > bestScore) {
+        best = p;
+        bestScore = score;
+      }
+      continue;
+    }
     if (sur.length >= 4) {
       const tokens = h.split(" ");
       if (tokens.includes(sur) || h.startsWith(sur + " ") || h.endsWith(" " + sur)) {

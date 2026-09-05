@@ -17,6 +17,7 @@ import {
   Printer,
   StickyNote,
   Sparkles,
+  Trophy,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -26,6 +27,7 @@ const items = [
   { slug: "packs", label: "Packs", icon: Sparkles },
   { slug: "prep", label: "Prep", icon: ClipboardList },
   { slug: "stats", label: "Stats", icon: Target },
+  { slug: "league", label: "League", icon: Trophy },
   { slug: "notes", label: "Notes", icon: StickyNote },
   { slug: "squad", label: "Squad", icon: Users },
   { slug: "injuries", label: "Injuries", icon: HeartPulse },

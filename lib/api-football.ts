@@ -1132,3 +1132,80 @@ export async function getPlayerTeams(playerId: number) {
 export async function searchCoaches(search: string) {
   return afFetch<AfCoach[]>("/coachs", { search }, 120_000);
 }
+
+/* ── League / competition intel (standings, form, upcoming, live) ───────── */
+
+export type AfStandingTeam = {
+  rank: number;
+  team: { id: number; name: string; logo?: string };
+  points: number;
+  goalsDiff: number;
+  group?: string;
+  form?: string | null;
+  status?: string | null;
+  description?: string | null;
+  all: { played: number; win: number; draw: number; lose: number; goals: { for: number; against: number } };
+  home?: { played: number; win: number; draw: number; lose: number; goals: { for: number; against: number } };
+  away?: { played: number; win: number; draw: number; lose: number; goals: { for: number; against: number } };
+};
+
+export type AfStandingsLeague = {
+  league: {
+    id: number;
+    name: string;
+    country: string;
+    logo?: string;
+    flag?: string;
+    season: number;
+    standings: AfStandingTeam[][];
+  };
+};
+
+export async function getStandings(leagueId: number, season: number) {
+  return afFetch<AfStandingsLeague[]>(
+    "/standings",
+    { league: leagueId, season },
+    120_000
+  );
+}
+
+/** Fixtures for a league on a calendar date (Free-plan friendly via date filter). */
+export async function getLeagueFixturesOnDate(leagueId: number, date: string) {
+  const result = await searchFixturesSmart({ league: leagueId, date });
+  return result;
+}
+
+/** Recent finished fixtures in a league (newest first). May need Pro for league+season. */
+export async function getLeagueRecentResults(
+  leagueId: number,
+  season: number,
+  last = 12
+) {
+  return afFetch<AfFixture[]>(
+    "/fixtures",
+    { league: leagueId, season, last, status: "FT-AET-PEN" },
+    120_000
+  );
+}
+
+/** Upcoming fixtures in a league (soonest first). */
+export async function getLeagueUpcoming(
+  leagueId: number,
+  season: number,
+  next = 12
+) {
+  return afFetch<AfFixture[]>(
+    "/fixtures",
+    { league: leagueId, season, next },
+    60_000
+  );
+}
+
+/** Live fixtures for a league (in-play). Empty when none live. */
+export async function getLeagueLive(leagueId: number) {
+  return afFetch<AfFixture[]>(
+    "/fixtures",
+    { league: leagueId, live: "all" },
+    15_000
+  );
+}

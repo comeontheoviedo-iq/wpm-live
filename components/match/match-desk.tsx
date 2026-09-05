@@ -1180,6 +1180,13 @@ export function MatchDesk({
                     Match Statistics
                   </Link>
                   <Link
+                    href={`/match-day/${matchId}/league`}
+                    className="block rounded-md px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-900 font-semibold text-teal-700 dark:text-teal-300"
+                    onClick={() => setIntelOpen(false)}
+                  >
+                    League table & fixtures
+                  </Link>
+                  <Link
                     href={`/match-day/${matchId}/scorers`}
                     className="block rounded-md px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-900"
                     onClick={() => setIntelOpen(false)}

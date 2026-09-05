@@ -105,7 +105,8 @@ export function saveFieldSettings(settings: FieldSettings): void {
  * Desired marker % before container fit/clamp.
  * Fullscreen + !userAdjusted → FULLSCREEN_DEFAULT_MARKER_PCT (0, no inflate);
  * PitchBoard still fits down so 22 cards never overlap.
- * userAdjusted → user value (still clamped by fit so overlaps never win).
+ * userAdjusted → user value exactly (PitchBoard skips overlap reposition so
+ * size changes never move formation anchors).
  */
 export function effectiveMarkerPct(
   settings: FieldSettings,

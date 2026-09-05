@@ -678,8 +678,8 @@ export function PitchBoard({
   }, [homePlayers, awayPlayers, homeSlots, awaySlots]);
 
   // Fit marker to the measured pitch box first (auto-fit when user has not
-  // touched Field Settings). Once userAdjusted, honor the slider exactly so
-  // −40…+40 is visible — collision still preserves formation depth bands.
+  // touched Field Settings). Once userAdjusted, honor the slider exactly —
+  // size only changes card width/height; anchors stay on formation slots.
   const layoutFittedPct = useMemo(() => {
     if (resolvedSettings.userAdjusted) {
       return clampPct(resolvedMarkerPct);
@@ -704,6 +704,10 @@ export function PitchBoard({
   const cardPx = estimateCardSizePx(fittedMarkerPct, resolvedSettings);
   const all = useMemo(() => {
     if (!pitchSize.w || !pitchSize.h) return rawPlaced;
+    // CRITICAL: marker size must NOT reposition the XI. When the user owns
+    // the slider, keep formation slot centres (rawPlaced). Prefer overlap /
+    // clip over pushing cards into the wrong depth band or lateral slot.
+    if (resolvedSettings.userAdjusted) return rawPlaced;
     return resolveCardOverlaps(
       rawPlaced,
       pitchSize.w,
@@ -712,7 +716,14 @@ export function PitchBoard({
       cardPx.h,
       CARD_GAP_PX
     );
-  }, [rawPlaced, pitchSize.w, pitchSize.h, cardPx.w, cardPx.h]);
+  }, [
+    rawPlaced,
+    pitchSize.w,
+    pitchSize.h,
+    cardPx.w,
+    cardPx.h,
+    resolvedSettings.userAdjusted,
+  ]);
 
   useEffect(() => {
     const root = pitchRef.current;

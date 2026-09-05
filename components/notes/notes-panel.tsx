@@ -24,6 +24,7 @@ export type NotesFilterScope =
   | "away"
   | "players"
   | "match"
+  | "pinned"
   | "club"
   | "hooks"
   | "bio"
@@ -43,7 +44,9 @@ export function NotesPanel({
   externalFilter,
   onFilterChange,
   fillHeight,
+  liveMode,
   playerNameById,
+  onNotePlayerClick,
 }: {
   matchId: string;
   entityType?: string | null;
@@ -58,8 +61,12 @@ export function NotesPanel({
   externalFilter?: NotesFilterScope;
   onFilterChange?: (f: NotesFilterScope) => void;
   fillHeight?: boolean;
+  /** LIVE desk: denser rows, sticky add, match/pinned first */
+  liveMode?: boolean;
   /** Optional map for grouping player notes */
   playerNameById?: Record<string, string>;
+  /** Click player-linked note → highlight on pitch / open dossier */
+  onNotePlayerClick?: (playerId: string) => void;
 }) {
   const router = useRouter();
   const [notes, setNotes] = useState(initialNotes);
@@ -139,6 +146,8 @@ export function NotesPanel({
         return false;
     } else if (scope === "hooks") {
       if (n.category !== "Hook" && n.category !== "Funfact") return false;
+    } else if (scope === "pinned") {
+      if (!n.pinned) return false;
     } else if (scope === "bio") {
       if (n.category !== "Bio" && n.category !== "Career") return false;
     } else if (scope !== "all") {
@@ -147,16 +156,36 @@ export function NotesPanel({
     return true;
   }
 
+
+  function isLiveEventNote(n: NoteRow): boolean {
+    if (n.category === "Match" && n.pinned) return true;
+    const t = `${n.title} ${n.body}`.toLowerCase();
+    return (
+      n.category === "Match" &&
+      (/\d+'/.test(n.title) ||
+        /\b(goal|penalt|yellow|red|sub|card|var)\b/i.test(t))
+    );
+  }
+
+  function noteRank(n: NoteRow): number {
+    if (n.pinned) return 0;
+    if (isLiveEventNote(n)) return 1;
+    if (n.category === "Hook" || n.category === "Funfact") return 2;
+    if (n.category === "Bio" || n.category === "Career") return 4;
+    return 3;
+  }
+
   const counts = useMemo(() => {
     const scopes: NotesFilterScope[] = [
       "all",
+      "pinned",
+      "match",
       "home",
       "away",
       "players",
-      "match",
-      "club",
-      "hooks",
       "bio",
+      "hooks",
+      "club",
     ];
     const out: Record<string, number> = {};
     for (const s of scopes) {
@@ -168,13 +197,21 @@ export function NotesPanel({
 
   const visible = useMemo(() => {
     const needle = search.trim().toLowerCase();
-    return notes.filter((n) => {
+    const filtered = notes.filter((n) => {
       if (!matchesScope(n, activeFilter)) return false;
       if (needle) {
-        const hay = `${n.title} ${n.body} ${n.category}`.toLowerCase();
+        const hay = `${n.title} ${n.body} ${n.category} ${
+          (n.entityId && playerNameById?.[n.entityId]) || ""
+        }`.toLowerCase();
         if (!hay.includes(needle)) return false;
       }
       return true;
+    });
+    return filtered.sort((a, b) => {
+      const ra = noteRank(a);
+      const rb = noteRank(b);
+      if (ra !== rb) return ra - rb;
+      return Number(b.pinned) - Number(a.pinned);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -187,6 +224,7 @@ export function NotesPanel({
     homeClubId,
     awayClubId,
     search,
+    playerNameById,
   ]);
 
   const grouped = useMemo(() => {
@@ -264,52 +302,89 @@ export function NotesPanel({
 
   const scopeChips: { key: NotesFilterScope; label: string }[] = [
     { key: "all", label: "All" },
+    { key: "pinned", label: "Pinned" },
+    { key: "match", label: "Match" },
     { key: "home", label: "Home" },
     { key: "away", label: "Away" },
     { key: "players", label: "Players" },
-    { key: "match", label: "Match" },
-    { key: "club", label: "Club" },
-    { key: "hooks", label: "Hooks" },
     { key: "bio", label: "Bio" },
+    { key: "hooks", label: "Hooks" },
   ];
 
   function NoteCard({ n }: { n: NoteRow }) {
+    const playerLinked =
+      n.entityType === "player" && n.entityId && onNotePlayerClick;
+    const playerName =
+      (n.entityId && playerNameById?.[n.entityId]) || null;
     return (
-      <div className="rounded-lg border border-slate-100 dark:border-slate-800 p-2.5">
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <div className="text-xs font-semibold text-teal-700 dark:text-teal-300">
+      <div
+        className={cn(
+          "rounded-md border border-slate-100 dark:border-slate-800 px-2 py-1.5",
+          liveMode && "py-1",
+          n.pinned && "border-amber-200/80 dark:border-amber-900/50 bg-amber-50/40 dark:bg-amber-950/20",
+          isLiveEventNote(n) && !n.pinned && "border-rose-100 dark:border-rose-900/40",
+          playerLinked && "cursor-pointer hover:border-teal-300 dark:hover:border-teal-700"
+        )}
+        onClick={() => {
+          if (playerLinked && n.entityId) onNotePlayerClick(n.entityId);
+        }}
+        role={playerLinked ? "button" : undefined}
+        title={
+          playerLinked
+            ? `Open ${playerName || "player"} on pitch`
+            : undefined
+        }
+      >
+        <div className="flex items-start justify-between gap-1.5">
+          <div className="min-w-0 flex-1">
+            <div
+              className={cn(
+                "font-semibold text-teal-700 dark:text-teal-300 truncate",
+                liveMode ? "text-[11px] leading-tight" : "text-xs"
+              )}
+            >
               {n.title}
-              <span className="ml-2 text-[10px] font-normal text-slate-400">
+              <span className="ml-1.5 text-[9px] font-normal text-slate-400">
                 {n.category}
-                {n.pinned ? " · pinned" : ""}
+                {n.pinned ? " · pin" : ""}
+                {playerName ? ` · ${playerName}` : ""}
               </span>
             </div>
-            <p className="mt-1 text-xs text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
+            <p
+              className={cn(
+                "text-slate-700 dark:text-slate-300 whitespace-pre-wrap",
+                liveMode
+                  ? "mt-0.5 text-[10px] leading-snug line-clamp-3"
+                  : "mt-1 text-xs"
+              )}
+            >
               {n.body}
             </p>
           </div>
-          <div className="flex gap-1">
+          <div
+            className="flex gap-0.5 shrink-0"
+            onClick={(e) => e.stopPropagation()}
+          >
             <button
               type="button"
-              className="p-1 text-slate-400 hover:text-amber-500"
+              className="p-0.5 text-slate-400 hover:text-amber-500"
               onClick={() => togglePin(n.id, n.pinned)}
-              aria-label="Pin"
+              aria-label="Pin note"
             >
               <Pin
                 className={cn(
-                  "h-3.5 w-3.5",
+                  "h-3 w-3",
                   n.pinned && "fill-amber-400 text-amber-500"
                 )}
               />
             </button>
             <button
               type="button"
-              className="p-1 text-slate-400 hover:text-rose-500"
+              className="p-0.5 text-slate-400 hover:text-rose-500"
               onClick={() => remove(n.id)}
-              aria-label="Delete"
+              aria-label="Delete note"
             >
-              <Trash2 className="h-3.5 w-3.5" />
+              <Trash2 className="h-3 w-3" />
             </button>
           </div>
         </div>
@@ -342,7 +417,7 @@ export function NotesPanel({
       >
         <div
           className={cn(
-            "shrink-0 space-y-1.5 bg-white/95 dark:bg-slate-950/95 backdrop-blur z-10",
+            "shrink-0 space-y-1.5 bg-white/95 dark:bg-slate-950/95 backdrop-blur z-10 pb-1 border-b border-slate-100 dark:border-slate-800",
             fillHeight && "sticky top-0"
           )}
         >
@@ -352,7 +427,8 @@ export function NotesPanel({
               ref={searchRef}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search… (/)"
+              placeholder="Search notes… press /"
+              aria-label="Search notes"
               className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-transparent pl-7 pr-2 py-0.5 text-[11px]"
             />
           </div>
@@ -383,29 +459,60 @@ export function NotesPanel({
                 </span>
               </button>
             ))}
-            {NOTE_CATEGORIES.filter(
-              (c) => !["Hook", "Bio", "Funfact", "Career", "Match"].includes(c)
-            ).map((c) => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => setScope(c)}
-                className={cn(
-                  "shrink-0 rounded-full px-1.5 py-0.5 text-[9px] border",
-                  activeFilter === c
-                    ? "bg-teal-600 text-white border-teal-600"
-                    : "border-slate-200 dark:border-slate-700"
-                )}
-              >
-                {c}
-              </button>
-            ))}
           </div>
+
+          {/* Sticky compact composer — always reachable during LIVE */}
+          {(fillHeight || liveMode || !compact) && (
+            <div className="space-y-1 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/50 p-1.5">
+              <input
+                className="w-full rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-1.5 py-1 text-[11px]"
+                placeholder="Title"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                aria-label="New note title"
+              />
+              <textarea
+                className={cn(
+                  "w-full rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-1.5 py-1 text-[11px]",
+                  liveMode ? "min-h-[40px]" : "min-h-[52px]"
+                )}
+                placeholder="Note body"
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                aria-label="New note body"
+              />
+              <div className="flex items-center gap-1.5">
+                <select
+                  className="min-w-0 flex-1 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-1.5 py-1 text-[11px]"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  aria-label="Note category"
+                  title="Note category"
+                >
+                  {NOTE_CATEGORIES.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+                <Button
+                  size="sm"
+                  onClick={createNote}
+                  disabled={pending || !title.trim() || !body.trim()}
+                  className="shrink-0 h-7 px-2 text-[11px]"
+                >
+                  <Plus className="h-3 w-3 mr-0.5" />
+                  Add
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
 
         <div
           className={cn(
-            "space-y-2 overflow-y-auto",
+            "overflow-y-auto",
+            liveMode ? "space-y-1" : "space-y-1.5",
             fillHeight ? "flex-1 min-h-0" : "max-h-64"
           )}
         >
@@ -414,7 +521,7 @@ export function NotesPanel({
           )}
           {grouped
             ? grouped.map(([pid, list]) => (
-                <div key={pid} className="space-y-1.5">
+                <div key={pid} className="space-y-1">
                   <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400 sticky top-0 bg-white/90 dark:bg-slate-950/90 py-0.5">
                     {playerNameById?.[pid] || list[0]?.title || "Player"}{" "}
                     <span className="font-normal normal-case">
@@ -428,45 +535,6 @@ export function NotesPanel({
               ))
             : visible.map((n) => <NoteCard key={n.id} n={n} />)}
         </div>
-
-        {!compact && (
-          <div className="space-y-2 border-t border-slate-100 dark:border-slate-800 pt-3 shrink-0">
-            <input
-              className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-transparent px-2 py-1.5 text-xs"
-              placeholder="Title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-            />
-            <textarea
-              className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-transparent px-2 py-1.5 text-xs min-h-[64px]"
-              placeholder="Note body"
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-            />
-            <div className="flex items-center gap-2">
-              <select
-                className="rounded-lg border border-slate-200 dark:border-slate-700 bg-transparent px-2 py-1.5 text-xs"
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-              >
-                {NOTE_CATEGORIES.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-              <Button
-                size="sm"
-                onClick={createNote}
-                disabled={pending}
-                className="ml-auto"
-              >
-                <Plus className="h-3.5 w-3.5 mr-1" />
-                Add note
-              </Button>
-            </div>
-          </div>
-        )}
       </CardBody>
     </Card>
   );

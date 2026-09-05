@@ -12,7 +12,7 @@ import {
   MapPin,
   Building2,
   CloudSun,
-  Heart,
+  Users,
   Radio,
   LayoutGrid,
   Printer,
@@ -35,7 +35,7 @@ const items = [
   { slug: "venue", label: "Venue", icon: MapPin },
   { slug: "clubs", label: "Clubs", icon: Building2 },
   { slug: "weather", label: "Weather", icon: CloudSun },
-  { slug: "fans", label: "Fans", icon: Heart },
+  { slug: "squad", label: "Squad", icon: Users },
   { slug: "live", label: "Live", icon: Radio },
   { slug: "print", label: "Export", icon: Printer },
 ];

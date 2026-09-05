@@ -32,6 +32,7 @@ import { EventTimeline } from "@/components/match/event-timeline";
 import { EventComposer } from "@/components/live/event-composer";
 import { Button } from "@/components/ui/button";
 import { FORMATIONS } from "@/lib/formations";
+import { namesLooselyMatch, parseSubDescription } from "@/lib/player-name";
 import { cn } from "@/lib/utils";
 import {
   type FieldSettings,
@@ -108,25 +109,89 @@ function lineupHint(status: string) {
   return "Expected XI · click squad → tap slot";
 }
 
+function findPlayerLoose(
+  players: PitchPlayer[],
+  opts: { id?: string | null; name?: string | null }
+): PitchPlayer | undefined {
+  if (opts.id) {
+    const byId = players.find((p) => p.id === opts.id);
+    if (byId) return byId;
+  }
+  if (opts.name) {
+    const exact = players.find(
+      (p) => p.name.toLowerCase() === opts.name!.toLowerCase()
+    );
+    if (exact) return exact;
+    return players.find((p) => namesLooselyMatch(p.name, opts.name));
+  }
+  return undefined;
+}
+
+/**
+ * Apply AF live sub events onto the XI for display:
+ * OFF leaves the slot; ON inherits it. Does not invent names.
+ */
+function applyLiveSubsToXi(
+  players: PitchPlayer[],
+  events: MatchEventRow[]
+): PitchPlayer[] {
+  const byId = new Map(players.map((p) => [p.id, { ...p }]));
+  const list = () => [...byId.values()];
+
+  const subs = events
+    .filter((e) => e.type === "sub")
+    .slice()
+    .sort((a, b) => (a.minute ?? 0) - (b.minute ?? 0));
+
+  for (const e of subs) {
+    const { outName, inName } = parseSubDescription(e.description || "");
+    const outP = findPlayerLoose(list(), { id: e.playerId, name: outName });
+    if (!outP) continue;
+    const inheritedSlot = outP.formationSlot;
+    const outNext = {
+      ...byId.get(outP.id)!,
+      subbedOff: true,
+      subMinute: e.minute ?? outP.subMinute ?? null,
+      onPitch: false,
+      // Keep isStarter for squad history, but clear slot so placeLandscape skips
+      formationSlot: null as string | null,
+    };
+    byId.set(outP.id, outNext);
+
+    if (!inName) continue;
+    const inP = findPlayerLoose(list(), { name: inName });
+    if (!inP || inP.id === outP.id) continue;
+    const slot = inheritedSlot || inP.formationSlot;
+    byId.set(inP.id, {
+      ...byId.get(inP.id)!,
+      onPitch: true,
+      isStarter: true,
+      formationSlot: slot,
+      subbedOff: false,
+      subMinute: e.minute ?? null,
+    });
+  }
+  return list();
+}
+
 function enrichPlayers(
   players: PitchPlayer[],
   events: MatchEventRow[]
 ): PitchPlayer[] {
-  const subbedOutNames = new Set<string>();
-  const subbedOutIds = new Set<string>();
-  for (const e of events) {
-    if (e.type !== "sub") continue;
-    // AF sync: player = out, assist name often in "(Name)"
-    if (e.playerId) subbedOutIds.add(e.playerId);
-    const m = e.description.match(/^[^—]+—\s*([^(\n]+)/);
-    const outName = m?.[1]?.trim();
-    if (outName) subbedOutNames.add(outName.toLowerCase());
-  }
-  return players.map((p) => {
+  const withMatchStats = players.map((p) => {
     const mine = events.filter(
       (e) =>
         e.playerId === p.id ||
-        (e.description && e.description.includes(p.name))
+        (e.description &&
+          (e.description.includes(p.name) ||
+            namesLooselyMatch(
+              p.name,
+              parseSubDescription(e.description).outName
+            ) ||
+            namesLooselyMatch(
+              p.name,
+              parseSubDescription(e.description).inName
+            )))
     );
     const matchGoals = mine.filter((e) =>
       ["goal", "penalty_goal", "own_goal"].includes(e.type)
@@ -138,26 +203,15 @@ function enrichPlayers(
     ).length;
     const matchYellow = mine.some((e) => e.type === "yellow");
     const matchRed = mine.some((e) => e.type === "red");
-    const subEvent = mine.find(
-      (e) =>
-        e.type === "sub" &&
-        (e.playerId === p.id ||
-          e.description.toLowerCase().includes(p.name.toLowerCase()))
-    );
-    const subbedOff =
-      subbedOutIds.has(p.id) ||
-      subbedOutNames.has(p.name.toLowerCase()) ||
-      Boolean(subEvent);
     return {
       ...p,
       matchGoals: matchGoals || undefined,
       matchAssists: matchAssists || undefined,
       matchYellow: matchYellow || undefined,
       matchRed: matchRed || undefined,
-      subbedOff: subbedOff || undefined,
-      subMinute: subEvent?.minute ?? null,
     };
   });
+  return applyLiveSubsToXi(withMatchStats, events);
 }
 
 export function MatchDesk({
@@ -279,6 +333,11 @@ export function MatchDesk({
   );
   const [fieldSettingsOpen, setFieldSettingsOpen] = useState(false);
   const [overrides, setOverrides] = useState<PlayerOverrideRow[]>(initialOverrides);
+  const [homeOnLeft, setHomeOnLeft] = useState(true);
+  const isLive = status === "Live" || status === "Half Time";
+  /** Prep only: click-to-place rail. LIVE/FT → Squad tab instead. */
+  const hideSquadRail =
+    status === "Live" || status === "Half Time" || status === "Full Time";
 
   useEffect(() => {
     const onFs = () => {
@@ -304,6 +363,31 @@ export function MatchDesk({
   useEffect(() => {
     setFieldSettings(loadFieldSettings());
   }, []);
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(`pitchline.homeOnLeft.${matchId}`);
+      if (raw === "0") setHomeOnLeft(false);
+      else if (raw === "1") setHomeOnLeft(true);
+    } catch {
+      /* ignore */
+    }
+  }, [matchId]);
+
+  const toggleHomeOnLeft = useCallback(() => {
+    setHomeOnLeft((prev) => {
+      const next = !prev;
+      try {
+        window.localStorage.setItem(
+          `pitchline.homeOnLeft.${matchId}`,
+          next ? "1" : "0"
+        );
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }, [matchId]);
+
 
   useEffect(() => {
     setOverrides(initialOverrides);
@@ -526,7 +610,7 @@ export function MatchDesk({
           }
           return merged.slice(-24);
         });
-        setOnAirOpen(true);
+        // Do not auto-expand On-air over the pitch — Chris opens via header.
       } catch {
         /* ignore */
       }
@@ -1064,7 +1148,14 @@ export function MatchDesk({
       )}
 
       {/* Main landscape: notes | pitch | squad */}
-      <div className="relative min-h-0 flex-1 grid grid-cols-1 lg:grid-cols-[minmax(220px,260px)_minmax(0,1fr)_minmax(180px,200px)] gap-1.5 overflow-hidden">
+      <div
+        className={cn(
+          "relative min-h-0 flex-1 grid grid-cols-1 gap-1.5 overflow-hidden",
+          hideSquadRail
+            ? "lg:grid-cols-[minmax(220px,280px)_minmax(0,1fr)]"
+            : "lg:grid-cols-[minmax(220px,260px)_minmax(0,1fr)_minmax(180px,200px)]"
+        )}
+      >
         <aside className="min-h-0 overflow-hidden order-2 lg:order-1">
           <NotesPanel
             matchId={matchId}
@@ -1081,8 +1172,12 @@ export function MatchDesk({
             externalFilter={notesFilter}
             onFilterChange={setNotesFilter}
             fillHeight
-            compact={Boolean(dossierId)}
+            liveMode={isLive || status === "Full Time"}
             playerNameById={Object.fromEntries(squad.map((p) => [p.id, p.name]))}
+            onNotePlayerClick={(playerId) => {
+              const p = squad.find((s) => s.id === playerId);
+              if (p) openPlayer(p);
+            }}
           />
         </aside>
 
@@ -1132,12 +1227,15 @@ export function MatchDesk({
               cardSettings={fieldSettings}
               markerPct={markerPct}
               onOpenFieldSettings={() => setFieldSettingsOpen(true)}
+              homeOnLeft={homeOnLeft}
+              onToggleHomeOnLeft={toggleHomeOnLeft}
+              liveCompact={isLive}
             />
           </div>
 
           {/* On-air drawer — overlays pitch, does not steal permanent height */}
           {onAirOpen && (
-            <div className="absolute inset-x-0 bottom-0 z-30 max-h-[min(42%,280px)] rounded-t-xl border border-slate-200 dark:border-slate-700 bg-white/95 dark:bg-slate-950/95 backdrop-blur shadow-2xl overflow-hidden flex flex-col">
+            <div className="absolute inset-x-0 bottom-0 z-30 max-h-[min(28%,168px)] rounded-t-xl border border-slate-200 dark:border-slate-700 bg-white/95 dark:bg-slate-950/95 backdrop-blur shadow-2xl overflow-hidden flex flex-col">
               <div className="shrink-0 flex items-center gap-2 px-3 py-1.5 border-b border-slate-100 dark:border-slate-800">
                 <Radio className="h-3.5 w-3.5 text-rose-500" />
                 <span className="text-xs font-bold uppercase tracking-wide">On-air</span>
@@ -1162,7 +1260,7 @@ export function MatchDesk({
                     events={events}
                     highlightIds={flashEventIds}
                     compact
-                    maxHeightClass="max-h-[200px]"
+                    maxHeightClass="max-h-[120px]"
                   />
                 </div>
                 <div className="min-h-0 overflow-y-auto space-y-1.5">
@@ -1236,24 +1334,26 @@ export function MatchDesk({
           )}
         </section>
 
-        <aside className="min-h-0 overflow-hidden order-3">
-          <SquadRail
-            players={squad}
-            homeName={homeName}
-            awayName={awayName}
-            homeColor={homeColor}
-            awayColor={awayColor}
-            locked={locked}
-            selectedId={selected?.id || dossierId}
-            placingId={placing?.id}
-            onPlayerClick={onSquadClick}
-            onRemoveFromXi={(p) =>
-              lineupAction({ action: "clear", playerId: p.id }).then(() => {
-                if (placing?.id === p.id) setPlacing(null);
-              })
-            }
-          />
-        </aside>
+        {!hideSquadRail && (
+          <aside className="min-h-0 overflow-hidden order-3">
+            <SquadRail
+              players={squad}
+              homeName={homeName}
+              awayName={awayName}
+              homeColor={homeColor}
+              awayColor={awayColor}
+              locked={locked}
+              selectedId={selected?.id || dossierId}
+              placingId={placing?.id}
+              onPlayerClick={onSquadClick}
+              onRemoveFromXi={(p) =>
+                lineupAction({ action: "clear", playerId: p.id }).then(() => {
+                  if (placing?.id === p.id) setPlacing(null);
+                })
+              }
+            />
+          </aside>
+        )}
       </div>
 
       {dossierId && (

@@ -42,6 +42,16 @@ import { ordinal, seasonOrdinal } from "@/lib/season-tally";
 import { bindDeskHotkeys } from "@/lib/desk-hotkeys";
 import { enrichFlashLines, momentFingerprint, shouldEmitMomentFlash } from "@/lib/flash-enrich";
 import {
+  evaluateMomentumProxy,
+  evaluatePlayerThresholds,
+  type LivePlayerStatRow,
+} from "@/lib/live-stat-triggers";
+import {
+  classifyGameState,
+  scoreNotesAgainstGameState,
+  type GameStateEvent,
+} from "@/lib/game-state-notes";
+import {
   DataVizFlashCard,
   type ShotPoint,
   type VizFlashKind,
@@ -456,6 +466,8 @@ export function MatchDesk({
     scoreline?: string;
   } | null>(null);
   const momentFpRef = useRef<string | null>(null);
+  /** Once-per-crossing keys for live stat / momentum flashes */
+  const firedStatTriggersRef = useRef<Set<string>>(new Set());
   const htVizEmittedRef = useRef(false);
   const possessionSamplesRef = useRef<number[]>([]);
   const advStatsCacheRef = useRef<{
@@ -915,6 +927,7 @@ export function MatchDesk({
         minute: number;
         description: string;
         playerId?: string | null;
+        teamSide?: string | null;
       }[],
       opts?: { force?: boolean; autoSwitch?: boolean }
     ) => {
@@ -928,10 +941,41 @@ export function MatchDesk({
       relevantInFlightRef.current = true;
       setRelevantLoading(true);
       try {
+        const trigger = (news && news[0]) || null;
+        const gsEvents: GameStateEvent[] = (news || []).map((e) => ({
+          type: e.type,
+          minute: e.minute,
+          description: e.description,
+          playerId: e.playerId,
+          teamSide: e.teamSide ?? null,
+        }));
+        const gameState = {
+          minute: liveMinute,
+          status,
+          homeScore: scoreRef.current.home,
+          awayScore: scoreRef.current.away,
+          homeName,
+          awayName,
+          trigger,
+          tags: classifyGameState({
+            minute: liveMinute,
+            status,
+            homeScore: scoreRef.current.home,
+            awayScore: scoreRef.current.away,
+            homeName,
+            awayName,
+            trigger,
+            events: gsEvents,
+          }),
+        };
         const res = await fetch(`/api/matches/${matchId}/notes/relevant`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ events: news || [], limit: 10 }),
+          body: JSON.stringify({
+            events: news || [],
+            limit: 10,
+            gameState,
+          }),
         });
         const json = await res.json();
         if (!res.ok) return;
@@ -949,7 +993,7 @@ export function MatchDesk({
         setRelevantLoading(false);
       }
     },
-    [matchId, status]
+    [matchId, status, liveMinute, homeName, awayName]
   );
 
   const pinSuggestion = useCallback(
@@ -1192,9 +1236,49 @@ export function MatchDesk({
                   ...seasonBits,
                   hook ? `Note: ${hook}` : null,
                 ].filter(Boolean) as string[];
+                const gsTrigger: GameStateEvent = {
+                  type: e.type,
+                  minute: e.minute,
+                  description: e.description,
+                  playerId: newsPlayerId,
+                  teamSide: (e as { teamSide?: string | null }).teamSide ?? null,
+                };
+                const gsTags = classifyGameState({
+                  minute: e.minute,
+                  status,
+                  homeScore: scoreRef.current.home,
+                  awayScore: scoreRef.current.away,
+                  homeName,
+                  awayName,
+                  trigger: gsTrigger,
+                  events: [gsTrigger],
+                });
+                const gsHits = scoreNotesAgainstGameState({
+                  notes: notesRef.current,
+                  tags: gsTags,
+                  trigger: gsTrigger,
+                  homeName,
+                  awayName,
+                  homeScore: scoreRef.current.home,
+                  awayScore: scoreRef.current.away,
+                  homeClubId: homeClubId || null,
+                  awayClubId: awayClubId || null,
+                  limit: 4,
+                });
+                const gsNoteIds = new Set(gsHits.map((h) => h.noteId));
                 const relevantSnips = notesRef.current
-                  .filter((n) => relevantNoteIdsRef.current.includes(n.id) || (scorer && n.entityId === scorer.id))
-                  .slice(0, 3)
+                  .filter(
+                    (n) =>
+                      gsNoteIds.has(n.id) ||
+                      relevantNoteIdsRef.current.includes(n.id) ||
+                      (scorer && n.entityId === scorer.id)
+                  )
+                  .sort((a, b) => {
+                    const sa = gsHits.find((h) => h.noteId === a.id)?.score || 0;
+                    const sb = gsHits.find((h) => h.noteId === b.id)?.score || 0;
+                    return sb - sa;
+                  })
+                  .slice(0, 4)
                   .map((n) => ({ id: n.id, title: n.title, body: n.body }));
                 const lines = enrichFlashLines({
                   baseLines,
@@ -1277,6 +1361,64 @@ export function MatchDesk({
               }
             }
           }
+
+          // Threshold / momentum flashes from AF fixture players + team stats
+          try {
+            const liveStats = (json.livePlayerStats || []) as LivePlayerStatRow[];
+            const fired = firedStatTriggersRef.current;
+            const thr = evaluatePlayerThresholds(liveStats, fired);
+            const mom = evaluateMomentumProxy({
+              statistics: statisticsRef.current,
+              possessionSamples: possessionSamplesRef.current,
+              fired,
+              homeName,
+              awayName,
+            });
+            const priority: Record<string, number> = {
+              shotsOn: 10,
+              keyPasses: 9,
+              saves: 8,
+              possessionSwing: 7,
+              shotDiff: 7,
+              dribblesSuccess: 6,
+              tackles: 5,
+              duelsWon: 4,
+              foulsCommitted: 3,
+            };
+            const flashes = [...thr, ...mom].sort(
+              (a, b) => (priority[b.stat] || 0) - (priority[a.stat] || 0)
+            );
+            for (const fl of flashes.slice(0, 4)) {
+              const id = `${fl.id}|${Date.now()}`;
+              setLivePopups((prev) =>
+                [
+                  ...prev,
+                  {
+                    id,
+                    kind: "fact" as const,
+                    title: fl.title,
+                    lines: fl.lines.slice(0, 6),
+                    scoreline: `${homeName} ${scoreRef.current.home}–${scoreRef.current.away} ${awayName}`,
+                    createdAt: Date.now(),
+                    pinned: false,
+                  },
+                ].slice(-5)
+              );
+              if (fl.vizHint) {
+                window.setTimeout(() => {
+                  void attachVizToPopup(id, fl.vizHint!);
+                }, 80);
+              }
+              window.setTimeout(() => {
+                setLivePopups((prev) =>
+                  prev.filter((p) => p.id !== id || p.pinned)
+                );
+              }, 12_000);
+            }
+          } catch {
+            /* soft-fail triggers */
+          }
+
           if (!silent) {
             setMsg(
               `Synced · ${json.lineupStatus} · squads ${json.squadHome ?? 0}/${json.squadAway ?? 0} · injuries ${json.injuryCount ?? 0}` +
@@ -1293,7 +1435,7 @@ export function MatchDesk({
         setBusy(false);
       }
     },
-    [apiFootballFixtureId, matchId, router, loadSuggestions, loadRelevantNotes, homeName, awayName, attachVizToPopup]
+    [apiFootballFixtureId, matchId, router, loadSuggestions, loadRelevantNotes, homeName, awayName, attachVizToPopup, homeClubId, awayClubId, status]
   );
 
   useEffect(() => {
@@ -1318,6 +1460,15 @@ export function MatchDesk({
     const t = setInterval(() => sync(true), 18_000);
     return () => clearInterval(t);
   }, [configured, apiFootballFixtureId, status, sync]);
+
+  // Full Time: one-shot sync so threshold flashes can verify from final AF player stats
+  useEffect(() => {
+    if (!configured || !apiFootballFixtureId || status !== "Full Time") return;
+    const t = window.setTimeout(() => sync(true), 800);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [configured, apiFootballFixtureId, status]);
+
 
   // Relevant notes: initial + throttled refresh while LIVE (not every poll)
   useEffect(() => {

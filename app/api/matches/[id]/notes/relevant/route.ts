@@ -3,6 +3,12 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateWithGemini, isGeminiConfigured } from "@/lib/gemini";
 import { namesLooselyMatch, lastToken } from "@/lib/player-name";
+import {
+  classifyGameState,
+  scoreNotesAgainstGameState,
+  type GameStateEvent,
+  type GameStateTag,
+} from "@/lib/game-state-notes";
 
 export const runtime = "nodejs";
 
@@ -12,9 +18,21 @@ type Body = {
     minute: number;
     description: string;
     playerId?: string | null;
+    teamSide?: string | null;
   }[];
   /** Cap of note ids to return */
   limit?: number;
+  /** LIVE game-state for early/late concede etc. note matching */
+  gameState?: {
+    minute?: number;
+    status?: string;
+    homeScore?: number;
+    awayScore?: number;
+    homeName?: string;
+    awayName?: string;
+    tags?: GameStateTag[];
+    trigger?: GameStateEvent | null;
+  };
 };
 
 type RelevantHit = {
@@ -179,6 +197,7 @@ export async function POST(
             minute: e.minute,
             description: e.description,
             playerId: e.playerId,
+            teamSide: e.teamSide,
           }));
 
   const squad = [
@@ -208,7 +227,85 @@ export async function POST(
     limit: Math.max(limit, 12),
   });
 
-  let source: "heuristic" | "gemini+heuristic" = "heuristic";
+  let source: "heuristic" | "gemini+heuristic" | "gamestate+heuristic" =
+    "heuristic";
+
+  // Game-state keyword matcher (early/late goal/concede, cards, HT/FT…)
+  const gs = body.gameState;
+  if (gs || events.length) {
+    const trigger =
+      gs?.trigger ||
+      (events[0]
+        ? {
+            type: events[0].type,
+            minute: events[0].minute,
+            description: events[0].description,
+            playerId: events[0].playerId,
+            teamSide: events[0].teamSide ?? null,
+          }
+        : null);
+    const snap = {
+      minute: gs?.minute ?? match.minute ?? 0,
+      status: gs?.status ?? match.status,
+      homeScore: gs?.homeScore ?? match.homeScore,
+      awayScore: gs?.awayScore ?? match.awayScore,
+      homeName: gs?.homeName || match.homeClub.name,
+      awayName: gs?.awayName || match.awayClub.name,
+      trigger,
+      events: [
+        ...events.map((e) => ({
+          type: e.type,
+          minute: e.minute,
+          description: e.description,
+          playerId: e.playerId,
+          teamSide: e.teamSide ?? null,
+        })),
+        ...match.events.slice(0, 40).map((e) => ({
+          type: e.type,
+          minute: e.minute,
+          description: e.description,
+          playerId: e.playerId,
+          teamSide: e.teamSide,
+        })),
+      ],
+    };
+    const tags =
+      Array.isArray(gs?.tags) && gs!.tags!.length
+        ? gs!.tags!
+        : classifyGameState(snap);
+    const gsHits = scoreNotesAgainstGameState({
+      notes: match.notes,
+      tags,
+      trigger,
+      homeName: snap.homeName,
+      awayName: snap.awayName,
+      homeScore: snap.homeScore,
+      awayScore: snap.awayScore,
+      homeClubId: match.homeClubId,
+      awayClubId: match.awayClubId,
+      limit: Math.max(limit, 10),
+    });
+    if (gsHits.length) {
+      const byId = new Map(hits.map((h) => [h.noteId, h]));
+      for (const g of gsHits) {
+        const prev = byId.get(g.noteId);
+        if (prev) {
+          prev.score += g.score;
+          prev.reason = `${prev.reason} · gs:${g.reason}`.slice(0, 160);
+        } else {
+          byId.set(g.noteId, {
+            noteId: g.noteId,
+            score: g.score,
+            reason: `gs:${g.reason}`,
+          });
+        }
+      }
+      hits = [...byId.values()]
+        .sort((a, b) => b.score - a.score)
+        .slice(0, Math.max(limit, 12));
+      source = "gamestate+heuristic";
+    }
+  }
 
   // Light Gemini re-rank over top heuristic candidates (titles only) — no invented facts
   if (isGeminiConfigured() && hits.length >= 3 && events.length) {
@@ -259,7 +356,9 @@ Do not invent facts. Do not rewrite notes. Only reorder/filter the given ids.`,
           }
           if (reranked.length) {
             hits = reranked.slice(0, limit);
-            source = "gemini+heuristic";
+            source = source === "gamestate+heuristic"
+              ? "gamestate+heuristic"
+              : "gemini+heuristic";
           }
         }
       }

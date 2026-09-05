@@ -16,6 +16,7 @@ import {
   getPredictions,
   getSquads,
   getStatistics,
+  getFixturePlayers,
   getTopScorers,
   getPlayersByTeam,
   getPlayerById,
@@ -42,6 +43,7 @@ import {
   fetchPlayerSeasonSplit,
   seasonOrdinal,
 } from "./season-tally";
+import { mapAfFixturePlayersToRows } from "./live-stat-triggers";
 
 
 /**
@@ -1714,6 +1716,35 @@ export async function syncMatchFromApiFootball(
     /* stats optional */
   }
 
+  // Per-player live tallies (AF /fixtures/players) — ephemeral on sync JSON
+  let livePlayerStats: ReturnType<typeof mapAfFixturePlayersToRows> = [];
+  try {
+    const fp = await getFixturePlayers(match.apiFootballFixtureId);
+    if (fp?.length) {
+      const squadRows = await prisma.player.findMany({
+        where: {
+          clubId: { in: [match.homeClubId, match.awayClubId] },
+          apiFootballPlayerId: { not: null },
+        },
+        select: { id: true, apiFootballPlayerId: true },
+      });
+      const localByAfId = new Map<number, string>();
+      for (const pl of squadRows) {
+        if (pl.apiFootballPlayerId != null) {
+          localByAfId.set(pl.apiFootballPlayerId, pl.id);
+        }
+      }
+      livePlayerStats = mapAfFixturePlayersToRows({
+        teams: fp,
+        homeAfTeamId: homeAfId,
+        awayAfTeamId: awayAfId,
+        localByAfId,
+      });
+    }
+  } catch {
+    /* player live stats optional — soft-fail */
+  }
+
   const scorerSync = await syncSeasonScorers(
     match.homeClubId,
     match.awayClubId,
@@ -2090,6 +2121,7 @@ export async function syncMatchFromApiFootball(
     venueName: venueWeather.venueName,
     weatherSummary: venueWeather.weather,
     statsCount,
+    livePlayerStats,
     scorersSynced: scorerSync.scorers,
     keepersSynced: scorerSync.keepers,
   };

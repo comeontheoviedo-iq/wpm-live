@@ -157,20 +157,23 @@ Never invent disciplinary history. End with a line that hands back to the action
     order: 5,
     prompt: `${HOUSE_RULES}
 
-Write the AIR-READY commentary script section where the commentator announces the two teams.
+Chris's Notebook brief (follow this spirit exactly):
+"Here are the two starting lineups.
+Please write me the section of the commentary script where I announce the two teams. First, reference how many changes there are from their last matches, and who those changes are. Then give me the two line-ups, home team first — give me any key stats, info or points of interest about the key players in each team. Finally, mention any key players missing and why, but only mention injuries to important players. Try and avoid duplicating what you have already said in the longer intro script."
+
 Voice: factual, grounded, spoken radio prose — ready to read on air. Short paragraphs.
-Do NOT invent changes, drops, injuries, returning players, or stats. Use ONLY MATCH CONTEXT (changes lists, XI, key stats, notable injuries). If a fact is missing, omit it — never guess.
+Do NOT invent changes, drops, injuries, returning players, or stats. Use ONLY MATCH CONTEXT (CHANGES HOME / CHANGES AWAY, XI, KEY PLAYER STATS, NOTABLE INJURIES). If a fact is missing, omit it or say you are unable to confirm — never guess.
 
-Explicit structure (follow in order):
+Structure (in order):
 
-1) Open exactly / closely with: "Here are the two starting lineups."
-2) Changes from last match — per team (home first, then away):
-   - State how many changes, and who those changes are (names in / out) from CHANGES HOME / CHANGES AWAY in context.
-   - If context says changes are unavailable / unable to confirm, say you are "unable to confirm changes from last outing" — do NOT invent in/outs (e.g. never invent a drop).
-3) Home lineup — formation from context, then the XI in natural radio cadence (numbers + names). Weave in key stats / points of interest ONLY from KEY PLAYER STATS / XI annotations (goals, apps, captain, grounded returning-ex-club notes). Do not pad.
+1) Open with: "Here are the two starting lineups."
+2) Changes from last match — home first, then away:
+   - How many changes, and who (IN / OUT names) from CHANGES HOME / CHANGES AWAY.
+   - If context says changes are unavailable / "unable to confirm changes from last outing", say that on air — do NOT invent in/outs.
+3) Home lineup — formation if known, then the XI in natural radio cadence (numbers + names). Weave key stats / points of interest ONLY from KEY PLAYER STATS / XI annotations. Do not pad.
 4) Away lineup — same treatment.
-5) Important absences only — from NOTABLE INJURIES / absences in context. Mention injuries only for important players (starters/regulars). Skip trivial/unknown.
-6) Do NOT repeat intro atmosphere, table stakes, continental storylines, or cold-open colour — that lives in the longer intro script. Stay on lineups, changes, key player POIs, and important absences.
+5) Key players missing — from NOTABLE INJURIES only; mention injuries only for important players (starters/regulars) and why when known. Skip trivial/unknown.
+6) Do not duplicate the longer intro (atmosphere, table stakes, continental storylines, cold-open colour). Stay on lineups, changes, key-player POIs, and important absences.
 
 Flag predicted vs confirmed only if LINEUP STATUS is not confirmed.
 Target length: roughly 90–150 seconds spoken.`,

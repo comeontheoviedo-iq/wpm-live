@@ -27,6 +27,7 @@ import {
   type UnderstatLeagueSlug,
   type UnderstatShot,
 } from "./understat";
+import { tryAltXg } from "./xg-alt";
 
 export type AdvancedStatsSource = "Understat";
 
@@ -326,10 +327,16 @@ export async function resolveAdvancedMatchStats(
 
   const slug = understatSlugForCompetition(competition);
   if (!slug) {
-    const msg = `xG not available for this competition`;
+    // Soft-fail second free source for Süper Lig / Scotland (never invent)
+    const alt = await tryAltXg({
+      competition,
+      homeName: input.homeName,
+      awayName: input.awayName,
+      kickoff,
+    });
+    const msg = alt.message || `xG not available for this competition`;
     const data = emptyResult(competition, false, msg);
     resultCache.set(cacheKey, { at: Date.now(), data });
-    // shorter negative cache still ok
     return data;
   }
 

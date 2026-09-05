@@ -128,8 +128,13 @@ export async function GET(
         if (w && !player.weightKg) patch.weightKg = w;
         if (row.player?.birth?.date && !player.birthDate)
           patch.birthDate = row.player.birth.date;
-        if (row.player?.nationality && (!player.nationality || player.nationality === "ENG" || player.nationality === "UNK"))
-          patch.nationality = row.player.nationality;
+        // Always prefer AF citizenship nationality over ENG/UNK defaults or stale values
+        if (row.player?.nationality) {
+          const nat = row.player.nationality.trim();
+          const cur = (player.nationality || "").trim().toUpperCase();
+          if (nat && (cur === "" || cur === "ENG" || cur === "UNK" || player.nationality !== nat))
+            patch.nationality = nat;
+        }
         if (row.player?.age && !player.age) patch.age = row.player.age;
         const af = row.statistics?.[0];
         const rt = af?.games?.rating;

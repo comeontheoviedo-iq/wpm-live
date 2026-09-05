@@ -33,6 +33,94 @@ function posGuess(pos?: string | null) {
   return p;
 }
 
+
+/** Placeholder / seed defaults that must be overwritten from API-Football. */
+function isUnsetNationality(n?: string | null) {
+  if (!n) return true;
+  const v = n.trim().toUpperCase();
+  return !v || v === "ENG" || v === "UNK" || v === "UNKNOWN";
+}
+
+function parseCm(h?: string | null) {
+  if (!h) return null;
+  const m = String(h).match(/(\d+)/);
+  return m ? Number(m[1]) : null;
+}
+function parseKg(w?: string | null) {
+  if (!w) return null;
+  const m = String(w).match(/(\d+)/);
+  return m ? Number(m[1]) : null;
+}
+
+/**
+ * Always prefer API-Football `player.nationality` (citizenship), never birth country.
+ * Overwrites ENG/UNK defaults and any stale wrong value when AF sends a nationality.
+ */
+async function upsertPlayerBioFromAf(
+  clubId: string,
+  row: {
+    apiId: number;
+    name: string;
+    nationality?: string;
+    photo?: string;
+    height?: string;
+    weight?: string;
+    birth?: string | null;
+    age?: number | null;
+    position?: string | null;
+    rating?: number | null;
+    goals?: number;
+    assists?: number;
+    apps?: number;
+  }
+) {
+  const existing = await findClubPlayer(clubId, {
+    apiId: row.apiId,
+    name: row.name,
+  });
+  const nat = row.nationality?.trim() || null;
+  if (!existing) {
+    await prisma.player.create({
+      data: {
+        clubId,
+        name: row.name,
+        shirtNumber: 0,
+        position: posGuess(row.position),
+        apiFootballPlayerId: row.apiId,
+        age: row.age ?? null,
+        nationality: nat || "UNK",
+        photoUrl: row.photo || null,
+        heightCm: parseCm(row.height),
+        weightKg: parseKg(row.weight),
+        birthDate: row.birth || null,
+        goals: row.goals || 0,
+        assists: row.assists || 0,
+        appearances: row.apps || 0,
+        ...(row.rating != null ? { rating: row.rating } : {}),
+      },
+    });
+    return;
+  }
+  const data: Record<string, unknown> = {};
+  if (nat && (isUnsetNationality(existing.nationality) || existing.nationality !== nat)) {
+    data.nationality = nat;
+  }
+  if (row.photo && !existing.photoUrl) data.photoUrl = row.photo;
+  const h = parseCm(row.height);
+  if (h && !existing.heightCm) data.heightCm = h;
+  const w = parseKg(row.weight);
+  if (w && !existing.weightKg) data.weightKg = w;
+  if (row.birth && !existing.birthDate) data.birthDate = row.birth;
+  if (row.age && !existing.age) data.age = row.age;
+  if (row.rating != null) data.rating = row.rating;
+  if (row.apps) data.appearances = row.apps;
+  if (row.goals != null && row.goals > (existing.goals || 0)) data.goals = row.goals;
+  if (row.assists != null && row.assists > (existing.assists || 0)) data.assists = row.assists;
+  if (Object.keys(data).length) {
+    await prisma.player.update({ where: { id: existing.id }, data });
+  }
+}
+
 async function findClubPlayer(
   clubId: string,
   opts: { apiId?: number | null; name?: string | null; number?: number | null }
@@ -86,6 +174,8 @@ export async function syncSquadForClub(clubId: string, teamAfId: number) {
         data: {
           clubId,
           ...data,
+          // Squads endpoint has no nationality — leave UNK until /players enrich
+          nationality: "UNK",
           isStarter: false,
           onPitch: false,
         },
@@ -138,6 +228,7 @@ async function upsertLineupSide(
           name: p.name,
           shirtNumber: p.number || i + 1,
           position: posGuess(p.pos),
+          nationality: "UNK",
           isStarter: true,
           onPitch: true,
           formationSlot: slot,
@@ -173,6 +264,7 @@ async function upsertLineupSide(
           name: p.name,
           shirtNumber: p.number || 99,
           position: posGuess(p.pos),
+          nationality: "UNK",
           isStarter: false,
           onPitch: false,
           apiFootballPlayerId: p.id || null,
@@ -695,15 +787,12 @@ async function syncSeasonScorers(
   for (const row of tops) ingest(row);
   for (const row of teamPages) ingest(row);
 
-  function parseCm(h?: string | null) {
-    if (!h) return null;
-    const m = String(h).match(/(\d+)/);
-    return m ? Number(m[1]) : null;
-  }
-  function parseKg(w?: string | null) {
-    if (!w) return null;
-    const m = String(w).match(/(\d+)/);
-    return m ? Number(m[1]) : null;
+  // Enrich EVERY squad player from /players (nationality, photo, bio) — not only scorers/keepers.
+  // Squads endpoint has no nationality; schema default ENG left most flags wrong.
+  let bios = 0;
+  for (const row of byApi.values()) {
+    await upsertPlayerBioFromAf(row.clubId, row);
+    bios++;
   }
 
   let scorers = 0;
@@ -755,9 +844,8 @@ async function syncSeasonScorers(
             : {}),
           ...(row.birth && !player.birthDate ? { birthDate: row.birth } : {}),
           ...(row.nationality &&
-          (!player.nationality ||
-            player.nationality === "ENG" ||
-            player.nationality === "UNK")
+          (isUnsetNationality(player.nationality) ||
+            player.nationality !== row.nationality)
             ? { nationality: row.nationality }
             : {}),
           ...(row.age && !player.age ? { age: row.age } : {}),
@@ -845,7 +933,7 @@ async function syncSeasonScorers(
     keepers++;
   }
 
-  return { scorers, keepers };
+  return { scorers, keepers, bios };
 }
 
 export async function syncMatchFromApiFootball(matchId: string) {

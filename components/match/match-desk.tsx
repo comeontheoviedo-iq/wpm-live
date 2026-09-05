@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -13,6 +13,8 @@ import {
   ChevronDown,
   Radio,
   Info,
+  Maximize2,
+  Minimize2,
 } from "lucide-react";
 import { PitchBoard, type PitchPlayer } from "@/components/match/pitch";
 import { SquadRail, type SquadPlayer } from "@/components/match/squad-rail";
@@ -241,6 +243,56 @@ export function MatchDesk({
   const [onAirOpen, setOnAirOpen] = useState(false);
   const [intelOpen, setIntelOpen] = useState(false);
   const [flashEventIds, setFlashEventIds] = useState<string[]>([]);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const deskRootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onFs = () => {
+      const el = deskRootRef.current;
+      const active =
+        document.fullscreenElement === el ||
+        // Safari
+        (document as Document & { webkitFullscreenElement?: Element | null })
+          .webkitFullscreenElement === el;
+      setIsFullscreen(Boolean(active));
+    };
+    document.addEventListener("fullscreenchange", onFs);
+    document.addEventListener("webkitfullscreenchange", onFs as EventListener);
+    return () => {
+      document.removeEventListener("fullscreenchange", onFs);
+      document.removeEventListener(
+        "webkitfullscreenchange",
+        onFs as EventListener
+      );
+    };
+  }, []);
+
+  const toggleFullscreen = useCallback(async () => {
+    const el = deskRootRef.current;
+    if (!el) return;
+    type FsEl = HTMLElement & {
+      webkitRequestFullscreen?: () => Promise<void> | void;
+    };
+    type FsDoc = Document & {
+      webkitExitFullscreen?: () => Promise<void> | void;
+      webkitFullscreenElement?: Element | null;
+    };
+    const doc = document as FsDoc;
+    const active =
+      document.fullscreenElement === el || doc.webkitFullscreenElement === el;
+    try {
+      if (active) {
+        if (document.exitFullscreen) await document.exitFullscreen();
+        else if (doc.webkitExitFullscreen) await doc.webkitExitFullscreen();
+      } else {
+        const node = el as FsEl;
+        if (node.requestFullscreen) await node.requestFullscreen();
+        else if (node.webkitRequestFullscreen) await node.webkitRequestFullscreen();
+      }
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "Fullscreen unavailable");
+    }
+  }, []);
 
   useEffect(() => {
     setHomeForm(homeFormation);
@@ -571,7 +623,15 @@ export function MatchDesk({
   }, [notes, dossierId]);
 
   return (
-    <div className="relative h-[calc(100dvh-11rem)] max-h-[100dvh] min-h-[380px] flex flex-col gap-1.5 overflow-hidden">
+    <div
+      ref={deskRootRef}
+      className={cn(
+        "relative flex flex-col gap-1.5 overflow-hidden bg-slate-50 dark:bg-slate-950",
+        isFullscreen
+          ? "fixed inset-0 z-[100] h-[100dvh] max-h-[100dvh] min-h-0 p-2"
+          : "h-[calc(100dvh-11rem)] max-h-[100dvh] min-h-[380px]"
+      )}
+    >
       {/* Slim top bar — score / meta / stats / actions */}
       <header className="shrink-0 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 px-2.5 py-1.5">
         <div className="min-w-0 flex-1">
@@ -775,6 +835,20 @@ export function MatchDesk({
               <Link2 className="h-3 w-3" /> Link
             </Link>
           )}
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 rounded-md border border-slate-200 dark:border-slate-700 px-2 py-1 text-[11px] font-medium hover:bg-slate-50 dark:hover:bg-slate-900"
+            onClick={() => void toggleFullscreen()}
+            title={isFullscreen ? "Exit fullscreen (Esc)" : "Fullscreen desk"}
+            aria-pressed={isFullscreen}
+          >
+            {isFullscreen ? (
+              <Minimize2 className="h-3 w-3" />
+            ) : (
+              <Maximize2 className="h-3 w-3" />
+            )}
+            {isFullscreen ? "Exit" : "Full"}
+          </button>
           <Button
             size="sm"
             variant="secondary"

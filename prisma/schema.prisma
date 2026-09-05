@@ -53,7 +53,7 @@ model Player {
   name             String
   shirtNumber      Int
   position         String
-  nationality      String          @default("ENG")
+  nationality      String          @default("UNK")
   age              Int?
   heightCm         Int?
   preferredFoot    String?

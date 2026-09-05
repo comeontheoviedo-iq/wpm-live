@@ -127,6 +127,7 @@ type DossierPayload = {
     date: string;
     opponent: string;
     opponentLogo?: string | null;
+    league?: string | null;
     result: "W" | "D" | "L" | null;
     homeAway: "H" | "A" | null;
     score: string;
@@ -138,6 +139,13 @@ type DossierPayload = {
     yellow: number | null;
     red: number | null;
   }[];
+  lastGoal?: {
+    date: string;
+    opponent: string;
+    score: string;
+    goals: number | null;
+    homeAway: "H" | "A" | null;
+  } | null;
   transfers?: {
     date: string;
     type: string | null;
@@ -674,126 +682,150 @@ export function PlayerDossier({
         {error && <p className="text-xs text-rose-600">{error}</p>}
 
         {p && tab === "profile" && (
-          <div className="grid md:grid-cols-2 gap-3">
-            <div className="space-y-3">
-              <Section title="Transfer">
+          <div className="grid md:grid-cols-2 gap-2.5">
+            <div className="space-y-2.5">
+              {/* This match + last goal chips */}
+              <div className="grid grid-cols-2 gap-2">
+                {(() => {
+                  const mps = data?.matchPlayerStats as any;
+                  const chips = [
+                    {
+                      label: "This match",
+                      value: mps?.games?.rating != null ? formatRating(mps.games.rating) : "—",
+                      sub: mps?.games?.minutes != null ? `${mps.games.minutes}'` : "no live row",
+                    },
+                    {
+                      label: "Last goal",
+                      value: data?.lastGoal
+                        ? `${data.lastGoal.goals || 1}G`
+                        : "—",
+                      sub: data?.lastGoal
+                        ? `${(data.lastGoal.date || "").slice(5, 10)} vs ${data.lastGoal.opponent}`
+                        : "none in last 5",
+                    },
+                  ];
+                  return chips.map((c) => (
+                    <div
+                      key={c.label}
+                      className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 px-2.5 py-2"
+                    >
+                      <div className="text-[9px] font-bold uppercase tracking-wide text-slate-400">
+                        {c.label}
+                      </div>
+                      <div className="text-lg font-black tabular-nums leading-tight">{c.value}</div>
+                      <div className="text-[10px] text-slate-500 truncate">{c.sub}</div>
+                    </div>
+                  ));
+                })()}
+              </div>
+
+              <Section title="Transfer" dense>
                 {data?.transfers?.[0] ? (
-                  <div className="flex items-center gap-2 text-xs">
-                    {data.transfers[0].from.logo ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={data.transfers[0].from.logo} alt="" className="h-6 w-6 object-contain" />
-                    ) : null}
-                    <div>
-                      <div className="font-semibold">From {data.transfers[0].from.name}</div>
-                      <div className="text-[11px] text-slate-500">
-                        {data.transfers[0].date}
-                        {data.transfers[0].type ? ` · ${data.transfers[0].type}` : ""}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2 text-xs">
+                      {data.transfers[0].from.logo ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={data.transfers[0].from.logo} alt="" className="h-5 w-5 object-contain" />
+                      ) : null}
+                      <div className="min-w-0">
+                        <div className="font-semibold truncate">
+                          {data.transfers[0].from.name} → {data.transfers[0].to.name}
+                        </div>
+                        <div className="text-[10px] text-slate-500">
+                          {data.transfers[0].date}
+                          {data.transfers[0].type ? ` · ${data.transfers[0].type}` : ""}
+                        </div>
                       </div>
                     </div>
+                    {(data.transfers.length > 1) && (
+                      <ul className="text-[10px] text-slate-500 space-y-0.5 max-h-16 overflow-y-auto">
+                        {data.transfers.slice(1, 5).map((tr, i) => (
+                          <li key={i} className="truncate">
+                            {tr.date.slice(0, 10)} · {tr.from.name} → {tr.to.name}
+                            {tr.type ? ` (${tr.type})` : ""}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                 ) : (
-                  <p className="text-xs text-slate-500">No transfer record from feed.</p>
+                  <p className="text-[11px] text-slate-500">No transfer record from feed.</p>
                 )}
               </Section>
 
-              <Section title="Current teams">
+              <Section title="Current club" dense>
                 <div className="flex items-center gap-2 text-xs">
                   {data?.clubLogoUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={data.clubLogoUrl} alt="" className="h-6 w-6 object-contain" />
+                    <img src={data.clubLogoUrl} alt="" className="h-5 w-5 object-contain" />
                   ) : null}
                   <div>
                     <div className="font-semibold">{p.club.name}</div>
-                    <div className="text-[11px] text-slate-500">
+                    <div className="text-[10px] text-slate-500">
                       Contract dates not in feed — honest empty.
                     </div>
                   </div>
                 </div>
               </Section>
 
-              <Section title="All-time team stats">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="text-[10px] uppercase text-slate-400 text-left">
-                      <th className="py-1 font-semibold">Team</th>
-                      <th className="py-1 font-semibold">App</th>
-                      <th className="py-1 font-semibold">G</th>
-                      <th className="py-1 font-semibold">A</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr className="border-t border-slate-100 dark:border-slate-800">
-                      <td className="py-1.5 font-medium">{p.club.name}</td>
-                      <td className="py-1.5">
-                        <span className="rounded bg-amber-100 dark:bg-amber-900/40 px-1.5 py-0.5 font-bold tabular-nums">
-                          {p.appearances || af?.games?.appearences || 0}
-                        </span>
-                      </td>
-                      <td className="py-1.5 tabular-nums font-semibold">
-                        {p.goals || af?.goals?.total || 0}
-                      </td>
-                      <td className="py-1.5 tabular-nums">
-                        {p.assists || af?.goals?.assists || 0}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-                {(p.seasonScorer || p.seasonKeeper) && (
-                  <p className="mt-2 text-[11px] text-slate-500">
-                    {p.seasonScorer
-                      ? `Season scorer #${p.seasonScorer.rank}: ${p.seasonScorer.goals}G ${p.seasonScorer.assists}A`
-                      : null}
-                    {p.seasonKeeper
-                      ? `Keeper #${p.seasonKeeper.rank}: ${p.seasonKeeper.cleanSheets} CS · ${p.seasonKeeper.saves} SV`
-                      : null}
-                  </p>
-                )}
-              </Section>
-
-              <Section title="Physical">
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <Fact label="Age" value={p.age != null ? String(p.age) : "—"} />
-                  <Fact label="Height" value={formatHeightValue(p.heightCm, heightUnit)} />
-                  <Fact label="Weight" value={formatWeightValue(p.weightKg, heightUnit)} />
-                  <Fact label="Foot" value={p.preferredFoot || "—"} />
-                  <Fact label="Born" value={p.birthDate || "—"} />
-                  <Fact label="Cards" value={`Y${p.yellowCards} R${p.redCards}`} />
-                </div>
-              </Section>
-
-              <Section title="Recent player form · last 5">
-                {(data?.recentForm?.length || 0) === 0 ? (
-                  <p className="text-xs text-slate-500">No recent form rows from feed.</p>
+              <Section title="All-time team stats" dense>
+                {(careerClubs.length ? careerClubs : []).length === 0 ? (
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-[10px] uppercase text-slate-400 text-left">
+                        <th className="py-0.5 font-semibold">Team</th>
+                        <th className="py-0.5 font-semibold">App</th>
+                        <th className="py-0.5 font-semibold">G</th>
+                        <th className="py-0.5 font-semibold">A</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="border-t border-slate-100 dark:border-slate-800">
+                        <td className="py-1 font-medium">{p.club.name}</td>
+                        <td className="py-1 tabular-nums font-bold">{p.appearances || 0}</td>
+                        <td className="py-1 tabular-nums font-semibold">{p.goals || 0}</td>
+                        <td className="py-1 tabular-nums">{p.assists || 0}</td>
+                      </tr>
+                    </tbody>
+                  </table>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-[10px]">
+                  <div className="overflow-x-auto max-h-40 overflow-y-auto">
+                    <table className="w-full text-xs">
                       <thead>
-                        <tr className="text-slate-400 uppercase text-left">
-                          <th className="py-1 pr-1">Date</th>
-                          <th className="py-1 pr-1">Opp</th>
-                          <th className="py-1 pr-1">W/D/L</th>
-                          <th className="py-1 pr-1">H/A</th>
-                          <th className="py-1 pr-1">Res</th>
-                          <th className="py-1 pr-1">Rtg</th>
-                          <th className="py-1 pr-1">XI</th>
-                          <th className="py-1 pr-1">Min</th>
-                          <th className="py-1 pr-1">G</th>
-                          <th className="py-1">A</th>
+                        <tr className="text-[10px] uppercase text-slate-400 text-left">
+                          <th className="py-0.5 font-semibold">Team</th>
+                          <th className="py-0.5 font-semibold">Seasons</th>
+                          <th className="py-0.5 font-semibold">App</th>
+                          <th className="py-0.5 font-semibold">G</th>
+                          <th className="py-0.5 font-semibold">A</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {(data?.recentForm || []).map((row, i) => (
-                          <tr key={i} className="border-t border-slate-100 dark:border-slate-800">
-                            <td className="py-1.5 pr-1 tabular-nums whitespace-nowrap">{(row.date || "").slice(5, 10)}</td>
-                            <td className="py-1.5 pr-1 max-w-[7rem] truncate">{row.opponent}</td>
-                            <td className="py-1.5 pr-1 font-bold">{row.result || "—"}</td>
-                            <td className="py-1.5 pr-1">{row.homeAway || "—"}</td>
-                            <td className="py-1.5 pr-1 tabular-nums">{row.score}</td>
-                            <td className="py-1.5 pr-1 tabular-nums">{row.rating || "—"}</td>
-                            <td className="py-1.5 pr-1">{row.started === true ? "XI" : row.started === false ? "SUB" : "—"}</td>
-                            <td className="py-1.5 pr-1 tabular-nums">{row.minutes ?? "—"}</td>
-                            <td className="py-1.5 pr-1 tabular-nums">{row.goals || "—"}</td>
-                            <td className="py-1.5 tabular-nums">{row.assists || "—"}</td>
+                        {careerClubs.filter((c) => c.apps > 0 || c.seasons.length > 0).slice(0, 8).map((c, i) => (
+                          <tr key={`${c.teamId ?? c.name}-${i}`} className="border-t border-slate-100 dark:border-slate-800">
+                            <td className="py-1 font-medium">
+                              <span className="inline-flex items-center gap-1.5">
+                                {c.logo ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img src={c.logo} alt="" className="h-4 w-4 object-contain" />
+                                ) : null}
+                                {c.name}
+                              </span>
+                            </td>
+                            <td className="py-1 text-[10px] text-slate-500 tabular-nums">
+                              {c.seasons.length
+                                ? c.seasons.length > 1
+                                  ? `${c.seasons[c.seasons.length - 1]}–${c.seasons[0]}`
+                                  : String(c.seasons[0])
+                                : "—"}
+                            </td>
+                            <td className="py-1">
+                              <span className="rounded bg-amber-100 dark:bg-amber-900/40 px-1 py-0.5 font-bold tabular-nums">
+                                {c.apps || "—"}
+                              </span>
+                            </td>
+                            <td className="py-1 tabular-nums font-semibold">{c.goals || "—"}</td>
+                            <td className="py-1 tabular-nums">{c.assists || "—"}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -802,96 +834,212 @@ export function PlayerDossier({
                 )}
               </Section>
 
+              <Section
+                title={
+                  currentSeasonBlock
+                    ? `Season ${currentSeasonBlock.season} · by competition`
+                    : "Season · by competition"
+                }
+                dense
+              >
+                {!currentSeasonBlock ? (
+                  <p className="text-[11px] text-slate-500">No season breakdown from feed.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-[11px]">
+                      <thead>
+                        <tr className="text-[9px] uppercase text-slate-400 text-left">
+                          <th className="py-0.5 font-semibold">Comp</th>
+                          <th className="py-0.5 font-semibold">App</th>
+                          <th className="py-0.5 font-semibold">G</th>
+                          <th className="py-0.5 font-semibold">A</th>
+                          <th className="py-0.5 font-semibold">Min</th>
+                          <th className="py-0.5 font-semibold">Rtg</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {currentSeasonBlock.competitions.map((row, i) => (
+                          <tr key={i} className="border-t border-slate-100 dark:border-slate-800">
+                            <td className="py-1 font-medium max-w-[9rem] truncate">{row.league}</td>
+                            <td className="py-1 tabular-nums">{row.apps ?? "—"}</td>
+                            <td className="py-1 tabular-nums font-semibold">{row.goals ?? "—"}</td>
+                            <td className="py-1 tabular-nums">{row.assists ?? "—"}</td>
+                            <td className="py-1 tabular-nums text-slate-500">{row.minutes ?? "—"}</td>
+                            <td className="py-1 tabular-nums">{formatRating(row.rating)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </Section>
+
+              <Section title="Physical" dense>
+                <div className="grid grid-cols-3 gap-1.5 text-xs">
+                  <Fact label="Age" value={p.age != null ? String(p.age) : "—"} />
+                  <Fact label="Height" value={formatHeightValue(p.heightCm, heightUnit)} />
+                  <Fact label="Weight" value={formatWeightValue(p.weightKg, heightUnit)} />
+                  <Fact
+                    label="Foot"
+                    value={
+                      p.preferredFoot
+                        ? formatFoot(p.preferredFoot) === "—"
+                          ? p.preferredFoot
+                          : formatFoot(p.preferredFoot)
+                        : "—"
+                    }
+                  />
+                  <Fact label="Born" value={p.birthDate || "—"} />
+                  <Fact label="Cards" value={`Y${p.yellowCards} R${p.redCards}`} />
+                </div>
+              </Section>
+
               {(data?.injuries?.length ?? 0) > 0 && (
-                <Section title="Sidelined" tone="rose">
-                  <ul className="space-y-1">
+                <Section title="Sidelined" tone="rose" dense>
+                  <ul className="space-y-0.5">
                     {(data?.injuries || []).map((inj) => (
                       <li key={inj.id} className="text-xs">
                         <span className="font-semibold">{inj.injuryType}</span>
                         <span className="text-slate-500"> · {inj.status}</span>
-                        {inj.expectedReturn ? (
-                          <span className="text-slate-500">
-                            {" "}
-                            · back {inj.expectedReturn}
-                          </span>
-                        ) : null}
                       </li>
                     ))}
                   </ul>
                 </Section>
               )}
+            </div>
+
+            <div className="space-y-2.5">
+              <Section title="Recent form · last 5" dense>
+                {(data?.recentForm?.length || 0) === 0 ? (
+                  <p className="text-[11px] text-slate-500">No recent form rows from feed.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-[10px]">
+                      <thead>
+                        <tr className="text-slate-400 uppercase text-left">
+                          <th className="py-0.5 pr-1">Date</th>
+                          <th className="py-0.5 pr-1">Opp</th>
+                          <th className="py-0.5 pr-1">R</th>
+                          <th className="py-0.5 pr-1">H/A</th>
+                          <th className="py-0.5 pr-1">Res</th>
+                          <th className="py-0.5 pr-1">Rtg</th>
+                          <th className="py-0.5 pr-1">XI</th>
+                          <th className="py-0.5 pr-1">Min</th>
+                          <th className="py-0.5 pr-1">G</th>
+                          <th className="py-0.5">A</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(data?.recentForm || []).map((row, i) => (
+                          <tr key={i} className="border-t border-slate-100 dark:border-slate-800">
+                            <td className="py-1 pr-1 tabular-nums whitespace-nowrap">{(row.date || "").slice(5, 10)}</td>
+                            <td className="py-1 pr-1 max-w-[6.5rem] truncate">{row.opponent}</td>
+                            <td className={cn(
+                              "py-1 pr-1 font-bold",
+                              row.result === "W" ? "text-emerald-600" : row.result === "L" ? "text-rose-600" : ""
+                            )}>{row.result || "—"}</td>
+                            <td className="py-1 pr-1">{row.homeAway || "—"}</td>
+                            <td className="py-1 pr-1 tabular-nums">{row.score}</td>
+                            <td className="py-1 pr-1 tabular-nums font-semibold">{row.rating ? formatRating(row.rating) : "—"}</td>
+                            <td className="py-1 pr-1">{row.started === true ? "XI" : row.started === false ? "SUB" : "—"}</td>
+                            <td className="py-1 pr-1 tabular-nums">{row.minutes ?? "—"}</td>
+                            <td className="py-1 pr-1 tabular-nums">{row.goals || "—"}</td>
+                            <td className="py-1 tabular-nums">{row.assists || "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </Section>
+
+              {/* Notes — compact, no giant void */}
+              <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 overflow-hidden flex flex-col">
+                <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 border-b border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-700 dark:text-slate-200">
+                    <BookOpen className="h-3.5 w-3.5" />
+                    Notes ({profileNotes.length})
+                  </div>
+                  <button
+                    type="button"
+                    className="text-[10px] font-semibold text-teal-700 dark:text-teal-300 hover:underline"
+                    onClick={() => setTab("notes")}
+                  >
+                    + Add
+                  </button>
+                </div>
+                <div className="p-2 space-y-1.5 max-h-[220px] overflow-y-auto">
+                  {profileNotes.length === 0 ? (
+                    <p className="text-[11px] text-slate-500 px-1 py-2 text-center">
+                      No notes yet — pack bios appear after generate.
+                    </p>
+                  ) : (
+                    profileNotes.slice(0, 6).map((n) => (
+                      <div
+                        key={n.id}
+                        className="rounded-lg border border-slate-200 dark:border-slate-800 border-l-[3px] border-l-sky-500 bg-slate-50/80 dark:bg-slate-900/40 px-2 py-1.5"
+                      >
+                        <div className="text-[11px] font-semibold truncate">
+                          {n.pinned ? "📌 " : ""}
+                          {n.title}
+                        </div>
+                        <p className="text-[10px] text-slate-600 dark:text-slate-400 mt-0.5 line-clamp-3 whitespace-pre-wrap">
+                          {n.body}
+                        </p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
 
               {data?.afStub && !/TURBOPACK|prisma|at\s+\S+/i.test(data.afStub) && (
-                <p className="text-[10px] text-slate-500 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/40 px-2 py-1.5">
+                <p className="text-[10px] text-slate-500 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/40 px-2 py-1">
                   {data.afStub}
                 </p>
               )}
-            </div>
-
-            {/* Notes panel — dossier right column */}
-            <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 overflow-hidden flex flex-col min-h-[280px]">
-              <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-slate-100 dark:border-slate-800">
-                <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-700 dark:text-slate-200">
-                  <BookOpen className="h-3.5 w-3.5" />
-                  Notes
-                </div>
-                <div className="flex items-center gap-2 text-[10px] text-slate-500">
-                  <span>Favorites (0)</span>
-                  <button
-                    type="button"
-                    className="font-semibold text-teal-700 dark:text-teal-300 hover:underline"
-                    onClick={() => setTab("notes")}
-                  >
-                    + Add Note
-                  </button>
-                </div>
-              </div>
-              <div className="p-2 space-y-2 flex-1 overflow-y-auto max-h-[420px]">
-                {profileNotes.length === 0 ? (
-                  <p className="text-xs text-slate-500 px-1 py-4 text-center">
-                    No player notes yet — pack bios/hooks appear here after generate.
-                  </p>
-                ) : (
-                  profileNotes.slice(0, 8).map((n) => (
-                    <div
-                      key={n.id}
-                      className="rounded-lg border border-slate-200 dark:border-slate-800 border-l-[3px] border-l-sky-500 bg-slate-50/80 dark:bg-slate-900/40 px-2.5 py-2"
-                    >
-                      <div className="text-xs font-semibold truncate">
-                        {n.pinned ? "📌 " : ""}
-                        {n.title}
-                      </div>
-                      <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5 line-clamp-4 whitespace-pre-wrap">
-                        {n.body}
-                      </p>
-                      <div className="mt-1.5 flex items-center gap-2">
-                        <span className="rounded bg-sky-600 text-white text-[9px] font-bold px-1.5 py-px">
-                          Player
-                        </span>
-                        <span className="text-[9px] text-slate-400">
-                          {n.category || "Note"}
-                        </span>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
             </div>
           </div>
         )}
 
         {p && tab === "today" && (
-          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-3">
-            <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-2">
-              Player vs opponent · {lastNameOf(p.name)}
-              {data?.opponentClub ? ` vs ${data.opponentClub.name}` : ""}
+          <div className="space-y-2.5">
+            {(() => {
+              const mps = data?.matchPlayerStats as any;
+              return (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {[
+                    ["Rating", mps?.games?.rating != null ? formatRating(mps.games.rating) : "—"],
+                    ["Minutes", mps?.games?.minutes ?? "—"],
+                    ["Goals", mps?.goals?.total ?? "—"],
+                    ["Assists", mps?.goals?.assists ?? "—"],
+                    ["Shots", mps?.shots?.total ?? "—"],
+                    ["SoT", mps?.shots?.on ?? "—"],
+                    ["Key pass", mps?.passes?.key ?? "—"],
+                    ["Tackles", mps?.tackles?.total ?? "—"],
+                  ].map(([label, val]) => (
+                    <div key={label as string} className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 px-2.5 py-2 text-center">
+                      <div className="text-[9px] font-bold uppercase text-slate-400">{label}</div>
+                      <div className="text-lg font-black tabular-nums">{val as any}</div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+            {!data?.matchPlayerStats ? (
+              <p className="text-[11px] text-slate-500">Match metrics not in feed yet — events below still update live.</p>
+            ) : null}
+            <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-2.5">
+              <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-2">
+                Events · {lastNameOf(p.name)}
+                {data?.opponentClub ? ` vs ${data.opponentClub.name}` : ""}
+              </div>
+              <EventTimeline
+                events={data?.events || []}
+                compact
+                emptyLabel="No match events for this player yet."
+                maxHeightClass="max-h-[50vh]"
+              />
             </div>
-            <EventTimeline
-              events={data?.events || []}
-              compact
-              emptyLabel="No match events for this player yet."
-              maxHeightClass="max-h-[60vh]"
-            />
           </div>
         )}
 
@@ -943,12 +1091,44 @@ export function PlayerDossier({
             ) : (
               <p className="text-xs text-slate-500">Match-level metrics not in feed for this player yet.</p>
             )}
-            {afRows.length === 0 && !p.seasonScorer && !p.seasonKeeper && !data?.matchPlayerStats && (
+            {currentSeasonBlock && (
+              <Section title={`Season ${currentSeasonBlock.season} · competitions`} dense>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-[10px] uppercase text-slate-400 text-left">
+                        <th className="py-1 font-semibold">Comp</th>
+                        <th className="py-1 font-semibold">Team</th>
+                        <th className="py-1 font-semibold">App</th>
+                        <th className="py-1 font-semibold">G</th>
+                        <th className="py-1 font-semibold">A</th>
+                        <th className="py-1 font-semibold">Min</th>
+                        <th className="py-1 font-semibold">Rtg</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {currentSeasonBlock.competitions.map((row, i) => (
+                        <tr key={i} className="border-t border-slate-100 dark:border-slate-800">
+                          <td className="py-1.5 font-medium">{row.league}</td>
+                          <td className="py-1.5 text-slate-600 dark:text-slate-300">{row.team}</td>
+                          <td className="py-1.5 tabular-nums">{row.apps ?? "—"}</td>
+                          <td className="py-1.5 tabular-nums font-semibold">{row.goals ?? "—"}</td>
+                          <td className="py-1.5 tabular-nums">{row.assists ?? "—"}</td>
+                          <td className="py-1.5 tabular-nums text-slate-500">{row.minutes ?? "—"}</td>
+                          <td className="py-1.5 tabular-nums">{formatRating(row.rating)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Section>
+            )}
+            {afRows.length === 0 && !currentSeasonBlock && !p.seasonScorer && !p.seasonKeeper && !data?.matchPlayerStats && (
               <p className="text-xs text-slate-500">
                 No season stats yet — Sync to load from feed.
               </p>
             )}
-            {afRows.map((row, i) => (
+            {afRows.length > 0 && !currentSeasonBlock && afRows.map((row, i) => (
               <div
                 key={i}
                 className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-3 text-xs space-y-1"
@@ -983,7 +1163,7 @@ export function PlayerDossier({
         )}
 
         {p && tab === "career" && (
-          <div className="grid md:grid-cols-[200px_1fr] gap-3 min-h-[280px]">
+          <div className="grid md:grid-cols-[200px_1fr] gap-2.5 min-h-0">
             <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 overflow-hidden">
               <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 text-[10px] font-bold uppercase tracking-wide text-slate-400">
                 Clubs
@@ -1227,15 +1407,18 @@ function Section({
   title,
   children,
   tone,
+  dense,
 }: {
   title: string;
   children: ReactNode;
   tone?: "rose";
+  dense?: boolean;
 }) {
   return (
     <div
       className={cn(
-        "rounded-xl border p-3 bg-white dark:bg-slate-950",
+        "rounded-xl border bg-white dark:bg-slate-950",
+        dense ? "p-2.5" : "p-3",
         tone === "rose"
           ? "border-rose-200 dark:border-rose-900/50 bg-rose-50/60 dark:bg-rose-950/20"
           : "border-slate-200 dark:border-slate-800"
@@ -1243,7 +1426,8 @@ function Section({
     >
       <div
         className={cn(
-          "text-[10px] font-bold uppercase tracking-wide mb-2",
+          "text-[10px] font-bold uppercase tracking-wide",
+          dense ? "mb-1.5" : "mb-2",
           tone === "rose"
             ? "text-rose-600 dark:text-rose-300"
             : "text-slate-400"

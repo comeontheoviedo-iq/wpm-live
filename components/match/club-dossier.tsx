@@ -370,7 +370,7 @@ export function ClubDossier({
               )}
             </div>
 
-            <div className="rounded-xl border bg-white dark:bg-slate-950 overflow-hidden flex flex-col min-h-[280px]">
+            <div className="rounded-xl border bg-white dark:bg-slate-950 overflow-hidden flex flex-col min-h-[160px] max-h-[420px]">
               <div className="flex items-center gap-1.5 px-3 py-2 border-b text-xs font-bold uppercase tracking-wide">
                 <BookOpen className="h-3.5 w-3.5" /> Notes
               </div>
@@ -394,8 +394,8 @@ export function ClubDossier({
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-3">
-      <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-2">{title}</div>
+    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-2.5">
+      <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1.5">{title}</div>
       {children}
     </div>
   );

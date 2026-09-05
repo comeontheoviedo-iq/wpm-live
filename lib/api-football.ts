@@ -991,6 +991,8 @@ export type AfTopScorer = {
     height?: string;
     weight?: string;
     photo?: string;
+    /** Present on some AF plans / players; often absent. */
+    foot?: string | null;
     birth?: { date?: string | null; place?: string | null; country?: string | null };
   };
   statistics: {
@@ -1246,13 +1248,174 @@ export async function getCoachSidelined(coachId: number) {
   return afFetch<AfSidelinedRow[]>("/sidelined", { coach: coachId }, 300_000);
 }
 
-/** Recent fixtures involving a player (AF /fixtures?player=&last=). Soft-fail empty. */
+/**
+ * AF `/fixtures?player=` is unsupported on current plans ("Player field do not exist").
+ * Soft-fail empty — callers should prefer getPlayerFormViaTeam.
+ */
 export async function getPlayerRecentFixtures(playerId: number, last = 8) {
-  return afFetch<AfFixture[]>(
-    "/fixtures",
-    { player: playerId, last },
-    120_000
+  try {
+    return await afFetch<AfFixture[]>(
+      "/fixtures",
+      { player: playerId, last },
+      60_000
+    );
+  } catch {
+    return [];
+  }
+}
+
+export type AfPlayerProfile = {
+  player: {
+    id: number;
+    name: string;
+    firstname?: string;
+    lastname?: string;
+    age?: number | null;
+    nationality?: string | null;
+    height?: string | null;
+    weight?: string | null;
+    photo?: string | null;
+    number?: number | null;
+    position?: string | null;
+    foot?: string | null;
+    birth?: { date?: string | null; place?: string | null; country?: string | null };
+  };
+};
+
+/** AF /players/profiles — static bio; may include foot when AF has it. */
+export async function getPlayerProfile(playerId: number) {
+  const list = await afFetch<AfPlayerProfile[]>(
+    "/players/profiles",
+    { player: playerId },
+    300_000
   );
+  return list[0] || null;
+}
+
+export type PlayerFormRow = {
+  fixtureId: number;
+  date: string;
+  opponent: string;
+  opponentLogo?: string | null;
+  league?: string | null;
+  leagueLogo?: string | null;
+  result: "W" | "D" | "L" | null;
+  homeAway: "H" | "A" | null;
+  score: string;
+  rating: string | null;
+  started: boolean | null;
+  minutes: number | null;
+  goals: number | null;
+  assists: number | null;
+  yellow: number | null;
+  red: number | null;
+  played: boolean;
+};
+
+/**
+ * Last-N form for a player via club team fixtures + /fixtures/players.
+ * (Direct /fixtures?player= is not available on free/current plan.)
+ */
+export async function getPlayerFormViaTeam(
+  playerId: number,
+  teamId: number,
+  last = 6
+): Promise<PlayerFormRow[]> {
+  const fixtures = await getTeamRecentFinished(teamId, Math.max(last + 4, 10));
+  const out: PlayerFormRow[] = [];
+  const slice = fixtures.slice(0, Math.max(last + 4, 8));
+  const packs = await Promise.all(
+    slice.map(async (fx) => {
+      try {
+        const fp = await getFixturePlayers(fx.fixture.id);
+        return { fx, fp };
+      } catch {
+        return { fx, fp: null as Awaited<ReturnType<typeof getFixturePlayers>> | null };
+      }
+    })
+  );
+  for (const { fx, fp } of packs) {
+    const home = fx.teams?.home;
+    const away = fx.teams?.away;
+    const gh = fx.goals?.home;
+    const ga = fx.goals?.away;
+    let homeAway: "H" | "A" | null =
+      home?.id === teamId ? "H" : away?.id === teamId ? "A" : null;
+    let opponent = "—";
+    let opponentLogo: string | null = null;
+    let result: "W" | "D" | "L" | null = null;
+    if (homeAway === "H") {
+      opponent = away?.name || "—";
+      opponentLogo = away?.logo || null;
+      if (gh != null && ga != null) result = gh > ga ? "W" : gh < ga ? "L" : "D";
+    } else if (homeAway === "A") {
+      opponent = home?.name || "—";
+      opponentLogo = home?.logo || null;
+      if (gh != null && ga != null) result = ga > gh ? "W" : ga < gh ? "L" : "D";
+    }
+    let rating: string | null = null;
+    let started: boolean | null = null;
+    let minutes: number | null = null;
+    let goals: number | null = null;
+    let assists: number | null = null;
+    let yellow: number | null = null;
+    let red: number | null = null;
+    let played = false;
+    if (fp) {
+      for (const teamBlock of fp) {
+        for (const pl of teamBlock.players || []) {
+          if (pl.player?.id !== playerId) continue;
+          played = true;
+          const st = pl.statistics?.[0];
+          rating = st?.games?.rating != null ? String(st.games.rating) : null;
+          if (st?.games?.substitute === true) started = false;
+          else if (st?.games?.substitute === false) started = true;
+          else if (st?.games?.minutes != null) started = true;
+          minutes = st?.games?.minutes ?? null;
+          goals = st?.goals?.total ?? null;
+          assists = st?.goals?.assists ?? null;
+          yellow = st?.cards?.yellow ?? null;
+          red = st?.cards?.red ?? null;
+          if (teamBlock.team?.id === home?.id) homeAway = "H";
+          if (teamBlock.team?.id === away?.id) homeAway = "A";
+          if (gh != null && ga != null && homeAway) {
+            if (homeAway === "H") result = gh > ga ? "W" : gh < ga ? "L" : "D";
+            else result = ga > gh ? "W" : ga < gh ? "L" : "D";
+            opponent = homeAway === "H" ? away?.name || "—" : home?.name || "—";
+            opponentLogo =
+              homeAway === "H" ? away?.logo || null : home?.logo || null;
+          }
+        }
+      }
+    }
+    // Prefer appearances; still record DNP rows until we have `last` played rows
+    if (!played && out.filter((r) => r.played).length >= last) continue;
+    out.push({
+      fixtureId: fx.fixture.id,
+      date: fx.fixture?.date || "",
+      opponent,
+      opponentLogo,
+      league: fx.league?.name || null,
+      leagueLogo: (fx.league as { logo?: string } | undefined)?.logo || null,
+      result,
+      homeAway,
+      score: gh != null && ga != null ? `${gh}-${ga}` : "—",
+      rating,
+      started,
+      minutes,
+      goals,
+      assists,
+      yellow,
+      red,
+      played,
+    });
+    if (out.filter((r) => r.played).length >= last) break;
+    if (out.length >= last + 2) break;
+  }
+  // Prefer played rows first, cap at `last`
+  const played = out.filter((r) => r.played);
+  if (played.length >= last) return played.slice(0, last);
+  return out.slice(0, last);
 }
 
 export type AfFixturePlayerStat = {

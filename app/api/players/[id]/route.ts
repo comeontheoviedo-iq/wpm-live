@@ -7,7 +7,8 @@ import {
   getPlayerTeams,
   getPlayerTransfers,
   getPlayerSidelined,
-  getPlayerRecentFixtures,
+  getPlayerFormViaTeam,
+  getPlayerProfile,
   getFixturePlayers,
   getPlayerTrophies,
 } from "@/lib/api-football";
@@ -248,42 +249,72 @@ export async function GET(
           ),
         ]);
 
-      // Stable call path (avoid turbopack-stale bindings bubbling raw errors)
       const afId = player.apiFootballPlayerId;
-      let rows = await withTimeout(getPlayerById(afId, season), 4000);
+      const clubAf = player.club.apiFootballTeamId;
+
+      // Parallel soft fetches — never fail the dossier for enrichments
+      const [profileRes, teamsRes, transfersRes, sidelinedRes, trophiesRes, formRes, curSeasonRes] =
+        await Promise.all([
+          withTimeout(getPlayerProfile(afId), 3500).catch(() => null),
+          withTimeout(getPlayerTeams(afId), 3500).catch(() => [] as Awaited<ReturnType<typeof getPlayerTeams>>),
+          withTimeout(getPlayerTransfers(afId), 3500).catch(() => []),
+          withTimeout(getPlayerSidelined(afId), 3000).catch(() => []),
+          withTimeout(getPlayerTrophies(afId), 3000).catch(() => []),
+          clubAf
+            ? withTimeout(getPlayerFormViaTeam(afId, clubAf, 5), 9000).catch(() => [])
+            : Promise.resolve([]),
+          withTimeout(getPlayerById(afId, season), 4000).catch(() => null),
+        ]);
+
+      let rows = curSeasonRes;
       if (!rows?.[0]) {
-        rows = await withTimeout(getPlayerById(afId, season - 1), 3000);
+        rows = await withTimeout(getPlayerById(afId, season - 1), 3000).catch(() => null);
       }
       afStats = rows?.[0] || null;
-      if (!afStats) {
+
+      const profilePlayer = profileRes?.player || null;
+      const rowPlayer = (rows?.[0] as { player?: Record<string, unknown> } | null)?.player || null;
+
+      if (!afStats && !profilePlayer) {
         afStub = "Stats temporarily unavailable";
       } else {
-        const row = rows[0] as {
-          player?: {
-            photo?: string;
-            height?: string;
-            weight?: string;
-            nationality?: string;
-            age?: number;
-            birth?: { date?: string; country?: string | null };
-          };
-          statistics?: AfStatRow[];
-        };
         const patch: Record<string, unknown> = {};
-        if (row.player?.photo && !player.photoUrl) patch.photoUrl = row.player.photo;
-        const h = parseCm(row.player?.height);
+        const photo =
+          (rowPlayer?.photo as string | undefined) ||
+          profilePlayer?.photo ||
+          null;
+        if (photo && !player.photoUrl) patch.photoUrl = photo;
+        const h = parseCm(
+          (rowPlayer?.height as string | undefined) || profilePlayer?.height || null
+        );
         if (h && !player.heightCm) patch.heightCm = h;
-        const w = parseKg(row.player?.weight);
+        const w = parseKg(
+          (rowPlayer?.weight as string | undefined) || profilePlayer?.weight || null
+        );
         if (w && !player.weightKg) patch.weightKg = w;
-        if (row.player?.birth?.date && !player.birthDate)
-          patch.birthDate = row.player.birth.date;
-        const birthCountry = row.player?.birth?.country?.trim() || null;
+        const birthDate =
+          (rowPlayer?.birth as { date?: string } | undefined)?.date ||
+          profilePlayer?.birth?.date ||
+          null;
+        if (birthDate && !player.birthDate) patch.birthDate = birthDate;
+        const birthCountry =
+          (rowPlayer?.birth as { country?: string | null } | undefined)?.country?.trim() ||
+          profilePlayer?.birth?.country?.trim() ||
+          null;
         if (birthCountry && player.birthCountry !== birthCountry)
           patch.birthCountry = birthCountry;
-        const afNat = row.player?.nationality?.trim() || null;
+        const footRaw =
+          (rowPlayer?.foot as string | undefined) ||
+          (profilePlayer?.foot as string | undefined) ||
+          null;
+        if (footRaw && !player.preferredFoot) patch.preferredFoot = footRaw;
+        const afNat =
+          ((rowPlayer?.nationality as string | undefined) ||
+            profilePlayer?.nationality ||
+            "").trim() || null;
         let nt: string | null = null;
         let bestApps = 0;
-        for (const s of row.statistics || []) {
+        for (const s of ((rows?.[0] as { statistics?: AfStatRow[] } | null)?.statistics || [])) {
           const teamName = s.team?.name?.trim();
           if (!teamName) continue;
           if (
@@ -311,18 +342,36 @@ export async function GET(
           if (cur === "" || cur === "ENG" || cur === "UNK" || player.nationality !== nat)
             patch.nationality = nat;
         }
-        if (row.player?.age && !player.age) patch.age = row.player.age;
-        const af = row.statistics?.[0];
+        const age =
+          (rowPlayer?.age as number | undefined) || profilePlayer?.age || null;
+        if (age && !player.age) patch.age = age;
+        const statsAll =
+          ((rows?.[0] as { statistics?: AfStatRow[] } | null)?.statistics || []);
+        const clubStats = clubAf
+          ? statsAll.filter((s) => s.team?.id === clubAf)
+          : statsAll;
+        const pickPool = clubStats.length ? clubStats : statsAll;
+        // Prefer domestic league row for headline rating; else first club row
+        const af =
+          pickPool.find((s) =>
+            /premier league|la liga|serie a|bundesliga|ligue 1|championship|eredivisie|liga portugal|süper lig|super lig|scottish premiership/i.test(
+              s.league?.name || ""
+            )
+          ) || pickPool[0];
         const rt = af?.games?.rating;
         if (rt != null && rt !== "") {
           const n = Number(rt);
           if (Number.isFinite(n)) patch.rating = n;
         }
-        if (af?.games?.appearences != null && !player.appearances)
-          patch.appearances = af.games.appearences;
-        if (af?.goals?.total != null && !player.goals) patch.goals = af.goals.total;
-        if (af?.goals?.assists != null && !player.assists)
-          patch.assists = af.goals.assists;
+        // Season totals for current club across competitions (overwrite thin sync tallies)
+        if (pickPool.length) {
+          const apps = pickPool.reduce((n, s) => n + (s.games?.appearences ?? 0), 0);
+          const goals = pickPool.reduce((n, s) => n + (s.goals?.total ?? 0), 0);
+          const assists = pickPool.reduce((n, s) => n + (s.goals?.assists ?? 0), 0);
+          if (apps > 0) patch.appearances = apps;
+          patch.goals = goals;
+          patch.assists = assists;
+        }
         if (Object.keys(patch).length) {
           player = await prisma.player.update({
             where: { id: player.id },
@@ -336,41 +385,48 @@ export async function GET(
         }
       }
 
-      // Career: clubs list + a few recent seasons (live AF, short timeouts)
-      const teams = await withTimeout(getPlayerTeams(afId), 3500).catch(() => []);
-      const seasonYears = [
-        season,
-        season - 1,
-        season - 2,
-        season - 3,
-        season - 4,
-      ];
+      const teams = teamsRes || [];
+      // Career seasons: union of team seasons + current, newest first, cap ~10
+      const yearSet = new Set<number>([season, season - 1]);
+      for (const t of teams) {
+        for (const y of t.seasons || []) {
+          if (typeof y === "number" && y >= season - 9) yearSet.add(y);
+        }
+      }
+      const seasonYears = [...yearSet].sort((a, b) => b - a).slice(0, 8);
       const seasonRows: { season: number; statistics: AfStatRow[] }[] = [];
-      // Current season already fetched; reuse when present
-      if (rows?.[0]?.statistics) {
+      if (rows?.[0]?.statistics?.length) {
         seasonRows.push({
           season,
           statistics: (rows[0].statistics || []) as AfStatRow[],
         });
       }
-      for (const y of seasonYears) {
-        if (seasonRows.some((s) => s.season === y)) continue;
-        const block = await withTimeout(getPlayerById(afId, y), 2500).catch(
-          () => null
+
+      const missingYears = seasonYears.filter((y) => !seasonRows.some((s) => s.season === y));
+      // Batch to avoid AF rate spikes; prefer newest seasons first
+      for (let i = 0; i < missingYears.length; i += 4) {
+        const chunk = missingYears.slice(i, i + 4);
+        const fetched = await Promise.all(
+          chunk.map(async (y) => {
+            const block = await withTimeout(getPlayerById(afId, y), 3500).catch(() => null);
+            if (block?.[0]?.statistics?.length) {
+              return {
+                season: y,
+                statistics: block[0].statistics as AfStatRow[],
+              };
+            }
+            return null;
+          })
         );
-        if (block?.[0]?.statistics?.length) {
-          seasonRows.push({
-            season: y,
-            statistics: block[0].statistics as AfStatRow[],
-          });
+        for (const b of fetched) {
+          if (b && !seasonRows.some((s) => s.season === b.season)) seasonRows.push(b);
         }
       }
 
-      // Soft enrichments — never fail the dossier for these
+      // Transfers
       try {
-        const tr = await withTimeout(getPlayerTransfers(afId), 3000).catch(() => []);
         const flat: typeof transfers = [];
-        for (const row of tr || []) {
+        for (const row of transfersRes || []) {
           for (const x of row.transfers || []) {
             flat.push({
               date: x.date || "",
@@ -394,123 +450,40 @@ export async function GET(
           .slice(0, 12);
       } catch { /* soft */ }
 
-      try {
-        const sid = await withTimeout(getPlayerSidelined(afId), 2500).catch(() => []);
-        afSidelined = (sid || [])
-          .map((s) => ({
-            type: s.type || "Sidelined",
-            start: s.start || null,
-            end: s.end || null,
-          }))
-          .slice(0, 20);
-      } catch { /* soft */ }
+      afSidelined = (sidelinedRes || [])
+        .map((s) => ({
+          type: s.type || "Sidelined",
+          start: s.start || null,
+          end: s.end || null,
+        }))
+        .slice(0, 20);
 
-      try {
-        const trop = await withTimeout(getPlayerTrophies(afId), 2500).catch(() => []);
-        trophies = (trop || [])
-          .map((x) => ({
-            league: x.league || "Trophy",
-            country: x.country || null,
-            season: x.season || null,
-            place: x.place || null,
-          }))
-          .slice(0, 40);
-      } catch { /* soft */ }
+      trophies = (trophiesRes || [])
+        .map((x) => ({
+          league: x.league || "Trophy",
+          country: x.country || null,
+          season: x.season || null,
+          place: x.place || null,
+        }))
+        .slice(0, 40);
 
-      try {
-        const fxList = await withTimeout(getPlayerRecentFixtures(afId, 6), 3500).catch(
-          () => []
-        );
-        const finished = (fxList || [])
-          .filter((fx) =>
-            /FT|AET|PEN/i.test(fx.fixture?.status?.short || "")
-          )
-          .slice(0, 5);
-        for (const fx of finished) {
-          const home = fx.teams?.home;
-          const away = fx.teams?.away;
-          const gh = fx.goals?.home;
-          const ga = fx.goals?.away;
-          // Determine player's side via team id match against career clubs / current club later — use events soft
-          let homeAway: "H" | "A" | null = null;
-          let result: "W" | "D" | "L" | null = null;
-          let opponent = "—";
-          let opponentLogo: string | null = null;
-          // Prefer matching club AF id
-          const clubAf = player.club.apiFootballTeamId;
-          if (clubAf && home?.id === clubAf) {
-            homeAway = "H";
-            opponent = away?.name || "—";
-            opponentLogo = away?.logo || null;
-            if (gh != null && ga != null) {
-              result = gh > ga ? "W" : gh < ga ? "L" : "D";
-            }
-          } else if (clubAf && away?.id === clubAf) {
-            homeAway = "A";
-            opponent = home?.name || "—";
-            opponentLogo = home?.logo || null;
-            if (gh != null && ga != null) {
-              result = ga > gh ? "W" : ga < gh ? "L" : "D";
-            }
-          } else {
-            opponent = `${home?.name || "?"} vs ${away?.name || "?"}`;
-          }
-          let rating: string | null = null;
-          let started: boolean | null = null;
-          let minutes: number | null = null;
-          let goals: number | null = null;
-          let assists: number | null = null;
-          let yellow: number | null = null;
-          let red: number | null = null;
-          try {
-            const fp = await withTimeout(getFixturePlayers(fx.fixture.id), 2500).catch(
-              () => null
-            );
-            if (fp) {
-              for (const teamBlock of fp) {
-                for (const pl of teamBlock.players || []) {
-                  if (pl.player?.id !== afId) continue;
-                  const st = pl.statistics?.[0];
-                  rating = st?.games?.rating != null ? String(st.games.rating) : null;
-                  started = st?.games?.substitute === true ? false : st?.games?.minutes != null ? true : null;
-                  if (st?.games?.substitute === false) started = true;
-                  minutes = st?.games?.minutes ?? null;
-                  goals = st?.goals?.total ?? null;
-                  assists = st?.goals?.assists ?? null;
-                  yellow = st?.cards?.yellow ?? null;
-                  red = st?.cards?.red ?? null;
-                  if (teamBlock.team?.id === home?.id) homeAway = "H";
-                  if (teamBlock.team?.id === away?.id) homeAway = "A";
-                  if (gh != null && ga != null && homeAway) {
-                    if (homeAway === "H") result = gh > ga ? "W" : gh < ga ? "L" : "D";
-                    else result = ga > gh ? "W" : ga < gh ? "L" : "D";
-                    opponent = homeAway === "H" ? away?.name || "—" : home?.name || "—";
-                    opponentLogo = homeAway === "H" ? away?.logo || null : home?.logo || null;
-                  }
-                }
-              }
-            }
-          } catch { /* soft */ }
-          recentForm.push({
-            date: fx.fixture?.date || "",
-            opponent,
-            opponentLogo,
-            league: fx.league?.name || null,
-            leagueLogo: (fx.league as { logo?: string } | undefined)?.logo || null,
-            result,
-            homeAway,
-            score:
-              gh != null && ga != null ? `${gh}-${ga}` : "—",
-            rating,
-            started,
-            minutes,
-            goals,
-            assists,
-            yellow,
-            red,
-          });
-        }
-      } catch { /* soft */ }
+      recentForm = (formRes || []).map((row) => ({
+        date: row.date,
+        opponent: row.opponent,
+        opponentLogo: row.opponentLogo,
+        league: row.league,
+        leagueLogo: row.leagueLogo,
+        result: row.result,
+        homeAway: row.homeAway,
+        score: row.score,
+        rating: row.rating,
+        started: row.started,
+        minutes: row.minutes,
+        goals: row.goals,
+        assists: row.assists,
+        yellow: row.yellow,
+        red: row.red,
+      }));
 
       if (matchId) {
         try {
@@ -547,7 +520,6 @@ export async function GET(
         } catch { /* soft */ }
       }
 
-
       careerClubs = aggregateCareer(teams || [], seasonRows);
       careerSeasons = seasonRows
         .map((block) => ({
@@ -576,6 +548,10 @@ export async function GET(
   } else {
     afStub = "Stats temporarily unavailable";
   }
+
+  const lastGoal =
+    recentForm.find((r) => (r.goals || 0) > 0) ||
+    null;
 
   const photoUrl =
     player.photoUrl ||
@@ -649,6 +625,15 @@ export async function GET(
       seasons: careerSeasons,
     },
     recentForm,
+    lastGoal: lastGoal
+      ? {
+          date: lastGoal.date,
+          opponent: lastGoal.opponent,
+          score: lastGoal.score,
+          goals: lastGoal.goals,
+          homeAway: lastGoal.homeAway,
+        }
+      : null,
     transfers,
     afSidelined,
     matchPlayerStats,

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { europeanSeasonYear } from "@/lib/season";
-import { getPlayerById } from "@/lib/api-football";
+import { getPlayerById, getPlayerTeams } from "@/lib/api-football";
 import { nationalityToIso } from "@/lib/flags";
 
 function parseCm(h?: string | null) {
@@ -14,6 +14,113 @@ function parseKg(w?: string | null) {
   if (!w) return null;
   const m = String(w).match(/(\d+)/);
   return m ? Number(m[1]) : null;
+}
+
+/** Never leak turbopack / stack / prisma internals to the client. */
+function friendlyAfStub(e: unknown): string {
+  const raw = e instanceof Error ? e.message : String(e || "");
+  if (
+    /TURBOPACK|__TURBOPACK__|prisma|stack|at\s+\S+\s+\(/i.test(raw) ||
+    raw.length > 160
+  ) {
+    return "Stats temporarily unavailable";
+  }
+  if (/timeout/i.test(raw)) return "Stats temporarily unavailable";
+  if (/not\s+set|API_FOOTBALL/i.test(raw)) return "Stats temporarily unavailable";
+  return "Stats temporarily unavailable";
+}
+
+type AfStatRow = {
+  team?: { id?: number; name?: string; logo?: string } | null;
+  league?: {
+    id?: number;
+    name?: string;
+    country?: string | null;
+    season?: number;
+  } | null;
+  games?: {
+    appearences?: number | null;
+    lineups?: number | null;
+    minutes?: number | null;
+    position?: string | null;
+    rating?: string | number | null;
+  };
+  goals?: {
+    total?: number | null;
+    assists?: number | null;
+    saves?: number | null;
+    conceded?: number | null;
+  };
+  cards?: { yellow?: number | null; red?: number | null };
+};
+
+type CareerClub = {
+  teamId: number | null;
+  name: string;
+  logo?: string | null;
+  seasons: number[];
+  apps: number;
+  goals: number;
+  assists: number;
+};
+
+function aggregateCareer(
+  teams: { team: { id: number; name: string; logo?: string }; seasons: number[] }[],
+  seasonRows: { season: number; statistics: AfStatRow[] }[]
+): CareerClub[] {
+  const byId = new Map<number, CareerClub>();
+  for (const t of teams) {
+    byId.set(t.team.id, {
+      teamId: t.team.id,
+      name: t.team.name,
+      logo: t.team.logo || null,
+      seasons: [...(t.seasons || [])].sort((a, b) => b - a),
+      apps: 0,
+      goals: 0,
+      assists: 0,
+    });
+  }
+  for (const block of seasonRows) {
+    for (const s of block.statistics || []) {
+      const id = s.team?.id;
+      const name = s.team?.name?.trim();
+      if (!name) continue;
+      const key = id ?? -Math.abs(hashName(name));
+      let row = id != null ? byId.get(id) : undefined;
+      if (!row) {
+        row = {
+          teamId: id ?? null,
+          name,
+          logo: s.team?.logo || null,
+          seasons: [],
+          apps: 0,
+          goals: 0,
+          assists: 0,
+        };
+        if (id != null) byId.set(id, row);
+        else byId.set(key, row);
+      }
+      if (block.season && !row.seasons.includes(block.season)) {
+        row.seasons.push(block.season);
+        row.seasons.sort((a, b) => b - a);
+      }
+      row.apps += s.games?.appearences ?? 0;
+      row.goals += s.goals?.total ?? 0;
+      row.assists += s.goals?.assists ?? 0;
+    }
+  }
+  return [...byId.values()].sort((a, b) => {
+    const sa = a.seasons[0] ?? 0;
+    const sb = b.seasons[0] ?? 0;
+    if (sb !== sa) return sb - sa;
+    return b.apps - a.apps;
+  });
+}
+
+function hashName(s: string) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return h;
 }
 
 export async function GET(
@@ -75,6 +182,21 @@ export async function GET(
 
   let afStats: unknown = null;
   let afStub: string | null = null;
+  let careerClubs: CareerClub[] = [];
+  let careerSeasons: {
+    season: number;
+    competitions: {
+      league: string;
+      country?: string | null;
+      team: string;
+      apps: number | null;
+      goals: number | null;
+      assists: number | null;
+      minutes: number | null;
+      rating: string | number | null;
+    }[];
+  }[] = [];
+
   if (player.apiFootballPlayerId) {
     try {
       const season = europeanSeasonYear(new Date());
@@ -85,19 +207,16 @@ export async function GET(
             setTimeout(() => rej(new Error("AF player stats timeout")), ms)
           ),
         ]);
-      let rows = await withTimeout(
-        getPlayerById(player.apiFootballPlayerId, season),
-        3500
-      );
+
+      // Stable call path (avoid turbopack-stale bindings bubbling raw errors)
+      const afId = player.apiFootballPlayerId;
+      let rows = await withTimeout(getPlayerById(afId, season), 4000);
       if (!rows?.[0]) {
-        rows = await withTimeout(
-          getPlayerById(player.apiFootballPlayerId, season - 1),
-          2500
-        );
+        rows = await withTimeout(getPlayerById(afId, season - 1), 3000);
       }
       afStats = rows?.[0] || null;
       if (!afStats) {
-        afStub = "No AF player season stats returned for this id/season.";
+        afStub = "Stats temporarily unavailable";
       } else {
         const row = rows[0] as {
           player?: {
@@ -108,20 +227,7 @@ export async function GET(
             age?: number;
             birth?: { date?: string; country?: string | null };
           };
-          statistics?: {
-            team?: { name?: string } | null;
-            league?: { name?: string; country?: string | null } | null;
-            games?: {
-              appearences?: number | null;
-              rating?: string | number | null;
-              position?: string | null;
-            };
-            goals?: {
-              total?: number | null;
-              assists?: number | null;
-              saves?: number | null;
-            };
-          }[];
+          statistics?: AfStatRow[];
         };
         const patch: Record<string, unknown> = {};
         if (row.player?.photo && !player.photoUrl) patch.photoUrl = row.player.photo;
@@ -134,7 +240,6 @@ export async function GET(
         const birthCountry = row.player?.birth?.country?.trim() || null;
         if (birthCountry && player.birthCountry !== birthCountry)
           patch.birthCountry = birthCountry;
-        // Prefer AF nationality, but national-team caps override stale England/etc.
         const afNat = row.player?.nationality?.trim() || null;
         let nt: string | null = null;
         let bestApps = 0;
@@ -190,14 +295,59 @@ export async function GET(
           });
         }
       }
+
+      // Career: clubs list + a few recent seasons (live AF, short timeouts)
+      const teams = await withTimeout(getPlayerTeams(afId), 3500).catch(() => []);
+      const seasonYears = [
+        season,
+        season - 1,
+        season - 2,
+        season - 3,
+        season - 4,
+      ];
+      const seasonRows: { season: number; statistics: AfStatRow[] }[] = [];
+      // Current season already fetched; reuse when present
+      if (rows?.[0]?.statistics) {
+        seasonRows.push({
+          season,
+          statistics: (rows[0].statistics || []) as AfStatRow[],
+        });
+      }
+      for (const y of seasonYears) {
+        if (seasonRows.some((s) => s.season === y)) continue;
+        const block = await withTimeout(getPlayerById(afId, y), 2500).catch(
+          () => null
+        );
+        if (block?.[0]?.statistics?.length) {
+          seasonRows.push({
+            season: y,
+            statistics: block[0].statistics as AfStatRow[],
+          });
+        }
+      }
+      careerClubs = aggregateCareer(teams || [], seasonRows);
+      careerSeasons = seasonRows
+        .map((block) => ({
+          season: block.season,
+          competitions: (block.statistics || []).map((s) => ({
+            league: s.league?.name || "Competition",
+            country: s.league?.country || null,
+            team: s.team?.name || "—",
+            apps: s.games?.appearences ?? null,
+            goals: s.goals?.total ?? null,
+            assists: s.goals?.assists ?? null,
+            minutes: s.games?.minutes ?? null,
+            rating: s.games?.rating ?? null,
+          })),
+        }))
+        .filter((b) => b.competitions.length > 0)
+        .sort((a, b) => b.season - a.season);
     } catch (e) {
-      afStub =
-        e instanceof Error
-          ? `AF player stats unavailable: ${e.message}`
-          : "AF player stats unavailable";
+      console.error("[players/:id] AF stats failed", e instanceof Error ? e.message : e);
+      afStub = friendlyAfStub(e);
     }
   } else {
-    afStub = "No apiFootballPlayerId linked — Sync squads first.";
+    afStub = "Stats temporarily unavailable";
   }
 
   const photoUrl =
@@ -249,5 +399,9 @@ export async function GET(
     })),
     afStats,
     afStub,
+    career: {
+      clubs: careerClubs,
+      seasons: careerSeasons,
+    },
   });
 }

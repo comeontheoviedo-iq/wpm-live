@@ -960,6 +960,12 @@ export async function getPlayersByTeam(
   );
 }
 
+export type AfCoachCareer = {
+  team?: { id?: number | null; name?: string; logo?: string } | null;
+  start?: string | null;
+  end?: string | null;
+};
+
 export type AfCoach = {
   id: number;
   name: string;
@@ -970,6 +976,7 @@ export type AfCoach = {
   photo?: string | null;
   birth?: { date?: string | null; place?: string | null; country?: string | null };
   team?: { id?: number | null; name?: string; logo?: string } | null;
+  career?: AfCoachCareer[];
 };
 
 /** API path is `/coachs` (API-Football spelling). */
@@ -978,11 +985,53 @@ export async function getCoachById(coachId: number) {
   return list[0] || null;
 }
 
+function coachCareerOpen(end?: string | null) {
+  return end == null || end === "" || end === "null";
+}
+
+/**
+ * AF /coachs?team= returns historical + current staff, often all with team.id set.
+ * Prefer the open career stint at this team with the latest start date (current HC).
+ */
 export async function getCoachByTeam(teamId: number) {
   const list = await afFetch<AfCoach[]>("/coachs", { team: teamId }, 300_000);
-  // Prefer the one currently attached to the team when multiple rows return
-  const match = list.find((c) => c.team?.id === teamId) || list[0];
-  return match || null;
+  if (!list.length) return null;
+
+  const ranked = list.map((c) => {
+    const stints = (c.career || []).filter((x) => x.team?.id === teamId);
+    const open = stints
+      .filter((x) => coachCareerOpen(x.end))
+      .sort((a, b) => String(b.start || "").localeCompare(String(a.start || "")));
+    const any = [...stints].sort((a, b) =>
+      String(b.start || "").localeCompare(String(a.start || ""))
+    );
+    return {
+      coach: c,
+      openStart: open[0]?.start || null,
+      anyStart: any[0]?.start || null,
+      teamMatch: c.team?.id === teamId,
+    };
+  });
+
+  ranked.sort((a, b) => {
+    if (a.openStart && !b.openStart) return -1;
+    if (!a.openStart && b.openStart) return 1;
+    if (a.openStart && b.openStart) return b.openStart.localeCompare(a.openStart);
+    if (a.teamMatch !== b.teamMatch) return a.teamMatch ? -1 : 1;
+    return String(b.anyStart || "").localeCompare(String(a.anyStart || ""));
+  });
+
+  return ranked[0]?.coach || list[0];
+}
+
+export type AfPlayerTeam = {
+  team: { id: number; name: string; logo?: string };
+  seasons: number[];
+};
+
+/** Clubs the player has appeared for (AF /players/teams). */
+export async function getPlayerTeams(playerId: number) {
+  return afFetch<AfPlayerTeam[]>("/players/teams", { player: playerId }, 300_000);
 }
 
 export async function searchCoaches(search: string) {

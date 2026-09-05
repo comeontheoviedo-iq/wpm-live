@@ -15,6 +15,8 @@ import {
   Info,
   Maximize2,
   Minimize2,
+  X,
+  Pin,
 } from "lucide-react";
 import { PitchBoard, type PitchPlayer } from "@/components/match/pitch";
 import { SquadRail, type SquadPlayer } from "@/components/match/squad-rail";
@@ -45,6 +47,19 @@ type MatchEventRow = {
   description: string;
   teamSide: string | null;
   playerId: string | null;
+};
+
+type OnAirSuggestion = {
+  id: string;
+  eventKey: string;
+  minute: number;
+  eventType: string;
+  eventLabel: string;
+  text: string;
+  source: "note" | "af_stat";
+  noteId?: string;
+  playerId?: string | null;
+  playerName?: string | null;
 };
 
 type StatRow = { label: string; homeValue: string; awayValue: string };
@@ -241,6 +256,8 @@ export function MatchDesk({
   const [notesFilter, setNotesFilter] = useState<NotesFilterScope>("all");
   const [dossierId, setDossierId] = useState<string | null>(null);
   const [onAirOpen, setOnAirOpen] = useState(false);
+  const [suggestions, setSuggestions] = useState<OnAirSuggestion[]>([]);
+  const [dismissedSuggestions, setDismissedSuggestions] = useState<string[]>([]);
   const [intelOpen, setIntelOpen] = useState(false);
   const [flashEventIds, setFlashEventIds] = useState<string[]>([]);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -410,6 +427,69 @@ export function MatchDesk({
     homeEnriched.filter((p) => p.isStarter || p.onPitch).length +
     awayEnriched.filter((p) => p.isStarter || p.onPitch).length;
 
+  const loadSuggestions = useCallback(
+    async (
+      news?: {
+        type: string;
+        minute: number;
+        description: string;
+        playerId?: string | null;
+      }[]
+    ) => {
+      try {
+        const res = await fetch(`/api/matches/${matchId}/suggest`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ events: news || [] }),
+        });
+        const json = await res.json();
+        if (!res.ok) return;
+        const list = (json.suggestions || []) as OnAirSuggestion[];
+        if (!list.length) return;
+        setSuggestions((prev) => {
+          const seen = new Set(prev.map((s) => s.id + s.text));
+          const merged = [...prev];
+          for (const s of list) {
+            const k = s.id + s.text;
+            if (seen.has(k)) continue;
+            seen.add(k);
+            merged.push(s);
+          }
+          return merged.slice(-24);
+        });
+        setOnAirOpen(true);
+      } catch {
+        /* ignore */
+      }
+    },
+    [matchId]
+  );
+
+  const pinSuggestion = useCallback(
+    async (s: OnAirSuggestion) => {
+      try {
+        await fetch("/api/notes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            matchId,
+            title: s.eventLabel || "On-air suggestion",
+            body: s.text,
+            category: "Match",
+            entityType: s.playerId ? "player" : "match",
+            entityId: s.playerId || matchId,
+            pinned: true,
+          }),
+        });
+        setDismissedSuggestions((d) => [...d, s.id]);
+        router.refresh();
+      } catch {
+        setMsg("Could not pin suggestion");
+      }
+    },
+    [matchId, router]
+  );
+
   const sync = useCallback(
     async (silent = false) => {
       if (!apiFootballFixtureId) {
@@ -438,6 +518,12 @@ export function MatchDesk({
               .join(" · ");
             setFlash(`${news.length} new: ${top}`);
             setTimeout(() => setFlash(null), 8000);
+            const actionable = news.filter((e) =>
+              /goal|yellow|red|sub|penalty/i.test(e.type || "")
+            );
+            if (actionable.length) {
+              void loadSuggestions(actionable);
+            }
           }
           if (!silent) {
             setMsg(
@@ -454,7 +540,7 @@ export function MatchDesk({
         setBusy(false);
       }
     },
-    [apiFootballFixtureId, matchId, router]
+    [apiFootballFixtureId, matchId, router, loadSuggestions]
   );
 
   useEffect(() => {
@@ -986,7 +1072,7 @@ export function MatchDesk({
                   Close
                 </button>
               </div>
-              <div className="min-h-0 flex-1 grid md:grid-cols-2 gap-2 p-2 overflow-hidden">
+              <div className="min-h-0 flex-1 grid md:grid-cols-3 gap-2 p-2 overflow-hidden">
                 <div className="min-h-0 overflow-hidden flex flex-col">
                   <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400 px-1 mb-1">
                     Timeline
@@ -997,6 +1083,54 @@ export function MatchDesk({
                     compact
                     maxHeightClass="max-h-[200px]"
                   />
+                </div>
+                <div className="min-h-0 overflow-y-auto space-y-1.5">
+                  <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400 px-1">
+                    Suggestions
+                  </div>
+                  {suggestions.filter((s) => !dismissedSuggestions.includes(s.id))
+                    .length === 0 ? (
+                    <p className="text-[11px] text-slate-500 px-1">
+                      Sync live events to pull note + AF stat chips here.
+                    </p>
+                  ) : (
+                    suggestions
+                      .filter((s) => !dismissedSuggestions.includes(s.id))
+                      .map((s) => (
+                        <div
+                          key={s.id + s.text.slice(0, 24)}
+                          className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 px-2 py-1.5"
+                        >
+                          <div className="flex items-center gap-1.5 text-[9px] uppercase tracking-wide text-slate-400 mb-0.5">
+                            <span>{s.eventLabel}</span>
+                            <span className="rounded bg-slate-200 dark:bg-slate-800 px-1 py-px normal-case">
+                              {s.source === "af_stat" ? "AF" : "Note"}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-700 dark:text-slate-200 leading-snug">
+                            {s.text}
+                          </p>
+                          <div className="mt-1 flex items-center gap-2">
+                            <button
+                              type="button"
+                              className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-teal-700 dark:text-teal-300 hover:underline"
+                              onClick={() => pinSuggestion(s)}
+                            >
+                              <Pin className="h-3 w-3" /> Pin
+                            </button>
+                            <button
+                              type="button"
+                              className="inline-flex items-center gap-0.5 text-[10px] text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                              onClick={() =>
+                                setDismissedSuggestions((d) => [...d, s.id])
+                              }
+                            >
+                              <X className="h-3 w-3" /> Dismiss
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                  )}
                 </div>
                 <div className="min-h-0 overflow-y-auto">
                   <EventComposer

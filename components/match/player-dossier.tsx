@@ -90,9 +90,33 @@ type DossierPayload = {
     }[];
   } | null;
   afStub: string | null;
+  career?: {
+    clubs: {
+      teamId: number | null;
+      name: string;
+      logo?: string | null;
+      seasons: number[];
+      apps: number;
+      goals: number;
+      assists: number;
+    }[];
+    seasons: {
+      season: number;
+      competitions: {
+        league: string;
+        country?: string | null;
+        team: string;
+        apps: number | null;
+        goals: number | null;
+        assists: number | null;
+        minutes: number | null;
+        rating: string | number | null;
+      }[];
+    }[];
+  } | null;
 };
 
-type Tab = "profile" | "today" | "statistics" | "bio" | "notes";
+type Tab = "profile" | "today" | "statistics" | "career" | "bio" | "notes";
 
 function Flag({ nationality, label }: { nationality?: string | null; label?: string }) {
   const src = flagUrl(nationality, 20);
@@ -143,7 +167,7 @@ export function PlayerDossier({
     if (t === "stats") return "statistics";
     if (t === "events") return "today";
     if (t === "notes") return "notes";
-    if (["profile", "today", "statistics", "bio", "notes"].includes(t))
+    if (["profile", "today", "statistics", "career", "bio", "notes"].includes(t))
       return t as Tab;
     return "profile";
   };
@@ -152,8 +176,10 @@ export function PlayerDossier({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>(mapInitial(initialTab));
+  const [careerClubIdx, setCareerClubIdx] = useState(0);
 
   useEffect(() => {
+    setCareerClubIdx(0);
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -198,9 +224,17 @@ export function PlayerDossier({
     { key: "profile", label: "Profile" },
     { key: "today", label: "Today's Match" },
     { key: "statistics", label: "Statistics" },
+    { key: "career", label: "Career" },
     { key: "bio", label: "Bio" },
     { key: "notes", label: "Notes" },
   ];
+
+  const careerClubs = data?.career?.clubs || [];
+  const careerSeasons = data?.career?.seasons || [];
+  const activeCareerClub =
+    careerClubs[Math.min(careerClubIdx, Math.max(careerClubs.length - 1, 0))] ||
+    null;
+  const currentSeasonBlock = careerSeasons[0] || null;
 
   const bioNotes = notesList.filter(
     (n) =>
@@ -398,8 +432,8 @@ export function PlayerDossier({
                 </Section>
               )}
 
-              {data?.afStub && (
-                <p className="text-[10px] text-amber-700 dark:text-amber-300 rounded-lg border border-amber-200 dark:border-amber-900 bg-amber-50/80 dark:bg-amber-950/30 px-2 py-1.5">
+              {data?.afStub && !/TURBOPACK|prisma|at\s+\S+/i.test(data.afStub) && (
+                <p className="text-[10px] text-slate-500 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/40 px-2 py-1.5">
                   {data.afStub}
                 </p>
               )}
@@ -509,6 +543,149 @@ export function PlayerDossier({
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {p && tab === "career" && (
+          <div className="grid md:grid-cols-[200px_1fr] gap-3 min-h-[280px]">
+            <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 overflow-hidden">
+              <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                Clubs
+              </div>
+              {careerClubs.length === 0 ? (
+                <p className="text-xs text-slate-500 p-3">
+                  No club history from AF yet.
+                </p>
+              ) : (
+                <ul className="max-h-[55vh] overflow-y-auto">
+                  {careerClubs.map((c, i) => (
+                    <li key={`${c.teamId ?? c.name}-${i}`}>
+                      <button
+                        type="button"
+                        onClick={() => setCareerClubIdx(i)}
+                        className={cn(
+                          "w-full text-left px-3 py-2 border-b border-slate-50 dark:border-slate-900 hover:bg-slate-50 dark:hover:bg-slate-900/50",
+                          i === careerClubIdx
+                            ? "bg-teal-50/80 dark:bg-teal-950/30"
+                            : ""
+                        )}
+                      >
+                        <div className="flex items-center gap-2">
+                          {c.logo ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={c.logo} alt="" className="h-5 w-5 object-contain" />
+                          ) : (
+                            <span className="h-5 w-5 rounded bg-slate-200 inline-block" />
+                          )}
+                          <span className="text-xs font-semibold truncate">{c.name}</span>
+                        </div>
+                        <div className="mt-0.5 text-[10px] text-slate-500 tabular-nums">
+                          {c.apps ? `${c.apps} apps` : "—"}
+                          {c.goals ? ` · ${c.goals}G` : ""}
+                          {c.assists ? ` · ${c.assists}A` : ""}
+                        </div>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div className="space-y-3">
+              {activeCareerClub && (
+                <Section title={`${activeCareerClub.name} · club totals`}>
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    <Fact label="Apps" value={String(activeCareerClub.apps || "—")} />
+                    <Fact label="Goals" value={String(activeCareerClub.goals || "—")} />
+                    <Fact label="Assists" value={String(activeCareerClub.assists || "—")} />
+                  </div>
+                  {activeCareerClub.seasons.length > 0 && (
+                    <p className="mt-2 text-[10px] text-slate-500">
+                      Seasons: {activeCareerClub.seasons.slice(0, 8).join(", ")}
+                      {activeCareerClub.seasons.length > 8 ? "…" : ""}
+                    </p>
+                  )}
+                </Section>
+              )}
+
+              <Section title={currentSeasonBlock ? `Season ${currentSeasonBlock.season} · competitions` : "Season competitions"}>
+                {!currentSeasonBlock ? (
+                  <p className="text-xs text-slate-500">
+                    No season breakdown available from AF for this player.
+                  </p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="text-[10px] uppercase text-slate-400 text-left">
+                          <th className="py-1 font-semibold">Comp</th>
+                          <th className="py-1 font-semibold">Team</th>
+                          <th className="py-1 font-semibold">App</th>
+                          <th className="py-1 font-semibold">G</th>
+                          <th className="py-1 font-semibold">A</th>
+                          <th className="py-1 font-semibold">Min</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {currentSeasonBlock.competitions.map((row, i) => (
+                          <tr
+                            key={i}
+                            className="border-t border-slate-100 dark:border-slate-800"
+                          >
+                            <td className="py-1.5 font-medium">{row.league}</td>
+                            <td className="py-1.5 text-slate-600 dark:text-slate-300">
+                              {row.team}
+                            </td>
+                            <td className="py-1.5 tabular-nums">{row.apps ?? "—"}</td>
+                            <td className="py-1.5 tabular-nums font-semibold">
+                              {row.goals ?? "—"}
+                            </td>
+                            <td className="py-1.5 tabular-nums">{row.assists ?? "—"}</td>
+                            <td className="py-1.5 tabular-nums text-slate-500">
+                              {row.minutes ?? "—"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </Section>
+
+              {careerSeasons.length > 1 && (
+                <Section title="Recent seasons">
+                  <ul className="space-y-2">
+                    {careerSeasons.slice(1, 4).map((block) => {
+                      const apps = block.competitions.reduce(
+                        (n, c) => n + (c.apps || 0),
+                        0
+                      );
+                      const goals = block.competitions.reduce(
+                        (n, c) => n + (c.goals || 0),
+                        0
+                      );
+                      return (
+                        <li
+                          key={block.season}
+                          className="text-xs flex items-center justify-between gap-2"
+                        >
+                          <span className="font-semibold">{block.season}</span>
+                          <span className="text-slate-500">
+                            {block.competitions.length} comps · {apps} apps · {goals}G
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </Section>
+              )}
+
+              {careerClubs.length === 0 && careerSeasons.length === 0 && (
+                <p className="text-xs text-slate-500">
+                  Career history is thin for this player in API-Football — nothing to show yet.
+                </p>
+              )}
+            </div>
           </div>
         )}
 

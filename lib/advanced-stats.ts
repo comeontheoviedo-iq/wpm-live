@@ -228,7 +228,7 @@ function emptyResult(
   return {
     available: false,
     source: null,
-    sourceLabel: "xG",
+    sourceLabel: "Advanced stats",
     competition,
     coveredCompetition: covered,
     message,

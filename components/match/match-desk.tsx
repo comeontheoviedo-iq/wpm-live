@@ -40,6 +40,11 @@ import { formatLiveClock } from "@/lib/live-clock";
 import { ordinal, seasonOrdinal } from "@/lib/season-tally";
 import { bindDeskHotkeys } from "@/lib/desk-hotkeys";
 import { enrichFlashLines, momentFingerprint, shouldEmitMomentFlash } from "@/lib/flash-enrich";
+import {
+  DataVizFlashCard,
+  type ShotPoint,
+  type VizFlashKind,
+} from "@/components/match/data-viz-flash";
 import { DeskLiveExtras } from "@/components/match/world-class/desk-live-extras";
 import {
   type FieldSettings,
@@ -404,6 +409,13 @@ export function MatchDesk({
     scoreline?: string;
     pinned?: boolean;
     createdAt: number;
+    viz?: {
+      kind: VizFlashKind;
+      shots?: ShotPoint[];
+      homeXg?: number | null;
+      awayXg?: number | null;
+      possessionSamples?: number[];
+    } | null;
   };
   const [livePopups, setLivePopups] = useState<LivePopup[]>([]);
   const [coachSide, setCoachSide] = useState<"home" | "away" | null>(null);
@@ -442,12 +454,31 @@ export function MatchDesk({
     scoreline?: string;
   } | null>(null);
   const momentFpRef = useRef<string | null>(null);
+  const htVizEmittedRef = useRef(false);
+  const possessionSamplesRef = useRef<number[]>([]);
+  const advStatsCacheRef = useRef<{
+    homeXg: number | null;
+    awayXg: number | null;
+    shots: ShotPoint[];
+    at: number;
+  } | null>(null);
   const notesRef = useRef(notes);
   notesRef.current = notes;
   const relevantNoteIdsRef = useRef(relevantNoteIds);
   relevantNoteIdsRef.current = relevantNoteIds;
   const statisticsRef = useRef(statistics);
   statisticsRef.current = statistics;
+  // Sample home possession % for sparkline (cap length — no spam)
+  useEffect(() => {
+    const poss = statistics.find((s) => /possession/i.test(s.label));
+    if (!poss) return;
+    const h = Number(String(poss.homeValue).replace("%", ""));
+    if (!Number.isFinite(h)) return;
+    const arr = possessionSamplesRef.current;
+    const last = arr[arr.length - 1];
+    if (last != null && Math.abs(last - h) < 1) return;
+    possessionSamplesRef.current = [...arr, h].slice(-24);
+  }, [statistics]);
   const [suggestions, setSuggestions] = useState<OnAirSuggestion[]>([]);
   const [dismissedSuggestions, setDismissedSuggestions] = useState<string[]>([]);
   const [intelOpen, setIntelOpen] = useState(false);
@@ -776,7 +807,65 @@ export function MatchDesk({
     homeEnriched.filter((p) => p.isStarter || p.onPitch).length +
     awayEnriched.filter((p) => p.isStarter || p.onPitch).length;
 
-  const loadSuggestions = useCallback(
+  const fetchAdvancedViz = useCallback(async () => {
+    const cached = advStatsCacheRef.current;
+    if (cached && Date.now() - cached.at < 60_000) return cached;
+    try {
+      const res = await fetch(`/api/matches/${matchId}/advanced-stats`, {
+        cache: "no-store",
+      });
+      if (!res.ok) return null;
+      const json = await res.json();
+      const payload = {
+        homeXg: json.homeXg ?? null,
+        awayXg: json.awayXg ?? null,
+        shots: (json.shots || []) as ShotPoint[],
+        at: Date.now(),
+      };
+      advStatsCacheRef.current = payload;
+      return payload;
+    } catch {
+      return null;
+    }
+  }, [matchId]);
+
+  const attachVizToPopup = useCallback(
+    async (
+      popupId: string,
+      prefer: VizFlashKind
+    ) => {
+      const adv = await fetchAdvancedViz();
+      const poss = possessionSamplesRef.current;
+      let viz: LivePopup["viz"] = null;
+      if (prefer === "shot_map" && adv?.shots?.length) {
+        viz = { kind: "shot_map", shots: adv.shots, homeXg: adv.homeXg, awayXg: adv.awayXg };
+      } else if (
+        (prefer === "xg_race" || prefer === "shot_map") &&
+        adv?.homeXg != null &&
+        adv?.awayXg != null
+      ) {
+        viz = {
+          kind: "xg_race",
+          homeXg: adv.homeXg,
+          awayXg: adv.awayXg,
+          shots: adv.shots,
+        };
+      } else if (prefer === "possession" && poss.length >= 2) {
+        viz = { kind: "possession", possessionSamples: [...poss] };
+      } else if (adv?.homeXg != null && adv?.awayXg != null) {
+        viz = { kind: "xg_race", homeXg: adv.homeXg, awayXg: adv.awayXg };
+      } else if (poss.length >= 2) {
+        viz = { kind: "possession", possessionSamples: [...poss] };
+      }
+      if (!viz) return;
+      setLivePopups((prev) =>
+        prev.map((p) => (p.id === popupId ? { ...p, viz } : p))
+      );
+    },
+    [fetchAdvancedViz]
+  );
+
+    const loadSuggestions = useCallback(
     async (
       news?: {
         type: string;
@@ -1120,6 +1209,17 @@ export function MatchDesk({
                 };
                 lastGoalPopupRef.current = goalPopup;
                 pushPopup(goalPopup);
+                // Live data-viz flash on goal (shot map / xG race when available)
+                window.setTimeout(() => {
+                  const idGuess = `${key}|`;
+                  setLivePopups((prev) => {
+                    const hit = [...prev].reverse().find((p) =>
+                      p.id.startsWith(idGuess) && p.kind === "goal"
+                    );
+                    if (hit) void attachVizToPopup(hit.id, "shot_map");
+                    return prev;
+                  });
+                }, 50);
               } else if (/^sub$/i.test(e.type || "")) {
                 const { outName, inName } = parseSubDescription(
                   e.description || ""
@@ -1191,7 +1291,7 @@ export function MatchDesk({
         setBusy(false);
       }
     },
-    [apiFootballFixtureId, matchId, router, loadSuggestions, loadRelevantNotes, homeName, awayName]
+    [apiFootballFixtureId, matchId, router, loadSuggestions, loadRelevantNotes, homeName, awayName, attachVizToPopup]
   );
 
   useEffect(() => {
@@ -1441,6 +1541,39 @@ export function MatchDesk({
     ["penalty_goal", "penalty_miss"].includes(e.type)
   );
 
+
+  // Half-time data-viz flash (once per HT spell)
+  useEffect(() => {
+    if (status !== "Half Time") {
+      if (status === "Live" || status === "Not Started") htVizEmittedRef.current = false;
+      return;
+    }
+    if (htVizEmittedRef.current) return;
+    htVizEmittedRef.current = true;
+    const id = `ht-viz|${Date.now()}`;
+    setLivePopups((prev) =>
+      [
+        ...prev,
+        {
+          id,
+          kind: "fact" as const,
+          title: "Half-time · Advanced stats",
+          lines: [
+            `${homeName} ${homeScore}–${awayScore} ${awayName}`,
+            "xG race / possession when available",
+          ],
+          scoreline: `${homeName} ${homeScore}–${awayScore} ${awayName}`,
+          createdAt: Date.now(),
+          pinned: false,
+        },
+      ].slice(-5)
+    );
+    window.setTimeout(() => void attachVizToPopup(id, "xg_race"), 100);
+    window.setTimeout(() => {
+      setLivePopups((prev) => prev.filter((p) => p.id !== id || p.pinned));
+    }, 16_000);
+  }, [status, homeName, awayName, homeScore, awayScore, attachVizToPopup]);
+
   // Periodic moment flash only when fingerprint changes (not spam)
   useEffect(() => {
     if (status !== "Live") return;
@@ -1471,13 +1604,16 @@ export function MatchDesk({
       statistics: statisticsRef.current,
     });
     const id = `moment|${Date.now()}`;
+    // status is Live here — detect HT-ish minute window as momentum beat
+    const isHt =
+      typeof last?.minute === "number" && last.minute >= 45 && last.minute <= 46;
     setLivePopups((prevPop) =>
       [
         ...prevPop,
         {
           id,
           kind: "fact" as const,
-          title: "Moment",
+          title: isHt ? "Half-time" : "Moment",
           lines: lines.slice(0, 6),
           scoreline: `${homeName} ${homeScore}–${awayScore} ${awayName}`,
           createdAt: Date.now(),
@@ -1485,6 +1621,10 @@ export function MatchDesk({
         },
       ].slice(-5)
     );
+    // Intelligent viz: HT → xG race; otherwise possession sparkline if we have samples
+    window.setTimeout(() => {
+      void attachVizToPopup(id, isHt ? "xg_race" : "possession");
+    }, 80);
     window.setTimeout(() => {
       setLivePopups((prevPop) =>
         prevPop.filter((p) => p.id !== id || p.pinned)
@@ -1927,6 +2067,19 @@ export function MatchDesk({
                   </li>
                 ))}
               </ul>
+              {popup.viz ? (
+                <DataVizFlashCard
+                  kind={popup.viz.kind}
+                  shots={popup.viz.shots}
+                  homeXg={popup.viz.homeXg}
+                  awayXg={popup.viz.awayXg}
+                  homeName={homeName}
+                  awayName={awayName}
+                  homeColor={homeColor}
+                  awayColor={awayColor}
+                  possessionSamples={popup.viz.possessionSamples}
+                />
+              ) : null}
               <div className="mt-2 text-[9px] text-slate-400">
                 Auto-hides · pin to keep
               </div>

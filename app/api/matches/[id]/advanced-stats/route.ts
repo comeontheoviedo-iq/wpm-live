@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { resolveAdvancedMatchStats } from "@/lib/advanced-stats";
+import { xgFromAfStatistics } from "@/lib/xg-alt";
 
 export async function GET(
   _req: Request,
@@ -34,7 +35,41 @@ export async function GET(
       kickoff: match.kickoff,
       status: match.status,
     });
-    return NextResponse.json(stats);
+
+    // Soft merge: AF fixture statistics sometimes include expected_goals
+    if (!stats.available || stats.homeXg == null) {
+      try {
+        const rows = await prisma.statistic.findMany({ where: { matchId: match.id } });
+        const mapped = rows.map((r) => ({
+          label: r.label,
+          homeValue: r.homeValue,
+          awayValue: r.awayValue,
+        }));
+        const afXg = xgFromAfStatistics(mapped);
+        if (afXg) {
+          return NextResponse.json({
+            ...stats,
+            available: true,
+            source: stats.source || "advanced",
+            sourceLabel: "Advanced stats",
+            homeXg: afXg.homeXg,
+            awayXg: afXg.awayXg,
+            homeXga: afXg.awayXg,
+            awayXga: afXg.homeXg,
+            message: null,
+            shots: stats.shots || [],
+          });
+        }
+      } catch {
+        /* soft */
+      }
+    }
+
+    return NextResponse.json({
+      ...stats,
+      sourceLabel: "Advanced stats",
+      shots: stats.shots || [],
+    });
   } catch (e) {
     return NextResponse.json(
       {
@@ -53,6 +88,7 @@ export async function GET(
         matchedAt: null,
         forecast: null,
         shotSummary: null,
+        shots: [],
       },
       { status: 200 }
     );

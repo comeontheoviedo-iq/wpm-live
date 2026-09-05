@@ -10,7 +10,7 @@ export function Badge({
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide",
+        "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.06em] shadow-xs",
         className
       )}
     >
@@ -21,6 +21,13 @@ export function Badge({
 
 export function StatusBadge({ status }: { status: string }) {
   return (
-    <Badge className={cn("text-white", statusColor(status))}>{status}</Badge>
+    <Badge
+      className={cn(
+        "text-white ring-1 ring-black/5 dark:ring-white/10",
+        statusColor(status)
+      )}
+    >
+      {status}
+    </Badge>
   );
 }

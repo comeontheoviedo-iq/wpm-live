@@ -8,7 +8,7 @@ export function Card({
   return (
     <div
       className={cn(
-        "rounded-xl border border-slate-200/80 dark:border-slate-700/80 bg-white dark:bg-slate-900 shadow-sm",
+        "rounded-xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-700/70 dark:bg-slate-900/95",
         className
       )}
       {...props}
@@ -22,7 +22,10 @@ export function CardHeader({
 }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn("px-4 py-3 border-b border-slate-100 dark:border-slate-800", className)}
+      className={cn(
+        "border-b border-slate-100/90 bg-gradient-to-b from-slate-50/80 to-transparent px-4 py-3 dark:border-slate-800 dark:from-slate-900/80",
+        className
+      )}
       {...props}
     />
   );
@@ -34,7 +37,10 @@ export function CardTitle({
 }: HTMLAttributes<HTMLHeadingElement>) {
   return (
     <h3
-      className={cn("text-sm font-semibold text-slate-900 dark:text-slate-100", className)}
+      className={cn(
+        "text-desk-sm font-semibold tracking-tight text-slate-900 dark:text-slate-100",
+        className
+      )}
       {...props}
     />
   );

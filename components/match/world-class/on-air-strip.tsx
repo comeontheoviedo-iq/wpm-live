@@ -26,9 +26,9 @@ export function OnAirStrip({
   onOpenEvents?: () => void;
 }) {
   return (
-    <div className="rounded-xl border border-rose-200 dark:border-rose-900 bg-rose-50/90 dark:bg-rose-950/40 px-2.5 py-2 text-[11px] shadow-sm">
+    <div className="rounded-xl border border-rose-200/90 bg-gradient-to-br from-rose-50 via-rose-50/90 to-white px-2.5 py-2 text-[11px] shadow-sm ring-1 ring-rose-500/10 dark:border-rose-900/80 dark:from-rose-950/50 dark:via-rose-950/40 dark:to-slate-950 dark:ring-rose-400/10">
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="rounded-full bg-rose-600 text-white text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5">
+        <span className="rounded-full bg-gradient-to-r from-rose-600 to-rose-500 text-white text-[9px] font-bold uppercase tracking-[0.06em] px-1.5 py-0.5 shadow-sm shadow-rose-900/20">
           On-air
         </span>
         <span className="font-bold tabular-nums text-slate-900 dark:text-white">

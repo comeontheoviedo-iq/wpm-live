@@ -492,23 +492,37 @@ function CoachChip({
   side,
   teamColor,
   onClick,
+  compact,
 }: {
   coach: Coach;
   side: "home" | "away";
   teamColor: string;
   onClick?: () => void;
+  /** One-line avatar + name — less corner height. */
+  compact?: boolean;
 }) {
   const isHome = side === "home";
   const Comp = onClick ? "button" : "div";
   // Only AF-stored photoUrl — never invent a media URL from coach id.
   const photo = coach.photoUrl?.trim() || null;
+  const tip = [
+    coach.name,
+    "Coach",
+    coach.age != null ? `${coach.age}y` : null,
+    coach.nationality || null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
   return (
     <Comp
       type={onClick ? "button" : undefined}
       onClick={onClick}
-      title={onClick ? `Open ${coach.name} profile` : undefined}
+      title={onClick ? `Open ${coach.name} profile · ${tip}` : tip}
       className={cn(
-        "pitch-overlay-chip flex max-w-[13.5rem] items-center gap-1.5 px-1.5 py-1 text-left",
+        "pitch-overlay-chip flex items-center text-left",
+        compact
+          ? "max-w-[11rem] gap-1 px-1 py-0.5"
+          : "max-w-[13.5rem] gap-1.5 px-1.5 py-1",
         isHome ? "border-slate-800/70" : "",
         onClick && "pointer-events-auto cursor-pointer hover:ring-2 hover:ring-teal-400/50"
       )}
@@ -516,7 +530,8 @@ function CoachChip({
     >
       <span
         className={cn(
-          "relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md",
+          "relative flex shrink-0 items-center justify-center overflow-hidden rounded",
+          compact ? "h-5 w-5 rounded-sm" : "h-9 w-9 rounded-md",
           "bg-slate-200/90 ring-1 ring-slate-300/80"
         )}
       >
@@ -541,19 +556,18 @@ function CoachChip({
             photo ? "hidden" : "flex"
           )}
         >
-          <User className="h-5 w-5" strokeWidth={1.5} />
+          <User className={compact ? "h-3 w-3" : "h-5 w-5"} strokeWidth={1.5} />
         </span>
       </span>
-      <div className="min-w-0 flex-1 pr-0.5">
-        <div className="flex items-center gap-1">
-          <FlagImg nationality={coach.nationality} className="h-3 w-[1.05rem]" />
-          <div className="truncate text-[9px] leading-none text-slate-500">
-            {coach.age != null ? `${coach.age}y · Coach` : "Coach"}
-          </div>
-        </div>
+      <div className="min-w-0 flex-1 flex items-center gap-1 pr-0.5">
+        <FlagImg
+          nationality={coach.nationality}
+          className={compact ? "h-2.5 w-3.5" : "h-3 w-[1.05rem]"}
+        />
         <div
           className={cn(
-            "truncate whitespace-nowrap text-[11px] font-bold leading-tight tracking-tight",
+            "truncate whitespace-nowrap font-bold leading-none tracking-tight",
+            compact ? "text-[10px]" : "text-[11px]",
             isHome ? "text-slate-900" : ""
           )}
           style={!isHome ? { color: teamColor } : undefined}
@@ -618,6 +632,7 @@ export function PitchBoard({
   homeOnLeft = true,
   onToggleHomeOnLeft,
   liveCompact,
+  onAirMode,
   onFreePlace,
   onCoachClick,
   hasCustomPlacements,
@@ -687,6 +702,8 @@ export function PitchBoard({
   onToggleHomeOnLeft?: () => void;
   /** LIVE: prefer smaller cards / less chrome. */
   liveCompact?: boolean;
+  /** On-air presentation: hide secondary pitch badges / tools. */
+  onAirMode?: boolean;
   /** Drop anywhere on pitch (free-move, not slot snap). */
   onFreePlace?: (args: {
     side: "home" | "away";
@@ -1136,9 +1153,11 @@ export function PitchBoard({
         }}
        onDragOver={(e) => { if (!locked && onFreePlace) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; } }} onDrop={handlePitchFreeDrop} title={onFreePlace ? "Drop on grass for free place · Alt+drop on slot also free-moves" : undefined}>
         {/* S / M legend — season vs match card stats */}
-        <div className="pointer-events-none absolute bottom-1.5 right-1.5 z-20 rounded bg-black/45 px-1.5 py-0.5 text-[7px] font-semibold tracking-wide text-white/80 whitespace-nowrap">
-          S = season · M = this match
-        </div>
+        {!onAirMode && (
+          <div className="pointer-events-none absolute bottom-1.5 right-1.5 z-20 rounded bg-black/45 px-1.5 py-0.5 text-[7px] font-semibold tracking-wide text-white/80 whitespace-nowrap">
+            S = season · M = this match
+          </div>
+        )}
 
         {/* Pitch markings — landscape goals left/right */}
         <div className="pointer-events-none absolute inset-2 rounded-sm border-2 border-white/55 sm:inset-3">
@@ -1151,338 +1170,302 @@ export function PitchBoard({
           <div className="absolute top-1/2 right-0 h-[28%] w-[6%] -translate-y-1/2 border-2 border-r-0 border-white/55" />
         </div>
 
-        {/* Top chrome: formation | scoreboard | formation (respects Swap sides) */}
-        <div className="pointer-events-none absolute left-1.5 right-1.5 top-1.5 z-20 flex items-start justify-between gap-2">
-          <div className="pointer-events-auto flex flex-col items-start gap-1">
-            <div
-              className={cn(
-                "pitch-overlay-chip flex items-center gap-1 px-1.5 py-0.5 text-[10px]",
-                leftChrome.light
-                  ? "bg-white/95 border-slate-300 text-slate-800"
-                  : "text-white"
-              )}
-              style={
-                leftChrome.light
-                  ? undefined
-                  : {
-                      backgroundColor: leftChrome.color,
-                      borderColor: leftChrome.color,
-                    }
-              }
-            >
-              {formationOptions && onFormationChange ? (
-                <select
-                  className={cn(
-                    "bg-transparent font-semibold max-w-[7.5rem] outline-none",
-                    !leftChrome.light && "text-white"
-                  )}
-                  value={leftChrome.formation}
-                  disabled={formationBusy || locked}
-                  onChange={(e) =>
-                    onFormationChange(leftChrome.side, e.target.value)
-                  }
-                  aria-label={`${leftChrome.side} formation`}
-                >
-                  {formationOptions.map((k) => (
-                    <option key={k} value={k} className="text-slate-900">
-                      {k}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <span className="font-semibold">{leftChrome.formation}</span>
-              )}
-            </div>
-            {(() => {
-              const sw = leftChrome.side === "home" ? homeSubWindows : awaySubWindows;
-              if (!sw || sw.max <= 0) return null;
-              return (
+        {/* Top chrome: slim formation+SUB+coach | scoreboard | mirror */}
+        <div className="pointer-events-none absolute left-2 right-2 top-2 z-20 flex items-start justify-between gap-3">
+          {([leftChrome, rightChrome] as const).map((chrome, idx) => {
+            const alignEnd = idx === 1;
+            const sw =
+              chrome.side === "home" ? homeSubWindows : awaySubWindows;
+            return (
+              <div
+                key={chrome.side + (alignEnd ? "-R" : "-L")}
+                className={cn(
+                  "pointer-events-auto flex max-w-[42%] flex-col gap-0.5",
+                  alignEnd ? "items-end" : "items-start"
+                )}
+              >
                 <div
-                  className="pitch-overlay-chip-dark flex items-center gap-1 px-1.5 py-0.5 text-[8px] font-semibold tracking-wide text-white"
-                  title={
-                    sw.windowsHeuristic
-                      ? "Sub windows estimated from event minutes"
-                      : "Substitutions used / allowance"
-                  }
+                  className={cn(
+                    "flex flex-wrap items-center gap-0.5",
+                    alignEnd && "justify-end"
+                  )}
                 >
-                  <span>SUB {sw.used}/{sw.max}</span>
-                  {sw.windows?.length ? (
-                    <span className="opacity-90 flex gap-0.5">
-                      {sw.windows.map((n, i) => (
-                        <span key={i} className="rounded bg-white/20 px-0.5 tabular-nums">
-                          {n}
+                  <div
+                    className={cn(
+                      "pitch-overlay-chip flex items-center gap-0.5 px-1 py-px text-[9px] leading-none",
+                      chrome.light
+                        ? "bg-white/95 border-slate-300 text-slate-800"
+                        : "text-white"
+                    )}
+                    style={
+                      chrome.light
+                        ? undefined
+                        : {
+                            backgroundColor: chrome.color,
+                            borderColor: chrome.color,
+                          }
+                    }
+                  >
+                    {formationOptions && onFormationChange ? (
+                      <select
+                        className={cn(
+                          "bg-transparent font-semibold max-w-[6.25rem] outline-none",
+                          !chrome.light && "text-white"
+                        )}
+                        value={chrome.formation}
+                        disabled={formationBusy || locked}
+                        onChange={(e) =>
+                          onFormationChange(chrome.side, e.target.value)
+                        }
+                        aria-label={`${chrome.side} formation`}
+                      >
+                        {formationOptions.map((k) => (
+                          <option key={k} value={k} className="text-slate-900">
+                            {k}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="font-semibold">{chrome.formation}</span>
+                    )}
+                  </div>
+                  {sw && sw.max > 0 ? (
+                    <div
+                      className="pitch-overlay-chip-dark flex items-center gap-0.5 px-1 py-px text-[7.5px] font-semibold tracking-wide text-white leading-none"
+                      title={
+                        sw.windowsHeuristic
+                          ? "Sub windows estimated from event minutes"
+                          : "Substitutions used / allowance"
+                      }
+                    >
+                      <span className="tabular-nums">
+                        SUB {sw.used}/{sw.max}
+                      </span>
+                      {sw.windows?.length ? (
+                        <span className="opacity-90 flex gap-px">
+                          {sw.windows.map((n, i) => (
+                            <span
+                              key={i}
+                              className="rounded bg-white/20 px-0.5 tabular-nums"
+                            >
+                              {n}
+                            </span>
+                          ))}
                         </span>
-                      ))}
-                    </span>
+                      ) : null}
+                    </div>
                   ) : null}
                 </div>
-              );
-            })()}
-            {leftChrome.coach && (
-              <CoachChip
-                coach={leftChrome.coach}
-                side={leftChrome.side}
-                teamColor={leftChrome.color}
-                onClick={
-                  onCoachClick
-                    ? () => onCoachClick(leftChrome.side)
-                    : undefined
+                {chrome.coach ? (
+                  <CoachChip
+                    coach={chrome.coach}
+                    side={chrome.side}
+                    teamColor={chrome.color}
+                    compact
+                    onClick={
+                      onCoachClick
+                        ? () => onCoachClick(chrome.side)
+                        : undefined
+                    }
+                  />
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Center scoreboard — kept clear of corner chrome */}
+        <div className="pointer-events-none absolute left-1/2 top-2 z-20 flex w-[min(46%,22rem)] -translate-x-1/2 flex-col items-center gap-1">
+          {showScore && (
+            <div className="pitch-overlay-chip pointer-events-auto flex items-center gap-2 rounded-full px-2.5 py-1">
+              {leagueLogoUrl ? (
+                <button
+                  type="button"
+                  onClick={onLeagueLogoClick}
+                  className="shrink-0 rounded-sm overflow-hidden hover:ring-2 hover:ring-teal-500"
+                  title="League notes"
+                  aria-label="Open league notes"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={leagueLogoUrl}
+                    alt=""
+                    className="h-6 w-6 object-contain"
+                  />
+                </button>
+              ) : null}
+              {(() => {
+                const leftLogo = homeOnLeft ? homeLogoUrl : awayLogoUrl;
+                const rightLogo = homeOnLeft ? awayLogoUrl : homeLogoUrl;
+                const onLeft = homeOnLeft ? onHomeLogoClick : onAwayLogoClick;
+                const onRight = homeOnLeft ? onAwayLogoClick : onHomeLogoClick;
+                const leftTitle = homeOnLeft
+                  ? "Home club notes"
+                  : "Away club notes";
+                const rightTitle = homeOnLeft
+                  ? "Away club notes"
+                  : "Home club notes";
+                return (
+                  <>
+                    {leftLogo ? (
+                      <button
+                        type="button"
+                        onClick={onLeft}
+                        className="shrink-0 rounded-sm overflow-hidden hover:ring-2 hover:ring-teal-500"
+                        title={leftTitle}
+                        aria-label={leftTitle}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={leftLogo}
+                          alt=""
+                          className="h-6 w-6 object-contain"
+                        />
+                      </button>
+                    ) : (
+                      <span className="text-[11px] font-bold text-slate-700 tracking-wide">
+                        {leftCode}
+                      </span>
+                    )}
+                    <span className="text-base font-black tabular-nums text-slate-900 leading-none">
+                      {leftScore}-{rightScore}
+                    </span>
+                    {rightLogo ? (
+                      <button
+                        type="button"
+                        onClick={onRight}
+                        className="shrink-0 rounded-sm overflow-hidden hover:ring-2 hover:ring-teal-500"
+                        title={rightTitle}
+                        aria-label={rightTitle}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={rightLogo}
+                          alt=""
+                          className="h-6 w-6 object-contain"
+                        />
+                      </button>
+                    ) : (
+                      <span className="text-[11px] font-bold text-slate-700 tracking-wide">
+                        {rightCode}
+                      </span>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* Compact tools: clock + swap + field (desk also has Field/Full) */}
+          <div className="pointer-events-auto flex items-center gap-0.5">
+            {statusShort && (
+              <span className="pitch-overlay-chip-dark rounded px-1.5 py-0.5 text-[9px] font-bold tracking-wider text-white tabular-nums">
+                {statusShort}
+              </span>
+            )}
+            {(onToggleHomeOnLeft || onOpenFieldSettings) && !onAirMode && (
+              <div className="pitch-overlay-chip inline-flex items-center gap-px p-0.5">
+                {onToggleHomeOnLeft && (
+                  <button
+                    type="button"
+                    onClick={onToggleHomeOnLeft}
+                    className="inline-flex h-5 w-5 items-center justify-center rounded text-slate-800 hover:bg-white/90"
+                    title={
+                      homeOnLeft
+                        ? "Swap sides · home moves to right"
+                        : "Swap sides · home moves to left"
+                    }
+                    aria-label="Swap sides"
+                  >
+                    <ArrowLeftRight className="h-3 w-3" />
+                  </button>
+                )}
+                {onOpenFieldSettings && (
+                  <button
+                    type="button"
+                    onClick={onOpenFieldSettings}
+                    className="inline-flex h-5 w-5 items-center justify-center rounded text-slate-800 hover:bg-white/90"
+                    title="Field Settings · Pitch Card"
+                    aria-label="Field Settings"
+                  >
+                    <SlidersHorizontal className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+            )}
+            {onToggleHomeOnLeft && onAirMode && (
+              <button
+                type="button"
+                onClick={onToggleHomeOnLeft}
+                className="pitch-overlay-chip inline-flex h-5 w-5 items-center justify-center text-slate-800 hover:bg-white"
+                title={
+                  homeOnLeft
+                    ? "Swap sides · home moves to right"
+                    : "Swap sides · home moves to left"
                 }
-              />
+                aria-label="Swap sides"
+              >
+                <ArrowLeftRight className="h-3 w-3" />
+              </button>
             )}
           </div>
 
-          <div className="flex flex-col items-center gap-0.5 pointer-events-none">
-            {showScore && (
-              <div className="pitch-overlay-chip pointer-events-auto flex items-center gap-2 rounded-full px-2.5 py-1.5">
-                {leagueLogoUrl ? (
-                  <button
-                    type="button"
-                    onClick={onLeagueLogoClick}
-                    className="shrink-0 rounded-sm overflow-hidden hover:ring-2 hover:ring-teal-500"
-                    title="League notes"
-                    aria-label="Open league notes"
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={leagueLogoUrl}
-                      alt=""
-                      className="h-7 w-7 object-contain"
-                    />
-                  </button>
-                ) : null}
-                {(() => {
-                  const leftLogo = homeOnLeft ? homeLogoUrl : awayLogoUrl;
-                  const rightLogo = homeOnLeft ? awayLogoUrl : homeLogoUrl;
-                  const onLeft = homeOnLeft ? onHomeLogoClick : onAwayLogoClick;
-                  const onRight = homeOnLeft ? onAwayLogoClick : onHomeLogoClick;
-                  const leftTitle = homeOnLeft
-                    ? "Home club notes"
-                    : "Away club notes";
-                  const rightTitle = homeOnLeft
-                    ? "Away club notes"
-                    : "Home club notes";
-                  return (
-                    <>
-                      {leftLogo ? (
-                        <button
-                          type="button"
-                          onClick={onLeft}
-                          className="shrink-0 rounded-sm overflow-hidden hover:ring-2 hover:ring-teal-500"
-                          title={leftTitle}
-                          aria-label={leftTitle}
-                        >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={leftLogo}
-                            alt=""
-                            className="h-7 w-7 object-contain"
-                          />
-                        </button>
-                      ) : (
-                        <span className="text-xs font-bold text-slate-700 tracking-wide">
-                          {leftCode}
-                        </span>
-                      )}
-                      <span className="text-lg font-black tabular-nums text-slate-900 leading-none">
-                        {leftScore}-{rightScore}
-                      </span>
-                      {rightLogo ? (
-                        <button
-                          type="button"
-                          onClick={onRight}
-                          className="shrink-0 rounded-sm overflow-hidden hover:ring-2 hover:ring-teal-500"
-                          title={rightTitle}
-                          aria-label={rightTitle}
-                        >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={rightLogo}
-                            alt=""
-                            className="h-7 w-7 object-contain"
-                          />
-                        </button>
-                      ) : (
-                        <span className="text-xs font-bold text-slate-700 tracking-wide">
-                          {rightCode}
-                        </span>
-                      )}
-                    </>
-                  );
-                })()}
-              </div>
-            )}
-            <div className="flex items-center gap-1 pointer-events-auto">
-              {statusShort && (
-                <span className="pitch-overlay-chip-dark rounded px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-white tabular-nums">
-                  {statusShort}
+          {!onAirMode && badge && (
+            <div
+              className={cn(
+                "rounded-md px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-white",
+                lineupStatus === "confirmed"
+                  ? "bg-emerald-600/95"
+                  : lineupStatus === "predicted"
+                    ? "bg-sky-600/95"
+                    : "bg-amber-500/95"
+              )}
+              title={lineupHintText}
+            >
+              {badge}
+            </div>
+          )}
+          {!onAirMode && !badge && lineupHintText && (
+            <span
+              className="rounded bg-black/45 px-1.5 py-px text-[8px] text-white/90 max-w-[12rem] truncate"
+              title={lineupHintText}
+            >
+              {lineupHintText}
+            </span>
+          )}
+          {!onAirMode && (hasCustomPlacements || onResetOfficial) && (
+            <div className="pointer-events-auto flex flex-wrap items-center justify-center gap-1">
+              {hasCustomPlacements && (
+                <span
+                  className="rounded-md bg-amber-500/90 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-white shadow-sm"
+                  title="Manual pitch positions — survive Sync until Reset"
+                >
+                  Custom positions
                 </span>
               )}
-              {onToggleHomeOnLeft && (
+              {hasCustomPlacements && onResetPlacements && (
                 <button
                   type="button"
-                  onClick={onToggleHomeOnLeft}
-                  className="pitch-overlay-chip inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] font-semibold text-slate-800 hover:bg-white"
-                  title={
-                    homeOnLeft
-                      ? "Swap sides · home moves to right"
-                      : "Swap sides · home moves to left"
-                  }
-                  aria-label="Swap sides"
+                  className="pitch-overlay-chip border-amber-400/80 px-1.5 py-0.5 text-[8px] font-semibold text-amber-900 hover:bg-amber-50"
+                  disabled={formationBusy}
+                  onClick={onResetPlacements}
+                  title="Clear manual placements and restore official AF XI"
                 >
-                  <ArrowLeftRight className="h-3 w-3" />
-                  Swap sides
+                  Reset placements
+                </button>
+              )}
+              {onResetOfficial && (
+                <button
+                  type="button"
+                  className="pitch-overlay-chip px-1.5 py-0.5 text-[8px] font-semibold text-slate-800 hover:bg-white"
+                  disabled={formationBusy}
+                  onClick={onResetOfficial}
+                >
+                  Reset official
                 </button>
               )}
             </div>
-            {badge && (
-              <div
-                className={cn(
-                  "rounded-md px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-white",
-                  lineupStatus === "confirmed"
-                    ? "bg-emerald-600/95"
-                    : lineupStatus === "predicted"
-                      ? "bg-sky-600/95"
-                      : "bg-amber-500/95"
-                )}
-                title={lineupHintText}
-              >
-                {badge}
-              </div>
-            )}
-            {!badge && lineupHintText && (
-              <span
-                className="rounded bg-black/45 px-1.5 py-px text-[8px] text-white/90 max-w-[12rem] truncate"
-                title={lineupHintText}
-              >
-                {lineupHintText}
-              </span>
-            )}
-            {(hasCustomPlacements || onResetOfficial) && (
-              <div className="flex items-center gap-1">
-                {hasCustomPlacements && (
-                  <span
-                    className="rounded-md bg-amber-500/90 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-white shadow-sm"
-                    title="Manual pitch positions — survive Sync until Reset"
-                  >
-                    Custom positions
-                  </span>
-                )}
-                {hasCustomPlacements && onResetPlacements && (
-                  <button
-                    type="button"
-                    className="pitch-overlay-chip border-amber-400/80 px-1.5 py-0.5 text-[8px] font-semibold text-amber-900 hover:bg-amber-50"
-                    disabled={formationBusy}
-                    onClick={onResetPlacements}
-                    title="Clear manual placements and restore official AF XI"
-                  >
-                    Reset placements
-                  </button>
-                )}
-                {onResetOfficial && (
-                  <button
-                    type="button"
-                    className="pitch-overlay-chip px-1.5 py-0.5 text-[8px] font-semibold text-slate-800 hover:bg-white"
-                    disabled={formationBusy}
-                    onClick={onResetOfficial}
-                  >
-                    Reset official
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-
-          <div className="pointer-events-auto flex flex-col items-end gap-1">
-            {onOpenFieldSettings && (
-              <button
-                type="button"
-                onClick={onOpenFieldSettings}
-                className="pitch-overlay-chip inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-semibold text-slate-800 hover:bg-white"
-                title="Field Settings · Pitch Card"
-                aria-label="Field Settings"
-              >
-                <SlidersHorizontal className="h-3 w-3" />
-                Field
-              </button>
-            )}
-            <div
-              className={cn(
-                "pitch-overlay-chip flex items-center gap-1 px-1.5 py-0.5 text-[10px]",
-                rightChrome.light
-                  ? "bg-white/95 border-slate-300 text-slate-800"
-                  : "text-white"
-              )}
-              style={
-                rightChrome.light
-                  ? undefined
-                  : {
-                      backgroundColor: rightChrome.color,
-                      borderColor: rightChrome.color,
-                    }
-              }
-            >
-              {formationOptions && onFormationChange ? (
-                <select
-                  className={cn(
-                    "bg-transparent font-semibold max-w-[7.5rem] outline-none",
-                    !rightChrome.light && "text-white"
-                  )}
-                  value={rightChrome.formation}
-                  disabled={formationBusy || locked}
-                  onChange={(e) =>
-                    onFormationChange(rightChrome.side, e.target.value)
-                  }
-                  aria-label={`${rightChrome.side} formation`}
-                >
-                  {formationOptions.map((k) => (
-                    <option key={k} value={k} className="text-slate-900">
-                      {k}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <span className="font-semibold">{rightChrome.formation}</span>
-              )}
-            </div>
-            {(() => {
-              const sw = rightChrome.side === "home" ? homeSubWindows : awaySubWindows;
-              if (!sw || sw.max <= 0) return null;
-              return (
-                <div
-                  className="pitch-overlay-chip-dark flex items-center gap-1 px-1.5 py-0.5 text-[8px] font-semibold tracking-wide text-white"
-                  title={
-                    sw.windowsHeuristic
-                      ? "Sub windows estimated from event minutes"
-                      : "Substitutions used / allowance"
-                  }
-                >
-                  <span>SUB {sw.used}/{sw.max}</span>
-                  {sw.windows?.length ? (
-                    <span className="opacity-90 flex gap-0.5">
-                      {sw.windows.map((n, i) => (
-                        <span key={i} className="rounded bg-white/20 px-0.5 tabular-nums">
-                          {n}
-                        </span>
-                      ))}
-                    </span>
-                  ) : null}
-                </div>
-              );
-            })()}
-            {rightChrome.coach && (
-              <CoachChip
-                coach={rightChrome.coach}
-                side={rightChrome.side}
-                teamColor={rightChrome.color}
-                onClick={
-                  onCoachClick
-                    ? () => onCoachClick(rightChrome.side)
-                    : undefined
-                }
-              />
-            )}
-          </div>
+          )}
         </div>
 
         {all.map(({ slot, player, x, y, side }) => {

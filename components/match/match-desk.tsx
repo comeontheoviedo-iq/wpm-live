@@ -1585,7 +1585,7 @@ export function MatchDesk({
         setBusy(false);
       }
     },
-    [apiFootballFixtureId, matchId, router, loadSuggestions, loadRelevantNotes, homeName, awayName, attachVizToPopup, homeClubId, awayClubId, status]
+    [apiFootballFixtureId, matchId, router, loadSuggestions, loadRelevantNotes, homeName, awayName, attachVizToPopup, pushLivePopup, homeClubId, awayClubId, status]
   );
 
   useEffect(() => {
@@ -1854,28 +1854,21 @@ export function MatchDesk({
     if (htVizEmittedRef.current) return;
     htVizEmittedRef.current = true;
     const id = `ht-viz|${Date.now()}`;
-    setLivePopups((prev) =>
-      [
-        ...prev,
-        {
-          id,
-          kind: "fact" as const,
-          title: "Half-time · Advanced stats",
-          lines: [
-            `${homeName} ${homeScore}–${awayScore} ${awayName}`,
-            "xG race / possession when available",
-          ],
-          scoreline: `${homeName} ${homeScore}–${awayScore} ${awayName}`,
-          createdAt: Date.now(),
-          pinned: false,
-        },
-      ].slice(-5)
+    pushLivePopup(
+      {
+        id,
+        kind: "fact" as const,
+        title: "Half-time · Advanced stats",
+        lines: [
+          `${homeName} ${homeScore}–${awayScore} ${awayName}`,
+          "xG race / possession when available",
+        ],
+        scoreline: `${homeName} ${homeScore}–${awayScore} ${awayName}`,
+      },
+      16_000
     );
     window.setTimeout(() => void attachVizToPopup(id, "xg_race", "ht"), 100);
-    window.setTimeout(() => {
-      setLivePopups((prev) => prev.filter((p) => p.id !== id || p.pinned));
-    }, 16_000);
-  }, [status, homeName, awayName, homeScore, awayScore, attachVizToPopup]);
+  }, [status, homeName, awayName, homeScore, awayScore, attachVizToPopup, pushLivePopup]);
 
   // Periodic moment flash only when fingerprint changes (not spam)
   useEffect(() => {
@@ -1910,19 +1903,15 @@ export function MatchDesk({
     // status is Live here — detect HT-ish minute window as momentum beat
     const isHt =
       typeof last?.minute === "number" && last.minute >= 45 && last.minute <= 46;
-    setLivePopups((prevPop) =>
-      [
-        ...prevPop,
-        {
-          id,
-          kind: "fact" as const,
-          title: isHt ? "Half-time" : "Moment",
-          lines: lines.slice(0, 6),
-          scoreline: `${homeName} ${homeScore}–${awayScore} ${awayName}`,
-          createdAt: Date.now(),
-          pinned: false,
-        },
-      ].slice(-5)
+    pushLivePopup(
+      {
+        id,
+        kind: "fact" as const,
+        title: isHt ? "Half-time" : "Moment",
+        lines: lines.slice(0, 6),
+        scoreline: `${homeName} ${homeScore}–${awayScore} ${awayName}`,
+      },
+      10_000
     );
     // Rotate viz: HT chain vs moment chain (soft-fail + dedupe recent kinds)
     window.setTimeout(() => {
@@ -1932,11 +1921,6 @@ export function MatchDesk({
         isHt ? "ht" : "moment"
       );
     }, 80);
-    window.setTimeout(() => {
-      setLivePopups((prevPop) =>
-        prevPop.filter((p) => p.id !== id || p.pinned)
-      );
-    }, 10_000);
   }, [
     status,
     homeScore,
@@ -1946,6 +1930,7 @@ export function MatchDesk({
     homeName,
     awayName,
     attachVizToPopup,
+    pushLivePopup,
   ]);
 
 
@@ -2159,6 +2144,111 @@ export function MatchDesk({
             )}
           </div>
 
+          <div className="relative">
+            <button
+              type="button"
+              className={cn(
+                "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium",
+                intelHistoryOpen
+                  ? "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-100"
+                  : "border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-900"
+              )}
+              onClick={() => setIntelHistoryOpen((v) => !v)}
+              aria-expanded={intelHistoryOpen}
+              title="Live intel history — reopen dismissed flashes"
+            >
+              <History className="h-3 w-3" />
+              History
+              {intelHistory.length > 0 ? (
+                <span className="tabular-nums text-slate-500">
+                  {intelHistory.length}
+                </span>
+              ) : null}
+            </button>
+            {intelHistoryOpen && (
+              <>
+                <button
+                  type="button"
+                  className="fixed inset-0 z-30 cursor-default"
+                  aria-label="Close history"
+                  onClick={() => setIntelHistoryOpen(false)}
+                />
+                <div
+                  className="absolute right-0 top-full mt-1 z-40 w-[min(92vw,22rem)] max-h-[min(70vh,28rem)] overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 shadow-xl p-2"
+                  role="list"
+                  aria-label="Live intel history"
+                >
+                  <div className="sticky top-0 bg-white dark:bg-slate-950 pb-1 mb-1 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2 px-1">
+                    <div className="font-semibold text-slate-500 uppercase tracking-wide text-[10px]">
+                      Live intel history
+                    </div>
+                    <span className="text-[10px] text-slate-400 tabular-nums">
+                      newest first · {intelHistory.length}/{INTEL_HISTORY_CAP}
+                    </span>
+                  </div>
+                  {intelHistory.length === 0 ? (
+                    <p className="px-2 py-3 text-[11px] text-slate-500">
+                      Dismissed goals, facts, and viz flashes land here for this
+                      match session. Tap one to reopen.
+                    </p>
+                  ) : (
+                    <ul className="space-y-1.5">
+                      {intelHistory.map((item) => (
+                        <li key={item.id}>
+                          <button
+                            type="button"
+                            role="listitem"
+                            className={cn(
+                              "w-full text-left rounded-md border px-2.5 py-2 hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors",
+                              item.kind === "goal" &&
+                                "border-emerald-200 dark:border-emerald-900",
+                              item.kind === "sub" &&
+                                "border-sky-200 dark:border-sky-900",
+                              item.kind === "fact" &&
+                                "border-amber-200 dark:border-amber-900"
+                            )}
+                            onClick={() => reopenIntelHistory(item)}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
+                                {item.kind === "goal"
+                                  ? "Goal"
+                                  : item.kind === "sub"
+                                    ? "Sub"
+                                    : "Live"}
+                                {item.viz ? " · viz" : ""}
+                              </span>
+                              <span className="text-[9px] tabular-nums text-slate-400">
+                                {new Date(item.createdAt).toLocaleTimeString([], {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                  second: "2-digit",
+                                })}
+                              </span>
+                            </div>
+                            <div className="mt-0.5 text-[12px] font-bold text-slate-900 dark:text-white line-clamp-2">
+                              {item.title}
+                            </div>
+                            {item.scoreline ? (
+                              <div className="text-[10px] tabular-nums text-slate-600 dark:text-slate-300">
+                                {item.scoreline}
+                              </div>
+                            ) : null}
+                            {item.lines[0] ? (
+                              <div className="mt-0.5 text-[10px] text-slate-500 line-clamp-2">
+                                {item.lines[0]}
+                              </div>
+                            ) : null}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+
           <button
             type="button"
             className={cn(
@@ -2359,9 +2449,7 @@ export function MatchDesk({
                     className="rounded-md border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 hover:text-rose-600"
                     title="Dismiss"
                     onClick={() =>
-                      setLivePopups((prev) =>
-                        prev.filter((p) => p.id !== popup.id)
-                      )
+                      dismissLivePopup(popup.id, { force: true })
                     }
                   >
                     <X className="h-3 w-3" />

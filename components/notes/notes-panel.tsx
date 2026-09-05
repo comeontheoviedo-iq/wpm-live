@@ -464,6 +464,7 @@ export function NotesPanel({
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
             <input
               ref={searchRef}
+              data-pitchline-notes-search="1"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search notes… press /"

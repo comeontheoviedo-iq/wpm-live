@@ -37,6 +37,9 @@ import { namesLooselyMatch, parseSubDescription } from "@/lib/player-name";
 import { cn } from "@/lib/utils";
 import { formatLiveClock } from "@/lib/live-clock";
 import { ordinal, seasonOrdinal } from "@/lib/season-tally";
+import { bindDeskHotkeys } from "@/lib/desk-hotkeys";
+import { enrichFlashLines, momentFingerprint, shouldEmitMomentFlash } from "@/lib/flash-enrich";
+import { DeskLiveExtras } from "@/components/match/world-class/desk-live-extras";
 import {
   type FieldSettings,
   DEFAULT_FIELD_SETTINGS,
@@ -389,6 +392,24 @@ export function MatchDesk({
   const relevantInFlightRef = useRef(false);
   const [dossierId, setDossierId] = useState<string | null>(null);
   const [onAirOpen, setOnAirOpen] = useState(false);
+  /** Presentation mode: collapse notes/squad chrome → slim Relevant+last-event strip */
+  const [onAirMode, setOnAirMode] = useState(false);
+  const [hotkeyHelpOpen, setHotkeyHelpOpen] = useState(false);
+  const [pollError, setPollError] = useState<string | null>(null);
+  const lastGoalPopupRef = useRef<{
+    kind: "goal" | "sub" | "fact";
+    title: string;
+    subtitle?: string;
+    lines: string[];
+    scoreline?: string;
+  } | null>(null);
+  const momentFpRef = useRef<string | null>(null);
+  const notesRef = useRef(notes);
+  notesRef.current = notes;
+  const relevantNoteIdsRef = useRef(relevantNoteIds);
+  relevantNoteIdsRef.current = relevantNoteIds;
+  const statisticsRef = useRef(statistics);
+  statisticsRef.current = statistics;
   const [suggestions, setSuggestions] = useState<OnAirSuggestion[]>([]);
   const [dismissedSuggestions, setDismissedSuggestions] = useState<string[]>([]);
   const [intelOpen, setIntelOpen] = useState(false);
@@ -671,6 +692,48 @@ export function MatchDesk({
     return () => window.removeEventListener("keydown", onKey);
   }, [placing]);
 
+  useEffect(() => {
+    return bindDeskHotkeys({
+      onFocusNotesSearch: () => {
+        // NotesPanel also binds `/` — dispatch focus via query
+        const el = document.querySelector<HTMLInputElement>(
+          '[data-pitchline-notes-search="1"]'
+        );
+        el?.focus();
+      },
+      onReopenLastGoal: () => {
+        const g = lastGoalPopupRef.current;
+        if (!g) {
+          setMsg("No recent goal card to re-open");
+          return;
+        }
+        const id = `goal-reopen|${Date.now()}`;
+        setLivePopups((prev) =>
+          [
+            ...prev,
+            { ...g, id, createdAt: Date.now(), pinned: true },
+          ].slice(-5)
+        );
+      },
+      onSwapSides: () => toggleHomeOnLeft(),
+      onToggleOnAirMode: () => setOnAirMode((v) => !v),
+      onToggleHelp: () => setHotkeyHelpOpen((v) => !v),
+      onOpenShirt: (shirt) => {
+        const onPitch = squad.filter((p) => p.onPitch || p.isStarter);
+        const pool = onPitch.length ? onPitch : squad;
+        const hit =
+          pool.find((p) => p.shirtNumber === shirt) ||
+          squad.find((p) => p.shirtNumber === shirt);
+        if (hit) {
+          setSelected(hit);
+          setDossierId(hit.id);
+        } else {
+          setMsg(`No shirt #${shirt} on this desk`);
+        }
+      },
+    });
+  }, [toggleHomeOnLeft, squad]);
+
   const starterCount =
     homeEnriched.filter((p) => p.isStarter || p.onPitch).length +
     awayEnriched.filter((p) => p.isStarter || p.onPitch).length;
@@ -799,8 +862,11 @@ export function MatchDesk({
         });
         const json = await res.json();
         if (!res.ok) {
-          setMsg(json.error || "Sync failed");
+          const err = json.error || "Sync failed";
+          setMsg(err);
+          setPollError(err);
         } else {
+          setPollError(null);
           const syncedHome =
             typeof json.homeScore === "number"
               ? json.homeScore
@@ -987,7 +1053,7 @@ export function MatchDesk({
                     }
                   }
                 }
-                const lines = [
+                const baseLines = [
                   scorerName
                     ? `Scorer: ${scorer?.name || scorerName}`
                     : e.description,
@@ -997,13 +1063,25 @@ export function MatchDesk({
                   ...seasonBits,
                   hook ? `Note: ${hook}` : null,
                 ].filter(Boolean) as string[];
-                pushPopup({
-                  kind: "goal",
+                const relevantSnips = notesRef.current
+                  .filter((n) => relevantNoteIdsRef.current.includes(n.id) || (scorer && n.entityId === scorer.id))
+                  .slice(0, 3)
+                  .map((n) => ({ id: n.id, title: n.title, body: n.body }));
+                const lines = enrichFlashLines({
+                  baseLines,
+                  scoreline: `${homeName} ${scoreRef.current.home}–${scoreRef.current.away} ${awayName}`,
+                  relevantNotes: relevantSnips,
+                  statistics: statisticsRef.current,
+                }).slice(0, 10);
+                const goalPopup = {
+                  kind: "goal" as const,
                   title: `GOAL ${e.minute}'`,
                   subtitle: scorer?.name || scorerName || undefined,
-                  lines: [...new Set(lines)].slice(0, 8),
+                  lines: [...new Set(lines)].slice(0, 10),
                   scoreline: `${homeName} ${scoreRef.current.home}–${scoreRef.current.away} ${awayName}`,
-                });
+                };
+                lastGoalPopupRef.current = goalPopup;
+                pushPopup(goalPopup);
               } else if (/^sub$/i.test(e.type || "")) {
                 const { outName, inName } = parseSubDescription(
                   e.description || ""
@@ -1039,13 +1117,22 @@ export function MatchDesk({
                   subtitle: onP?.name || inName || undefined,
                   lines: [...new Set(lines)].slice(0, 6),
                 });
-              } else if (/var|penalty_miss|red/i.test(e.type || "")) {
+              } else if (/var|penalty_miss|red|yellow/i.test(e.type || "")) {
+                const relevantSnips = notesRef.current
+                  .filter((n) => relevantNoteIdsRef.current.includes(n.id))
+                  .slice(0, 2)
+                  .map((n) => ({ id: n.id, title: n.title, body: n.body }));
                 pushPopup({
                   kind: "fact",
                   title: `${(e.type || "Event")
                     .replace(/_/g, " ")
                     .toUpperCase()} ${e.minute}'`,
-                  lines: [e.description].filter(Boolean),
+                  lines: enrichFlashLines({
+                    baseLines: [e.description].filter(Boolean),
+                    scoreline: `${homeName} ${scoreRef.current.home}–${scoreRef.current.away} ${awayName}`,
+                    relevantNotes: relevantSnips,
+                    statistics: statisticsRef.current,
+                  }).slice(0, 8),
                 });
               }
             }
@@ -1060,7 +1147,8 @@ export function MatchDesk({
           router.refresh();
         }
       } catch {
-        setMsg("Sync failed");
+        setMsg("Sync failed — will retry");
+        setPollError("network");
       } finally {
         setBusy(false);
       }
@@ -1315,6 +1403,66 @@ export function MatchDesk({
     ["penalty_goal", "penalty_miss"].includes(e.type)
   );
 
+  // Periodic moment flash only when fingerprint changes (not spam)
+  useEffect(() => {
+    if (status !== "Live") return;
+    const last = events[events.length - 1];
+    const fp = momentFingerprint({
+      scoreHome: homeScore,
+      scoreAway: awayScore,
+      lastEventKey: last
+        ? `${last.minute}|${last.type}|${last.description}`
+        : null,
+      onTargetHome: shotsOnTarget?.homeValue ?? null,
+      onTargetAway: shotsOnTarget?.awayValue ?? null,
+    });
+    if (!shouldEmitMomentFlash(momentFpRef.current, fp)) return;
+    const prev = momentFpRef.current;
+    momentFpRef.current = fp;
+    if (prev == null) return;
+    const relevantSnips = notesRef.current
+      .filter((n) => relevantNoteIdsRef.current.includes(n.id))
+      .slice(0, 2)
+      .map((n) => ({ id: n.id, title: n.title, body: n.body }));
+    const lines = enrichFlashLines({
+      baseLines: last
+        ? [`${last.minute}' ${last.description}`]
+        : [`Score now ${homeName} ${homeScore}–${awayScore} ${awayName}`],
+      scoreline: `${homeName} ${homeScore}–${awayScore} ${awayName}`,
+      relevantNotes: relevantSnips,
+      statistics: statisticsRef.current,
+    });
+    const id = `moment|${Date.now()}`;
+    setLivePopups((prevPop) =>
+      [
+        ...prevPop,
+        {
+          id,
+          kind: "fact" as const,
+          title: "Moment",
+          lines: lines.slice(0, 6),
+          scoreline: `${homeName} ${homeScore}–${awayScore} ${awayName}`,
+          createdAt: Date.now(),
+          pinned: false,
+        },
+      ].slice(-5)
+    );
+    window.setTimeout(() => {
+      setLivePopups((prevPop) =>
+        prevPop.filter((p) => p.id !== id || p.pinned)
+      );
+    }, 10_000);
+  }, [
+    status,
+    homeScore,
+    awayScore,
+    events,
+    shotsOnTarget,
+    homeName,
+    awayName,
+  ]);
+
+
   const homeLogoUrl = homeTeamAfId
     ? `https://media.api-sports.io/football/teams/${homeTeamAfId}.png`
     : null;
@@ -1529,18 +1677,30 @@ export function MatchDesk({
             type="button"
             className={cn(
               "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium",
-              onAirOpen
-                ? "border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-200"
-                : "border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-900"
+              onAirMode
+                ? "border-rose-400 bg-rose-600 text-white dark:border-rose-500"
+                : onAirOpen
+                  ? "border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-200"
+                  : "border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-900"
             )}
-            onClick={() => setOnAirOpen((v) => !v)}
+            onClick={() => setOnAirMode((v) => !v)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setOnAirOpen((v) => !v);
+            }}
+            title="On-air mode (O) · right-click events drawer"
           >
             <Radio className="h-3 w-3 text-rose-500" />
-            On-air
+            {onAirMode ? "On-air ON" : "On-air"}
             <span className="tabular-nums text-slate-500">{events.length}</span>
-            <ChevronDown
-              className={cn("h-3 w-3 text-slate-400 transition", onAirOpen && "rotate-180")}
-            />
+          </button>
+          <button
+            type="button"
+            className="inline-flex items-center rounded-md border border-slate-200 dark:border-slate-700 px-1.5 py-1 text-[11px] hover:bg-slate-50 dark:hover:bg-slate-900"
+            onClick={() => setHotkeyHelpOpen(true)}
+            title="Hotkeys (?)"
+          >
+            ?
           </button>
 
           <Link
@@ -1593,6 +1753,50 @@ export function MatchDesk({
           </Button>
         </div>
       </header>
+
+      <DeskLiveExtras
+        matchId={matchId}
+        status={status}
+        events={events.map((e) => ({
+          id: e.id,
+          type: e.type,
+          minute: e.minute,
+          description: e.description,
+          team: e.teamSide,
+          playerId: e.playerId,
+        }))}
+        squad={squad.map((p) => ({
+          id: p.id,
+          name: p.name,
+          shirtNumber: p.shirtNumber,
+          side: p.side,
+          team: p.team,
+        }))}
+        homeName={homeName}
+        awayName={awayName}
+        homeScore={homeScore}
+        awayScore={awayScore}
+        h2hSummary={h2hSummary}
+        apiFootballFixtureId={apiFootballFixtureId}
+        lastFeedSyncAt={lastFeedSyncAt}
+        pollError={pollError}
+        onAirMode={onAirMode}
+        relevantNotes={notes
+          .filter((n) => relevantNoteIds.includes(n.id))
+          .map((n) => ({ id: n.id, title: n.title, body: n.body }))}
+        clockLabel={clockLabel}
+        helpOpen={hotkeyHelpOpen}
+        onCloseHelp={() => setHotkeyHelpOpen(false)}
+        onExpandNotes={() => {
+          setOnAirMode(false);
+          setNotesFilter("relevant");
+        }}
+        onOpenEvents={() => setOnAirOpen(true)}
+        onPlayerClick={(pid) => {
+          const p = squad.find((s) => s.id === pid);
+          if (p) openPlayer(p);
+        }}
+      />
 
       {/* Flash toast — overlay, not a permanent band */}
       {flash && (
@@ -1727,11 +1931,14 @@ export function MatchDesk({
       <div
         className={cn(
           "relative min-h-0 flex-1 grid grid-cols-1 gap-1.5 overflow-hidden",
-          hideSquadRail
-            ? "lg:grid-cols-[minmax(220px,280px)_minmax(0,1fr)]"
-            : "lg:grid-cols-[minmax(220px,260px)_minmax(0,1fr)_minmax(180px,200px)]"
+          onAirMode
+            ? "lg:grid-cols-[minmax(0,1fr)]"
+            : hideSquadRail
+              ? "lg:grid-cols-[minmax(220px,280px)_minmax(0,1fr)]"
+              : "lg:grid-cols-[minmax(220px,260px)_minmax(0,1fr)_minmax(180px,200px)]"
         )}
       >
+        {!onAirMode && (
         <aside className="min-h-0 overflow-hidden order-2 lg:order-1">
           <NotesPanel
             matchId={matchId}
@@ -1758,6 +1965,7 @@ export function MatchDesk({
             relevantLoading={relevantLoading}
           />
         </aside>
+        )}
 
         <section className="relative min-h-0 flex flex-col overflow-hidden order-1 lg:order-2">
           <div className="min-h-0 flex-1">
@@ -1956,7 +2164,7 @@ export function MatchDesk({
           )}
         </section>
 
-        {!hideSquadRail && (
+        {!hideSquadRail && !onAirMode && (
           <aside className="min-h-0 overflow-hidden order-3">
             <SquadRail
               players={squad}

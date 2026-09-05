@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Sparkles, AlertTriangle, Wand2, ChevronDown, ChevronUp } from "lucide-react";
+import { ResearchStagesHeader } from "@/components/packs/research-stages";
+import { looksLikeNotebookPaste } from "@/lib/research-stages";
 
 type Template = {
   key: string;
@@ -97,6 +99,16 @@ export function PacksClient({ matchId }: { matchId: string }) {
   const [sourceUrls, setSourceUrls] = useState("");
   const [sourceNotes, setSourceNotes] = useState("");
   const draftDirty = useRef(false);
+  const [researchDistributed, setResearchDistributed] = useState(false);
+  useEffect(() => {
+    try {
+      setResearchDistributed(
+        window.localStorage.getItem(`pitchline.researchDistributed.${matchId}`) === "1"
+      );
+    } catch {
+      /* ignore */
+    }
+  }, [matchId]);
 
   const sourcesPayload = useMemo(() => {
     const urls = sourceUrls
@@ -252,6 +264,17 @@ export function PacksClient({ matchId }: { matchId: string }) {
         matchNotes: 0,
       }) as Distributed;
       setLastDistributed(d);
+      if (active === "research") {
+        setResearchDistributed(true);
+        try {
+          window.localStorage.setItem(
+            `pitchline.researchDistributed.${matchId}`,
+            "1"
+          );
+        } catch {
+          /* ignore */
+        }
+      }
       setMsg(
         `Kept your Notebook draft for “${label}” · sent to desk notes · ${formatDistributed(d)}`
       );
@@ -433,6 +456,29 @@ export function PacksClient({ matchId }: { matchId: string }) {
   }
 
   const current = templates.find((t) => t.key === active);
+  async function fillGap(templateKey: string) {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const json = await generateOne(templateKey);
+      const section = json.section as Section;
+      setSections((prev) => {
+        const others = prev.filter((s) => s.templateKey !== templateKey);
+        return [section, ...others];
+      });
+      if (active === templateKey) {
+        draftDirty.current = false;
+        setDraft(section.content);
+      }
+      setMsg(`Filled gap: ${templateKey} only (no full re-research).`);
+      router.refresh();
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "Fill gap failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const researchDone = sections.some((s) => s.templateKey === "research");
   const hasSources = Boolean(sourcesPayload);
 
@@ -442,9 +488,10 @@ export function PacksClient({ matchId }: { matchId: string }) {
         <div>
           <h2 className="text-xl font-bold">Broadcast packs</h2>
           <p className="text-sm text-slate-500">
-            Paste Gemini Notebook research into a section, then Use my draft /
-            Send to desk notes. Generate overwrites paste (you’ll get a confirm).
-            Optional sources steer AI only — prefer pasting into the editor.
+            Gemini Notebook is the research source of truth: paste → Use my draft
+            → desk notes (organise/tag). Do not full re-Generate on top of paste —
+            use Fill gap for missing sections only. Generate still asks to confirm
+            before replacing a Notebook draft.
           </p>
         </div>
         <Button
@@ -456,11 +503,31 @@ export function PacksClient({ matchId }: { matchId: string }) {
           <Wand2 className="h-3.5 w-3.5 mr-1" />
           {packBusy
             ? "Deep researching…"
-            : researchDone
-              ? "Regenerate research pack"
-              : "Generate research pack"}
+            : (() => {
+                const research = sections.find((s) => s.templateKey === "research");
+                const pasted =
+                  research &&
+                  research.content.trim().length >= 40 &&
+                  (/^##\s+/m.test(research.content) ||
+                    research.content.trim().length >= 280);
+                if (pasted) return "Generate (replaces Notebook paste)";
+                return researchDone
+                  ? "Regenerate research pack"
+                  : "Generate research pack";
+              })()}
         </Button>
       </div>
+
+      <ResearchStagesHeader
+        sections={sections.map((s) => ({
+          templateKey: s.templateKey,
+          content: s.content,
+          status: s.status,
+        }))}
+        researchDistributed={researchDistributed}
+        onFillGap={(key) => void fillGap(key)}
+        fillBusy={busy || packBusy}
+      />
 
       {!gemini && (
         <div className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/40 px-3 py-2.5 text-sm text-amber-900 dark:text-amber-100 flex gap-2">

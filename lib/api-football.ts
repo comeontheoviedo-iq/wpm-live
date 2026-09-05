@@ -574,7 +574,7 @@ export function remapStartersToFormation(
 
   const coordFor = (slotId: string | null) => {
     if (!slotId) return { y: 50, x: 50 };
-    for (const f of ["4-3-3", "4-2-3-1", "4-4-2", "3-5-2"]) {
+    for (const f of ["4-3-3", "4-2-3-1", "4-4-2", "4-2-2-2", "3-5-2"]) {
       const s = slotsFor(f).find((x) => x.id === slotId);
       if (s) return { y: s.y, x: s.x };
     }

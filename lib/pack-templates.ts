@@ -156,7 +156,8 @@ Never invent disciplinary history. End with a line that hands back to the action
     order: 5,
     prompt: `${HOUSE_RULES}
 
-Write a spoken LINEUP READ for both teams.
+Write a spoken LINEUP / "let's look at the two teams" intro beat for both sides.
+- Open with a short bridge into the XIs (e.g. looking at the two teams)
 - Start with formation for each side (from context)
 - Read numbers + surnames in a natural radio cadence
 - Note captain and any standout selection ONLY if known from context
@@ -167,25 +168,45 @@ Keep it under ~90–120 seconds spoken.`,
   {
     key: "hooks",
     title: "Hooks & fillers (factual)",
-    description: "8–12 short factual on-air lines derived only from research/desk context.",
+    description:
+      "15+ numbered factual commentary hooks/fillers from grounded search + desk context (Notebook bar).",
     section: "hooks",
     order: 6,
     prompt: `${HOUSE_RULES}
 
-CRITICAL — HOOKS MUST BE DERIVED ONLY FROM THE RESEARCH / MATCH CONTEXT AND DESK FACTS ALREADY PROVIDED.
-Ban invented injuries, transfers, personal stories, fake stats, and colourful fiction.
-If a beat is not in context or grounded search, SKIP it. Prefer fewer true hooks over colourful fiction.
+SYSTEM TASK — COMMENTARY HOOKS & FILLERS (Notebook bar)
+Write commentary hooks and fillers usable throughout the game for an unofficial broadcast.
+Push hard to find REAL material via grounded Google search + MATCH CONTEXT / desk / API-Football.
 
-Generate 8–12 short factual on-air lines (not 15+ filler fluff).
-Prefer lines tagged to real named players from the XI/squad/context.
-Categories (use only when you have a real fact): openers, form/stakes, player watchpoint, tactical observation,
-injury/absence (only if listed), discipline (only if known), substitution bridge, weather/venue colour (only if known), full-time.
+You FAIL the task unless you produce **15 or more** numbered, relevant hooks/fillers.
+Do NOT invent. Every line must be factual from grounded search or desk context.
+If a specific beat cannot be verified, skip it (or mark Unknown) and find another true line instead —
+volume of *true* lines is required; colourful fiction is forbidden.
 
-Format:
-1. [Tag — Player/Topic] Title
-   Spoken line(s)
+Hunt across these categories (use only when you have a real fact):
+- City / town facts for the venue
+- Historical points for both teams
+- Recent matches for each team
+- Recent head-to-head
+- Overall H2H + head coaches
+- Quirky but true team facts
+- General team stats
+- Players returning to old clubs
+- Standout player stats / milestones
+- Narrative / transfer / context (only if confirmed)
+- Injured players (only if listed/confirmed)
+- Top scorers
+- Upcoming goal milestones
+- Transfer rumours — only when clearly attributed and current; else skip
+- Anything else relevant and grounded
 
-Number them. Each item: short title + 1–2 spoken lines.`,
+Format (NUMBER THEM 1…N, N ≥ 15):
+1. [Tag — Player/Topic] Short title
+   Spoken line(s) — 1–2 sentences, air-ready.
+
+Prefer lines tagged to real named players from the XI/squad/context when possible.
+Cite outlet/date lightly in parentheses when the fact comes from search.
+Target: 15–22 true hooks. Never pad with guesses.`,
   },
 ];
 

@@ -26,6 +26,7 @@ import {
 } from "./api-football";
 import { resolveWeatherForVenue } from "./weather";
 import { nationalityToIso } from "./flags";
+import { maybeAutoGenerateLineupPack } from "./pack-generate";
 
 
 /**
@@ -1511,12 +1512,33 @@ export async function syncMatchFromApiFootball(matchId: string) {
     },
   });
 
+  const previousStatus = match.lineupStatus || "expected";
+  let lineupPack: { triggered: boolean; reason: string } | null = null;
+  if (lineupStatus === "confirmed") {
+    // Fire-and-forget so sync stays fast; await only the decision kickoff
+    void maybeAutoGenerateLineupPack({
+      matchId,
+      previousStatus,
+      newStatus: lineupStatus,
+    })
+      .then((r) => {
+        if (r.triggered) {
+          console.info("[sync] auto lineup pack", matchId, r.reason);
+        }
+      })
+      .catch((err) => console.error("[sync] auto lineup pack failed", matchId, err));
+    lineupPack = { triggered: true, reason: "queued" };
+    // Refine: if already confirmed same XI, maybeAuto… returns quickly — still ok
+  }
+
   return {
     match: updated,
     lineupCount: lineups.length,
     eventCount: events.length,
     newEvents,
     lineupStatus,
+    previousLineupStatus: previousStatus,
+    lineupPack,
     squadHome: squadHome.upserted,
     squadAway: squadAway.upserted,
     injuryCount,

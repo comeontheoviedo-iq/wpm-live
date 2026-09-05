@@ -162,6 +162,8 @@ model Match {
   h2hSummary           String?
   predictedHomeJson    String?
   predictedAwayJson    String?
+  lineupPackGeneratedAt DateTime?
+  lineupPackXiHash     String?
   notes                Note[]
   speaks               Speak[]
   checklistItems       ChecklistItem[]

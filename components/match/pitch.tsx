@@ -1,6 +1,12 @@
 "use client";
 
-import { useState, type DragEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent,
+} from "react";
 import { User, X, SlidersHorizontal } from "lucide-react";
 import { slotsFor } from "@/lib/formations";
 import { cn } from "@/lib/utils";
@@ -20,6 +26,10 @@ import {
   DEFAULT_FIELD_SETTINGS,
   scaleFactor,
 } from "@/lib/field-settings";
+import {
+  estimateCardSizePx,
+  resolveCardOverlaps,
+} from "@/lib/pitch-layout";
 
 export type PitchPlayer = {
   id: string;
@@ -574,6 +584,21 @@ export function PitchBoard({
   const resolvedMarkerPct = markerPct ?? resolvedSettings.markerSizePct;
   const badge = lineupBadgeLabel(lineupStatus);
   const [dragOverSlot, setDragOverSlot] = useState<string | null>(null);
+  const pitchRef = useRef<HTMLDivElement | null>(null);
+  const [pitchSize, setPitchSize] = useState({ w: 0, h: 0 });
+
+  useEffect(() => {
+    const el = pitchRef.current;
+    if (!el) return;
+    const apply = () => {
+      const r = el.getBoundingClientRect();
+      setPitchSize({ w: Math.round(r.width), h: Math.round(r.height) });
+    };
+    apply();
+    const ro = new ResizeObserver(() => apply());
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   function placeLandscape(
     players: PitchPlayer[],
@@ -620,9 +645,30 @@ export function PitchBoard({
     return placed;
   }
 
-  const homePlaced = placeLandscape(homePlayers, homeSlots, "home");
-  const awayPlaced = placeLandscape(awayPlayers, awaySlots, "away");
-  const all = [...homePlaced, ...awayPlaced];
+  const cardPx = estimateCardSizePx(resolvedMarkerPct, resolvedSettings);
+  const all = useMemo(() => {
+    const homePlaced = placeLandscape(homePlayers, homeSlots, "home");
+    const awayPlaced = placeLandscape(awayPlayers, awaySlots, "away");
+    const raw = [...homePlaced, ...awayPlaced];
+    if (!pitchSize.w || !pitchSize.h) return raw;
+    return resolveCardOverlaps(
+      raw,
+      pitchSize.w,
+      pitchSize.h,
+      cardPx.w,
+      cardPx.h,
+      6
+    );
+  }, [
+    homePlayers,
+    awayPlayers,
+    homeSlots,
+    awaySlots,
+    pitchSize.w,
+    pitchSize.h,
+    cardPx.w,
+    cardPx.h,
+  ]);
   const placing = Boolean(placingPlayerId && !locked);
 
   const showScore =
@@ -689,6 +735,7 @@ export function PitchBoard({
       )}
     >
       <div
+        ref={pitchRef}
         className={cn(
           "relative w-full",
           compact ? "h-full min-h-[220px]" : "aspect-[16/9]"
@@ -869,10 +916,14 @@ export function PitchBoard({
             >
               <div
                 className={cn(
-                  "absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[88px] w-[76px] rounded-md z-0",
+                  "absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-md z-0",
                   isDragOver && "bg-sky-400/20"
                 )}
-                style={{ touchAction: "manipulation" }}
+                style={{
+                  touchAction: "manipulation",
+                  width: cardPx.w,
+                  height: cardPx.h,
+                }}
                 onDragOver={(e) => handleDragOver(e, key)}
                 onDragLeave={() => handleDragLeave(key)}
                 onDrop={(e) => handleDrop(e, side, slot.id)}
@@ -905,11 +956,12 @@ export function PitchBoard({
               {(isDragOver || highlightPlace) && (
                 <div
                   className={cn(
-                    "pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[88px] w-[76px] rounded-md border-2 z-[1]",
+                    "pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-md border-2 z-[1]",
                     isDragOver
                       ? "border-sky-300 bg-sky-400/25 shadow-[0_0_12px_rgba(56,189,248,0.55)]"
                       : "border-white/50 border-dashed bg-white/10"
                   )}
+                  style={{ width: cardPx.w, height: cardPx.h }}
                 />
               )}
 

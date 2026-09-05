@@ -194,8 +194,11 @@ export function PacksClient({ matchId }: { matchId: string }) {
   }
 
   async function sendToNotes() {
+    const label = templates.find((t) => t.key === active)?.title || active;
     if (!draft.trim()) {
-      setMsg(null);
+      setMsg(
+        `No content for “${label}” yet — Generate (or paste) first, then Send to desk notes.`
+      );
       return;
     }
     setBusy(true);
@@ -265,7 +268,7 @@ export function PacksClient({ matchId }: { matchId: string }) {
       setMsg(
         json.emptyDistribution && json.message
           ? json.message
-          : `Sent to desk notes · ${formatDistributed(d)}`
+          : `Sent “${label}” to desk notes · ${formatDistributed(d)}`
       );
       router.refresh();
     } catch (e) {
@@ -412,7 +415,12 @@ export function PacksClient({ matchId }: { matchId: string }) {
               <button
                 key={t.key}
                 type="button"
-                onClick={() => setActive(t.key)}
+                onClick={() => {
+                  setActive(t.key);
+                  const existing = sections.find((s) => s.templateKey === t.key);
+                  setDraft(existing?.content || "");
+                  setMsg(null);
+                }}
                 className={`w-full text-left rounded-lg px-3 py-2 text-sm border ${
                   active === t.key
                     ? "border-teal-500 bg-teal-50 dark:bg-teal-950/40"
@@ -450,7 +458,11 @@ export function PacksClient({ matchId }: { matchId: string }) {
                 variant="secondary"
                 disabled={busy || packBusy || !draft.trim()}
                 onClick={sendToNotes}
-                title="Push this section into Scripts / desk notes"
+                title={
+                  draft.trim()
+                    ? `Push “${current?.title || active}” into Scripts / desk notes`
+                    : "Generate or paste content for this section first"
+                }
               >
                 Send to desk notes
               </Button>
@@ -461,7 +473,25 @@ export function PacksClient({ matchId }: { matchId: string }) {
             </div>
           </CardHeader>
           <CardBody className="space-y-2">
-            {msg && <p className="text-xs text-slate-500">{msg}</p>}
+            {msg && (
+              <p
+                className={`text-xs ${
+                  /failed|error|no content|could not|page instead|nothing mapped/i.test(
+                    msg
+                  )
+                    ? "text-rose-600 dark:text-rose-400"
+                    : "text-emerald-700 dark:text-emerald-400"
+                }`}
+              >
+                {msg}
+              </p>
+            )}
+            {!draft.trim() && (
+              <p className="text-[11px] text-amber-700 dark:text-amber-300">
+                This section is empty — Generate first (or paste), then Send to
+                desk notes unlocks.
+              </p>
+            )}
             <textarea
               className="w-full min-h-[420px] rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent px-3 py-2 text-sm leading-relaxed font-mono"
               value={draft}

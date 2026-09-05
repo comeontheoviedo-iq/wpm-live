@@ -244,15 +244,21 @@ export default function NewMatchDayPage() {
           awayClubId,
           kickoff: kickoffDate.toISOString(),
           apiFootballFixtureId: selectedFixture?.fixture.id,
+          homeApiFootballTeamId: selectedFixture?.teams.home.id,
+          awayApiFootballTeamId: selectedFixture?.teams.away.id,
+          homeTeamName: selectedFixture?.teams.home.name,
+          awayTeamName: selectedFixture?.teams.away.name,
           featured: true,
         }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(
-          json.error ||
-            (typeof json === "object" ? JSON.stringify(json) : "Create failed")
-        );
+        const raw = typeof json.error === "string" ? json.error : "";
+        const short =
+          raw && raw.length < 180 && !raw.includes("Invalid `")
+            ? raw
+            : "Could not create match desk. Please try again.";
+        setError(short);
         return;
       }
       if (!json.match?.id) {

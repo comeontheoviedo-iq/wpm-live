@@ -2,6 +2,36 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { DEFAULT_CHECKLIST, DEFAULT_SCRIPT_SLOTS } from "@/lib/defaults";
+import { ensureClub, parseAfTeamId } from "@/lib/ensure-club";
+
+function sanitizeCreateError(e: unknown): { status: number; error: string } {
+  if (
+    typeof e === "object" &&
+    e !== null &&
+    "code" in e &&
+    typeof (e as { code?: string }).code === "string"
+  ) {
+    const code = (e as { code: string }).code;
+    if (code === "P2002") {
+      return { status: 409, error: "Fixture already linked to another desk" };
+    }
+    if (code === "P2003") {
+      return {
+        status: 400,
+        error:
+          "Could not create match desk — a related record is missing. Sign in again and re-select the teams.",
+      };
+    }
+  }
+  console.error(
+    "[POST /api/match-days]",
+    e instanceof Error ? e.message : String(e)
+  );
+  return {
+    status: 500,
+    error: "Could not create match desk. Please try again.",
+  };
+}
 
 export async function GET() {
   const session = await getSession();
@@ -22,6 +52,15 @@ export async function POST(req: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  // Stale JWT after DB reseed → MatchDay.userId FK P2003 (exact UI dump)
+  const dbUser = await prisma.user.findUnique({ where: { id: session.id } });
+  if (!dbUser) {
+    return NextResponse.json(
+      { error: "Session expired — please sign in again" },
+      { status: 401 }
+    );
+  }
+
   try {
     const body = await req.json().catch(() => ({}));
 
@@ -29,20 +68,33 @@ export async function POST(req: Request) {
     const homeClubId = String(body.homeClubId || "").trim();
     const awayClubId = String(body.awayClubId || "").trim();
     const kickoffRaw = body.kickoff;
-    if (!competition || !homeClubId || !awayClubId || !kickoffRaw) {
+    if (!competition || !kickoffRaw) {
       return NextResponse.json(
-        { error: "competition, homeClubId, awayClubId, kickoff required" },
+        { error: "competition and kickoff required" },
         { status: 400 }
       );
     }
-    if (homeClubId === awayClubId) {
-      return NextResponse.json({ error: "Teams must differ" }, { status: 400 });
-    }
 
-    const home = await prisma.club.findUnique({ where: { id: homeClubId } });
-    const away = await prisma.club.findUnique({ where: { id: awayClubId } });
-    if (!home || !away) {
-      return NextResponse.json({ error: "Club not found" }, { status: 404 });
+    const homeAf = parseAfTeamId(
+      body.homeApiFootballTeamId ?? body.homeAfTeamId
+    );
+    const awayAf = parseAfTeamId(
+      body.awayApiFootballTeamId ?? body.awayAfTeamId
+    );
+    const homeName = String(body.homeTeamName || body.homeName || "").trim();
+    const awayName = String(body.awayTeamName || body.awayName || "").trim();
+
+    if (!homeClubId && homeAf === null && !homeName) {
+      return NextResponse.json(
+        { error: "homeClubId or home API-Football team required" },
+        { status: 400 }
+      );
+    }
+    if (!awayClubId && awayAf === null && !awayName) {
+      return NextResponse.json(
+        { error: "awayClubId or away API-Football team required" },
+        { status: 400 }
+      );
     }
 
     const kickoff = new Date(kickoffRaw);
@@ -56,7 +108,6 @@ export async function POST(req: Request) {
         ? null
         : Number(fixtureIdRaw);
 
-    // Not @unique in schema, but prevent accidental duplicate desks for same fixture
     if (apiFootballFixtureId !== null && !Number.isNaN(apiFootballFixtureId)) {
       const existing = await prisma.match.findFirst({
         where: { apiFootballFixtureId },
@@ -74,17 +125,37 @@ export async function POST(req: Request) {
       }
     }
 
-    const title =
-      String(body.title || "").trim() ||
-      `${home.shortName} vs ${away.shortName}`;
-
     const result = await prisma.$transaction(async (tx) => {
+      const home = await ensureClub(tx, {
+        id: homeClubId || null,
+        name: homeName || null,
+        shortName: body.homeShortName || null,
+        apiFootballTeamId: homeAf,
+      });
+      const away = await ensureClub(tx, {
+        id: awayClubId || null,
+        name: awayName || null,
+        shortName: body.awayShortName || null,
+        apiFootballTeamId: awayAf,
+      });
+
+      if (!home || !away) {
+        throw Object.assign(new Error("CLUB_NOT_FOUND"), { code: "CLUB_NOT_FOUND" });
+      }
+      if (home.id === away.id) {
+        throw Object.assign(new Error("TEAMS_SAME"), { code: "TEAMS_SAME" });
+      }
+
+      const title =
+        String(body.title || "").trim() ||
+        `${home.shortName} vs ${away.shortName}`;
+
       const matchDay = await tx.matchDay.create({
         data: {
           title,
           date: kickoff,
           competition,
-          userId: session.id,
+          userId: dbUser.id,
           status: "upcoming",
         },
       });
@@ -92,8 +163,8 @@ export async function POST(req: Request) {
       const match = await tx.match.create({
         data: {
           matchDayId: matchDay.id,
-          homeClubId,
-          awayClubId,
+          homeClubId: home.id,
+          awayClubId: away.id,
           kickoff,
           status: "Assigned",
           featured: Boolean(body.featured),
@@ -119,7 +190,7 @@ export async function POST(req: Request) {
         data: DEFAULT_SCRIPT_SLOTS.map((s) => ({
           ...s,
           matchId: match.id,
-          userId: session.id,
+          userId: dbUser.id,
         })),
       });
 
@@ -170,24 +241,31 @@ export async function POST(req: Request) {
         ],
       });
 
-      return { matchDay, match };
+      return { matchDay, match, home, away };
     });
 
     return NextResponse.json(result);
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    console.error("[POST /api/match-days]", msg);
     if (
       typeof e === "object" &&
       e !== null &&
       "code" in e &&
-      (e as { code?: string }).code === "P2002"
+      (e as { code?: string }).code === "CLUB_NOT_FOUND"
     ) {
       return NextResponse.json(
-        { error: "Fixture already linked" },
-        { status: 409 }
+        { error: "Club not found — re-select teams from the fixture list" },
+        { status: 404 }
       );
     }
-    return NextResponse.json({ error: msg }, { status: 500 });
+    if (
+      typeof e === "object" &&
+      e !== null &&
+      "code" in e &&
+      (e as { code?: string }).code === "TEAMS_SAME"
+    ) {
+      return NextResponse.json({ error: "Teams must differ" }, { status: 400 });
+    }
+    const { status, error } = sanitizeCreateError(e);
+    return NextResponse.json({ error }, { status });
   }
 }

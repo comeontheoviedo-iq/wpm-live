@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { ensureClub, parseAfTeamId } from "@/lib/ensure-club";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -30,81 +31,34 @@ export async function POST(req: Request) {
     const name = String(body.name || "").trim();
     if (!name) return NextResponse.json({ error: "name required" }, { status: 400 });
 
-    const afTeamIdRaw = body.apiFootballTeamId;
-    const afTeamId =
-      afTeamIdRaw === null || afTeamIdRaw === undefined || afTeamIdRaw === ""
-        ? null
-        : Number(afTeamIdRaw);
+    const afTeamId = parseAfTeamId(body.apiFootballTeamId);
+    const before =
+      afTeamId !== null
+        ? await prisma.club.findFirst({ where: { apiFootballTeamId: afTeamId } })
+        : await prisma.club.findFirst({ where: { name: { equals: name } } });
 
-    if (afTeamId !== null && !Number.isNaN(afTeamId)) {
-      const byAf = await prisma.club.findFirst({
-        where: { apiFootballTeamId: afTeamId },
-      });
-      if (byAf) {
-        // Keep name in sync lightly if missing AF link already existed under same id
-        return NextResponse.json({ club: byAf, existing: true });
-      }
-    }
-
-    const byName = await prisma.club.findFirst({
-      where: { name: { equals: name } },
+    const club = await ensureClub(prisma, {
+      name,
+      shortName: body.shortName,
+      abbreviation: body.abbreviation,
+      apiFootballTeamId: afTeamId,
+      primaryColor: body.primaryColor,
+      secondaryColor: body.secondaryColor,
+      badgeEmoji: body.badgeEmoji,
+      city: body.city,
     });
-    if (byName) {
-      if (
-        afTeamId !== null &&
-        !Number.isNaN(afTeamId) &&
-        byName.apiFootballTeamId == null
-      ) {
-        const updated = await prisma.club.update({
-          where: { id: byName.id },
-          data: { apiFootballTeamId: afTeamId },
-        });
-        return NextResponse.json({ club: updated, existing: true });
-      }
-      return NextResponse.json({ club: byName, existing: true });
+
+    if (!club) {
+      return NextResponse.json({ error: "Could not create club" }, { status: 500 });
     }
 
-    const shortName = String(body.shortName || name).trim();
-    const abbreviation = String(
-      body.abbreviation || shortName.slice(0, 3).toUpperCase()
-    );
-
-    try {
-      const club = await prisma.club.create({
-        data: {
-          name,
-          shortName,
-          abbreviation,
-          primaryColor: body.primaryColor || "#0d9488",
-          secondaryColor: body.secondaryColor || "#f0fdfa",
-          badgeEmoji: body.badgeEmoji || "⚽",
-          city: body.city || null,
-          apiFootballTeamId:
-            afTeamId !== null && !Number.isNaN(afTeamId) ? afTeamId : null,
-        },
-      });
-      return NextResponse.json({ club });
-    } catch (e) {
-      // Unique conflict (or race): fetch existing by AF id or name
-      const msg = e instanceof Error ? e.message : String(e);
-      if (afTeamId !== null && !Number.isNaN(afTeamId)) {
-        const existing = await prisma.club.findFirst({
-          where: { apiFootballTeamId: afTeamId },
-        });
-        if (existing) return NextResponse.json({ club: existing, existing: true });
-      }
-      const existingByName = await prisma.club.findFirst({
-        where: { name: { equals: name } },
-      });
-      if (existingByName) {
-        return NextResponse.json({ club: existingByName, existing: true });
-      }
-      console.error("[POST /api/clubs]", msg);
-      return NextResponse.json({ error: msg }, { status: 500 });
-    }
+    return NextResponse.json({ club, existing: Boolean(before) });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[POST /api/clubs]", msg);
-    return NextResponse.json({ error: msg }, { status: 500 });
+    return NextResponse.json(
+      { error: "Could not save club. Please try again." },
+      { status: 500 }
+    );
   }
 }

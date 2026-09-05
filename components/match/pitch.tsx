@@ -426,6 +426,16 @@ function PitchCardToken({
             {player.isCaptain ? "© " : ""}
             {fieldName}
           </span>
+          {player.age != null && Number.isFinite(player.age) ? (
+            <span
+              className={cn(
+                "mt-px text-[6.5px] font-semibold leading-none tabular-nums tracking-wide",
+                isHome ? "text-white/70" : "text-slate-500"
+              )}
+            >
+              {Math.round(player.age)} y/o
+            </span>
+          ) : null}
         </div>
 
         {/* Cream stats table */}

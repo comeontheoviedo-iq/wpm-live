@@ -97,6 +97,9 @@ function PreviewCard({
             >
               SAMPLE
             </span>
+            <span className="mt-px text-[6.5px] font-semibold leading-none tabular-nums tracking-wide text-slate-500">
+              27 y/o
+            </span>
           </div>
           <div className="bg-[#F4EFE3] px-0.5 py-0.5 border-t border-black/10">
             <div

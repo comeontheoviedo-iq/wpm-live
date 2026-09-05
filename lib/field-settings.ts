@@ -60,7 +60,7 @@ export const ALL_CARD_FIELDS: {
   { id: "M_GOL", label: "M GOL", hint: "Goals this match", outfield: true },
   { id: "M_AST", label: "M AST", hint: "Assists this match", outfield: true },
   { id: "RTG", label: "RTG", hint: "Season rating", outfield: true, gk: true },
-  { id: "AGE", label: "AGE", hint: "Age", outfield: true, gk: true },
+  { id: "AGE", label: "AGE", hint: "Age (also under name when known)", outfield: true, gk: true },
   { id: "SUB", label: "SUB", hint: "Sub minute / out", outfield: true },
   { id: "HGT", label: "HGT", hint: "Height", outfield: true, gk: true },
   { id: "WGT", label: "WGT", hint: "Weight", outfield: true, gk: true },

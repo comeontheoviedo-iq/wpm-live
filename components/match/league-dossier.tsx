@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Loader2, RefreshCw, X } from "lucide-react";
 import { NotesPanel, type NoteRow } from "@/components/notes/notes-panel";
 import { cn } from "@/lib/utils";
@@ -68,6 +68,8 @@ type LeaguePayload = {
 };
 
 type Tab = "overview" | "table" | "results" | "fixtures" | "history" | "notes";
+type ZoneKind = "cl" | "el" | "ecl" | "up" | "rel" | null;
+type FormLetter = "W" | "D" | "L";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "overview", label: "Overview" },
@@ -93,11 +95,157 @@ function whenLabel(iso: string) {
   }
 }
 
+function dateGroupKey(iso: string) {
+  try {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Europe/London",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date(iso));
+  } catch {
+    return iso.slice(0, 10);
+  }
+}
+
+function dateGroupLabel(iso: string) {
+  try {
+    return new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Europe/London",
+      weekday: "long",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    }).format(new Date(iso));
+  } catch {
+    return iso.slice(0, 10);
+  }
+}
+
+function kickoffLabel(iso: string) {
+  try {
+    return new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Europe/London",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(iso));
+  } catch {
+    return "—";
+  }
+}
+
 function scoreLabel(fx: SlimFx) {
   if (fx.goals.home != null && fx.goals.away != null) {
     return `${fx.goals.home}–${fx.goals.away}`;
   }
   return "–";
+}
+
+function gdLabel(gd: number) {
+  if (gd > 0) return `+${gd}`;
+  return String(gd);
+}
+
+function zoneKind(description?: string | null): ZoneKind {
+  if (!description) return null;
+  const d = description.toLowerCase();
+  if (/relegat/.test(d)) return "rel";
+  if (/champions\s*league|uefa\s*champions|^promotion\s*-\s*champions/.test(d))
+    return "cl";
+  if (/europa\s*league|uefa\s*europa/.test(d)) return "el";
+  if (/conference|uefa\s*europa\s*conference/.test(d)) return "ecl";
+  if (/promotion/.test(d)) return "up";
+  return null;
+}
+
+function parseForm(form?: string | null): FormLetter[] {
+  if (!form) return [];
+  return form
+    .toUpperCase()
+    .replace(/[^WDL]/g, "")
+    .slice(-5)
+    .split("")
+    .filter((c): c is FormLetter => c === "W" || c === "D" || c === "L");
+}
+
+function deskResult(fx: SlimFx, deskIds: Set<number>): FormLetter | null {
+  if (fx.goals.home == null || fx.goals.away == null) return null;
+  const homeDesk = deskIds.has(fx.home.id);
+  const awayDesk = deskIds.has(fx.away.id);
+  if (!homeDesk && !awayDesk) return null;
+  if (fx.goals.home === fx.goals.away) return "D";
+  const homeWon = fx.goals.home > fx.goals.away;
+  if (homeDesk && !awayDesk) return homeWon ? "W" : "L";
+  if (awayDesk && !homeDesk) return homeWon ? "L" : "W";
+  return "D";
+}
+
+function isFinished(fx: SlimFx) {
+  const s = (fx.status || "").toUpperCase();
+  return (
+    s === "FT" ||
+    s === "AET" ||
+    s === "PEN" ||
+    s === "AWD" ||
+    s === "WO" ||
+    /finished|after|award/i.test(fx.statusLong || "")
+  );
+}
+
+function isLiveStatus(fx: SlimFx) {
+  const s = (fx.status || "").toUpperCase();
+  return (
+    s === "1H" ||
+    s === "2H" ||
+    s === "HT" ||
+    s === "ET" ||
+    s === "BT" ||
+    s === "P" ||
+    s === "LIVE" ||
+    /live|half|extra/i.test(fx.statusLong || "")
+  );
+}
+
+function groupByDate(items: SlimFx[]): { key: string; label: string; items: SlimFx[] }[] {
+  const map = new Map<string, SlimFx[]>();
+  for (const fx of items) {
+    const key = dateGroupKey(fx.date);
+    const list = map.get(key) || [];
+    list.push(fx);
+    map.set(key, list);
+  }
+  return [...map.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([key, list]) => ({
+      key,
+      label: dateGroupLabel(list[0].date),
+      items: list.sort(
+        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+      ),
+    }));
+}
+
+function Crest({
+  src,
+  className,
+}: {
+  src?: string | null;
+  className?: string;
+}) {
+  if (!src) {
+    return <span className={cn("league-elite-crest is-empty", className)} aria-hidden />;
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt=""
+      className={cn("league-elite-crest", className)}
+      onError={(e) => {
+        (e.target as HTMLImageElement).style.visibility = "hidden";
+      }}
+    />
+  );
 }
 
 export function LeagueDossier({
@@ -139,9 +287,12 @@ export function LeagueDossier({
     (data?.leagueId
       ? `https://media.api-sports.io/football/leagues/${data.leagueId}.png`
       : null);
-  const highlight = new Set<number>();
-  if (data?.homeTeamId) highlight.add(data.homeTeamId);
-  if (data?.awayTeamId) highlight.add(data.awayTeamId);
+  const highlight = useMemo(() => {
+    const set = new Set<number>();
+    if (data?.homeTeamId) set.add(data.homeTeamId);
+    if (data?.awayTeamId) set.add(data.awayTeamId);
+    return set;
+  }, [data?.homeTeamId, data?.awayTeamId]);
 
   const titleTally = (() => {
     const map = new Map<string, number>();
@@ -198,6 +349,29 @@ export function LeagueDossier({
         .filter(Boolean)
         .join(" · ") || null;
 
+  const resultGroups = useMemo(() => {
+    const groups = groupByDate([...(data?.recent || [])]).reverse();
+    return groups.map((g) => ({
+      ...g,
+      items: [...g.items].reverse(),
+    }));
+  }, [data?.recent]);
+
+  const fixtureGroups = useMemo(() => {
+    const seen = new Set<number>();
+    const merged: SlimFx[] = [];
+    for (const fx of [
+      ...(data?.live || []),
+      ...(data?.todayFixtures || []),
+      ...(data?.upcoming || []),
+    ]) {
+      if (seen.has(fx.id)) continue;
+      seen.add(fx.id);
+      merged.push(fx);
+    }
+    return groupByDate(merged);
+  }, [data?.live, data?.todayFixtures, data?.upcoming]);
+
   function openFx(fx: SlimFx) {
     setSelectedFx(fx);
   }
@@ -208,6 +382,7 @@ export function LeagueDossier({
       data-league-dossier="1"
       data-dossier-kind="league"
       data-dossier-craft="v2"
+      data-league-elite="1"
     >
       <div className="player-dossier-titlebar">
         <div className="player-dossier-title">League dossier</div>
@@ -286,7 +461,7 @@ export function LeagueDossier({
             aria-selected={tab === t.key}
             onClick={() => {
               setTab(t.key);
-              if (t.key !== "results" && t.key !== "fixtures") setSelectedFx(null);
+              setSelectedFx(null);
             }}
             className={cn(
               "player-dossier-tab",
@@ -409,83 +584,128 @@ export function LeagueDossier({
         )}
 
         {!busy && data && tab === "table" && (
-          <Section title="Table">
+          <div className="league-elite-panel" data-league-elite-table="1">
             {!(data.standings?.length) ? (
-              <p className="text-xs text-[#64748b]">No standings returned.</p>
+              <p className="league-elite-empty">No standings returned.</p>
             ) : (
-              <div className="overflow-x-auto">
-                <table>
+              <div className="league-elite-table-wrap">
+                <table className="league-elite-table">
                   <thead>
                     <tr>
-                      <th>#</th>
-                      <th>Club</th>
-                      <th>MP</th>
-                      <th>W</th>
-                      <th>D</th>
-                      <th>L</th>
-                      <th>GD</th>
-                      <th>Pts</th>
-                      <th>Form</th>
-                      <th>Zone</th>
+                      <th className="is-rank">#</th>
+                      <th className="is-club">Club</th>
+                      <th className="is-num">P</th>
+                      <th className="is-num">W</th>
+                      <th className="is-num">D</th>
+                      <th className="is-num">L</th>
+                      <th className="is-num">GD</th>
+                      <th className="is-num is-pts">Pts</th>
+                      <th className="is-form">Form</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {data.standings.map((r) => (
-                      <tr
-                        key={`${r.rank}-${r.teamId}`}
-                        className={cn(highlight.has(r.teamId) && "font-semibold")}
-                      >
-                        <td className="muted">{r.rank}</td>
-                        <td>
-                          {r.logo ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={r.logo}
-                              alt=""
-                              className="inline h-3.5 w-3.5 mr-1 object-contain align-middle"
-                            />
-                          ) : null}
-                          {r.team}
-                        </td>
-                        <td>{r.played}</td>
-                        <td>{r.won}</td>
-                        <td>{r.drawn}</td>
-                        <td>{r.lost}</td>
-                        <td>{r.gd}</td>
-                        <td className="font-semibold">{r.points}</td>
-                        <td className="muted font-mono text-[10px]">
-                          {r.form || "—"}
-                        </td>
-                        <td
-                          className="muted text-[10px] max-w-[8rem] truncate"
-                          title={r.description || ""}
+                    {data.standings.map((r, i) => {
+                      const zone = zoneKind(r.description);
+                      const form = parseForm(r.form);
+                      const desk = highlight.has(r.teamId);
+                      return (
+                        <tr
+                          key={`${r.rank}-${r.teamId}`}
+                          className={cn(
+                            desk && "is-desk",
+                            i % 2 === 1 && "is-zebra",
+                            zone && `is-zone-${zone}`
+                          )}
+                          title={r.description || undefined}
+                          data-team-id={r.teamId}
                         >
-                          {r.description || "—"}
-                        </td>
-                      </tr>
-                    ))}
+                          <td className="is-rank">
+                            <span className="league-elite-rank">{r.rank}</span>
+                          </td>
+                          <td className="is-club">
+                            <span className="league-elite-club">
+                              <Crest src={r.logo} />
+                              <span className="league-elite-club-name">{r.team}</span>
+                            </span>
+                          </td>
+                          <td className="is-num">{r.played}</td>
+                          <td className="is-num">{r.won}</td>
+                          <td className="is-num">{r.drawn}</td>
+                          <td className="is-num">{r.lost}</td>
+                          <td
+                            className={cn(
+                              "is-num",
+                              r.gd > 0 && "is-pos",
+                              r.gd < 0 && "is-neg"
+                            )}
+                          >
+                            {gdLabel(r.gd)}
+                          </td>
+                          <td className="is-num is-pts">{r.points}</td>
+                          <td className="is-form">
+                            <span className="league-elite-form">
+                              {form.length ? (
+                                form.map((letter, fi) => (
+                                  <span
+                                    key={`${r.teamId}-${fi}-${letter}`}
+                                    className={cn(
+                                      "player-dossier-form-chip league-elite-form-pill",
+                                      letter === "W" && "is-w",
+                                      letter === "D" && "is-d",
+                                      letter === "L" && "is-l"
+                                    )}
+                                  >
+                                    {letter}
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="league-elite-form-empty">—</span>
+                              )}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
             )}
-            <p className="mt-2 text-[10px] text-[#64748b]">
-              Qualification / relegation zones appear in Zone when the feed
-              provides descriptions.
-            </p>
-          </Section>
+            {(data.standings?.length || 0) > 0 ? (
+              <div className="league-elite-legend" aria-hidden>
+                <span className="is-zone-cl">CL</span>
+                <span className="is-zone-el">EL</span>
+                <span className="is-zone-ecl">ECL</span>
+                <span className="is-zone-rel">REL</span>
+              </div>
+            ) : null}
+          </div>
         )}
 
         {!busy && data && tab === "results" && (
-          <div className="space-y-3">
-            <Section title="Recent results">
-              <FxList
-                items={data.recent || []}
-                empty="No recent results."
-                highlight={highlight}
-                onSelect={openFx}
-                selectedId={selectedFx?.id}
-              />
-            </Section>
+          <div className="league-elite-panel space-y-3" data-league-elite-results="1">
+            {!(data.recent?.length) ? (
+              <p className="league-elite-empty">No recent results.</p>
+            ) : (
+              <div className="league-elite-fx-groups">
+                {resultGroups.map((g) => (
+                  <section key={g.key} className="league-elite-fx-group">
+                    <div className="league-elite-fx-date">{g.label}</div>
+                    <ul className="league-elite-fx-list">
+                      {g.items.map((fx) => (
+                        <FxEliteRow
+                          key={fx.id}
+                          fx={fx}
+                          mode="result"
+                          highlight={highlight}
+                          selected={selectedFx?.id === fx.id}
+                          onSelect={openFx}
+                        />
+                      ))}
+                    </ul>
+                  </section>
+                ))}
+              </div>
+            )}
             {selectedFx ? (
               <MatchInfoPanel fx={selectedFx} onClose={() => setSelectedFx(null)} />
             ) : null}
@@ -493,34 +713,30 @@ export function LeagueDossier({
         )}
 
         {!busy && data && tab === "fixtures" && (
-          <div className="space-y-3">
-            <Section title="Live" dense>
-              <FxList
-                items={data.live || []}
-                empty="No live matches."
-                highlight={highlight}
-                onSelect={openFx}
-                selectedId={selectedFx?.id}
-              />
-            </Section>
-            <Section title="Today" dense>
-              <FxList
-                items={data.todayFixtures || []}
-                empty="No fixtures today."
-                highlight={highlight}
-                onSelect={openFx}
-                selectedId={selectedFx?.id}
-              />
-            </Section>
-            <Section title="Upcoming">
-              <FxList
-                items={data.upcoming || []}
-                empty="No upcoming fixtures."
-                highlight={highlight}
-                onSelect={openFx}
-                selectedId={selectedFx?.id}
-              />
-            </Section>
+          <div className="league-elite-panel space-y-3" data-league-elite-fixtures="1">
+            {!fixtureGroups.length ? (
+              <p className="league-elite-empty">No fixtures returned.</p>
+            ) : (
+              <div className="league-elite-fx-groups">
+                {fixtureGroups.map((g) => (
+                  <section key={g.key} className="league-elite-fx-group">
+                    <div className="league-elite-fx-date">{g.label}</div>
+                    <ul className="league-elite-fx-list">
+                      {g.items.map((fx) => (
+                        <FxEliteRow
+                          key={fx.id}
+                          fx={fx}
+                          mode="fixture"
+                          highlight={highlight}
+                          selected={selectedFx?.id === fx.id}
+                          onSelect={openFx}
+                        />
+                      ))}
+                    </ul>
+                  </section>
+                ))}
+              </div>
+            )}
             {selectedFx ? (
               <MatchInfoPanel fx={selectedFx} onClose={() => setSelectedFx(null)} />
             ) : null}
@@ -619,6 +835,94 @@ export function LeagueDossier({
   );
 }
 
+function FxEliteRow({
+  fx,
+  mode,
+  highlight,
+  selected,
+  onSelect,
+}: {
+  fx: SlimFx;
+  mode: "result" | "fixture";
+  highlight: Set<number>;
+  selected: boolean;
+  onSelect: (fx: SlimFx) => void;
+}) {
+  const hi = highlight.has(fx.home.id) || highlight.has(fx.away.id);
+  const result = mode === "result" ? deskResult(fx, highlight) : null;
+  const live = isLiveStatus(fx);
+  const finished = isFinished(fx);
+  const homeHi = highlight.has(fx.home.id);
+  const awayHi = highlight.has(fx.away.id);
+
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={() => onSelect(fx)}
+        className={cn(
+          "league-elite-fx-row",
+          hi && "is-desk",
+          selected && "is-selected",
+          result === "W" && "is-w",
+          result === "D" && "is-d",
+          result === "L" && "is-l",
+          live && "is-live"
+        )}
+        data-league-fx={fx.id}
+      >
+        <span className="league-elite-fx-time">
+          {mode === "fixture" ? (
+            live ? (
+              <span className="league-elite-live-badge">
+                {fx.elapsed != null ? `${fx.elapsed}'` : "LIVE"}
+              </span>
+            ) : (
+              kickoffLabel(fx.date)
+            )
+          ) : (
+            <span className="league-elite-fx-status">
+              {finished ? "FT" : fx.status || "—"}
+            </span>
+          )}
+        </span>
+
+        <span className={cn("league-elite-fx-side is-home", homeHi && "is-hi")}>
+          <span className="league-elite-fx-name truncate">{fx.home.name}</span>
+          <Crest src={fx.home.logo} />
+        </span>
+
+        <span className="league-elite-fx-score">
+          {mode === "result" || finished || live || fx.goals.home != null ? (
+            <span className="league-elite-fx-score-nums">{scoreLabel(fx)}</span>
+          ) : (
+            <span className="league-elite-fx-vs">vs</span>
+          )}
+        </span>
+
+        <span className={cn("league-elite-fx-side is-away", awayHi && "is-hi")}>
+          <Crest src={fx.away.logo} />
+          <span className="league-elite-fx-name truncate">{fx.away.name}</span>
+        </span>
+
+        {result ? (
+          <span className={cn("league-elite-wdl", `is-${result.toLowerCase()}`)}>
+            {result}
+          </span>
+        ) : mode === "result" ? (
+          <span className="league-elite-wdl is-muted" aria-hidden>
+            ·
+          </span>
+        ) : (
+          <span className="league-elite-fx-meta">
+            {fx.round ? fx.round.replace(/^Regular Season - /i, "R") : ""}
+          </span>
+        )}
+      </button>
+    </li>
+  );
+}
+
 function MatchInfoPanel({
   fx,
   onClose,
@@ -628,12 +932,14 @@ function MatchInfoPanel({
 }) {
   return (
     <Section title="Match info" dense>
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex items-start justify-between gap-2" data-league-match-info="1">
         <div className="min-w-0 space-y-1 text-xs">
-          <div className="font-semibold text-[#e2e8f0]">
-            {fx.home.name}{" "}
-            <span className="tabular-nums">{scoreLabel(fx)}</span>{" "}
-            {fx.away.name}
+          <div className="font-semibold text-[#e2e8f0] flex items-center gap-2 flex-wrap">
+            <Crest src={fx.home.logo} />
+            <span>{fx.home.name}</span>
+            <span className="tabular-nums">{scoreLabel(fx)}</span>
+            <span>{fx.away.name}</span>
+            <Crest src={fx.away.logo} />
           </div>
           <div className="text-[#64748b] tabular-nums">{whenLabel(fx.date)}</div>
           <div className="text-[#64748b]">
@@ -700,57 +1006,6 @@ function Kv({
         {sub ? <span className="player-dossier-kv-sub">{sub}</span> : null}
       </span>
     </div>
-  );
-}
-
-function FxList({
-  items,
-  empty,
-  highlight,
-  onSelect,
-  selectedId,
-}: {
-  items: SlimFx[];
-  empty: string;
-  highlight: Set<number>;
-  onSelect: (fx: SlimFx) => void;
-  selectedId?: number;
-}) {
-  if (!items.length) return <p className="text-xs text-[#64748b]">{empty}</p>;
-  return (
-    <ul className="space-y-1 text-xs">
-      {items.map((fx) => {
-        const hi = highlight.has(fx.home.id) || highlight.has(fx.away.id);
-        const selected = selectedId === fx.id;
-        return (
-          <li key={fx.id}>
-            <button
-              type="button"
-              onClick={() => onSelect(fx)}
-              className={cn(
-                "w-full flex gap-2 items-center rounded-[2px] px-1.5 py-1 text-left border border-transparent hover:bg-[#12161c] hover:border-white/[0.06]",
-                hi && "bg-[#12161c] font-semibold",
-                selected && "border-white/20 bg-[#161b22]"
-              )}
-              data-league-fx={fx.id}
-            >
-              <span className="text-[#64748b] w-28 shrink-0 tabular-nums text-[10px]">
-                {whenLabel(fx.date)}
-              </span>
-              <span className="flex-1 truncate text-[#e2e8f0]">
-                {fx.home.name} vs {fx.away.name}
-              </span>
-              <span className="tabular-nums font-semibold text-[#e2e8f0]">
-                {scoreLabel(fx)}
-              </span>
-              <span className="text-[10px] text-[#64748b] w-8 shrink-0">
-                {fx.status}
-              </span>
-            </button>
-          </li>
-        );
-      })}
-    </ul>
   );
 }
 

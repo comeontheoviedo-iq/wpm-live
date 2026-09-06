@@ -1657,6 +1657,392 @@
   background: #10141a;
 }
 
+
+/* League elite — FotMob / Sofascore density (table, results, fixtures) */
+.league-dossier .league-elite-panel {
+  margin: 0;
+}
+.league-dossier .league-elite-empty {
+  font-size: 0.75rem;
+  color: #64748b;
+  padding: 1.25rem 0.25rem;
+  text-align: center;
+}
+.league-dossier .league-elite-table-wrap {
+  overflow: auto;
+  max-height: min(62vh, 640px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 2px;
+  background: #0a0d12;
+}
+.league-dossier .league-elite-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+}
+.league-dossier .league-elite-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #10141a;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
+  font-size: 0.5625rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #64748b;
+  padding: 0.45rem 0.35rem;
+  text-align: center;
+  white-space: nowrap;
+}
+.league-dossier .league-elite-table thead th.is-club {
+  text-align: left;
+  padding-left: 0.5rem;
+}
+.league-dossier .league-elite-table thead th.is-rank {
+  text-align: center;
+  width: 1.75rem;
+  padding-left: 0.55rem;
+}
+.league-dossier .league-elite-table thead th.is-form {
+  text-align: right;
+  padding-right: 0.55rem;
+}
+.league-dossier .league-elite-table tbody td {
+  padding: 0.38rem 0.35rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.035);
+  color: #cbd5e1;
+  background: transparent;
+  text-align: center;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.league-dossier .league-elite-table tbody tr.is-zebra td {
+  background: rgba(255, 255, 255, 0.015);
+}
+.league-dossier .league-elite-table tbody tr.is-desk td {
+  background: rgba(148, 163, 184, 0.07);
+}
+.league-dossier .league-elite-table tbody tr.is-desk.is-zebra td {
+  background: rgba(148, 163, 184, 0.09);
+}
+.league-dossier .league-elite-table tbody tr.is-desk .league-elite-club-name {
+  color: #f1f5f9;
+  font-weight: 700;
+}
+.league-dossier .league-elite-table tbody td.is-club {
+  text-align: left;
+  padding-left: 0.5rem;
+  max-width: 11rem;
+}
+.league-dossier .league-elite-table tbody td.is-rank {
+  padding-left: 0.55rem;
+  color: #64748b;
+  font-weight: 600;
+  width: 1.75rem;
+}
+.league-dossier .league-elite-table tbody td.is-num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+  min-width: 1.5rem;
+  color: #94a3b8;
+}
+.league-dossier .league-elite-table tbody td.is-pts {
+  color: #f1f5f9;
+  font-weight: 800;
+  font-size: 0.75rem;
+}
+.league-dossier .league-elite-table tbody td.is-pos {
+  color: #34d399;
+}
+.league-dossier .league-elite-table tbody td.is-neg {
+  color: #f87171;
+}
+.league-dossier .league-elite-table tbody td.is-form {
+  text-align: right;
+  padding-right: 0.55rem;
+}
+.league-dossier .league-elite-rank {
+  display: inline-flex;
+  min-width: 1.1rem;
+  justify-content: center;
+}
+.league-dossier .league-elite-club {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  max-width: 100%;
+}
+.league-dossier .league-elite-club-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: #e2e8f0;
+  letter-spacing: -0.01em;
+}
+.league-dossier .league-elite-crest {
+  width: 1.125rem;
+  height: 1.125rem;
+  object-fit: contain;
+  flex-shrink: 0;
+  border-radius: 1px;
+  background: transparent;
+}
+.league-dossier .league-elite-crest.is-empty {
+  display: inline-block;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.league-dossier .league-elite-form {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.18rem;
+}
+.league-dossier .league-elite-form-pill {
+  min-width: 1.05rem;
+  height: 1.05rem;
+  padding: 0;
+  font-size: 0.5625rem;
+  border-radius: 2px;
+}
+.league-dossier .league-elite-form-empty {
+  color: #475569;
+  font-size: 0.625rem;
+}
+/* Zone accents — left rail (no candy violet) */
+.league-dossier .league-elite-table tbody tr.is-zone-cl td.is-rank,
+.league-dossier .league-elite-table tbody tr.is-zone-el td.is-rank,
+.league-dossier .league-elite-table tbody tr.is-zone-ecl td.is-rank,
+.league-dossier .league-elite-table tbody tr.is-zone-up td.is-rank,
+.league-dossier .league-elite-table tbody tr.is-zone-rel td.is-rank {
+  box-shadow: inset 3px 0 0 0 transparent;
+}
+.league-dossier .league-elite-table tbody tr.is-zone-cl td.is-rank {
+  box-shadow: inset 3px 0 0 0 #38bdf8;
+}
+.league-dossier .league-elite-table tbody tr.is-zone-el td.is-rank {
+  box-shadow: inset 3px 0 0 0 #f59e0b;
+}
+.league-dossier .league-elite-table tbody tr.is-zone-ecl td.is-rank {
+  box-shadow: inset 3px 0 0 0 #2dd4bf;
+}
+.league-dossier .league-elite-table tbody tr.is-zone-up td.is-rank {
+  box-shadow: inset 3px 0 0 0 #34d399;
+}
+.league-dossier .league-elite-table tbody tr.is-zone-rel td.is-rank {
+  box-shadow: inset 3px 0 0 0 #f87171;
+}
+.league-dossier .league-elite-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-top: 0.55rem;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+.league-dossier .league-elite-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.league-dossier .league-elite-legend span::before {
+  content: "";
+  width: 0.35rem;
+  height: 0.7rem;
+  border-radius: 1px;
+  background: currentColor;
+}
+.league-dossier .league-elite-legend .is-zone-cl { color: #38bdf8; }
+.league-dossier .league-elite-legend .is-zone-el { color: #f59e0b; }
+.league-dossier .league-elite-legend .is-zone-ecl { color: #2dd4bf; }
+.league-dossier .league-elite-legend .is-zone-rel { color: #f87171; }
+
+/* Results / fixtures rows */
+.league-dossier .league-elite-fx-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+.league-dossier .league-elite-fx-date {
+  font-size: 0.5625rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748b;
+  padding: 0.15rem 0.2rem 0.4rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  margin-bottom: 0.25rem;
+}
+.league-dossier .league-elite-fx-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.league-dossier .league-elite-fx-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 3.1rem minmax(0, 1fr) 3.1rem minmax(0, 1fr) 1.5rem;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.42rem 0.45rem;
+  border-radius: 2px;
+  border: 1px solid transparent;
+  background: #0a0d12;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  position: relative;
+  box-shadow: inset 3px 0 0 0 transparent;
+}
+.league-dossier .league-elite-fx-row:hover {
+  background: #12161c;
+  border-color: rgba(255, 255, 255, 0.05);
+}
+.league-dossier .league-elite-fx-row.is-desk {
+  background: rgba(148, 163, 184, 0.06);
+}
+.league-dossier .league-elite-fx-row.is-selected {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: #161b22;
+}
+.league-dossier .league-elite-fx-row.is-w {
+  box-shadow: inset 3px 0 0 0 #34d399;
+}
+.league-dossier .league-elite-fx-row.is-d {
+  box-shadow: inset 3px 0 0 0 #94a3b8;
+}
+.league-dossier .league-elite-fx-row.is-l {
+  box-shadow: inset 3px 0 0 0 #f87171;
+}
+.league-dossier .league-elite-fx-row.is-live {
+  box-shadow: inset 3px 0 0 0 #fbbf24;
+}
+.league-dossier .league-elite-fx-time {
+  font-size: 0.625rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #64748b;
+  text-align: center;
+}
+.league-dossier .league-elite-fx-status {
+  color: #64748b;
+  letter-spacing: 0.04em;
+}
+.league-dossier .league-elite-live-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.2rem;
+  padding: 0.1rem 0.28rem;
+  border-radius: 2px;
+  background: rgba(251, 191, 36, 0.12);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  color: #fbbf24;
+  font-size: 0.5625rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+.league-dossier .league-elite-fx-side {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+.league-dossier .league-elite-fx-side.is-home {
+  justify-content: flex-end;
+}
+.league-dossier .league-elite-fx-side.is-away {
+  justify-content: flex-start;
+}
+.league-dossier .league-elite-fx-name {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: #cbd5e1;
+  letter-spacing: -0.01em;
+}
+.league-dossier .league-elite-fx-side.is-hi .league-elite-fx-name {
+  color: #f8fafc;
+  font-weight: 800;
+}
+.league-dossier .league-elite-fx-score {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.35rem;
+}
+.league-dossier .league-elite-fx-score-nums {
+  font-size: 0.8125rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: #f8fafc;
+  background: #12161c;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  padding: 0.12rem 0.4rem;
+  min-width: 2.6rem;
+  text-align: center;
+}
+.league-dossier .league-elite-fx-vs {
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #475569;
+}
+.league-dossier .league-elite-wdl {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 2px;
+  font-size: 0.5625rem;
+  font-weight: 800;
+  justify-self: end;
+}
+.league-dossier .league-elite-wdl.is-w {
+  color: #34d399;
+  border: 1px solid rgba(52, 211, 153, 0.35);
+  background: rgba(52, 211, 153, 0.08);
+}
+.league-dossier .league-elite-wdl.is-d {
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(148, 163, 184, 0.06);
+}
+.league-dossier .league-elite-wdl.is-l {
+  color: #f87171;
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  background: rgba(248, 113, 113, 0.08);
+}
+.league-dossier .league-elite-wdl.is-muted {
+  color: #334155;
+  border: none;
+  background: transparent;
+}
+.league-dossier .league-elite-fx-meta {
+  font-size: 0.5rem;
+  font-weight: 600;
+  color: #475569;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Club dossier craft — reuse player-dossier shell; crest contains */
 .club-dossier .club-dossier-crest {
   object-fit: contain;

@@ -20,7 +20,7 @@ export function baseCardHeight(settings: FieldSettings): number {
 }
 
 export function baseCardWidth(): number {
-  return 76;
+  return 78;
 }
 
 /** Approximate rendered card size (matches PitchCardToken baseW + scaled transform). */

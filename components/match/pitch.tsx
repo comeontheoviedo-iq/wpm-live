@@ -231,18 +231,14 @@ function PitchCardToken({
         ? "OUT"
         : "-";
 
-  // Both sides: dark broadcast card surfaces; home/away = thin accent only
-  const band = "bg-[var(--card-bg)] text-[var(--card-fg)]";
-  const borderStyle = {
-    borderColor: "rgba(255,255,255,0.1)",
-    borderTopColor: teamColor || (isHome ? "#ffffff" : "#94a3b8"),
-    borderTopWidth: 2 as number,
-  };
+  // Craft: charcoal body; team colour = hairline + shirt # only
+  const accent = teamColor || (isHome ? "#f8fafc" : "#94a3b8");
+  const band = "text-[var(--card-fg)]";
 
   const cols = cardSettings.fieldsPerRow;
   const namePx = 9 * scaleFactor(cardSettings.nameSizePct);
   const markerScale = scaleFactor(markerPct);
-  const baseW = 76;
+  const baseW = 78;
 
   // Build cells from Field Settings visibility (S = season, M = match).
   type StatTuple = [string, string | number, string?, boolean?];
@@ -331,7 +327,7 @@ function PitchCardToken({
           placing && "ring-2 ring-amber-400",
           player.subbedOff && "opacity-50 grayscale-[25%]"
         )}
-        style={{ width: baseW, ...borderStyle }}
+        style={{ width: baseW }}
         title={[
           player.displayName || player.name,
           player.isCaptain ? "Captain" : null,
@@ -344,26 +340,16 @@ function PitchCardToken({
           .filter(Boolean)
           .join(" · ")}
       >
-        {/* Primary: # + short name (+ quiet flag/pos) */}
-        <div className="flex items-start justify-between gap-0.5 bg-[#0a0d12] px-1 pb-0 pt-0.5">
-          <span className="pitch-token-id">{shirt}</span>
-          <div className="flex flex-col items-end gap-[1px] pt-px">
-            <div className="flex items-center gap-px opacity-80" title={flagTitle || undefined}>
-              {flagNats.length ? (
-                flagNats.map((n) => <FlagImg key={n} nationality={n} />)
-              ) : (
-                <FlagImg nationality={player.nationality} />
-              )}
-            </div>
-            <span className="text-[5.5px] font-bold uppercase leading-none tracking-[0.08em] text-[#64748b]">
-              {pos}
-            </span>
-          </div>
-        </div>
+        {/* Team colour — top hairline only (number colour applied below) */}
+        <span
+          className="pitch-token-hairline"
+          style={{ backgroundColor: accent }}
+          aria-hidden
+        />
 
-        {/* Photo + name + age — name is co-primary with number */}
-        <div className="flex flex-col items-center bg-[#0c0f14] px-1 pb-0.5 pt-0.5">
-          <span className="relative flex h-7 w-7 sm:h-[30px] sm:w-[30px] items-center justify-center overflow-hidden rounded-[2px] bg-black/60 ring-1 ring-white/10">
+        {/* Primary triad: photo + loud # + surname */}
+        <div className="pitch-token-identity">
+          <span className="pitch-token-photo">
             {photo ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -388,21 +374,42 @@ function PitchCardToken({
               <User className="h-3.5 w-3.5" strokeWidth={1.5} />
             </span>
           </span>
-          <span
-            className="pitch-token-name mt-0.5 w-full truncate text-center"
-            style={{ fontSize: `${Math.max(namePx, 9)}px` }}
-          >
-            {player.isCaptain ? "© " : ""}
-            {fieldName}
-          </span>
-          {player.age != null && Number.isFinite(player.age) ? (
-            <span className="pitch-token-age mt-px">
-              {Math.round(player.age)} y/o
+
+          <div className="pitch-token-copy min-w-0 flex-1">
+            <div className="flex items-start justify-between gap-0.5">
+              <span className="pitch-token-id" style={{ color: accent }}>
+                {shirt}
+              </span>
+              <div
+                className="pitch-token-meta flex flex-col items-end gap-[1px] pt-px"
+                title={flagTitle || undefined}
+              >
+                <div className="flex items-center gap-px opacity-75">
+                  {flagNats.length ? (
+                    flagNats.map((n) => <FlagImg key={n} nationality={n} />)
+                  ) : (
+                    <FlagImg nationality={player.nationality} />
+                  )}
+                </div>
+                <span className="pitch-token-pos">{pos}</span>
+              </div>
+            </div>
+            <span
+              className="pitch-token-name mt-0.5 w-full truncate"
+              style={{ fontSize: `${Math.max(namePx, 9)}px` }}
+            >
+              {player.isCaptain ? "© " : ""}
+              {fieldName}
             </span>
-          ) : null}
+            {player.age != null && Number.isFinite(player.age) ? (
+              <span className="pitch-token-age mt-px">
+                {Math.round(player.age)} y/o
+              </span>
+            ) : null}
+          </div>
         </div>
 
-        {/* Quiet dense stats strip */}
+        {/* Quiet dense stats — Field Settings still drives which/how many */}
         <div className="pitch-token-stats px-0.5 py-[2px]">
           <div
             className="grid gap-y-px"
@@ -437,7 +444,7 @@ function PitchCardToken({
         </div>
 
         {(player.matchYellow || player.matchRed) && (
-          <span className="absolute left-0.5 top-[18px] flex flex-col gap-px">
+          <span className="absolute left-0.5 top-[22px] flex flex-col gap-px">
             {player.matchYellow ? (
               <span className="h-2 w-1.5 rounded-[1px] bg-yellow-400 shadow" />
             ) : null}

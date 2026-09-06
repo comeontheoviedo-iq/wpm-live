@@ -116,7 +116,7 @@ export function ClubDossier({
   const funNotes = notes.filter((n) => /fun|fact|trivia/i.test(n.title || ""));
 
   return (
-    <div data-desk-focus="dossier" className="fixed inset-y-0 right-0 z-50 flex w-full max-w-4xl flex-col border-l border-[var(--border)] bg-[var(--surface)] shadow-lg animate-slide-up">
+    <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-4xl flex-col border-l border-[var(--border)] bg-[var(--surface)] shadow-lg animate-slide-up">
       <div className="modal-header-shell shrink-0 px-4 py-3">
         {c?.logoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element

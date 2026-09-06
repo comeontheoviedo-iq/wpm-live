@@ -80,12 +80,9 @@
   --tracking-label: 0.08em;
   --font-tabular: ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono", Menlo, monospace;
 
-  /* Mission-control luminance weights — Scan / Investigate / On-air */
+  /* Mission-control luminance weights — Scan / On-air (investigate removed: broke dossier fixed drawer) */
   --weight-scan: 1;
   --weight-scan-rail: 0.78;
-  --weight-investigate-focus: 1;
-  --weight-investigate-pitch: 0.84;
-  --weight-investigate-rail: 0.7;
   --weight-onair-rail: 0.28;
   --weight-onair-header: 0.72;
   --weight-onair-chrome: 0.48;
@@ -547,27 +544,6 @@
 .scan-desk [data-desk-primary] {
   opacity: var(--weight-scan);
   filter: none;
-}
-
-/* Investigate: raise focused panel; slightly quiet pitch chrome (features stay) */
-.investigate-desk [data-desk-primary] {
-  opacity: var(--weight-investigate-pitch);
-  filter: saturate(0.88);
-  transition: opacity var(--duration-slow) var(--ease-out), filter var(--duration-slow) var(--ease-out);
-}
-.investigate-desk [data-desk-rail]:not([data-desk-focus]) {
-  opacity: var(--weight-investigate-rail);
-  filter: saturate(0.88);
-}
-.investigate-desk [data-desk-focus] {
-  opacity: var(--weight-investigate-focus);
-  filter: none;
-  position: relative;
-  z-index: 2;
-  box-shadow: var(--shadow-md);
-}
-.investigate-desk .desk-header {
-  opacity: 0.92;
 }
 
 /* On-air: deepen calm — scorebug+pitch only; chrome nearly silent */

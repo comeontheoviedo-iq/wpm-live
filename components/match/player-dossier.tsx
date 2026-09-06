@@ -434,7 +434,7 @@ export function PlayerDossier({
   }
 
   return (
-    <div data-desk-focus="dossier" className="fixed inset-y-0 right-0 z-50 w-full max-w-4xl shadow-lg border-l border-[var(--border)] bg-[var(--surface)] flex flex-col">
+    <div className="fixed inset-y-0 right-0 z-50 w-full max-w-4xl shadow-lg border-l border-[var(--border)] bg-[var(--surface)] flex flex-col">
       {/* Header */}
       <div className="modal-header-shell shrink-0 px-4 py-3">
         {data?.clubLogoUrl ? (

@@ -1959,8 +1959,9 @@ export function MatchDesk({
     return notes;
   }, [notes, dossierId]);
 
-  const investigating = Boolean(dossierId || clubDossierId);
-  const deskMode = onAirMode ? "onair" : investigating ? "investigate" : "scan";
+  // Scan / On-air only — do not enter investigate weighting when a dossier opens
+  // (pass-2 investigate mode overrode dossier position:fixed → broken click flow).
+  const deskMode = onAirMode ? "onair" : "scan";
 
   return (
     <div
@@ -1969,7 +1970,6 @@ export function MatchDesk({
       className={cn(
         "relative flex flex-col gap-1.5 overflow-hidden bg-[var(--background)] text-[var(--foreground)]",
         deskMode === "onair" && "onair-desk",
-        deskMode === "investigate" && "investigate-desk",
         deskMode === "scan" && "scan-desk",
         isFullscreen
           ? "fixed inset-0 z-[100] h-[100dvh] max-h-[100dvh] min-h-0 p-2"
@@ -2558,7 +2558,6 @@ export function MatchDesk({
         {!onAirMode && (
         <aside
           data-desk-rail="notes"
-          data-desk-focus={investigating && dossierId ? "1" : undefined}
           className="min-h-0 overflow-hidden order-2 lg:order-1"
         >
           <NotesPanel

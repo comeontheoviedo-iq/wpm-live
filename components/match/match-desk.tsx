@@ -2102,48 +2102,48 @@ export function MatchDesk({
                   aria-label="Close intel"
                   onClick={() => setIntelOpen(false)}
                 />
-                <div className="absolute right-0 top-full mt-1 z-40 w-56 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 shadow-lg p-2 text-[11px]">
+                <div className="absolute right-0 top-full mt-1 z-40 w-56 rounded-lg border border-slate-200 dark:border-slate-700 bg-[var(--surface)] shadow-lg p-2 text-[11px]">
                   <div className="font-semibold text-slate-500 uppercase tracking-wide px-1 mb-1">
                     Match intel
                   </div>
                   <Link
                     href={`/match-day/${matchId}/stats`}
-                    className="block rounded-md px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-900 font-semibold text-teal-700 dark:text-teal-300"
+                    className="block rounded-md px-2 py-1.5 hover:bg-[var(--surface-muted)] font-semibold text-teal-700 dark:text-teal-300"
                     onClick={() => setIntelOpen(false)}
                   >
                     Match Statistics
                   </Link>
                   <Link
                     href={`/match-day/${matchId}/league`}
-                    className="block rounded-md px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-900 font-semibold text-teal-700 dark:text-teal-300"
+                    className="block rounded-md px-2 py-1.5 hover:bg-[var(--surface-muted)] font-semibold text-teal-700 dark:text-teal-300"
                     onClick={() => setIntelOpen(false)}
                   >
                     League table & fixtures
                   </Link>
                   <Link
                     href={`/match-day/${matchId}/scorers`}
-                    className="block rounded-md px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-900"
+                    className="block rounded-md px-2 py-1.5 hover:bg-[var(--surface-muted)]"
                     onClick={() => setIntelOpen(false)}
                   >
                     Scorers {scorers.length ? `(${scorers.length})` : ""}
                   </Link>
                   <Link
                     href={`/match-day/${matchId}/keepers`}
-                    className="block rounded-md px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-900"
+                    className="block rounded-md px-2 py-1.5 hover:bg-[var(--surface-muted)]"
                     onClick={() => setIntelOpen(false)}
                   >
                     Keepers {keepers.length ? `(${keepers.length})` : ""}
                   </Link>
                   <Link
                     href={`/match-day/${matchId}/penalties`}
-                    className="block rounded-md px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-900"
+                    className="block rounded-md px-2 py-1.5 hover:bg-[var(--surface-muted)]"
                     onClick={() => setIntelOpen(false)}
                   >
                     Penalties {penalties.length ? `(${penalties.length})` : ""}
                   </Link>
                   <Link
                     href={`/match-day/${matchId}/injuries`}
-                    className="block rounded-md px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-900"
+                    className="block rounded-md px-2 py-1.5 hover:bg-[var(--surface-muted)]"
                     onClick={() => setIntelOpen(false)}
                   >
                     Injuries ({injuryCount})
@@ -2190,7 +2190,7 @@ export function MatchDesk({
                   role="list"
                   aria-label="Live intel history"
                 >
-                  <div className="sticky top-0 bg-white dark:bg-slate-950 pb-1 mb-1 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2 px-1">
+                  <div className="sticky top-0 bg-[var(--surface)] pb-1 mb-1 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2 px-1">
                     <div className="font-semibold text-slate-500 uppercase tracking-wide text-[10px]">
                       Live intel history
                     </div>

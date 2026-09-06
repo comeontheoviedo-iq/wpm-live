@@ -507,7 +507,7 @@ export function NotesPanel({
           {(fillHeight || liveMode || !compact) && (
             <div className="space-y-1 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface-muted)] p-1.5">
               <input
-                className="w-full rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-1.5 py-1 text-[11px]"
+                className="w-full rounded border border-slate-200 dark:border-slate-700 bg-[var(--surface)] px-1.5 py-1 text-[11px]"
                 placeholder="Title"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
@@ -515,7 +515,7 @@ export function NotesPanel({
               />
               <textarea
                 className={cn(
-                  "w-full rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-1.5 py-1 text-[11px]",
+                  "w-full rounded border border-slate-200 dark:border-slate-700 bg-[var(--surface)] px-1.5 py-1 text-[11px]",
                   liveMode ? "min-h-[40px]" : "min-h-[52px]"
                 )}
                 placeholder="Note body"
@@ -525,7 +525,7 @@ export function NotesPanel({
               />
               <div className="flex items-center gap-1.5">
                 <select
-                  className="min-w-0 flex-1 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-1.5 py-1 text-[11px]"
+                  className="min-w-0 flex-1 rounded border border-slate-200 dark:border-slate-700 bg-[var(--surface)] px-1.5 py-1 text-[11px]"
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
                   aria-label="Note category"

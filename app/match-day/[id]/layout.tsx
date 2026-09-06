@@ -22,12 +22,12 @@ export default async function MatchDayLayout({
   if (!match) notFound();
 
   return (
-    <div className="min-h-dvh pb-0">
+    <div className="min-h-dvh bg-[var(--background)] pb-0 text-[var(--foreground)]">
       <AppHeader user={user} matchId={match.id} />
-      <div className="desk-chrome relative overflow-hidden bg-white/95 dark:bg-slate-950/95">
+      <div className="desk-chrome relative overflow-hidden bg-[var(--surface)]">
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(13,148,136,0.08),transparent_45%),radial-gradient(ellipse_at_top_right,rgba(14,165,233,0.06),transparent_40%)]"
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(20,184,166,0.06),transparent_45%),radial-gradient(ellipse_at_top_right,rgba(225,29,72,0.04),transparent_40%)]"
         />
         <div className="relative mx-auto flex max-w-[1600px] flex-col gap-2 px-3 py-2.5 sm:flex-row sm:items-center sm:gap-4 sm:px-4">
           <div className="flex min-w-0 items-center gap-3">

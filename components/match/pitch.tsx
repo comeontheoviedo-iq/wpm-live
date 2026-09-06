@@ -123,15 +123,13 @@ function StatCell({
 }) {
   return (
     <div className="min-w-0 px-px text-center leading-none" title={title || label}>
-      <div className="truncate text-[5.5px] font-bold uppercase tracking-[0.08em] text-slate-500">
+      <div className="truncate text-[5.5px] font-bold uppercase tracking-[0.08em] text-[var(--card-muted)]">
         {label}
       </div>
       <div
         className={cn(
           "mt-px truncate text-[9px] font-extrabold tabular-nums tracking-tight",
-          emphasize
-            ? "text-emerald-700 dark:text-emerald-800"
-            : "text-slate-900"
+          emphasize ? "text-emerald-400" : "text-[var(--card-fg)]"
         )}
       >
         {value}
@@ -146,7 +144,7 @@ function FlagImg({ nationality, className }: { nationality?: string | null; clas
     return (
       <span
         className={cn(
-          "inline-block h-2.5 w-3.5 rounded-[1px] bg-slate-300/80",
+          "inline-block h-2.5 w-3.5 rounded-[1px] bg-white/20",
           className
         )}
       />
@@ -233,12 +231,13 @@ function PitchCardToken({
         ? "OUT"
         : "-";
 
-  const band = isHome
-    ? "bg-[#141414] text-white"
-    : "bg-white text-slate-900";
-  const borderStyle = isHome
-    ? { borderColor: "#ffffff" }
-    : { borderColor: teamColor };
+  // Both sides: dark broadcast card surfaces; home/away = thin accent only
+  const band = "bg-[var(--card-bg)] text-[var(--card-fg)]";
+  const borderStyle = {
+    borderColor: "rgba(255,255,255,0.12)",
+    borderTopColor: teamColor || (isHome ? "#ffffff" : "#94a3b8"),
+    borderTopWidth: 2.5 as number,
+  };
 
   const cols = cardSettings.fieldsPerRow;
   const namePx = 9 * scaleFactor(cardSettings.nameSizePct);
@@ -332,7 +331,7 @@ function PitchCardToken({
           placing && "ring-2 ring-amber-400",
           player.subbedOff && "opacity-50 grayscale-[25%]"
         )}
-        style={{ ...borderStyle, width: baseW, borderWidth: 1.5 }}
+        style={{ width: baseW, borderWidth: 1.5, ...borderStyle }}
         title={[
           player.displayName || player.name,
           player.isCaptain ? "Captain" : null,
@@ -346,18 +345,8 @@ function PitchCardToken({
           .join(" · ")}
       >
         {/* Header: # + flag/pos */}
-        <div
-          className={cn(
-            "flex items-center justify-between gap-0.5 px-1 pb-px pt-0.5",
-            isHome ? "bg-[#141414]" : "bg-white"
-          )}
-        >
-          <span
-            className={cn(
-              "text-[15px] sm:text-[16px] font-black leading-none tabular-nums tracking-tight",
-              isHome ? "text-white" : "text-slate-900"
-            )}
-          >
+        <div className="flex items-center justify-between gap-0.5 bg-[var(--card-bg-header)] px-1 pb-px pt-0.5">
+          <span className="text-[15px] sm:text-[16px] font-black leading-none tabular-nums tracking-tight text-[var(--card-fg)]">
             {shirt}
           </span>
           <div className="flex flex-col items-end gap-[1px]">
@@ -368,30 +357,15 @@ function PitchCardToken({
                 <FlagImg nationality={player.nationality} />
               )}
             </div>
-            <span
-              className={cn(
-                "text-[6.5px] font-bold uppercase leading-none tracking-[0.06em]",
-                isHome ? "text-white/75" : "text-slate-500"
-              )}
-            >
+            <span className="text-[6.5px] font-bold uppercase leading-none tracking-[0.06em] text-[var(--card-muted)]">
               {pos}
             </span>
           </div>
         </div>
 
         {/* Photo + name */}
-        <div
-          className={cn(
-            "flex flex-col items-center px-1 pb-0.5 pt-0.5",
-            isHome ? "bg-[#141414]" : "bg-[#f7f7f5]"
-          )}
-        >
-          <span
-            className={cn(
-              "relative flex h-8 w-8 sm:h-[34px] sm:w-[34px] items-center justify-center overflow-hidden rounded-[5px]",
-              isHome ? "bg-black/50 ring-1 ring-white/15" : "bg-slate-200/80 ring-1 ring-slate-300/80"
-            )}
-          >
+        <div className="flex flex-col items-center bg-[var(--card-bg)] px-1 pb-0.5 pt-0.5">
+          <span className="relative flex h-8 w-8 sm:h-[34px] sm:w-[34px] items-center justify-center overflow-hidden rounded-[5px] bg-black/50 ring-1 ring-white/15">
             {photo ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -409,38 +383,29 @@ function PitchCardToken({
             ) : null}
             <span
               className={cn(
-                "absolute inset-0 items-center justify-center",
-                photo ? "hidden" : "flex",
-                isHome ? "text-white/50" : "text-slate-400"
+                "absolute inset-0 items-center justify-center text-white/50",
+                photo ? "hidden" : "flex"
               )}
             >
               <User className="h-4 w-4" strokeWidth={1.5} />
             </span>
           </span>
           <span
-            className={cn(
-              "mt-0.5 w-full truncate text-center font-extrabold uppercase leading-[1.05] tracking-[0.02em]",
-              isHome ? "text-white" : "text-slate-900"
-            )}
+            className="mt-0.5 w-full truncate text-center font-extrabold uppercase leading-[1.05] tracking-[0.02em] text-[var(--card-fg)]"
             style={{ fontSize: `${namePx}px` }}
           >
             {player.isCaptain ? "© " : ""}
             {fieldName}
           </span>
           {player.age != null && Number.isFinite(player.age) ? (
-            <span
-              className={cn(
-                "mt-px text-[6.5px] font-semibold leading-none tabular-nums tracking-wide",
-                isHome ? "text-white/70" : "text-slate-500"
-              )}
-            >
+            <span className="mt-px text-[6.5px] font-semibold leading-none tabular-nums tracking-wide text-[var(--card-muted)]">
               {Math.round(player.age)} y/o
             </span>
           ) : null}
         </div>
 
-        {/* Cream stats table */}
-        <div className="border-t border-black/10 bg-[#F4EFE3] px-0.5 py-[3px]">
+        {/* Dark stats strip */}
+        <div className="border-t border-white/10 bg-[var(--card-bg-stats)] px-0.5 py-[3px]">
           <div
             className="grid gap-y-0.5"
             style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
@@ -457,7 +422,7 @@ function PitchCardToken({
           </div>
           {row2 ? (
             <div
-              className="mt-[3px] grid gap-y-0.5 border-t border-black/[0.06] pt-[3px]"
+              className="mt-[3px] grid gap-y-0.5 border-t border-white/10 pt-[3px]"
               style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
             >
               {row2.map(([label, value, tip, emph]) => (
@@ -541,7 +506,7 @@ function CoachChip({
           className={cn(
             "relative flex shrink-0 items-center justify-center overflow-hidden rounded",
             compact ? "h-5 w-5 rounded-sm" : "h-9 w-9 rounded-md",
-            "bg-slate-200/90 ring-1 ring-slate-300/80"
+            "bg-black/40 ring-1 ring-white/15"
           )}
         >
           {photo ? (
@@ -579,7 +544,7 @@ function CoachChip({
         <div
           className={cn(
             "truncate whitespace-nowrap font-bold leading-none tracking-tight",
-            isHome ? "text-slate-900" : ""
+            "text-[var(--bug-fg)]"
           )}
           style={{
             fontSize: `${namePx}px`,
@@ -1211,7 +1176,7 @@ export function PitchBoard({
                     className={cn(
                       "pitch-overlay-chip flex items-center gap-0.5 px-1 py-px text-[9px] leading-none",
                       chrome.light
-                        ? "bg-white/95 border-slate-300 text-slate-800"
+                        ? "bg-[var(--bug-bg-elevated)] border-white/20 text-[var(--bug-fg)]"
                         : "text-white"
                     )}
                     style={
@@ -1386,7 +1351,7 @@ export function PitchBoard({
                   <button
                     type="button"
                     onClick={onToggleHomeOnLeft}
-                    className="inline-flex h-5 w-5 items-center justify-center rounded-[2px] text-slate-800 hover:bg-slate-100"
+                    className="inline-flex h-5 w-5 items-center justify-center rounded-[2px] text-[var(--bug-fg)] hover:bg-white/10"
                     title={
                       homeOnLeft
                         ? "Swap sides · home moves to right"
@@ -1401,7 +1366,7 @@ export function PitchBoard({
                   <button
                     type="button"
                     onClick={() => onOpenFieldSettings("player")}
-                    className="inline-flex h-5 w-5 items-center justify-center rounded-[2px] text-slate-800 hover:bg-slate-100"
+                    className="inline-flex h-5 w-5 items-center justify-center rounded-[2px] text-[var(--bug-fg)] hover:bg-white/10"
                     title="Field Settings · Pitch Card"
                     aria-label="Field Settings"
                   >
@@ -1414,7 +1379,7 @@ export function PitchBoard({
               <button
                 type="button"
                 onClick={onToggleHomeOnLeft}
-                className="pitch-overlay-chip inline-flex h-5 w-5 items-center justify-center text-slate-800 hover:bg-slate-100"
+                className="pitch-overlay-chip inline-flex h-5 w-5 items-center justify-center text-[var(--bug-fg)] hover:bg-white/10"
                 title={
                   homeOnLeft
                     ? "Swap sides · home moves to right"
@@ -1474,7 +1439,7 @@ export function PitchBoard({
               {onResetOfficial && (
                 <button
                   type="button"
-                  className="pitch-overlay-chip px-1.5 py-0.5 text-[8px] font-semibold text-slate-800 hover:bg-white"
+                  className="pitch-overlay-chip px-1.5 py-0.5 text-[8px] font-semibold text-[var(--bug-fg)] hover:bg-white/10"
                   disabled={formationBusy}
                   onClick={onResetOfficial}
                 >

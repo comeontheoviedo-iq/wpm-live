@@ -3,47 +3,57 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  /* Surfaces — monochrome desk at rest */
-  --background: #f1f3f6;
-  --foreground: #0b1220;
-  --surface: #ffffff;
-  --surface-elevated: #ffffff;
-  --surface-muted: #e8ecf1;
-  --surface-glass: rgba(255, 255, 255, 0.94);
+  /* DEFAULT = dark broadcast bug desk (Direction A/C). Light is opt-in via .light */
+  color-scheme: dark;
 
-  /* Ink / contrast */
-  --muted: #64748b;
-  --muted-foreground: #475569;
-  --border: rgba(15, 23, 42, 0.12);
-  --border-strong: rgba(15, 23, 42, 0.2);
-  --ring: #14b8a6;
+  /* Surfaces — near-black / charcoal chrome */
+  --background: #0b0e12;
+  --foreground: #e8eef7;
+  --surface: #12161c;
+  --surface-elevated: #181d26;
+  --surface-muted: #0e1218;
+  --surface-glass: rgba(12, 16, 22, 0.94);
 
-  /* Brand — thin accent only */
-  --brand: #0d9488;
-  --brand-dark: #0f766e;
-  --brand-soft: #ccfbf1;
-  --brand-glow: rgba(13, 148, 136, 0.18);
+  /* Ink / text */
+  --muted: #8b98a8;
+  --muted-foreground: #c5d0dc;
+  --border: rgba(148, 163, 184, 0.14);
+  --border-strong: rgba(148, 163, 184, 0.28);
+  --ring: #2dd4bf;
+
+  /* Brand — thin accent only (Research = solid dark, not purple) */
+  --brand: #14b8a6;
+  --brand-dark: #0d9488;
+  --brand-soft: rgba(20, 184, 166, 0.14);
+  --brand-glow: rgba(45, 212, 191, 0.14);
 
   /* Broadcast accents — live edge only (goal/card/injury/break) */
   --live: #e11d48;
-  --live-soft: #ffe4e6;
+  --live-soft: rgba(244, 63, 94, 0.18);
   --warning: #f59e0b;
-  --success: #059669;
-  --edge-goal: #059669;
-  --edge-card: #eab308;
-  --edge-red: #dc2626;
-  --edge-injury: #ea580c;
-  --edge-break: #0284c7;
-  --edge-sub: #0369a1;
+  --success: #34d399;
+  --edge-goal: #34d399;
+  --edge-card: #facc15;
+  --edge-red: #f87171;
+  --edge-injury: #fb923c;
+  --edge-break: #38bdf8;
+  --edge-sub: #7dd3fc;
 
   /* Scorebug / broadcast bug desk */
-  --bug-bg: #0a0c0f;
-  --bug-bg-elevated: #12151a;
+  --bug-bg: #050608;
+  --bug-bg-elevated: #0e1116;
   --bug-fg: #f8fafc;
   --bug-muted: #94a3b8;
   --bug-border: rgba(255, 255, 255, 0.14);
   --bug-accent-home: rgba(255, 255, 255, 0.55);
   --bug-accent-away: rgba(255, 255, 255, 0.55);
+
+  /* Player card (pitch tokens) */
+  --card-bg: #14181f;
+  --card-bg-header: #10141a;
+  --card-bg-stats: #0c1016;
+  --card-fg: #f1f5f9;
+  --card-muted: #94a3b8;
 
   /* Radii — quieter broadcast tool feel */
   --radius-xs: 0.125rem;
@@ -52,13 +62,13 @@
   --radius-lg: 0.5rem;
   --radius-xl: 0.625rem;
 
-  /* Elevation — flatter, less glass */
-  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.05);
-  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.04);
-  --shadow-md: 0 2px 8px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.05);
-  --shadow-lg: 0 8px 24px rgba(15, 23, 42, 0.12), 0 2px 6px rgba(15, 23, 42, 0.06);
-  --shadow-glow: 0 0 0 1px rgba(13, 148, 136, 0.14), 0 4px 14px rgba(13, 148, 136, 0.1);
-  --shadow-bug: 0 2px 8px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(0, 0, 0, 0.35);
+  /* Elevation — deeper broadcast shadows */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.55), 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.45);
+  --shadow-glow: 0 0 0 1px rgba(45, 212, 191, 0.14), 0 6px 18px rgba(13, 148, 136, 0.12);
+  --shadow-bug: 0 2px 10px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(0, 0, 0, 0.55);
 
   /* Type — condensed broadcast labels */
   --text-2xs: 0.625rem;
@@ -76,9 +86,9 @@
   --weight-investigate-focus: 1;
   --weight-investigate-pitch: 0.84;
   --weight-investigate-rail: 0.7;
-  --weight-onair-rail: 0.36;
-  --weight-onair-header: 0.78;
-  --weight-onair-chrome: 0.55;
+  --weight-onair-rail: 0.28;
+  --weight-onair-header: 0.72;
+  --weight-onair-chrome: 0.48;
 
   /* Motion */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
@@ -88,46 +98,61 @@
   --duration-flash: 420ms;
 }
 
+/* .dark keeps Tailwind dark: variants working; tokens already dark on :root */
 .dark {
-  --background: #05070b;
-  --foreground: #e2e8f0;
-  --surface: #0b0f14;
-  --surface-elevated: #12171f;
-  --surface-muted: #0a0e14;
-  --surface-glass: rgba(8, 12, 18, 0.92);
+  color-scheme: dark;
+}
 
-  --muted: #94a3b8;
-  --muted-foreground: #cbd5e1;
-  --border: rgba(148, 163, 184, 0.16);
-  --border-strong: rgba(148, 163, 184, 0.26);
-  --ring: #2dd4bf;
+/* Opt-in light SaaS theme (toggle) — not the match-day default */
+.light {
+  color-scheme: light;
+  --background: #f1f3f6;
+  --foreground: #0b1220;
+  --surface: #ffffff;
+  --surface-elevated: #ffffff;
+  --surface-muted: #e8ecf1;
+  --surface-glass: rgba(255, 255, 255, 0.94);
 
-  --brand: #14b8a6;
-  --brand-dark: #0d9488;
-  --brand-soft: rgba(20, 184, 166, 0.12);
-  --brand-glow: rgba(45, 212, 191, 0.16);
+  --muted: #64748b;
+  --muted-foreground: #475569;
+  --border: rgba(15, 23, 42, 0.12);
+  --border-strong: rgba(15, 23, 42, 0.2);
+  --ring: #14b8a6;
 
-  --live: #fb7185;
-  --live-soft: rgba(244, 63, 94, 0.16);
-  --edge-goal: #34d399;
-  --edge-card: #facc15;
-  --edge-red: #f87171;
-  --edge-injury: #fb923c;
-  --edge-break: #38bdf8;
-  --edge-sub: #7dd3fc;
+  --brand: #0d9488;
+  --brand-dark: #0f766e;
+  --brand-soft: #ccfbf1;
+  --brand-glow: rgba(13, 148, 136, 0.18);
 
-  --bug-bg: #050608;
-  --bug-bg-elevated: #0e1116;
+  --live: #e11d48;
+  --live-soft: #ffe4e6;
+  --warning: #f59e0b;
+  --success: #059669;
+  --edge-goal: #059669;
+  --edge-card: #eab308;
+  --edge-red: #dc2626;
+  --edge-injury: #ea580c;
+  --edge-break: #0284c7;
+  --edge-sub: #0369a1;
+
+  --bug-bg: #0a0c0f;
+  --bug-bg-elevated: #12151a;
   --bug-fg: #f8fafc;
   --bug-muted: #94a3b8;
-  --bug-border: rgba(255, 255, 255, 0.12);
+  --bug-border: rgba(255, 255, 255, 0.14);
 
-  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.45), 0 1px 3px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.35);
-  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);
-  --shadow-glow: 0 0 0 1px rgba(45, 212, 191, 0.16), 0 6px 18px rgba(13, 148, 136, 0.14);
-  --shadow-bug: 0 2px 10px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(0, 0, 0, 0.5);
+  --card-bg: #14181f;
+  --card-bg-header: #10141a;
+  --card-bg-stats: #0c1016;
+  --card-fg: #f1f5f9;
+  --card-muted: #94a3b8;
+
+  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 2px 8px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow-lg: 0 8px 24px rgba(15, 23, 42, 0.12), 0 2px 6px rgba(15, 23, 42, 0.06);
+  --shadow-glow: 0 0 0 1px rgba(13, 148, 136, 0.14), 0 4px 14px rgba(13, 148, 136, 0.1);
+  --shadow-bug: 0 2px 8px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(0, 0, 0, 0.35);
 }
 
 @theme inline {
@@ -275,12 +300,21 @@
     color: #fff;
   }
   .desk-btn-accent {
-    background: var(--foreground);
-    border-color: var(--foreground);
-    color: var(--surface);
+    /* Research = dark solid monochrome (never candy purple / never light pill) */
+    background: #1a2030;
+    border-color: rgba(255, 255, 255, 0.22);
+    color: #f8fafc;
   }
   .desk-btn-accent:hover {
-    background: color-mix(in oklab, var(--foreground) 88%, white);
+    background: #232a3a;
+  }
+  .light .desk-btn-accent {
+    background: #0f141c;
+    border-color: #0f141c;
+    color: #f8fafc;
+  }
+  .light .desk-btn-accent:hover {
+    background: #1a2030;
   }
 
   /* Broadcast scorebug — solid opaque, never glass into grass */
@@ -326,10 +360,11 @@
 
   .pitch-overlay-chip {
     border-radius: var(--radius-sm);
-    border: 1px solid rgba(15, 23, 42, 0.18);
-    background: rgba(252, 252, 253, 0.97);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
-    /* no glass dying into grass */
+    border: 1px solid var(--bug-border);
+    background: var(--bug-bg-elevated);
+    color: var(--bug-fg);
+    box-shadow: var(--shadow-bug);
+    /* solid opaque — no glass into grass */
   }
 
   .pitch-overlay-chip-dark {
@@ -375,7 +410,7 @@
 
   .onair-quiet {
     opacity: var(--weight-onair-rail);
-    filter: saturate(0.75);
+    filter: saturate(0.55) brightness(0.92);
   }
   .onair-primary {
     opacity: 1;

@@ -796,10 +796,10 @@ export function ObsOverlayClient(props: {
       {livePopups.length > 0 ? (
         <div
           className={cn(
-            "obs-overlay-flashes absolute left-1/2 z-[60] flex w-[min(94%,26rem)] -translate-x-1/2 flex-col gap-2",
+            "obs-overlay-flashes absolute left-1/2 z-[60] flex -translate-x-1/2 flex-col gap-2",
             flashesLower
-              ? "bottom-[20%] top-auto items-center drop-shadow-[0_8px_24px_rgba(0,0,0,0.45)]"
-              : "top-28"
+              ? "bottom-[28%] top-auto w-[min(94%,30rem)] items-center text-center drop-shadow-[0_10px_28px_rgba(0,0,0,0.5)]"
+              : "top-28 w-[min(94%,26rem)]"
           )}
           data-flashes-placement={flashesLower ? "lower" : "top"}
         >

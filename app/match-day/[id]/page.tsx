@@ -17,7 +17,7 @@ export default async function MatchOverviewPage({
   const referee = refOfficial?.name;
   const refereeNationality = refOfficial?.nationality ?? null;
 
-  const packCount = await prisma.packSection.count({ where: { matchId: id } });
+  const packCount = await prisma.packSection.count({ where: { matchId: match.id } });
 
   const scorersRaw = await prisma.seasonScorer.findMany({
     where: { clubId: { in: [match.homeClubId, match.awayClubId] } },

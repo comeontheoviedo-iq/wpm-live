@@ -27,6 +27,7 @@ import {
   type NoteRow,
   type NotesFilterScope,
 } from "@/components/notes/notes-panel";
+import { defaultNotesBucket } from "@/lib/notes-buckets";
 import { PlayerDossier } from "@/components/match/player-dossier";
 import { ClubDossier } from "@/components/match/club-dossier";
 import { FieldSettingsModal } from "@/components/match/field-settings-modal";
@@ -333,6 +334,7 @@ export function MatchDesk({
   lastFeedSyncAt,
   status,
   kickoffLabel,
+  kickoffAt = null,
   competition,
   homeScore,
   awayScore,
@@ -384,6 +386,8 @@ export function MatchDesk({
   lastFeedSyncAt: string | Date | null;
   status: string;
   kickoffLabel: string;
+  /** ISO kickoff for tonight vs prematch default bucket */
+  kickoffAt?: string | Date | null;
   competition: string;
   homeScore: number;
   awayScore: number;
@@ -447,7 +451,9 @@ export function MatchDesk({
   const locked = false;
   const [homeForm, setHomeForm] = useState(homeFormation);
   const [awayForm, setAwayForm] = useState(awayFormation);
-  const [notesFilter, setNotesFilter] = useState<NotesFilterScope>("all");
+  const [notesFilter, setNotesFilter] = useState<NotesFilterScope>(() =>
+    defaultNotesBucket(status, kickoffAt ?? null)
+  );
   const [relevantNoteIds, setRelevantNoteIds] = useState<string[]>([]);
   const [relevantLoading, setRelevantLoading] = useState(false);
   const relevantFetchedAtRef = useRef(0);
@@ -1158,7 +1164,7 @@ export function MatchDesk({
         setRelevantNoteIds(ids);
         relevantFetchedAtRef.current = Date.now();
         const f = notesFilterRef.current;
-        if (opts?.autoSwitch && ids.length && (f === "all" || f === "relevant")) {
+        if (opts?.autoSwitch && ids.length && (f === "all" || f === "relevant" || f === "prematch" || f === "tonight")) {
           setNotesFilter("relevant");
         }
       } catch {
@@ -1850,7 +1856,14 @@ export function MatchDesk({
     const full = squad.find((s) => s.id === p.id);
     if (full) setSelected(full);
     setDossierId(p.id);
-    setNotesFilter("players");
+    // No Players bucket — roll into home/away; entity scope still filters to player
+    const side = homePlayers.some((h) => h.id === p.id)
+      ? "home"
+      : awayPlayers.some((a) => a.id === p.id)
+        ? "away"
+        : null;
+    if (side === "home") setNotesFilter("home");
+    else if (side === "away") setNotesFilter("away");
   }
 
   async function changeFormation(side: "home" | "away", formation: string) {
@@ -2688,6 +2701,10 @@ export function MatchDesk({
             awayPlayerIds={awayPlayers.map((p) => p.id)}
             homeClubId={homeClubId}
             awayClubId={awayClubId}
+            homeName={homeName}
+            awayName={awayName}
+            matchStatus={status}
+            kickoffAt={kickoffAt}
             externalFilter={notesFilter}
             onFilterChange={setNotesFilter}
             fillHeight
@@ -2800,7 +2817,7 @@ export function MatchDesk({
                 if (awayClubId) setClubDossierId(awayClubId);
                 else setNotesFilter("away");
               }}
-              onLeagueLogoClick={() => setNotesFilter("match")}
+              onLeagueLogoClick={() => setNotesFilter("league")}
               cardSettings={fieldSettings}
               markerPct={markerPct}
               onOpenFieldSettings={openFieldSettings}

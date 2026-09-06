@@ -63,6 +63,7 @@ export default async function MatchOverviewPage({
       lastFeedSyncAt={match.lastFeedSyncAt}
       status={match.status}
       kickoffLabel={formatKickoff(match.kickoff)}
+      kickoffAt={match.kickoff.toISOString()}
       competition={match.matchDay.competition}
       homeScore={match.homeScore}
       awayScore={match.awayScore}

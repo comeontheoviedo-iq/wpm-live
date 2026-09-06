@@ -4,6 +4,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { NOTE_CATEGORIES } from "@/lib/defaults";
+import {
+  NOTES_BUCKET_ORDER,
+  defaultNotesBucket,
+  isLiveEventNote as bucketIsLiveEventNote,
+  noteMatchesBucket,
+  notesBucketLabel,
+  type NotesBucket,
+} from "@/lib/notes-buckets";
 import { Pin, Plus, Trash2, Search } from "lucide-react";
 import { cn, normalizeApostrophes } from "@/lib/utils";
 
@@ -18,6 +26,7 @@ export type NoteRow = {
 };
 
 export type NotesFilterScope =
+  | NotesBucket
   | "all"
   | "home"
   | "away"
@@ -28,7 +37,20 @@ export type NotesFilterScope =
   | "hooks"
   | "bio"
   | "relevant"
+  | "prematch"
+  | "league"
+  | "h2h"
+  | "history"
+  | "managers"
+  | "venue"
+  | "tonight"
   | string;
+
+const RAIL_BUCKETS = NOTES_BUCKET_ORDER;
+
+function isRailBucket(scope: string): scope is NotesBucket {
+  return (RAIL_BUCKETS as string[]).includes(scope);
+}
 
 export function NotesPanel({
   matchId,
@@ -41,6 +63,10 @@ export function NotesPanel({
   awayPlayerIds,
   homeClubId,
   awayClubId,
+  homeName,
+  awayName,
+  matchStatus,
+  kickoffAt,
   externalFilter,
   onFilterChange,
   fillHeight,
@@ -60,6 +86,13 @@ export function NotesPanel({
   awayPlayerIds?: string[];
   homeClubId?: string;
   awayClubId?: string;
+  /** Short club names for HOME/AWAY bucket labels */
+  homeName?: string;
+  awayName?: string;
+  /** Match status for default bucket (Live/HT → RELEVANT) */
+  matchStatus?: string;
+  /** Kickoff ISO/date — tonight → TONIGHT default */
+  kickoffAt?: string | Date | null;
   externalFilter?: NotesFilterScope;
   onFilterChange?: (f: NotesFilterScope) => void;
   fillHeight?: boolean;
@@ -71,7 +104,7 @@ export function NotesPanel({
   onNotePlayerClick?: (playerId: string) => void;
   /** LIVE: note ids ranked relevant to current match events */
   relevantNoteIds?: string[];
-  /** Show loading pulse on Relevant now chip */
+  /** Show loading pulse on Relevant chip */
   relevantLoading?: boolean;
 }) {
   const router = useRouter();
@@ -79,13 +112,19 @@ export function NotesPanel({
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [category, setCategory] = useState<string>("Custom");
-  const [filter, setFilter] = useState<NotesFilterScope>("all");
+  const initialBucket = defaultNotesBucket(
+    matchStatus || "Not Started",
+    kickoffAt ?? null
+  );
+  const [filter, setFilter] = useState<NotesFilterScope>(initialBucket);
   const [search, setSearch] = useState("");
   const [pending, setPending] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const activeFilter = externalFilter ?? filter;
+  /** Notes rail (desk) or live: hook line collapsed, Full on expand */
+  const railDense = Boolean(fillHeight || liveMode);
 
   useEffect(() => {
     setNotes(initialNotes);
@@ -128,6 +167,19 @@ export function NotesPanel({
     [relevantNoteIds]
   );
 
+  const bucketCtx = useMemo(
+    () => ({
+      homePlayerIds: homeSet,
+      awayPlayerIds: awaySet,
+      homeClubId,
+      awayClubId,
+      homeName,
+      awayName,
+      relevantNoteIds: relevantSet,
+    }),
+    [homeSet, awaySet, homeClubId, awayClubId, homeName, awayName, relevantSet]
+  );
+
   function matchesScope(n: NoteRow, scope: NotesFilterScope) {
     if (entityId && entityType === "player") {
       if (n.entityId !== entityId) return false;
@@ -138,7 +190,6 @@ export function NotesPanel({
     }
     if (entityType === "league") {
       if (n.entityType !== "league") return false;
-      // Accept AF league id, competition name, or generic "league" key
       if (
         entityId &&
         n.entityId &&
@@ -148,6 +199,13 @@ export function NotesPanel({
         return false;
       }
     }
+
+    // New context buckets
+    if (isRailBucket(scope)) {
+      return noteMatchesBucket(n, scope, bucketCtx);
+    }
+
+    // Legacy scopes (dossiers / hotkeys)
     if (scope === "home") {
       if (!(n.entityId && homeSet.has(n.entityId)) && n.entityId !== homeClubId)
         return false;
@@ -177,23 +235,14 @@ export function NotesPanel({
       if (!n.pinned) return false;
     } else if (scope === "bio") {
       if (n.category !== "Bio" && n.category !== "Career") return false;
-    } else if (scope === "relevant") {
-      if (!relevantSet.has(n.id)) return false;
     } else if (scope !== "all") {
       if (n.category !== scope) return false;
     }
     return true;
   }
 
-
   function isLiveEventNote(n: NoteRow): boolean {
-    if (n.category === "Match" && n.pinned) return true;
-    const t = `${normalizeApostrophes(n.title)} ${normalizeApostrophes(n.body)}`.toLowerCase();
-    return (
-      n.category === "Match" &&
-      (/\d+'/.test(n.title) ||
-        /\b(goal|penalt|yellow|red|sub|card|var)\b/i.test(t))
-    );
+    return bucketIsLiveEventNote(n);
   }
 
   function noteRank(n: NoteRow): number {
@@ -206,25 +255,27 @@ export function NotesPanel({
   }
 
   const counts = useMemo(() => {
-    const scopes: NotesFilterScope[] = [
-      "all",
-      "relevant",
-      "pinned",
-      "match",
-      "home",
-      "away",
-      "players",
-      "bio",
-      "hooks",
-      "club",
-    ];
     const out: Record<string, number> = {};
-    for (const s of scopes) {
+    for (const s of RAIL_BUCKETS) {
+      out[s] = notes.filter((n) => matchesScope(n, s)).length;
+    }
+    // legacy chips if ever shown
+    for (const s of ["all", "pinned", "match", "players", "bio", "hooks", "club"] as const) {
       out[s] = notes.filter((n) => matchesScope(n, s)).length;
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [notes, entityId, entityType, homeSet, awaySet, homeClubId, awayClubId, relevantSet]);
+  }, [
+    notes,
+    entityId,
+    entityType,
+    homeSet,
+    awaySet,
+    homeClubId,
+    awayClubId,
+    relevantSet,
+    bucketCtx,
+  ]);
 
   const visible = useMemo(() => {
     const needle = search.trim().toLowerCase();
@@ -257,29 +308,8 @@ export function NotesPanel({
     search,
     playerNameById,
     relevantSet,
+    bucketCtx,
   ]);
-
-  const grouped = useMemo(() => {
-    if (activeFilter !== "players" || entityType === "player") return null;
-    const map = new Map<string, NoteRow[]>();
-    for (const n of visible) {
-      const key = n.entityId || "unknown";
-      const list = map.get(key) || [];
-      list.push(n);
-      map.set(key, list);
-    }
-    return [...map.entries()].sort((a, b) => {
-      const an =
-        playerNameById?.[a[0]] ||
-        a[1][0]?.title ||
-        a[0];
-      const bn =
-        playerNameById?.[b[0]] ||
-        b[1][0]?.title ||
-        b[0];
-      return an.localeCompare(bn);
-    });
-  }, [visible, activeFilter, entityType, playerNameById]);
 
   async function createNote() {
     if (!title.trim()) return;
@@ -332,22 +362,15 @@ export function NotesPanel({
     router.refresh();
   }
 
-  const scopeChips: { key: NotesFilterScope; label: string }[] = [
-    { key: "all", label: "All" },
-    {
-      key: "relevant",
-      label: relevantLoading
-        ? "Relevant…"
-        : `Relevant now${relevantSet.size ? ` (${relevantSet.size})` : ""}`,
-    },
-    { key: "pinned", label: "Pinned" },
-    { key: "match", label: "Match" },
-    { key: "home", label: "Home" },
-    { key: "away", label: "Away" },
-    { key: "players", label: "Players" },
-    { key: "bio", label: "Bio" },
-    { key: "hooks", label: "Hooks" },
-  ];
+  const scopeChips: { key: NotesFilterScope; label: string }[] = RAIL_BUCKETS.map(
+    (key) => ({
+      key,
+      label:
+        key === "relevant" && relevantLoading
+          ? "RELEVANT…"
+          : notesBucketLabel(key, homeName, awayName),
+    })
+  );
 
   function parseNoteMinute(title: string): {
     minute: string | null;
@@ -370,7 +393,6 @@ export function NotesPanel({
   }
 
   function noteSeverityClass(n: NoteRow): string {
-    // Event severity wins over pin/relevant so MATCH goals stay green (--edge-goal)
     const t = `${normalizeApostrophes(n.title)} ${normalizeApostrophes(n.body)}`.toLowerCase();
     const isMatch = n.category === "Match" || isLiveEventNote(n);
     if (
@@ -397,14 +419,15 @@ export function NotesPanel({
     const expanded = expandedId === n.id;
     const { minute, sayable } = parseNoteMinute(n.title);
     const severity = noteSeverityClass(n);
-    // Dense call-queue: collapsed = title row only (~36–40px); body on expand
-    const showBody = expanded || !liveMode;
+    // Hook line in list; Full body on click (rail / live)
+    const showBody = expanded || !railDense;
+    const hookLine = sayable;
 
     return (
       <div
         className={cn(
           "queue-row cursor-pointer",
-          liveMode && "px-1.5",
+          railDense && "px-1.5",
           severity,
           expanded && "queue-row-active",
           playerLinked && "hover:border-white/20"
@@ -414,7 +437,7 @@ export function NotesPanel({
         }}
         role="button"
         aria-expanded={expanded}
-        title={expanded ? "Collapse note" : "Expand note"}
+        title={expanded ? "Collapse note" : "Expand full note"}
       >
         <div className="flex items-center gap-1.5">
           <span
@@ -431,7 +454,7 @@ export function NotesPanel({
                   expanded ? "whitespace-normal" : "truncate"
                 )}
               >
-                {sayable}
+                {hookLine}
               </div>
               <span
                 className="note-queue-chip shrink-0"
@@ -444,7 +467,7 @@ export function NotesPanel({
                   .filter(Boolean)
                   .join(" · ")}
               >
-                {n.category}
+                {expanded && railDense ? "Full" : n.category}
               </span>
               <div
                 className="flex gap-0.5 shrink-0"
@@ -569,25 +592,32 @@ export function NotesPanel({
             />
           </div>
 
-          <div className="flex gap-1 overflow-x-auto scrollbar-none pb-0.5 flex-nowrap">
+          <div
+            className="flex gap-1 overflow-x-auto scrollbar-none pb-0.5 flex-nowrap"
+            data-notes-buckets="1"
+            role="tablist"
+            aria-label="Notes context buckets"
+          >
             {scopeChips.map((c) => (
               <button
                 key={c.key}
                 type="button"
+                role="tab"
+                aria-selected={activeFilter === c.key}
                 onClick={() => setScope(c.key)}
                 className={cn(
-                  "shrink-0 rounded-[2px] px-1.5 py-0.5 text-[9px] border inline-flex items-center gap-0.5 font-semibold tabular-nums tracking-wide",
+                  "shrink-0 rounded-[2px] px-1.5 py-0.5 text-[9px] border inline-flex items-center gap-0.5 font-semibold tabular-nums tracking-wide uppercase",
                   activeFilter === c.key
                     ? "bg-slate-200 text-[#0a0d12] border-slate-200"
                     : c.key === "relevant"
                       ? "border-[var(--edge-break)]/35 text-[var(--edge-break)]"
-                      : "border-white/10 text-slate-500"
+                      : "border-white/10 text-slate-500 hover:text-slate-300 hover:border-white/20"
                 )}
               >
                 {c.label}
                 <span
                   className={cn(
-                    "rounded-[2px] px-1 text-[9px] tabular-nums",
+                    "rounded-[2px] px-1 text-[9px] tabular-nums normal-case",
                     activeFilter === c.key
                       ? "bg-black/15"
                       : "bg-[#0a0d12] text-slate-500"
@@ -659,28 +689,16 @@ export function NotesPanel({
         <div
           className={cn(
             "overflow-y-auto",
-            liveMode ? "space-y-0.5" : "space-y-1",
+            railDense ? "space-y-0.5" : "space-y-1",
             fillHeight ? "flex-1 min-h-0" : "max-h-64"
           )}
         >
           {visible.length === 0 && (
             <p className="text-xs text-slate-500">No notes yet.</p>
           )}
-          {grouped
-            ? grouped.map(([pid, list]) => (
-                <div key={pid} className="space-y-1">
-                  <div className="text-[10px] font-bold uppercase tracking-[var(--tracking-label)] text-slate-500 sticky top-0 bg-[#0e1218] py-0.5">
-                    {playerNameById?.[pid] || list[0]?.title || "Player"}{" "}
-                    <span className="font-normal normal-case">
-                      ({list.length})
-                    </span>
-                  </div>
-                  {list.map((n) => (
-                    <NoteCard key={n.id} n={n} />
-                  ))}
-                </div>
-              ))
-            : visible.map((n) => <NoteCard key={n.id} n={n} />)}
+          {visible.map((n) => (
+            <NoteCard key={n.id} n={n} />
+          ))}
         </div>
       </CardBody>
     </Card>

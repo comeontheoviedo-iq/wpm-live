@@ -132,6 +132,22 @@ export function NotesPanel({
     if (entityId && entityType === "player") {
       if (n.entityId !== entityId) return false;
     }
+    if (entityType === "club" || entityType === "team") {
+      if (n.entityType !== "club" && n.entityType !== "team") return false;
+      if (entityId && n.entityId !== entityId) return false;
+    }
+    if (entityType === "league") {
+      if (n.entityType !== "league") return false;
+      // Accept AF league id, competition name, or generic "league" key
+      if (
+        entityId &&
+        n.entityId &&
+        n.entityId !== entityId &&
+        n.entityId !== "league"
+      ) {
+        return false;
+      }
+    }
     if (scope === "home") {
       if (!(n.entityId && homeSet.has(n.entityId)) && n.entityId !== homeClubId)
         return false;

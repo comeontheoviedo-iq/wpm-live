@@ -8,6 +8,7 @@ export type DistributedCounts = {
   scripts: number;
   playerNotes: number;
   clubNotes: number;
+  leagueNotes: number;
   matchNotes: number;
   coachNotes: number;
   hookNotes: number;
@@ -20,6 +21,7 @@ export function emptyDistributed(): DistributedCounts {
     scripts: 0,
     playerNotes: 0,
     clubNotes: 0,
+    leagueNotes: 0,
     matchNotes: 0,
     coachNotes: 0,
     hookNotes: 0,
@@ -37,6 +39,7 @@ export function formatDistributeSummary(d: DistributedCounts): string {
   if (d.intro) bits.push("intro");
   if (d.lineup) bits.push("lineup");
   if (d.clubNotes) bits.push(`${d.clubNotes} club`);
+  if (d.leagueNotes) bits.push(`${d.leagueNotes} league`);
   if (d.matchNotes) bits.push(`${d.matchNotes} match`);
   if (d.scripts && !d.intro && !d.lineup) {
     bits.push(`${d.scripts} script${d.scripts === 1 ? "" : "s"}`);

@@ -35,12 +35,19 @@ export async function GET(
 
   const notes = matchId
     ? await prisma.note.findMany({
-        where: { matchId, OR: [{ entityId: id }, { entityType: "club", entityId: id }] },
+        where: {
+          matchId,
+          entityType: { in: ["club", "team"] },
+          entityId: id,
+        },
         orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
         take: 40,
       })
     : await prisma.note.findMany({
-        where: { entityId: id },
+        where: {
+          entityType: { in: ["club", "team"] },
+          entityId: id,
+        },
         orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
         take: 40,
       });

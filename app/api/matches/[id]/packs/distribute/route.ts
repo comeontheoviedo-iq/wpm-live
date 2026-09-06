@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { PACK_TEMPLATE_SEEDS } from "@/lib/pack-templates";
 import { applyPackDistribution } from "@/lib/pack-distribute-apply";
 import { formatDistributeSummary } from "@/lib/pack-distribute";
+import { leagueIdForCompetition } from "@/lib/competitions";
 
 export async function POST(
   req: Request,
@@ -29,6 +30,7 @@ export async function POST(
     const match = await prisma.match.findUnique({
       where: { id },
       include: {
+        matchDay: { select: { competition: true } },
         homeClub: {
           include: {
             players: { select: { id: true, name: true } },
@@ -100,6 +102,8 @@ export async function POST(
       })),
     ];
 
+    const competition = match.matchDay?.competition || null;
+    const leagueId = competition ? leagueIdForCompetition(competition) : null;
     const distributed = await applyPackDistribution({
       matchId: id,
       userId: session.id,
@@ -110,12 +114,15 @@ export async function POST(
       awayClub: { id: match.awayClub.id, name: match.awayClub.name },
       allPlayers,
       coaches,
+      competition,
+      leagueEntityId: leagueId != null ? String(leagueId) : competition,
     });
 
     const total =
       (distributed.scripts || 0) +
       (distributed.playerNotes || 0) +
       (distributed.clubNotes || 0) +
+      (distributed.leagueNotes || 0) +
       (distributed.matchNotes || 0) +
       (distributed.coachNotes || 0) +
       (distributed.hookNotes || 0);

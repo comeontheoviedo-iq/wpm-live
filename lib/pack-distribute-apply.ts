@@ -159,6 +159,8 @@ export type DistributeArgs = {
   awayClub: { id: string; name: string };
   allPlayers: SquadMember[];
   coaches?: CoachMember[];
+  competition?: string | null;
+  leagueEntityId?: string | null;
   /** Optional: store full paste as archive note. Default false (split-first). */
   keepFullArchive?: boolean;
 };
@@ -183,6 +185,10 @@ function tallyFromNotes(
     distributed.clubNotes += 1;
     return;
   }
+  if (note.entityType === "league") {
+    distributed.leagueNotes += 1;
+    return;
+  }
   distributed.matchNotes += 1;
 }
 
@@ -198,6 +204,8 @@ async function applyOrganised(
     awayClub: args.awayClub,
     players: args.allPlayers,
     coaches,
+    competition: args.competition,
+    leagueEntityId: args.leagueEntityId,
     keepFullArchive: args.keepFullArchive === true,
   });
 

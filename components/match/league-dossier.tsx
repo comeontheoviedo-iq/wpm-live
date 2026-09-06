@@ -252,7 +252,7 @@ function Crest({
 
 export function LeagueDossier({
   matchId,
-  notes = [],
+  notes: notesProp = [],
 }: {
   matchId: string;
   notes?: NoteRow[];
@@ -262,6 +262,7 @@ export function LeagueDossier({
   const [err, setErr] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("overview");
   const [selectedFx, setSelectedFx] = useState<SlimFx | null>(null);
+  const [fetchedNotes, setFetchedNotes] = useState<NoteRow[]>(notesProp);
 
   async function load() {
     setBusy(true);
@@ -271,6 +272,32 @@ export function LeagueDossier({
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || json.message || "Failed");
       setData(json);
+      // League Notes tab: load entityType=league (parent often passes []).
+      try {
+        const leagueKey = String(json.leagueId || json.competition || "league");
+        const nRes = await fetch(
+          `/api/notes?matchId=${encodeURIComponent(matchId)}&entityType=league`,
+          { cache: "no-store" }
+        );
+        if (nRes.ok) {
+          const nJson = await nRes.json();
+          const rows = (nJson.notes || []) as NoteRow[];
+          // Prefer notes keyed to this league id / competition name
+          const keyed = rows.filter(
+            (n) =>
+              !n.entityId ||
+              n.entityId === leagueKey ||
+              n.entityId === String(json.leagueId || "") ||
+              n.entityId === String(json.competition || "") ||
+              n.entityId === "league"
+          );
+          setFetchedNotes(keyed.length ? keyed : rows);
+        } else if (notesProp.length) {
+          setFetchedNotes(notesProp);
+        }
+      } catch {
+        if (notesProp.length) setFetchedNotes(notesProp);
+      }
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Failed to load league dossier");
     } finally {
@@ -305,6 +332,7 @@ export function LeagueDossier({
     return [...map.entries()].sort((a, b) => b[1] - a[1]);
   })();
 
+  const notes = fetchedNotes;
   const leagueNotes = notes.filter((n) => (n.body || n.title || "").trim());
   const hookNotes = leagueNotes.filter(
     (n) =>

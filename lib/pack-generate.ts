@@ -6,7 +6,7 @@ import {
   PACK_TEMPLATE_SEEDS,
   buildMatchContextPrompt,
 } from "./pack-templates";
-import { broadcastLabelFor } from "./competitions";
+import { broadcastLabelFor, leagueIdForCompetition } from "./competitions";
 import { formatKickoff } from "./utils";
 import { emptyDistributed, type DistributedCounts } from "./pack-distribute";
 import { applyPackDistribution } from "./pack-distribute-apply";
@@ -559,6 +559,11 @@ export async function generatePackForMatch(args: {
         awayClub: { id: match.awayClub.id, name: match.awayClub.name },
         allPlayers,
         coaches,
+        competition: match.matchDay.competition,
+        leagueEntityId: (() => {
+          const lid = leagueIdForCompetition(match.matchDay.competition);
+          return lid != null ? String(lid) : match.matchDay.competition;
+        })(),
       });
     } catch (distErr) {
       console.error("[pack-generate] useDraft distribute failed", templateKey, distErr);
@@ -698,6 +703,11 @@ export async function generatePackForMatch(args: {
         awayClub: { id: match.awayClub.id, name: match.awayClub.name },
         allPlayers,
         coaches,
+        competition: match.matchDay.competition,
+        leagueEntityId: (() => {
+          const lid = leagueIdForCompetition(match.matchDay.competition);
+          return lid != null ? String(lid) : match.matchDay.competition;
+        })(),
       });
     } catch (distErr) {
       console.error("[pack-generate] distribute failed", templateKey, distErr);

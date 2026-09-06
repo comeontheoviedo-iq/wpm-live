@@ -50,6 +50,7 @@ async function main() {
   d.coachNotes = organised.summary.coachNotes;
   d.hookNotes = organised.summary.hookNotes;
   d.clubNotes = organised.summary.clubNotes;
+  d.leagueNotes = organised.summary.leagueNotes;
   d.matchNotes = organised.summary.matchNotes;
   d.intro = organised.summary.intro ? 1 : 0;
   d.lineup = organised.summary.lineup ? 1 : 0;

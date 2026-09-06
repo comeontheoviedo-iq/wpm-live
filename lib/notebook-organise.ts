@@ -34,6 +34,7 @@ export type OrganisedPack = {
     coachNotes: number;
     hookNotes: number;
     clubNotes: number;
+    leagueNotes: number;
     matchNotes: number;
     intro: boolean;
     lineup: boolean;
@@ -130,7 +131,11 @@ function classifySection(heading: string): {
   if (/venue|atmosphere|stadium|chobani|saraco.lu|kad.koy fortress/i.test(h)) {
     return { kind: "venue" };
   }
-  if (/league table|table position|season-to-date|form\b|last 7 days|standings/i.test(h)) {
+  if (
+    /league table|table position|season-to-date|form\b|last 7 days|standings|divisional context|division trajectory|state of the division/i.test(
+      h
+    )
+  ) {
     return { kind: "table" };
   }
   if (/\bh2h\b|head[- ]?to[- ]?head|rivalry history|historical scorelines|centenary/i.test(h)) {
@@ -139,7 +144,7 @@ function classifySection(heading: string): {
   if (/tactical|battle lines|opposition identity/i.test(h)) {
     return { kind: "tactical" };
   }
-  if (/team news|sidelined|injur|squad depth|absences/i.test(h)) {
+  if (/team news|sidelined|injur|squad depth|absences|key absentees/i.test(h)) {
     return { kind: "team_news" };
   }
   if (/other .*squad|institutional & squad|broadcast framing|open questions|unknowns/i.test(h)) {
@@ -296,6 +301,13 @@ export type OrganiseArgs = {
   awayClub: { id: string; name: string };
   players: SquadMember[];
   coaches: CoachMember[];
+  /** Competition display name (e.g. Premier League). */
+  competition?: string | null;
+  /**
+   * Stable league dossier key — prefer AF league id string ("39"), else competition name.
+   * League dossier Notes tab queries entityType=league with this entityId.
+   */
+  leagueEntityId?: string | null;
   /** When true, also store a pinned archive of the full paste (secondary). Default false. */
   keepFullArchive?: boolean;
 };
@@ -311,6 +323,8 @@ export function organiseNotebookPack(args: OrganiseArgs): OrganisedPack {
     awayClub,
     players,
     coaches,
+    competition,
+    leagueEntityId,
     keepFullArchive = false,
   } = args;
   const notes: OrganisedNote[] = [];
@@ -318,6 +332,10 @@ export function organiseNotebookPack(args: OrganiseArgs): OrganisedPack {
   const seenPlayer = new Set<string>();
   const seenCoach = new Set<string>();
   const seenHookTitles = new Set<string>();
+  const leagueKey =
+    (leagueEntityId && String(leagueEntityId).trim()) ||
+    (competition && String(competition).trim()) ||
+    "league";
 
   const sections = splitByHeadings(text);
 
@@ -331,6 +349,7 @@ export function organiseNotebookPack(args: OrganiseArgs): OrganisedPack {
   let teamNewsChunks: string[] = [];
   let homeClubChunks: string[] = [];
   let awayClubChunks: string[] = [];
+  let leagueChunks: string[] = [];
   let hooksRaw = "";
 
   // Sticky bucket for roman / major sections so nested **(Commentator)**
@@ -402,6 +421,19 @@ export function organiseNotebookPack(args: OrganiseArgs): OrganisedPack {
     }
 
     let { kind } = classifySection(heading);
+    // Club dossier sections: "Everton FC: …", "Manchester United FC: …"
+    if (kind === "other" || kind === "skip") {
+      const sideHint = clubSideFromHeading(heading, homeClub.name, awayClub.name);
+      if (
+        sideHint &&
+        /\bFC\b|club background|institutional|rebuild|club profile|storylines?|nickname|history|founded|identity/i.test(
+          heading
+        ) &&
+        !/manager profile|expected starting|other .*squad|player/i.test(heading)
+      ) {
+        kind = sideHint === "home" ? "club_home" : "club_away";
+      }
+    }
     if (
       kind === "other" &&
       sticky &&
@@ -469,31 +501,56 @@ export function organiseNotebookPack(args: OrganiseArgs): OrganisedPack {
         if (body.length >= 30) venueChunks.push(chunk);
         break;
       case "table":
-        if (body.length >= 30) tableChunks.push(chunk);
+        if (body.length >= 30) {
+          tableChunks.push(chunk);
+          leagueChunks.push(chunk);
+        }
         break;
       case "h2h":
-        if (body.length >= 30) h2hChunks.push(chunk);
+        if (body.length >= 30) {
+          h2hChunks.push(chunk);
+          // Rivalry is match-level, but also useful on league Notes
+          leagueChunks.push(chunk);
+        }
         break;
       case "tactical":
         if (body.length >= 30) tacticalChunks.push(chunk);
         break;
       case "team_news":
-        if (body.length >= 30) teamNewsChunks.push(chunk);
+        if (body.length >= 30) {
+          teamNewsChunks.push(chunk);
+          // Split club-named team news into club dossiers when possible
+          const newsSide = clubSideFromHeading(heading, homeClub.name, awayClub.name);
+          if (newsSide === "home") homeClubChunks.push(chunk);
+          else if (newsSide === "away") awayClubChunks.push(chunk);
+          else {
+            // Body often has **Everton:** / **Manchester United:** bullets — copy whole to both
+            const hn = normalizePlayerKey(homeClub.name);
+            const an = normalizePlayerKey(awayClub.name);
+            const bn = normalizePlayerKey(body);
+            if (hn.split(" ").some((t) => t.length >= 4 && bn.includes(t))) {
+              homeClubChunks.push(chunk);
+            }
+            if (an.split(" ").some((t) => t.length >= 4 && bn.includes(t))) {
+              awayClubChunks.push(chunk);
+            }
+          }
+        }
         break;
       case "skip":
         break;
       case "club_home":
-        homeClubChunks.push(chunk);
+        if (body.length >= 20) homeClubChunks.push(chunk);
         break;
       case "club_away":
-        awayClubChunks.push(chunk);
+        if (body.length >= 20) awayClubChunks.push(chunk);
         break;
       case "other": {
-        // Club history only when heading clearly names one club and isn't a player dump
+        // Club history / background when heading clearly names one club
         const side = clubSideFromHeading(heading, homeClub.name, awayClub.name);
         if (
           side &&
-          /history|founded|institution|identity|club (profile|story)|nickname/i.test(
+          /history|founded|institution|identity|club (profile|story)|nickname|background|rebuild|friction|pragmatism|volatility/i.test(
             heading
           ) &&
           body.length >= 40
@@ -630,7 +687,7 @@ export function organiseNotebookPack(args: OrganiseArgs): OrganisedPack {
     }
   }
 
-  // Club history only (true club-level)
+  // Club-level notes (dossier Club Notes tab)
   if (homeClubChunks.join("").trim().length >= 40) {
     notes.push({
       title: `${homeClub.name} — Club`,
@@ -647,6 +704,21 @@ export function organiseNotebookPack(args: OrganiseArgs): OrganisedPack {
       category: "Club",
       entityType: "club",
       entityId: awayClub.id,
+    });
+  }
+
+  // League / competition Notes (league dossier tab)
+  const leagueBody = leagueChunks.join("\n\n").trim();
+  if (leagueBody.length >= 40) {
+    const leagueTitle = competition
+      ? `${competition} — Season context`
+      : "League — Season context";
+    notes.push({
+      title: leagueTitle,
+      body: leagueBody,
+      category: "Match",
+      entityType: "league",
+      entityId: leagueKey,
     });
   }
 
@@ -668,6 +740,7 @@ export function organiseNotebookPack(args: OrganiseArgs): OrganisedPack {
   const coachNotes = notes.filter((n) => n.entityType === "coach").length;
   const hookNotes = notes.filter((n) => n.category === "Hook").length;
   const clubNotes = notes.filter((n) => n.entityType === "club").length;
+  const leagueNotes = notes.filter((n) => n.entityType === "league").length;
   const matchNotes = notes.filter(
     (n) => n.entityType === "match" && n.category !== "Hook"
   ).length;
@@ -680,6 +753,7 @@ export function organiseNotebookPack(args: OrganiseArgs): OrganisedPack {
       coachNotes,
       hookNotes,
       clubNotes,
+      leagueNotes,
       matchNotes,
       intro: speaks.some((s) => /intro/i.test(s.title)),
       lineup: speaks.some((s) => /lineup/i.test(s.title)),

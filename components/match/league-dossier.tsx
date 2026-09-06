@@ -158,7 +158,7 @@ export function LeagueDossier({
             // eslint-disable-next-line @next/next/no-img-element
             <img src={logo} alt="" className="h-14 w-14 object-contain" />
           ) : (
-            <div className="h-14 w-14 rounded-md bg-slate-200" />
+            <div className="h-14 w-14 rounded-md bg-[var(--surface-muted)]" />
           )}
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
@@ -169,7 +169,7 @@ export function LeagueDossier({
                 Active
               </span>
             </div>
-            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-600 dark:text-slate-300">
+            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-[var(--muted-foreground)]">
               {meta?.countryFlag ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={meta.countryFlag} alt="" className="h-3 w-4 object-cover inline rounded-[1px]" />
@@ -211,16 +211,16 @@ export function LeagueDossier({
       </div>
 
       {err && (
-        <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs flex gap-2">
+        <div className="rounded-[var(--radius-sm)] border border-[var(--warning)]/40 bg-[var(--surface-muted)] px-3 py-2 text-xs flex gap-2 text-[var(--foreground)]">
           <AlertTriangle className="h-4 w-4 shrink-0" /> {err}
         </div>
       )}
       {data?.message && (
-        <div className="rounded-lg border px-3 py-2 text-xs text-slate-600">{data.message}</div>
+        <div className="rounded-[var(--radius-sm)] border px-3 py-2 text-xs text-[var(--muted-foreground)]">{data.message}</div>
       )}
 
       {busy && !data ? (
-        <div className="flex justify-center gap-2 text-sm text-slate-500 py-10">
+        <div className="flex justify-center gap-2 text-sm text-[var(--muted)] py-10">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading league dossier…
         </div>
       ) : (
@@ -230,17 +230,17 @@ export function LeagueDossier({
               <>
                 <Panel title="Seasons tracked">
                   {(meta?.seasonsTracked?.length || 0) === 0 ? (
-                    <p className="text-xs text-slate-500">No season list from feed.</p>
+                    <p className="text-xs text-[var(--muted)]">No season list from feed.</p>
                   ) : (
                     <ul className="flex flex-wrap gap-1">
                       {meta!.seasonsTracked.map((s) => (
                         <li
                           key={s.year}
                           className={cn(
-                            "rounded-full px-2 py-0.5 text-[10px] font-semibold border",
+                            "rounded-[var(--radius-sm)] px-2 py-0.5 text-[10px] font-semibold border",
                             s.current
-                              ? "border-teal-300 bg-teal-50 text-teal-800"
-                              : "border-slate-200 text-slate-600"
+                              ? "border-[var(--border-strong)] bg-[var(--surface)] text-[var(--foreground)] shadow-xs"
+                              : "border-[var(--border)] text-[var(--muted)]"
                           )}
                         >
                           {s.year}{s.current ? " · current" : ""}
@@ -257,10 +257,10 @@ export function LeagueDossier({
                         <img src={data.lastChampion.logo} alt="" className="h-6 w-6 object-contain" />
                       ) : null}
                       <span className="font-semibold">{data.lastChampion.name}</span>
-                      <span className="text-slate-500">· {data.lastChampion.season}</span>
+                      <span className="text-[var(--muted)]">· {data.lastChampion.season}</span>
                     </div>
                   ) : (
-                    <p className="text-xs text-slate-500">Champion not in feed yet (plan/season limits).</p>
+                    <p className="text-xs text-[var(--muted)]">Champion not in feed yet (plan/season limits).</p>
                   )}
                 </Panel>
                 <Panel title="Last runner-up">
@@ -271,10 +271,10 @@ export function LeagueDossier({
                         <img src={data.lastRunnerUp.logo} alt="" className="h-6 w-6 object-contain" />
                       ) : null}
                       <span className="font-semibold">{data.lastRunnerUp.name}</span>
-                      <span className="text-slate-500">· {data.lastRunnerUp.season}</span>
+                      <span className="text-[var(--muted)]">· {data.lastRunnerUp.season}</span>
                     </div>
                   ) : (
-                    <p className="text-xs text-slate-500">Runner-up not in feed yet.</p>
+                    <p className="text-xs text-[var(--muted)]">Runner-up not in feed yet.</p>
                   )}
                 </Panel>
               </>
@@ -300,12 +300,12 @@ export function LeagueDossier({
             {tab === "standings" && (
               <Panel title="Table">
                 {!(data?.standings?.length) ? (
-                  <p className="text-xs text-slate-500">No standings returned.</p>
+                  <p className="text-xs text-[var(--muted)]">No standings returned.</p>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full text-[11px]">
                       <thead>
-                        <tr className="text-left text-slate-500 border-b">
+                        <tr className="text-left text-[var(--muted)] border-b">
                           <th className="py-1.5 pr-1">#</th>
                           <th className="py-1.5 pr-2">Club</th>
                           <th className="py-1.5 px-1 text-right">MP</th>
@@ -323,11 +323,11 @@ export function LeagueDossier({
                           <tr
                             key={`${r.rank}-${r.teamId}`}
                             className={cn(
-                              "border-b border-slate-50 dark:border-slate-900",
-                              highlight.has(r.teamId) && "bg-teal-50 dark:bg-teal-950/40 font-semibold"
+                              "border-b border-[var(--border)]",
+                              highlight.has(r.teamId) && "bg-[var(--surface-muted)] font-semibold"
                             )}
                           >
-                            <td className="py-1.5 pr-1 tabular-nums text-slate-500">{r.rank}</td>
+                            <td className="py-1.5 pr-1 tabular-nums text-[var(--muted)]">{r.rank}</td>
                             <td className="py-1.5 pr-2 truncate max-w-[10rem]">
                               {r.logo ? (
                                 // eslint-disable-next-line @next/next/no-img-element
@@ -341,8 +341,8 @@ export function LeagueDossier({
                             <td className="py-1.5 px-1 text-right tabular-nums">{r.lost}</td>
                             <td className="py-1.5 px-1 text-right tabular-nums">{r.gd}</td>
                             <td className="py-1.5 pl-1 text-right tabular-nums font-semibold">{r.points}</td>
-                            <td className="py-1.5 pl-2 font-mono text-[10px] text-slate-500">{r.form || "—"}</td>
-                            <td className="py-1.5 pl-2 text-[10px] text-slate-500 max-w-[8rem] truncate" title={r.description || ""}>
+                            <td className="py-1.5 pl-2 font-mono text-[10px] text-[var(--muted)]">{r.form || "—"}</td>
+                            <td className="py-1.5 pl-2 text-[10px] text-[var(--muted)] max-w-[8rem] truncate" title={r.description || ""}>
                               {r.description || "—"}
                             </td>
                           </tr>
@@ -358,14 +358,14 @@ export function LeagueDossier({
               <>
                 <Panel title="Season winners">
                   {(data?.hallOfFame?.length || 0) === 0 ? (
-                    <p className="text-xs text-slate-500">Hall of Fame empty — prior-season tables soft-failed or plan-limited.</p>
+                    <p className="text-xs text-[var(--muted)]">Hall of Fame empty — prior-season tables soft-failed or plan-limited.</p>
                   ) : (
                     <ul className="space-y-1.5 text-xs">
                       {data!.hallOfFame!.map((row) => (
                         <li key={row.season} className="flex gap-2 items-center">
-                          <span className="tabular-nums text-slate-500 w-12">{row.season}</span>
+                          <span className="tabular-nums text-[var(--muted)] w-12">{row.season}</span>
                           <span className="font-semibold flex-1 truncate">{row.champion || "—"}</span>
-                          <span className="text-slate-500 truncate">2nd {row.runnerUp || "—"}</span>
+                          <span className="text-[var(--muted)] truncate">2nd {row.runnerUp || "—"}</span>
                         </li>
                       ))}
                     </ul>
@@ -373,7 +373,7 @@ export function LeagueDossier({
                 </Panel>
                 <Panel title="Titles tally">
                   {titleTally.length === 0 ? (
-                    <p className="text-xs text-slate-500">No title tally yet.</p>
+                    <p className="text-xs text-[var(--muted)]">No title tally yet.</p>
                   ) : (
                     <ul className="space-y-1 text-xs">
                       {titleTally.map(([name, n]) => (
@@ -390,7 +390,7 @@ export function LeagueDossier({
 
             {tab === "map" && (
               <Panel title="Map">
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-[var(--muted)]">
                   Geographic club map is not in the feed — showing country only.
                 </p>
                 <div className="mt-2 text-sm font-semibold">
@@ -402,13 +402,13 @@ export function LeagueDossier({
             {tab === "seasons" && (
               <Panel title="Seasons">
                 {(meta?.seasonsTracked?.length || 0) === 0 ? (
-                  <p className="text-xs text-slate-500">No seasons list from feed.</p>
+                  <p className="text-xs text-[var(--muted)]">No seasons list from feed.</p>
                 ) : (
                   <ul className="space-y-1.5 text-xs">
                     {meta!.seasonsTracked.map((s) => (
                       <li key={s.year} className="flex gap-2">
                         <span className="font-semibold tabular-nums w-12">{s.year}</span>
-                        <span className="text-slate-500">
+                        <span className="text-[var(--muted)]">
                           {s.start || "?"} → {s.end || "?"}
                           {s.current ? " · current" : ""}
                         </span>
@@ -438,11 +438,11 @@ export function LeagueDossier({
             </div>
           ) : (
             <Panel title="Desk tips">
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-[var(--muted)]">
                 European qualification zones appear in the Zone column when the feed provides descriptions (CL / EL / relegation).
               </p>
               {fixtureDetail ? (
-                <p className="text-[10px] mt-2 text-slate-400">{fixtureDetail}</p>
+                <p className="text-[10px] mt-2 text-[var(--muted)]">{fixtureDetail}</p>
               ) : null}
             </Panel>
           )}
@@ -455,7 +455,7 @@ export function LeagueDossier({
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] p-3">
-      <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-2">{title}</div>
+      <div className="text-desk-label text-[var(--muted)] mb-2">{title}</div>
       {children}
     </div>
   );
@@ -470,7 +470,7 @@ function FxList({
   empty: string;
   highlight: Set<number>;
 }) {
-  if (!items.length) return <p className="text-xs text-slate-500">{empty}</p>;
+  if (!items.length) return <p className="text-xs text-[var(--muted)]">{empty}</p>;
   return (
     <ul className="space-y-1.5 text-xs">
       {items.map((fx) => {
@@ -484,17 +484,17 @@ function FxList({
             key={fx.id}
             className={cn(
               "flex gap-2 items-center rounded-md px-1.5 py-1",
-              hi && "bg-teal-50 dark:bg-teal-950/30 font-semibold"
+              hi && "bg-[var(--surface-muted)] font-semibold"
             )}
           >
-            <span className="text-slate-500 w-28 shrink-0 tabular-nums text-[10px]">
+            <span className="text-[var(--muted)] w-28 shrink-0 tabular-nums text-[10px]">
               {whenLabel(fx.date)}
             </span>
             <span className="flex-1 truncate">
               {fx.home.name} vs {fx.away.name}
             </span>
             <span className="tabular-nums font-semibold">{score}</span>
-            <span className="text-[10px] text-slate-400 w-8">{fx.status}</span>
+            <span className="text-[10px] text-[var(--muted)] w-8">{fx.status}</span>
           </li>
         );
       })}

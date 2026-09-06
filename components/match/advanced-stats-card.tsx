@@ -98,16 +98,16 @@ export function AdvancedStatsCard({
   return (
     <div
       className={cn(
-        "rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-sm overflow-hidden",
+        "rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] shadow-xs overflow-hidden",
         className
       )}
     >
-      <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-slate-100 dark:border-slate-800">
+      <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-[var(--border)]">
         <div className="min-w-0">
-          <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+          <div className="text-desk-label text-[var(--muted)]">
             Advanced stats
           </div>
-          <div className="text-[11px] text-slate-500 truncate">
+          <div className="text-[11px] text-[var(--muted)] truncate">
             {"Advanced stats"}
             {data?.competition ? ` · ${data.competition}` : ""}
           </div>
@@ -115,7 +115,7 @@ export function AdvancedStatsCard({
         <button
           type="button"
           onClick={() => void load()}
-          className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-900 hover:text-slate-700"
+          className="rounded-[var(--radius-sm)] p-1.5 text-[var(--muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--foreground)]"
           title="Refresh xG"
         >
           {loading ? (
@@ -128,16 +128,16 @@ export function AdvancedStatsCard({
 
       <div className={cn("px-3", compact ? "py-2.5" : "py-3")}>
         {loading && !data ? (
-          <p className="text-xs text-slate-500 flex items-center gap-2 py-2">
+          <p className="text-xs text-[var(--muted)] flex items-center gap-2 py-2">
             <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading xG…
           </p>
         ) : err ? (
-          <p className="text-xs text-slate-500 py-1">{err}</p>
+          <p className="text-xs text-[var(--muted)] py-1">{err}</p>
         ) : data?.available && data.homeXg != null && data.awayXg != null ? (
           <div className="space-y-3">
             <div className="flex items-end justify-between gap-3">
               <div className="min-w-0 flex-1">
-                <div className="text-[10px] uppercase tracking-wide text-slate-400 truncate">
+                <div className="text-[10px] uppercase tracking-[var(--tracking-label)] text-[var(--muted)] truncate">
                   {homeName}
                 </div>
                 <div
@@ -148,15 +148,15 @@ export function AdvancedStatsCard({
                 </div>
               </div>
               <div className="text-center shrink-0 pb-0.5">
-                <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                <div className="text-desk-label text-[var(--muted)]">
                   xG
                 </div>
-                <div className="text-xs text-slate-500 tabular-nums">
+                <div className="text-xs text-[var(--muted)] tabular-nums">
                   {fmtXg(data.homeXg)} – {fmtXg(data.awayXg)}
                 </div>
               </div>
               <div className="min-w-0 flex-1 text-right">
-                <div className="text-[10px] uppercase tracking-wide text-slate-400 truncate">
+                <div className="text-[10px] uppercase tracking-[var(--tracking-label)] text-[var(--muted)] truncate">
                   {awayName}
                 </div>
                 <div
@@ -174,7 +174,7 @@ export function AdvancedStatsCard({
               const a = data.awayXg || 0;
               const t = h + a || 1;
               return (
-                <div className="flex h-2 rounded-full overflow-hidden bg-slate-100 dark:bg-slate-800">
+                <div className="flex h-2 rounded-[var(--radius-xs)] overflow-hidden bg-[var(--surface-muted)]">
                   <div
                     className="h-full"
                     style={{ width: `${(h / t) * 100}%`, backgroundColor: hc }}
@@ -189,8 +189,8 @@ export function AdvancedStatsCard({
 
             {!compact && (
               <div className="grid grid-cols-2 gap-2 text-[11px]">
-                <div className="rounded-lg bg-slate-50 dark:bg-slate-900 px-2 py-1.5">
-                  <div className="text-slate-400 font-semibold uppercase text-[9px]">
+                <div className="rounded-[var(--radius-sm)] bg-[var(--surface-muted)] px-2 py-1.5">
+                  <div className="text-[var(--muted)] font-semibold uppercase text-[9px] tracking-[var(--tracking-label)]">
                     xGA (opp xG)
                   </div>
                   <div className="tabular-nums font-semibold">
@@ -198,14 +198,14 @@ export function AdvancedStatsCard({
                   </div>
                 </div>
                 {data.shotSummary && (
-                  <div className="rounded-lg bg-slate-50 dark:bg-slate-900 px-2 py-1.5">
-                    <div className="text-slate-400 font-semibold uppercase text-[9px]">
+                  <div className="rounded-[var(--radius-sm)] bg-[var(--surface-muted)] px-2 py-1.5">
+                    <div className="text-[var(--muted)] font-semibold uppercase text-[9px] tracking-[var(--tracking-label)]">
                       Shot map summary
                     </div>
                     <div className="tabular-nums font-semibold">
                       {data.shotSummary.homeShots}–{data.shotSummary.awayShots}{" "}
                       shots
-                      <span className="text-slate-400 font-normal">
+                      <span className="text-[var(--muted)] font-normal">
                         {" "}
                         · on target {data.shotSummary.homeOnTarget}–
                         {data.shotSummary.awayOnTarget}
@@ -214,8 +214,8 @@ export function AdvancedStatsCard({
                   </div>
                 )}
                 {data.forecast && (
-                  <div className="rounded-lg bg-slate-50 dark:bg-slate-900 px-2 py-1.5 col-span-2">
-                    <div className="text-slate-400 font-semibold uppercase text-[9px]">
+                  <div className="rounded-[var(--radius-sm)] bg-[var(--surface-muted)] px-2 py-1.5 col-span-2">
+                    <div className="text-[var(--muted)] font-semibold uppercase text-[9px] tracking-[var(--tracking-label)]">
                       Model win probs (from xG)
                     </div>
                     <div className="tabular-nums font-semibold">
@@ -228,15 +228,15 @@ export function AdvancedStatsCard({
             )}
           </div>
         ) : (
-          <p className="text-xs text-slate-500 py-1">
+          <p className="text-xs text-[var(--muted)] py-1">
             {data?.message || "xG not available for this competition"}
           </p>
         )}
       </div>
 
       {showCoverage && data?.coverage && data.coverage.length > 0 && (
-        <div className="border-t border-slate-100 dark:border-slate-800 px-3 py-2 bg-slate-50/80 dark:bg-slate-900/40">
-          <div className="text-[9px] font-bold uppercase tracking-wide text-slate-400 mb-1">
+        <div className="border-t border-[var(--border)] px-3 py-2 bg-[var(--surface-muted)]">
+          <div className="text-desk-label text-[var(--muted)] mb-1">
             Free xG coverage
           </div>
           <ul className="flex flex-wrap gap-1">
@@ -246,8 +246,8 @@ export function AdvancedStatsCard({
                 className={cn(
                   "rounded-full px-1.5 py-0.5 text-[10px] border",
                   c.covered
-                    ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200"
-                    : "border-slate-200 bg-white text-slate-500 dark:border-slate-700 dark:bg-slate-950"
+                    ? "border-[var(--success)]/40 bg-[var(--surface)] text-[var(--foreground)]"
+                    : "border-[var(--border)] bg-[var(--surface)] text-[var(--muted)]"
                 )}
                 title={c.note || undefined}
               >
@@ -295,7 +295,7 @@ export function AdvancedStatsStrip({
   if (data.available && data.homeXg != null && data.awayXg != null) {
     return (
       <span
-        className={cn("tabular-nums text-violet-700 dark:text-violet-300", className)}
+        className={cn("tabular-nums text-[var(--foreground)]", className)}
         title={data.sourceLabel}
       >
         xG {data.homeXg.toFixed(2)}–{data.awayXg.toFixed(2)}
@@ -307,7 +307,7 @@ export function AdvancedStatsStrip({
   if (!data.coveredCompetition) {
     return (
       <span
-        className={cn("text-slate-400", className)}
+        className={cn("text-[var(--muted)]", className)}
         title={data.message || undefined}
       >
         xG n/a

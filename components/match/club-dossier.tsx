@@ -131,7 +131,7 @@ export function ClubDossier({
           )}
           <div className="min-w-0 flex-1">
             <h2 className="text-xl font-black tracking-tight">{c?.name || "Club"}</h2>
-            <div className="mt-1 text-xs text-slate-600 dark:text-slate-300 flex flex-wrap gap-x-3 gap-y-1">
+            <div className="mt-1 text-xs text-[var(--muted-foreground)] flex flex-wrap gap-x-3 gap-y-1">
               {c?.country ? <span>{c.country}</span> : null}
               {c?.city ? <span>{c.city}</span> : null}
               {c?.founded ? <span>Est. {c.founded}</span> : null}
@@ -142,7 +142,7 @@ export function ClubDossier({
             </div>
           </div>
           <div className="flex flex-col items-end gap-1">
-            <span className="text-[10px] font-bold uppercase text-amber-500">Club</span>
+            <span className="text-[10px] font-bold uppercase tracking-[var(--tracking-label)] text-[var(--muted)]">Club</span>
             <button type="button" className="focus-ring interactive-press p-1.5 rounded-[var(--radius-sm)] hover:bg-[var(--surface-muted)]" onClick={onClose}>
               <X className="h-4 w-4" />
             </button>
@@ -170,11 +170,11 @@ export function ClubDossier({
 
       <div className="flex-1 min-h-0 overflow-y-auto p-3">
         {loading && (
-          <div className="flex items-center justify-center gap-2 text-xs text-slate-500 py-10">
+          <div className="flex items-center justify-center gap-2 text-xs text-[var(--muted)] py-10">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading club dossier…
           </div>
         )}
-        {err && <p className="text-xs text-rose-600">{err}</p>}
+        {err && <p className="text-xs text-[var(--live)]">{err}</p>}
 
         {!loading && c && (
           <div className="grid lg:grid-cols-2 gap-3">
@@ -200,16 +200,16 @@ export function ClubDossier({
                     </Card>
                   ) : (
                     <Card title="League position">
-                      <p className="text-xs text-slate-500">Standings row not in feed for this desk.</p>
+                      <p className="text-xs text-[var(--muted)]">Standings row not in feed for this desk.</p>
                     </Card>
                   )}
-                  {data?.afStub ? <p className="text-[10px] text-slate-500">{data.afStub}</p> : null}
+                  {data?.afStub ? <p className="text-[10px] text-[var(--muted)]">{data.afStub}</p> : null}
                 </>
               )}
 
               {tab === "today" && (
                 <Card title="Today's match context">
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-[var(--muted)]">
                     Match H2H for the club lives on the desk Form/H2H strip. Add club notes here for talking points.
                   </p>
                 </Card>
@@ -224,7 +224,7 @@ export function ClubDossier({
                       <Fact label="Points" value={String(data.standingsRow.points)} />
                     </div>
                   ) : (
-                    <p className="text-xs text-slate-500">No statistics row from feed.</p>
+                    <p className="text-xs text-[var(--muted)]">No statistics row from feed.</p>
                   )}
                 </Card>
               )}
@@ -232,14 +232,14 @@ export function ClubDossier({
               {tab === "career" && (
                 <Card title="Trophies">
                   {(data?.trophies?.length || 0) === 0 ? (
-                    <p className="text-xs text-slate-500">No trophies in feed.</p>
+                    <p className="text-xs text-[var(--muted)]">No trophies in feed.</p>
                   ) : (
                     <ul className="space-y-1 text-xs max-h-80 overflow-y-auto">
                       {(data?.trophies || []).map((tr, i) => (
                         <li key={i}>
                           <span className="font-semibold">{tr.league}</span>
-                          {tr.season ? <span className="text-slate-500"> · {tr.season}</span> : null}
-                          {tr.place ? <span className="text-slate-500"> · {tr.place}</span> : null}
+                          {tr.season ? <span className="text-[var(--muted)]"> · {tr.season}</span> : null}
+                          {tr.place ? <span className="text-[var(--muted)]"> · {tr.place}</span> : null}
                         </li>
                       ))}
                     </ul>
@@ -249,18 +249,18 @@ export function ClubDossier({
 
               {tab === "squad" && (
                 <Card title={`Squad (${data?.squad.length || 0})`}>
-                  <ul className="max-h-[60vh] overflow-y-auto divide-y divide-slate-100 dark:divide-slate-900">
+                  <ul className="max-h-[60vh] overflow-y-auto divide-y divide-[var(--border)]">
                     {(data?.squad || []).map((pl) => (
                       <li key={pl.id}>
                         <button
                           type="button"
-                          className="w-full text-left px-1 py-1.5 text-xs hover:bg-slate-50 dark:hover:bg-slate-900 flex items-center gap-2"
+                          className="w-full text-left px-1 py-1.5 text-xs hover:bg-[var(--surface-muted)] flex items-center gap-2"
                           onClick={() => onPlayerClick?.(pl.id)}
                         >
-                          <span className="w-6 tabular-nums text-slate-400">#{pl.shirtNumber}</span>
+                          <span className="w-6 tabular-nums text-[var(--muted)]">#{pl.shirtNumber}</span>
                           <span className="font-semibold flex-1 truncate">{pl.name}{pl.isCaptain ? " (C)" : ""}</span>
-                          <span className="text-slate-400">{pl.position}</span>
-                          <span className="tabular-nums text-slate-500">{pl.goals}G</span>
+                          <span className="text-[var(--muted)]">{pl.position}</span>
+                          <span className="tabular-nums text-[var(--muted)]">{pl.goals}G</span>
                         </button>
                       </li>
                     ))}
@@ -278,13 +278,13 @@ export function ClubDossier({
               {tab === "sidelined" && (
                 <Card title="Injuries / sidelined">
                   {(data?.injuries?.length || 0) === 0 ? (
-                    <p className="text-xs text-slate-500">No injuries on file.</p>
+                    <p className="text-xs text-[var(--muted)]">No injuries on file.</p>
                   ) : (
                     <ul className="space-y-1 text-xs">
                       {(data?.injuries || []).map((i) => (
                         <li key={i.id}>
                           <span className="font-semibold">{i.injuryType}</span>
-                          <span className="text-slate-500"> · {i.status}</span>
+                          <span className="text-[var(--muted)]"> · {i.status}</span>
                         </li>
                       ))}
                     </ul>
@@ -302,7 +302,7 @@ export function ClubDossier({
                       ) : null}
                       <div>
                         <div className="font-bold text-sm">{data.afCoach.name}</div>
-                        <div className="text-slate-500">
+                        <div className="text-[var(--muted)]">
                           {data.afCoach.nationality || "—"}
                           {data.afCoach.age != null ? ` · ${data.afCoach.age}y` : ""}
                         </div>
@@ -310,13 +310,13 @@ export function ClubDossier({
                     </div>
                   ) : null}
                   {(data?.coaches?.length || 0) === 0 && !data?.afCoach ? (
-                    <p className="text-xs text-slate-500">No coaches on file.</p>
+                    <p className="text-xs text-[var(--muted)]">No coaches on file.</p>
                   ) : (
                     <ul className="space-y-1 text-xs">
                       {(data?.coaches || []).map((ch) => (
                         <li key={ch.id}>
                           <span className="font-semibold">{ch.name}</span>
-                          <span className="text-slate-500"> · {ch.role}</span>
+                          <span className="text-[var(--muted)]"> · {ch.role}</span>
                         </li>
                       ))}
                     </ul>
@@ -327,15 +327,15 @@ export function ClubDossier({
               {tab === "transfers" && (
                 <Card title="Transfers">
                   {(data?.transfers?.length || 0) === 0 ? (
-                    <p className="text-xs text-slate-500">No transfers in feed.</p>
+                    <p className="text-xs text-[var(--muted)]">No transfers in feed.</p>
                   ) : (
                     <ul className="space-y-1.5 text-xs max-h-[60vh] overflow-y-auto">
                       {(data?.transfers || []).map((tr, i) => (
                         <li key={i} className="flex gap-2">
-                          <span className="tabular-nums text-slate-500 w-20 shrink-0">{tr.date}</span>
+                          <span className="tabular-nums text-[var(--muted)] w-20 shrink-0">{tr.date}</span>
                           <span className="font-semibold shrink-0">{tr.player}</span>
-                          <span className="truncate text-slate-600">{tr.from} → {tr.to}</span>
-                          <span className="text-slate-400 shrink-0">{tr.type || ""}</span>
+                          <span className="truncate text-[var(--muted-foreground)]">{tr.from} → {tr.to}</span>
+                          <span className="text-[var(--muted)] shrink-0">{tr.type || ""}</span>
                         </li>
                       ))}
                     </ul>
@@ -345,7 +345,7 @@ export function ClubDossier({
 
               {tab === "contracts" && (
                 <Card title="Contracts">
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-[var(--muted)]">
                     Contract end dates are not available in the feed — honest empty.
                   </p>
                 </Card>
@@ -354,12 +354,12 @@ export function ClubDossier({
               {tab === "schedule" && (
                 <Card title="Recent schedule">
                   {(data?.schedule?.length || 0) === 0 ? (
-                    <p className="text-xs text-slate-500">No recent fixtures in feed.</p>
+                    <p className="text-xs text-[var(--muted)]">No recent fixtures in feed.</p>
                   ) : (
                     <ul className="space-y-1.5 text-xs">
                       {(data?.schedule || []).map((fx, i) => (
                         <li key={i} className="flex gap-2">
-                          <span className="tabular-nums text-slate-500 w-24 shrink-0">{(fx.date || "").slice(0, 10)}</span>
+                          <span className="tabular-nums text-[var(--muted)] w-24 shrink-0">{(fx.date || "").slice(0, 10)}</span>
                           <span className="flex-1 truncate">{fx.home} vs {fx.away}</span>
                           <span className="tabular-nums font-semibold">{fx.score}</span>
                         </li>
@@ -395,7 +395,7 @@ export function ClubDossier({
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] p-2.5">
-      <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1.5">{title}</div>
+      <div className="text-desk-label text-[var(--muted)] mb-1.5">{title}</div>
       {children}
     </div>
   );
@@ -403,19 +403,19 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
 function Fact({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-[var(--radius-sm)] bg-[var(--surface-muted)] px-2 py-1.5">
-      <div className="text-[9px] uppercase text-slate-400 font-semibold">{label}</div>
+      <div className="text-[9px] uppercase tracking-[var(--tracking-label)] text-[var(--muted)] font-semibold">{label}</div>
       <div className="font-semibold">{value}</div>
     </div>
   );
 }
 function NotesList({ notes, empty }: { notes: NoteRow[]; empty: string }) {
-  if (!notes.length) return <p className="text-xs text-slate-500">{empty}</p>;
+  if (!notes.length) return <p className="text-xs text-[var(--muted)]">{empty}</p>;
   return (
     <div className="space-y-2">
       {notes.map((n) => (
         <div key={n.id} className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] p-3">
           <div className="text-xs font-bold mb-1">{n.title}</div>
-          <p className="text-xs text-slate-600 whitespace-pre-wrap">{n.body}</p>
+          <p className="text-xs text-[var(--muted-foreground)] whitespace-pre-wrap">{n.body}</p>
         </div>
       ))}
     </div>

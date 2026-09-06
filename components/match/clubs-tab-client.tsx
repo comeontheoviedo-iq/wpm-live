@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ClubDossier } from "@/components/match/club-dossier";
 import { Building2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 type ClubChip = {
   id: string;
@@ -26,8 +27,8 @@ export function ClubsTabClient({
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-xl font-bold">Clubs</h2>
-        <p className="text-sm text-slate-500">
+        <h2 className="text-xl font-bold tracking-tight">Clubs</h2>
+        <p className="text-sm text-[var(--muted)]">
           Full club dossiers (AF) — not a squad replica. Open either side.
         </p>
       </div>
@@ -42,11 +43,12 @@ export function ClubsTabClient({
               key={c.id}
               type="button"
               onClick={() => setOpenId(c.id)}
-              className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition ${
+              className={cn(
+                "flex items-center gap-3 rounded-[var(--radius-md)] border px-4 py-3 text-left transition focus-ring",
                 active
-                  ? "border-teal-500 ring-2 ring-teal-500/30 bg-white dark:bg-slate-950"
-                  : "border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/40 hover:border-slate-300"
-              }`}
+                  ? "border-[var(--border-strong)] bg-[var(--surface)] shadow-xs"
+                  : "border-[var(--border)] bg-[var(--surface-muted)] hover:bg-[var(--surface)] hover:border-[var(--border-strong)]"
+              )}
             >
               {crest ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -61,7 +63,7 @@ export function ClubsTabClient({
               )}
               <div>
                 <div className="font-bold">{c.name}</div>
-                <div className="text-xs text-slate-500">Open club dossier</div>
+                <div className="text-xs text-[var(--muted)]">Open club dossier</div>
               </div>
             </button>
           );
@@ -69,7 +71,7 @@ export function ClubsTabClient({
       </div>
 
       {openId ? (
-        <div className="relative min-h-[70vh] rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+        <div className="relative min-h-[70vh] rounded-[var(--radius-md)] border border-[var(--border)] overflow-hidden bg-[var(--surface)]">
           <ClubDossier
             key={openId}
             matchId={matchId}

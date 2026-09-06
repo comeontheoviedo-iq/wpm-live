@@ -31,9 +31,9 @@ export function TabStrip<T extends string>({
       className={cn(
         "flex gap-1 overflow-x-auto",
         variant === "chip" &&
-          "border-b border-slate-200/80 bg-slate-100/70 px-3 py-2 dark:border-slate-800 dark:bg-slate-900/50",
+          "border-b border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2",
         variant === "underline" &&
-          "border-b border-slate-200/80 px-2 dark:border-slate-800",
+          "border-b border-[var(--border)] px-2",
         className
       )}
     >
@@ -57,15 +57,15 @@ export function TabStrip<T extends string>({
                 cn(
                   "rounded-md border",
                   active
-                    ? "border-slate-300/90 bg-white text-slate-900 shadow-sm dark:border-slate-600 dark:bg-slate-950 dark:text-white"
-                    : "border-transparent text-slate-500 hover:bg-white/70 hover:text-slate-800 dark:hover:bg-slate-800/70 dark:hover:text-slate-200"
+                    ? "border-[var(--border-strong)] bg-[var(--surface)] text-[var(--foreground)] shadow-xs"
+                    : "border-transparent text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--foreground)]"
                 ),
               variant === "underline" &&
                 cn(
                   "rounded-t-md border-b-2 -mb-px",
                   active
-                    ? "border-teal-600 text-teal-700 dark:border-teal-400 dark:text-teal-300"
-                    : "border-transparent text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                    ? "border-[var(--foreground)] text-[var(--foreground)]"
+                    : "border-transparent text-[var(--muted)] hover:text-[var(--foreground)]"
                 )
             )}
           >

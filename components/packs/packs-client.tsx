@@ -487,7 +487,7 @@ export function PacksClient({ matchId }: { matchId: string }) {
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold">Research</h2>
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-[var(--muted)]">
             Gemini Notebook is the research source of truth: paste → Use my draft
             → desk notes (organise/tag). Do not full re-Generate on top of paste —
             use Fill gap for missing sections only. Generate still asks to confirm
@@ -498,7 +498,7 @@ export function PacksClient({ matchId }: { matchId: string }) {
           size="sm"
           disabled={packBusy || busy}
           onClick={generateResearchPack}
-          className="bg-violet-600 hover:bg-violet-500"
+          className="desk-btn-accent"
         >
           <Wand2 className="h-3.5 w-3.5 mr-1" />
           {packBusy
@@ -530,7 +530,7 @@ export function PacksClient({ matchId }: { matchId: string }) {
       />
 
       {!gemini && (
-        <div className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/40 px-3 py-2.5 text-sm text-amber-900 dark:text-amber-100 flex gap-2">
+        <div className="rounded-[var(--radius-md)] border border-[var(--warning)]/40 bg-[var(--surface-muted)] px-3 py-2.5 text-sm text-[var(--foreground)] flex gap-2">
           <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
           <div>
             <div className="font-semibold">Gemini not connected</div>
@@ -544,7 +544,7 @@ export function PacksClient({ matchId }: { matchId: string }) {
         </div>
       )}
 
-      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 overflow-hidden">
+      <div className="panel-surface overflow-hidden">
         <button
           type="button"
           className="w-full flex items-center justify-between gap-2 px-3 py-2.5 text-left text-sm"
@@ -553,9 +553,9 @@ export function PacksClient({ matchId }: { matchId: string }) {
           <div>
             <div className="font-semibold">
               Enhance with sources{" "}
-              <span className="font-normal text-slate-500">(optional)</span>
+              <span className="font-normal text-[var(--muted)]">(optional)</span>
             </div>
-            <div className="text-[11px] text-slate-500">
+            <div className="text-[11px] text-[var(--muted)]">
               Deep research already uses match context, API-Football
               squads/injuries/predictions/H2H, and Gemini Google Search. Paste
               URLs or notes only to steer.
@@ -563,32 +563,32 @@ export function PacksClient({ matchId }: { matchId: string }) {
             </div>
           </div>
           {sourcesOpen ? (
-            <ChevronUp className="h-4 w-4 shrink-0 text-slate-400" />
+            <ChevronUp className="h-4 w-4 shrink-0 text-[var(--muted)]" />
           ) : (
-            <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
+            <ChevronDown className="h-4 w-4 shrink-0 text-[var(--muted)]" />
           )}
         </button>
         {sourcesOpen && (
-          <div className="border-t border-slate-100 dark:border-slate-800 px-3 py-3 space-y-2">
-            <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">
+          <div className="border-t border-[var(--border)] px-3 py-3 space-y-2">
+            <label className="block text-xs font-medium text-[var(--muted-foreground)]">
               URLs (one per line)
               <textarea
-                className="mt-1 w-full min-h-[72px] rounded-lg border border-slate-200 dark:border-slate-700 bg-transparent px-2 py-1.5 text-xs font-mono"
+                className="mt-1 w-full min-h-[72px] rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 text-xs font-mono"
                 placeholder="https://…"
                 value={sourceUrls}
                 onChange={(e) => setSourceUrls(e.target.value)}
               />
             </label>
-            <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">
+            <label className="block text-xs font-medium text-[var(--muted-foreground)]">
               Extra notes
               <textarea
-                className="mt-1 w-full min-h-[72px] rounded-lg border border-slate-200 dark:border-slate-700 bg-transparent px-2 py-1.5 text-xs"
+                className="mt-1 w-full min-h-[72px] rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 text-xs"
                 placeholder="Anything you want Gemini to weigh…"
                 value={sourceNotes}
                 onChange={(e) => setSourceNotes(e.target.value)}
               />
             </label>
-            <p className="text-[10px] text-slate-400">
+            <p className="text-[10px] text-[var(--muted)]">
               Empty is fine — Generate never waits on sources.
             </p>
           </div>
@@ -596,7 +596,7 @@ export function PacksClient({ matchId }: { matchId: string }) {
       </div>
 
       {lastDistributed && (
-        <div className="rounded-lg border border-violet-200 dark:border-violet-900 bg-violet-50/80 dark:bg-violet-950/30 px-3 py-2 text-xs text-violet-900 dark:text-violet-100">
+        <div className="rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2 text-xs text-[var(--foreground)]">
           <span className="font-semibold">Last distribution: </span>
           {formatDistributed(lastDistributed)}
         </div>
@@ -627,14 +627,14 @@ export function PacksClient({ matchId }: { matchId: string }) {
                   setDraft(existing?.content || "");
                   setMsg(null);
                 }}
-                className={`w-full text-left rounded-lg px-3 py-2 text-sm border ${
+                className={`w-full text-left rounded-[var(--radius-sm)] px-3 py-2 text-sm border ${
                   active === t.key
-                    ? "border-teal-500 bg-teal-50 dark:bg-teal-950/40"
-                    : "border-slate-200 dark:border-slate-800"
+                    ? "border-[var(--border-strong)] bg-[var(--surface)] shadow-xs"
+                    : "border-[var(--border)] bg-[var(--surface-muted)] hover:bg-[var(--surface)]"
                 }`}
               >
                 <div className="font-medium">{t.title}</div>
-                <div className="text-[10px] text-slate-500">
+                <div className="text-[10px] text-[var(--muted)]">
                   {done ? "Saved" : "Not generated"} · {t.section}
                 </div>
               </button>
@@ -646,7 +646,7 @@ export function PacksClient({ matchId }: { matchId: string }) {
           <CardHeader className="flex flex-row items-center justify-between gap-2">
             <div>
               <CardTitle>{current?.title || "Section"}</CardTitle>
-              <p className="text-xs text-slate-500 mt-0.5">
+              <p className="text-xs text-[var(--muted)] mt-0.5">
                 {current?.description}
               </p>
             </div>
@@ -694,27 +694,27 @@ export function PacksClient({ matchId }: { matchId: string }) {
                   /failed|error|no content|could not|page instead|nothing mapped/i.test(
                     msg
                   )
-                    ? "text-rose-600 dark:text-rose-400"
-                    : "text-emerald-700 dark:text-emerald-400"
+                    ? "text-[var(--live)]"
+                    : "text-[var(--success)]"
                 }`}
               >
                 {msg}
               </p>
             )}
             {!draft.trim() && (
-              <p className="text-[11px] text-amber-700 dark:text-amber-300">
+              <p className="text-[11px] text-[var(--muted)]">
                 This section is empty — Generate first (or paste), then Send to
                 desk notes unlocks.
               </p>
             )}
-            <p className="text-[11px] text-slate-500">
+            <p className="text-[11px] text-[var(--muted)]">
               Notebook path: paste Gemini Notebook research into this editor →
               <span className="font-medium"> Use my draft → desk notes</span> or
               <span className="font-medium"> Send to desk notes</span>. Avoid
               Generate if you want to keep your paste.
             </p>
             <textarea
-              className="w-full min-h-[420px] rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent px-3 py-2 text-sm leading-relaxed font-mono"
+              className="w-full min-h-[420px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm leading-relaxed font-mono"
               value={draft}
               onChange={(e) => {
                 draftDirty.current = true;

@@ -64,7 +64,7 @@ export function AppHeader({
           {matchId && (
             <Link
               href={`/match-day/${matchId}/print`}
-              className="focus-ring interactive-press rounded-lg p-2 text-slate-500 hover:bg-slate-100/90 dark:hover:bg-slate-800/90"
+              className="focus-ring interactive-press rounded-[var(--radius-sm)] p-2 text-[var(--muted)] hover:bg-[var(--surface-muted)]"
               aria-label="Print"
             >
               <Printer className="h-4 w-4" />
@@ -82,11 +82,11 @@ export function AppHeader({
           </IconBtn>
           <Link
             href="/settings"
-            className="focus-ring interactive-press rounded-lg p-2 text-slate-500 hover:bg-slate-100/90 dark:hover:bg-slate-800/90"
+            className="focus-ring interactive-press rounded-[var(--radius-sm)] p-2 text-[var(--muted)] hover:bg-[var(--surface-muted)]"
           >
             <Settings className="h-4 w-4" />
           </Link>
-          <div className="ml-1 flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-teal-500 to-emerald-600 text-[11px] font-bold text-white shadow-sm shadow-teal-900/25 ring-2 ring-white/70 dark:ring-slate-900/80">
+          <div className="ml-1 flex h-8 w-8 items-center justify-center rounded-full bg-[var(--foreground)] text-[11px] font-bold text-[var(--surface)] shadow-xs ring-2 ring-[var(--border)]">
             {user.avatarInitials}
           </div>
           <IconBtn ariaLabel="Log out" onClick={logout}>
@@ -109,7 +109,7 @@ function IconBtn({
 }) {
   return (
     <button
-      className="focus-ring interactive-press rounded-lg p-2 text-slate-500 hover:bg-slate-100/90 dark:hover:bg-slate-800/90"
+      className="focus-ring interactive-press rounded-[var(--radius-sm)] p-2 text-[var(--muted)] hover:bg-[var(--surface-muted)]"
       aria-label={ariaLabel}
       type="button"
       onClick={onClick}

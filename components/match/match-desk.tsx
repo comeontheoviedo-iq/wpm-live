@@ -1612,9 +1612,14 @@ export function MatchDesk({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [configured, apiFootballFixtureId]);
 
+  // Live: 18s. Pre-match / Assigned / Preparation / Ready (and any other
+  // non-terminal): 30s so Official XI can land without a manual Sync.
   useEffect(() => {
-    if (!configured || !apiFootballFixtureId || status !== "Live") return;
-    const t = setInterval(() => sync(true), 18_000);
+    if (!configured || !apiFootballFixtureId) return;
+    if (status === "Full Time" || status === "Finished") return;
+    const intervalMs =
+      status === "Live" || status === "Half Time" ? 18_000 : 30_000;
+    const t = setInterval(() => sync(true), intervalMs);
     return () => clearInterval(t);
   }, [configured, apiFootballFixtureId, status, sync]);
 

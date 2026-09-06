@@ -39,11 +39,15 @@ export function FeedBanner({
       .catch(() => setConfigured(false));
   }, []);
 
+  // Live: 18s. Pre-match / Assigned / other non-terminal: 30s for Official XI pickup.
   useEffect(() => {
-    if (!configured || !apiFootballFixtureId || status !== "Live") return;
+    if (!configured || !apiFootballFixtureId) return;
+    if (status === "Full Time" || status === "Finished") return;
+    const intervalMs =
+      status === "Live" || status === "Half Time" ? 18_000 : 30_000;
     const t = setInterval(() => {
       sync(true);
-    }, 18_000);
+    }, intervalMs);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [configured, apiFootballFixtureId, status]);

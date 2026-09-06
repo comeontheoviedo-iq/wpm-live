@@ -906,13 +906,13 @@ function mapEventType(ev: AfEvent): string {
 }
 
 /**
- * Full desk sync:
- * - squads for both clubs
- * - injuries
- * - predictions + H2H
- * - official lineups when present → lineupStatus=confirmed
- * - else Expected (last XI) unless user already has a personal predicted board
- * - events when live/available
+ * Desk sync — mode gated for AF diet:
+ * - mode "full" (manual Sync / match create / scripts): squads, injuries,
+ *   predictions, venue, season scorers, last-XI hunts, coaches, plus live feed.
+ * - mode "live" (timed desk/overlay poll): fixture + events + statistics +
+ *   lineups when Official XI still needed / NS→live, + fixture players for
+ *   card tallies. Never pages players, top scorers, predictions, venue detail,
+ *   injuries refresh, coach spam, or last-played lineup hunts on the timer.
  */
 
 /** Ensure at most one on-pitch player per formation slot (subs can double-book on name mismatch). */
@@ -1528,10 +1528,44 @@ async function syncRefereeFromFixture(matchId: string, refereeName?: string | nu
   return display;
 }
 
+export type SyncMode = "live" | "full";
+
+/** One in-flight sync writer per matchId so desk+overlay+tabs coalesce. */
+const syncInflight = new Map<string, Promise<unknown>>();
+
 export async function syncMatchFromApiFootball(
   matchId: string,
-  opts?: { resetPlacements?: boolean }
+  opts?: { resetPlacements?: boolean; mode?: SyncMode }
 ) {
+  const mode: SyncMode = opts?.mode === "live" ? "live" : "full";
+
+  const existing = syncInflight.get(matchId);
+  if (existing) {
+    if (mode === "live") {
+      // Live polls share whatever is already running (live or full).
+      return existing as ReturnType<typeof runSyncMatchFromApiFootball>;
+    }
+    // Full Sync waits for the in-flight pass, then runs full enrich.
+    await existing.catch(() => null);
+  }
+
+  const run = runSyncMatchFromApiFootball(matchId, {
+    resetPlacements: opts?.resetPlacements,
+    mode,
+  }).finally(() => {
+    if (syncInflight.get(matchId) === run) syncInflight.delete(matchId);
+  });
+  syncInflight.set(matchId, run);
+  return run;
+}
+
+async function runSyncMatchFromApiFootball(
+  matchId: string,
+  opts: { resetPlacements?: boolean; mode: SyncMode }
+) {
+  const mode = opts.mode;
+  const isLive = mode === "live";
+
   const match = await prisma.match.findUnique({
     where: { id: matchId },
     include: { homeClub: true, awayClub: true },
@@ -1593,30 +1627,54 @@ export async function syncMatchFromApiFootball(
     });
   }
 
-  const squadHome = await syncSquadForClub(match.homeClubId, homeAfId, {
-    purgeForeignAfPlayers: true,
-  }).catch(() => ({ upserted: 0, purged: 0 }));
-  const squadAway = await syncSquadForClub(match.awayClubId, awayAfId, {
-    purgeForeignAfPlayers: true,
-  }).catch(() => ({ upserted: 0, purged: 0 }));
+  let squadHome = { upserted: 0, purged: 0 };
+  let squadAway = { upserted: 0, purged: 0 };
+  let injuryCount = 0;
+  let pred: { advice: string | null; h2h: string | null } = {
+    advice: null,
+    h2h: null,
+  };
 
-  const injuryCount = await syncInjuriesForMatch(
-    matchId,
-    match.apiFootballFixtureId,
-    match.homeClubId,
-    match.awayClubId,
-    homeAfId,
-    awayAfId
-  ).catch(() => 0);
+  if (!isLive) {
+    squadHome = await syncSquadForClub(match.homeClubId, homeAfId, {
+      purgeForeignAfPlayers: true,
+    }).catch(() => ({ upserted: 0, purged: 0 }));
+    squadAway = await syncSquadForClub(match.awayClubId, awayAfId, {
+      purgeForeignAfPlayers: true,
+    }).catch(() => ({ upserted: 0, purged: 0 }));
 
-  const pred = await syncPredictionsForMatch(
-    matchId,
-    match.apiFootballFixtureId,
-    homeAfId,
-    awayAfId
-  ).catch(() => ({ advice: null, h2h: null }));
+    injuryCount = await syncInjuriesForMatch(
+      matchId,
+      match.apiFootballFixtureId,
+      match.homeClubId,
+      match.awayClubId,
+      homeAfId,
+      awayAfId
+    ).catch(() => 0);
 
-  const lineups = await getLineups(match.apiFootballFixtureId);
+    pred = await syncPredictionsForMatch(
+      matchId,
+      match.apiFootballFixtureId,
+      homeAfId,
+      awayAfId
+    ).catch(() => ({ advice: null, h2h: null }));
+  }
+
+  // Lineups on live only when Official XI still needed or pre-live transition.
+  const afStatusShort = fixture.fixture.status.short || "";
+  const isPreOrNs =
+    ["NS", "TBD", "PST", "SUSP"].includes(afStatusShort) ||
+    ["Not Started", "Assigned", "Preparation", "Ready", "Scheduled"].includes(
+      match.status
+    );
+  const needLineups =
+    !isLive ||
+    match.lineupStatus !== "confirmed" ||
+    isPreOrNs;
+
+  const lineups = needLineups
+    ? await getLineups(match.apiFootballFixtureId).catch(() => [])
+    : [];
   let homeFormation = match.homeFormation;
   let awayFormation = match.awayFormation;
   let lineupStatus = match.lineupStatus || "expected";
@@ -1633,11 +1691,13 @@ export async function syncMatchFromApiFootball(
     }
   } else if (match.lineupStatus === "predicted") {
     // Preserve personal DnD board; refresh from saved JSON if needed
-    await applyPredictedJson(match.homeClubId, match.predictedHomeJson);
-    await applyPredictedJson(match.awayClubId, match.predictedAwayJson);
+    if (!isLive) {
+      await applyPredictedJson(match.homeClubId, match.predictedHomeJson);
+      await applyPredictedJson(match.awayClubId, match.predictedAwayJson);
+    }
     lineupStatus = "predicted";
-  } else {
-    // Expected XI = last finished lineup for each team
+  } else if (!isLive) {
+    // Expected XI = last finished lineup — full enrich only (expensive hunt).
     const homeLast = await getLastPlayedLineup(homeAfId).catch(() => null);
     const awayLast = await getLastPlayedLineup(awayAfId).catch(() => null);
     if (homeLast) {
@@ -1657,11 +1717,15 @@ export async function syncMatchFromApiFootball(
       expectedFrom = expectedFrom || awayLast.fixtureId;
     }
     lineupStatus = homeLast || awayLast ? "expected" : match.lineupStatus || "expected";
+  } else {
+    // Live poll without Official XI yet — keep prior board; do not hunt last XI.
+    lineupStatus = match.lineupStatus || "expected";
   }
 
   // Confirmed XI: lineup.coach is authoritative (may have id 0; search surname).
   // Skip /coachs?team= on confirmed desks — open careers still rank Howe/Ferguson.
-  if (lineupStatus === "confirmed") {
+  // Live: never spam getCoachByTeam; only upsert from lineup payload when present.
+  if (lineupStatus === "confirmed" && lineups.length) {
     for (const lu of lineups) {
       if (!lu.coach?.name) continue;
       if (lu.team.id === homeAfId) {
@@ -1670,16 +1734,17 @@ export async function syncMatchFromApiFootball(
         await upsertCoachFromLineup(match.awayClubId, lu).catch(() => null);
       }
     }
-  } else {
+  } else if (!isLive) {
     await syncCoachForClub(match.homeClubId, homeAfId).catch(() => null);
     await syncCoachForClub(match.awayClubId, awayAfId).catch(() => null);
   }
 
-  const venueWeather = await syncVenueAndWeather(
-    matchId,
-    fixture,
-    match.kickoff
-  ).catch(() => ({ venueName: null, weather: null }));
+  const venueWeather = isLive
+    ? { venueName: null as string | null, weather: null as string | null }
+    : await syncVenueAndWeather(matchId, fixture, match.kickoff).catch(() => ({
+        venueName: null as string | null,
+        weather: null as string | null,
+      }));
 
   let statsCount = 0;
   try {
@@ -1745,14 +1810,16 @@ export async function syncMatchFromApiFootball(
     /* player live stats optional — soft-fail */
   }
 
-  const scorerSync = await syncSeasonScorers(
-    match.homeClubId,
-    match.awayClubId,
-    homeAfId,
-    awayAfId,
-    fixture.league.id,
-    fixture.league.season
-  ).catch(() => ({ scorers: 0, keepers: 0 }));
+  const scorerSync = isLive
+    ? { scorers: 0, keepers: 0 }
+    : await syncSeasonScorers(
+        match.homeClubId,
+        match.awayClubId,
+        homeAfId,
+        awayAfId,
+        fixture.league.id,
+        fixture.league.season
+      ).catch(() => ({ scorers: 0, keepers: 0 }));
 
   const events = await getEvents(match.apiFootballFixtureId).catch(() => []);
   const homeScore = fixture.goals.home ?? match.homeScore;
@@ -2066,6 +2133,7 @@ export async function syncMatchFromApiFootball(
 
   return {
     match: updated,
+    mode,
     lineupCount: lineups.length,
     eventCount: events.length,
     newEvents,

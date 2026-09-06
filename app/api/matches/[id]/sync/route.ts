@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { isApiFootballConfigured } from "@/lib/api-football";
-import { syncMatchFromApiFootball } from "@/lib/sync-fixture";
+import { syncMatchFromApiFootball, type SyncMode } from "@/lib/sync-fixture";
 
 /** OBS Browser Source has no session — allow sync when clearly from overlay. */
 function isObsOverlayRequest(req: Request) {
@@ -13,6 +13,10 @@ function isObsOverlayRequest(req: Request) {
     referer.includes("/overlay") ||
     url.searchParams.get("obs") === "1"
   );
+}
+
+function parseMode(raw: unknown): SyncMode {
+  return raw === "live" ? "live" : "full";
 }
 
 export async function POST(
@@ -34,9 +38,11 @@ export async function POST(
   }
   const { id } = await params;
   const body = await req.json().catch(() => ({}));
+  const mode = parseMode(body?.mode);
   try {
     const result = await syncMatchFromApiFootball(id, {
       resetPlacements: Boolean(body?.resetPlacements),
+      mode,
     });
     return NextResponse.json(result);
   } catch (e) {

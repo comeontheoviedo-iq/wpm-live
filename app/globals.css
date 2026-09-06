@@ -1616,6 +1616,25 @@
 .player-dossier tbody td.muted {
   color: #64748b;
 }
+
+.player-dossier-season-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.6875rem;
+  padding: 0.2rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  margin-bottom: 0.25rem;
+}
+.player-dossier tbody tr.season-total-row td {
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  padding-top: 0.4rem;
+  background: rgba(255, 255, 255, 0.02);
+}
+.player-dossier tbody tr.is-friendly td {
+  font-style: italic;
+}
 .player-dossier .club-rail-btn {
   width: 100%;
   text-align: left;

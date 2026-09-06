@@ -115,12 +115,20 @@ type DossierPayload = {
         league: string;
         country?: string | null;
         team: string;
+        teamId?: number | null;
         apps: number | null;
         goals: number | null;
         assists: number | null;
         minutes: number | null;
         rating: string | number | null;
+        friendly?: boolean;
       }[];
+      total?: {
+        apps: number | null;
+        goals: number | null;
+        assists: number | null;
+        minutes: number | null;
+      } | null;
     }[];
   } | null;
   recentForm?: {
@@ -359,6 +367,47 @@ export function PlayerDossier({
     careerClubs[Math.min(careerClubIdx, Math.max(careerClubs.length - 1, 0))] ||
     null;
   const currentSeasonBlock = careerSeasons[0] || null;
+
+  /** Seasons filtered to the active career club (by teamId or name). Soft-empty if none. */
+  const clubSeasonBlocks = (() => {
+    if (!activeCareerClub) return careerSeasons;
+    const tid = activeCareerClub.teamId;
+    const name = (activeCareerClub.name || "").trim().toLowerCase();
+    const out: typeof careerSeasons = [];
+    for (const block of careerSeasons) {
+      const competitions = block.competitions.filter((c) => {
+        if (tid != null && c.teamId != null) return c.teamId === tid;
+        return (c.team || "").trim().toLowerCase() === name;
+      });
+      if (!competitions.length) continue;
+      const competitive = competitions.filter((c) => !c.friendly);
+      const sum = (key: "apps" | "goals" | "assists" | "minutes") => {
+        let n = 0;
+        let any = false;
+        for (const c of competitive) {
+          const v = c[key];
+          if (v != null) {
+            n += v;
+            any = true;
+          }
+        }
+        return any ? n : null;
+      };
+      out.push({
+        ...block,
+        competitions,
+        total: competitive.length
+          ? {
+              apps: sum("apps"),
+              goals: sum("goals"),
+              assists: sum("assists"),
+              minutes: sum("minutes"),
+            }
+          : null,
+      });
+    }
+    return out;
+  })();
 
   const bioNotes = notesList.filter(
     (n) =>
@@ -848,10 +897,27 @@ export function PlayerDossier({
                       <div className="player-dossier-kv-label">
                         Season {currentSeasonBlock.season}
                       </div>
+                      {currentSeasonBlock.total ? (
+                        <div className="player-dossier-season-total mb-1">
+                          <span className="font-semibold text-[#e2e8f0]">TOTAL</span>
+                          <span className="tabular-nums text-[#94a3b8]">
+                            {currentSeasonBlock.total.apps ?? "—"} app
+                            {isGk
+                              ? ""
+                              : ` · ${currentSeasonBlock.total.goals ?? 0}G · ${currentSeasonBlock.total.assists ?? 0}A`}
+                            <span className="text-[#64748b]"> · ex-friendlies</span>
+                          </span>
+                        </div>
+                      ) : null}
                       <ul className="player-dossier-comp-list">
                         {currentSeasonBlock.competitions.slice(0, 5).map((row, i) => (
                           <li key={i}>
-                            <span className="truncate">{row.league}</span>
+                            <span className="truncate">
+                              {row.league}
+                              {row.friendly ? (
+                                <span className="text-[#64748b]"> · F</span>
+                              ) : null}
+                            </span>
                             <span className="tabular-nums text-[#94a3b8]">
                               {row.apps ?? "—"} app
                               {isGk
@@ -981,88 +1047,46 @@ export function PlayerDossier({
                         value={String(activeCareerClub.assists || "—")}
                       />
                     </div>
-                    {activeCareerClub.seasons.length > 0 && (
-                      <p className="mt-2 text-[10px] text-[#64748b]">
-                        Seasons:{" "}
-                        {activeCareerClub.seasons.slice(0, 8).join(", ")}
-                        {activeCareerClub.seasons.length > 8 ? "…" : ""}
-                      </p>
-                    )}
+                    <p className="mt-1.5 text-[10px] text-[#64748b]">
+                      Totals exclude friendlies
+                      {activeCareerClub.seasons.length > 0
+                        ? ` · seasons ${activeCareerClub.seasons.slice(0, 8).join(", ")}${activeCareerClub.seasons.length > 8 ? "…" : ""}`
+                        : ""}
+                    </p>
                   </Section>
                 )}
 
-                <Section
-                  title={
-                    currentSeasonBlock
-                      ? `Season ${currentSeasonBlock.season} · competitions`
-                      : "Season competitions"
-                  }
-                >
-                  {!currentSeasonBlock ? (
+                {clubSeasonBlocks.length === 0 ? (
+                  <Section
+                    title={
+                      activeCareerClub
+                        ? `${activeCareerClub.name} · seasons`
+                        : "Season competitions"
+                    }
+                  >
                     <p className="text-xs text-[#64748b]">
-                      No season breakdown available from AF for this player.
+                      {activeCareerClub
+                        ? "No season rows from AF for this club yet."
+                        : "No season breakdown available from AF for this player."}
                     </p>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table>
-                        <thead>
-                          <tr>
-                            <th>Comp</th>
-                            <th>Team</th>
-                            <th>App</th>
-                            <th>G</th>
-                            <th>A</th>
-                            <th>Min</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {currentSeasonBlock.competitions.map((row, i) => (
-                            <tr key={i}>
-                              <td className="font-medium">{row.league}</td>
-                              <td className="muted">{row.team}</td>
-                              <td>{row.apps ?? "—"}</td>
-                              <td className="font-semibold">
-                                {row.goals ?? "—"}
-                              </td>
-                              <td>{row.assists ?? "—"}</td>
-                              <td className="muted">{row.minutes ?? "—"}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </Section>
-
-                {careerSeasons.length > 1 && (
-                  <Section title="Recent seasons">
-                    <ul className="space-y-2">
-                      {careerSeasons.slice(1, 4).map((block) => {
-                        const apps = block.competitions.reduce(
-                          (n, c) => n + (c.apps || 0),
-                          0
-                        );
-                        const goals = block.competitions.reduce(
-                          (n, c) => n + (c.goals || 0),
-                          0
-                        );
-                        return (
-                          <li
-                            key={block.season}
-                            className="text-xs flex items-center justify-between gap-2"
-                          >
-                            <span className="font-semibold text-[#e2e8f0]">
-                              {block.season}
-                            </span>
-                            <span className="text-[#64748b]">
-                              {block.competitions.length} comps · {apps} apps ·{" "}
-                              {goals}G
-                            </span>
-                          </li>
-                        );
-                      })}
-                    </ul>
                   </Section>
+                ) : (
+                  clubSeasonBlocks.map((block) => (
+                    <Section
+                      key={block.season}
+                      title={
+                        activeCareerClub
+                          ? `${activeCareerClub.name} · ${block.season}`
+                          : `Season ${block.season} · competitions`
+                      }
+                    >
+                      <SeasonCompTable
+                        competitions={block.competitions}
+                        total={block.total ?? null}
+                        isGk={isGk}
+                      />
+                    </Section>
+                  ))
                 )}
               </div>
             </div>
@@ -1396,6 +1420,92 @@ export function PlayerDossier({
     </div>
   );
 }
+
+type CompRow = {
+  league: string;
+  team: string;
+  apps: number | null;
+  goals: number | null;
+  assists: number | null;
+  minutes: number | null;
+  friendly?: boolean;
+};
+
+function SeasonCompTable({
+  competitions,
+  total,
+  isGk,
+}: {
+  competitions: CompRow[];
+  total: {
+    apps: number | null;
+    goals: number | null;
+    assists: number | null;
+    minutes: number | null;
+  } | null;
+  isGk: boolean;
+}) {
+  if (!competitions.length) {
+    return (
+      <p className="text-xs text-[#64748b]">No competition rows in feed.</p>
+    );
+  }
+  return (
+    <div className="overflow-x-auto">
+      <table data-season-comp-table="1">
+        <thead>
+          <tr>
+            <th>Comp</th>
+            <th>Team</th>
+            <th>App</th>
+            {!isGk ? <th>G</th> : null}
+            {!isGk ? <th>A</th> : null}
+            <th>Min</th>
+          </tr>
+        </thead>
+        <tbody>
+          {competitions.map((row, i) => (
+            <tr
+              key={i}
+              className={row.friendly ? "is-friendly opacity-70" : undefined}
+            >
+              <td className="font-medium">
+                {row.league}
+                {row.friendly ? (
+                  <span className="ml-1 text-[10px] font-normal text-[#64748b]">
+                    F
+                  </span>
+                ) : null}
+              </td>
+              <td className="muted">{row.team}</td>
+              <td>{row.apps ?? "—"}</td>
+              {!isGk ? (
+                <td className="font-semibold">{row.goals ?? "—"}</td>
+              ) : null}
+              {!isGk ? <td>{row.assists ?? "—"}</td> : null}
+              <td className="muted">{row.minutes ?? "—"}</td>
+            </tr>
+          ))}
+          {total ? (
+            <tr className="season-total-row" data-season-total="1">
+              <td className="font-bold text-[#e2e8f0]">TOTAL</td>
+              <td className="muted text-[10px]">ex-friendlies</td>
+              <td className="font-bold">{total.apps ?? "—"}</td>
+              {!isGk ? (
+                <td className="font-bold">{total.goals ?? "—"}</td>
+              ) : null}
+              {!isGk ? (
+                <td className="font-bold">{total.assists ?? "—"}</td>
+              ) : null}
+              <td className="muted font-semibold">{total.minutes ?? "—"}</td>
+            </tr>
+          ) : null}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 
 function Section({
   title,

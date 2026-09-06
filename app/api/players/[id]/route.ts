@@ -13,6 +13,7 @@ import {
   getPlayerTrophies,
 } from "@/lib/api-football";
 import { nationalityToIso } from "@/lib/flags";
+import { isFriendlyCompetition } from "@/lib/season-tally";
 
 function parseCm(h?: string | null) {
   if (!h) return null;
@@ -113,6 +114,8 @@ function aggregateCareer(
         row.seasons.push(block.season);
         row.seasons.sort((a, b) => b - a);
       }
+      // Season club totals exclude friendlies
+      if (isFriendlyCompetition(s.league?.name)) continue;
       row.apps += s.games?.appearences ?? 0;
       row.goals += s.goals?.total ?? 0;
       row.assists += s.goals?.assists ?? 0;
@@ -198,6 +201,7 @@ export async function GET(
       league: string;
       country?: string | null;
       team: string;
+      teamId?: number | null;
       apps: number | null;
       goals: number | null;
       assists: number | null;
@@ -207,7 +211,14 @@ export async function GET(
       red?: number | null;
       lineups?: number | null;
       leagueLogo?: string | null;
+      friendly?: boolean;
     }[];
+    total: {
+      apps: number | null;
+      goals: number | null;
+      assists: number | null;
+      minutes: number | null;
+    } | null;
   }[] = [];
   let recentForm: {
     date: string;
@@ -363,11 +374,16 @@ export async function GET(
           const n = Number(rt);
           if (Number.isFinite(n)) patch.rating = n;
         }
-        // Season totals for current club across competitions (overwrite thin sync tallies)
+        // Season totals for current club across competitions (overwrite thin sync tallies).
+        // Exclude friendlies from headline season TOTAL.
         if (pickPool.length) {
-          const apps = pickPool.reduce((n, s) => n + (s.games?.appearences ?? 0), 0);
-          const goals = pickPool.reduce((n, s) => n + (s.goals?.total ?? 0), 0);
-          const assists = pickPool.reduce((n, s) => n + (s.goals?.assists ?? 0), 0);
+          const competitive = pickPool.filter(
+            (s) => !isFriendlyCompetition(s.league?.name)
+          );
+          const pool = competitive.length ? competitive : pickPool;
+          const apps = pool.reduce((n, s) => n + (s.games?.appearences ?? 0), 0);
+          const goals = pool.reduce((n, s) => n + (s.goals?.total ?? 0), 0);
+          const assists = pool.reduce((n, s) => n + (s.goals?.assists ?? 0), 0);
           if (apps > 0) patch.appearances = apps;
           patch.goals = goals;
           patch.assists = assists;
@@ -522,23 +538,53 @@ export async function GET(
 
       careerClubs = aggregateCareer(teams || [], seasonRows);
       careerSeasons = seasonRows
-        .map((block) => ({
-          season: block.season,
-          competitions: (block.statistics || []).map((s) => ({
-            league: s.league?.name || "Competition",
-            country: s.league?.country || null,
-            team: s.team?.name || "—",
-            apps: s.games?.appearences ?? null,
-            goals: s.goals?.total ?? null,
-            assists: s.goals?.assists ?? null,
-            minutes: s.games?.minutes ?? null,
-            rating: s.games?.rating ?? null,
-            yellow: s.cards?.yellow ?? null,
-            red: s.cards?.red ?? null,
-            lineups: s.games?.lineups ?? null,
-            leagueLogo: (s.league as { logo?: string } | undefined)?.logo || null,
-          })),
-        }))
+        .map((block) => {
+          const competitions = (block.statistics || []).map((s) => {
+            const league = s.league?.name || "Competition";
+            return {
+              league,
+              country: s.league?.country || null,
+              team: s.team?.name || "—",
+              teamId: s.team?.id ?? null,
+              apps: s.games?.appearences ?? null,
+              goals: s.goals?.total ?? null,
+              assists: s.goals?.assists ?? null,
+              minutes: s.games?.minutes ?? null,
+              rating: s.games?.rating ?? null,
+              yellow: s.cards?.yellow ?? null,
+              red: s.cards?.red ?? null,
+              lineups: s.games?.lineups ?? null,
+              leagueLogo: (s.league as { logo?: string } | undefined)?.logo || null,
+              friendly: isFriendlyCompetition(league),
+            };
+          });
+          const competitive = competitions.filter((c) => !c.friendly);
+          const sum = (key: "apps" | "goals" | "assists" | "minutes") => {
+            let n = 0;
+            let any = false;
+            for (const c of competitive) {
+              const v = c[key];
+              if (v != null) {
+                n += v;
+                any = true;
+              }
+            }
+            return any ? n : null;
+          };
+          return {
+            season: block.season,
+            competitions,
+            // Season TOTAL excludes friendlies — never invent when no competitive rows
+            total: competitive.length
+              ? {
+                  apps: sum("apps"),
+                  goals: sum("goals"),
+                  assists: sum("assists"),
+                  minutes: sum("minutes"),
+                }
+              : null,
+          };
+        })
         .filter((b) => b.competitions.length > 0)
         .sort((a, b) => b.season - a.season);
     } catch (e) {

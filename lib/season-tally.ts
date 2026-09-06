@@ -6,6 +6,11 @@
 
 import { getPlayerById, type AfTopScorer } from "./api-football";
 
+/** Club/international friendlies — excluded from season TOTAL aggregations. */
+export function isFriendlyCompetition(leagueName?: string | null): boolean {
+  return /\bfriendl/i.test(leagueName || "");
+}
+
 export function ordinal(n: number): string {
   const v = Math.floor(n);
   const mod100 = v % 100;
@@ -57,6 +62,8 @@ export function splitSeasonStats(
   let allA = 0;
   let any = false;
   for (const s of rows) {
+    // Skip friendlies from all-competitions season totals
+    if (isFriendlyCompetition(s.league?.name)) continue;
     // Skip pure national-team rows when we have club rows (teamAfId matched)
     const g = s.goals?.total;
     const a = s.goals?.assists;
@@ -215,6 +222,7 @@ export function aggregateForIngest(
   let allAssists = 0;
   let allApps = 0;
   for (const s of rows) {
+    if (isFriendlyCompetition(s.league?.name)) continue;
     allGoals += s.goals?.total ?? 0;
     allAssists += s.goals?.assists ?? 0;
     allApps += s.games?.appearences ?? 0;

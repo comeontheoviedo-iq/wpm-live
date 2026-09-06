@@ -1,5 +1,23 @@
 import { clsx, type ClassValue } from "clsx";
-import { twMerge } from "tailwind-merge";
+import { extendTailwindMerge } from "tailwind-merge";
+
+/**
+ * Custom desk type scale uses `text-desk-*` names. Default twMerge treats any
+ * `text-*` as text-color, so `text-desk-sm` was stripping Button colors
+ * (`text-white`, `text-[var(--surface)]`, etc.) → blank white CTAs.
+ */
+const twMerge = extendTailwindMerge({
+  extend: {
+    classGroups: {
+      "font-size": [
+        "text-desk-2xs",
+        "text-desk-xs",
+        "text-desk-sm",
+        "text-desk-label",
+      ],
+    },
+  },
+});
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));

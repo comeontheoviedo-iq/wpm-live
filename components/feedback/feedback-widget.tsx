@@ -68,11 +68,12 @@ export function FeedbackWidget({
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-full bg-teal-600 px-3.5 py-2.5 text-sm font-semibold text-white shadow-lg hover:bg-teal-500 focus-ring"
+          className="fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-full bg-[var(--brand)] px-3.5 py-2.5 text-sm font-semibold text-white shadow-lg hover:bg-[var(--brand-dark)] focus-ring"
           aria-label="Send feedback"
+          title="Send feedback"
         >
-          <MessageSquarePlus className="h-4 w-4" />
-          <span className="hidden sm:inline">Feedback</span>
+          <MessageSquarePlus className="h-4 w-4 shrink-0" aria-hidden />
+          <span>Feedback</span>
         </button>
       )}
       {open && (
@@ -143,7 +144,7 @@ export function FeedbackWidget({
               {matchId ? <input type="hidden" name="matchId" value={matchId} /> : null}
               <p className="text-[11px] text-slate-400">
                 Captures type, message, page URL{matchId ? ", match id" : ""}, and user agent.
-                Stored locally for now (API → data/feedback.json).
+                Stored locally via POST /api/feedback → data/feedback.jsonl (+ feedback.json mirror).
               </p>
               {status && (
                 <p className="text-xs text-slate-600 dark:text-slate-300">{status}</p>

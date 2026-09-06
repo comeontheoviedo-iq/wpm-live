@@ -4,6 +4,20 @@ import { jwtVerify } from "jose";
 
 const publicPaths = ["/login", "/pricing"];
 
+function withPathname(req: NextRequest, res: NextResponse) {
+  // Request header so server layouts can read via headers()
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set("x-pathname", req.nextUrl.pathname);
+  // Rebuild next() responses with the mutated request headers.
+  if (res.status >= 300 && res.status < 400) {
+    // redirects — keep as-is; overlay detection only needed for page renders
+    return res;
+  }
+  return NextResponse.next({
+    request: { headers: requestHeaders },
+  });
+}
+
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   if (
@@ -12,7 +26,7 @@ export async function middleware(req: NextRequest) {
     pathname.includes(".") ||
     pathname === "/favicon.ico"
   ) {
-    return NextResponse.next();
+    return withPathname(req, NextResponse.next());
   }
 
   const isPublic =
@@ -49,7 +63,7 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(new URL("/dashboard", req.url));
   }
 
-  return NextResponse.next();
+  return withPathname(req, NextResponse.next());
 }
 
 export const config = {

@@ -1,4 +1,5 @@
 import { redirect, notFound } from "next/navigation";
+import { headers } from "next/headers";
 import { getSession } from "@/lib/auth";
 import { getMatchFull } from "@/lib/match-data";
 import { AppHeader } from "@/components/layout/app-header";
@@ -18,6 +19,14 @@ export default async function MatchDayLayout({
   const user = await getSession();
   if (!user) redirect("/login");
   const { id } = await params;
+
+  const pathname = (await headers()).get("x-pathname") || "";
+  const isObsOverlay = /\/match-day\/[^/]+\/overlay\/?$/.test(pathname);
+  if (isObsOverlay) {
+    // Chrome-free transparent OBS page — auth already checked.
+    return <>{children}</>;
+  }
+
   const match = await getMatchFull(id);
   if (!match) notFound();
 

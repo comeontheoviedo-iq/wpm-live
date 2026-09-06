@@ -1,14 +1,17 @@
 "use client";
 
+import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { LiveBanner } from "@/lib/live-banners";
 
 export function LiveBannersBar({
   banners,
   onPlayerClick,
+  onDismiss,
 }: {
   banners: LiveBanner[];
   onPlayerClick?: (playerId: string) => void;
+  onDismiss?: (id: string) => void;
 }) {
   if (!banners.length) return null;
   return (
@@ -26,8 +29,21 @@ export function LiveBannersBar({
               "border-sky-400 bg-sky-50 text-sky-950 dark:border-sky-700 dark:bg-sky-950/60 dark:text-sky-100"
           )}
         >
-          <div className="font-bold uppercase tracking-wide text-[10px] opacity-80">
-            {b.title}
+          <div className="flex items-start justify-between gap-2">
+            <div className="font-bold uppercase tracking-wide text-[10px] opacity-80">
+              {b.title}
+            </div>
+            {onDismiss ? (
+              <button
+                type="button"
+                className="shrink-0 rounded p-1.5 opacity-70 hover:bg-black/10 hover:opacity-100 dark:hover:bg-white/10"
+                title="Dismiss banner"
+                aria-label="Dismiss banner"
+                onClick={() => onDismiss(b.id)}
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            ) : null}
           </div>
           <div className="mt-0.5 leading-snug">{b.detail}</div>
           {b.kind === "one_away" && onPlayerClick && (

@@ -131,8 +131,13 @@ export function deriveLiveBanners(opts: {
 
   const oneAway = playersOneAway(events, squad);
   if (oneAway.length && (status === "Live" || status === "Half Time")) {
+    const fp = oneAway
+      .map((p) => p.playerId)
+      .slice()
+      .sort()
+      .join(",");
     banners.push({
-      id: "one-away",
+      id: `one-away|${fp}`,
       kind: "one_away",
       tone: "amber",
       title: "One away from a sending-off",

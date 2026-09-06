@@ -972,6 +972,12 @@ export function MatchDesk({
       }
       return [];
     });
+    // Also clear sticky live banners (one-away / VAR) via DeskLiveExtras listener
+    try {
+      window.dispatchEvent(new CustomEvent("pitchline:clear-live-banners"));
+    } catch {
+      /* soft-fail */
+    }
   }, [pushIntelHistory]);
 
   const pushLivePopup = useCallback(

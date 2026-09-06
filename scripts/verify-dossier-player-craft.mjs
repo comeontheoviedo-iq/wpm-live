@@ -2,8 +2,8 @@ import { chromium } from "playwright";
 import { writeFileSync } from "fs";
 
 const deskId = "cmtorhbeo08zm11zutipi5m3a"; // Newcastle
-const shot = ".pitchline-dossier-player-craft-nufc.png";
-const probe = ".pitchline-dossier-player-craft-probe.json";
+const shot = ".pitchline-dossier-player-v2-nufc.png";
+const probe = ".pitchline-dossier-player-v2-probe.json";
 
 const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext({
@@ -60,11 +60,30 @@ const craft = await page.evaluate(() => {
   const hash = el.querySelector(".player-dossier-hash")?.textContent?.trim() || null;
   const pos = el.querySelector(".player-dossier-pos")?.textContent?.trim() || null;
   const verdict = el.querySelector("[data-dossier-verdict]") || el.querySelector(".player-dossier-verdict");
+  const title = el.querySelector(".player-dossier-title")?.textContent?.trim() || null;
   const tabs = [...el.querySelectorAll(".player-dossier-tab")].map((t) => ({
     label: t.textContent?.trim(),
     active: t.classList.contains("is-active"),
     borderRadius: getComputedStyle(t).borderRadius,
   }));
+  const tabLabels = tabs.map((t) => (t.label || "").replace(/\s*\(.*\)$/, "").trim());
+  const expectedTabs = ["Overview", "Career", "Form", "Notes"];
+  const tabsMatch =
+    tabLabels.length === 4 &&
+    expectedTabs.every((x, i) => tabLabels[i] === x);
+  const hasLoudName = (() => {
+    const n = el.querySelector(".player-dossier-name");
+    if (!n) return false;
+    const fs = parseFloat(getComputedStyle(n).fontSize);
+    const fw = parseInt(getComputedStyle(n).fontWeight, 10);
+    return fs >= 20 && fw >= 700;
+  })();
+  const hasNoteChrome = /\+\s*NOTE|\+\s*FILL/i.test(
+    el.querySelector(".player-dossier-titlebar")?.innerText || ""
+  ) || !!el.querySelector(".player-dossier-titlebar .player-dossier-action");
+  const hasCrest = !!el.querySelector(".crest-watermark");
+  const general = /\bGENERAL\b/i.test(el.innerText || "");
+  const attacking = /\b(ATTACKING|KEEPING)\b/i.test(el.innerText || "");
   const formChips = [...el.querySelectorAll(".player-dossier-form-chip")].map((c) =>
     c.textContent?.trim()
   );
@@ -90,6 +109,7 @@ const craft = await page.evaluate(() => {
     fixedRight:
       cs.position === "fixed" &&
       (cs.right === "0px" || rect.right >= window.innerWidth - 4),
+    title,
     name,
     age,
     hash,
@@ -97,7 +117,15 @@ const craft = await page.evaluate(() => {
     hasYo: !!(age && /y\/o/.test(age)),
     hasVerdict: !!verdict,
     verdictText: verdict?.querySelector(".player-dossier-verdict-line")?.textContent?.trim() || null,
+    verdictLabel: verdict?.querySelector(".player-dossier-verdict-label")?.textContent?.trim() || null,
     tabs,
+    tabLabels,
+    tabsMatch,
+    hasLoudName,
+    hasNoteChrome,
+    hasCrest,
+    general,
+    attacking,
     underlineTabs:
       tabs.length > 0 &&
       tabs.every((t) => !t.borderRadius || t.borderRadius === "0px"),
@@ -133,7 +161,14 @@ const out = {
     craft.hasYo &&
     craft.hasVerdict &&
     craft.underlineTabs &&
-    craft.noSportsPro,
+    craft.noSportsPro &&
+    craft.tabsMatch &&
+    craft.hasLoudName &&
+    !craft.hasNoteChrome &&
+    !craft.hasCrest &&
+    craft.general &&
+    craft.attacking &&
+    /verdict/i.test(craft.verdictLabel || ""),
 };
 writeFileSync(probe, JSON.stringify(out, null, 2));
 console.log(JSON.stringify(out, null, 2));

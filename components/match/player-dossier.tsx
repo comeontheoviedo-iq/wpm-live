@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { X, Loader2, BookOpen, User, Settings2, Volume2, Plus } from "lucide-react";
+import { X, Loader2, User, Settings2, Volume2, Plus } from "lucide-react";
 import { NotesPanel, type NoteRow } from "@/components/notes/notes-panel";
 import { EventTimeline } from "@/components/match/event-timeline";
 import { cn } from "@/lib/utils";
@@ -159,7 +159,8 @@ type DossierPayload = {
   clubLogoUrl?: string | null;
 };
 
-type Tab = "profile" | "today" | "statistics" | "career" | "bio" | "scouting" | "funfact" | "sidelined" | "notes";
+/** Craft tabs — map legacy Profile/Today/Statistics/Bio/… into these four. */
+type Tab = "overview" | "career" | "form" | "notes";
 
 function Flag({ nationality }: { nationality?: string | null }) {
   const src = flagUrl(nationality, 20);
@@ -175,24 +176,11 @@ function Flag({ nationality }: { nationality?: string | null }) {
   );
 }
 
-function cmToFtIn(cm?: number | null): string {
-  if (cm == null) return "—";
-  const totalIn = cm / 2.54;
-  const ft = Math.floor(totalIn / 12);
-  const inch = Math.round(totalIn % 12);
-  return `${ft}'${inch}"`;
-}
-
-function kgToLbs(kg?: number | null): string {
-  if (kg == null) return "—";
-  return `${Math.round(kg * 2.20462)} lbs`;
-}
-
 export function PlayerDossier({
   matchId,
   playerId,
   onClose,
-  initialTab = "profile",
+  initialTab = "overview",
   initialNotes = [],
   playerName,
   initialOverride = null,
@@ -201,20 +189,19 @@ export function PlayerDossier({
   matchId: string;
   playerId: string;
   onClose: () => void;
-  initialTab?: Tab | "overview" | "stats" | "events";
+  initialTab?: Tab | "profile" | "today" | "statistics" | "bio" | "scouting" | "funfact" | "sidelined" | "stats" | "events";
   initialNotes?: NoteRow[];
   playerName?: string;
   initialOverride?: PlayerOverrideRow | null;
   onOverrideChange?: (row: PlayerOverrideRow | null) => void;
 }) {
   const mapInitial = (t: string): Tab => {
-    if (t === "overview") return "profile";
-    if (t === "stats") return "statistics";
-    if (t === "events") return "today";
-    if (t === "notes") return "notes";
-    if (["profile", "today", "statistics", "career", "bio", "notes", "scouting", "funfact", "sidelined"].includes(t))
-      return t as Tab;
-    return "profile";
+    if (t === "overview" || t === "profile") return "overview";
+    if (t === "career" || t === "sidelined") return "career";
+    if (t === "form" || t === "today" || t === "statistics" || t === "stats" || t === "events")
+      return "form";
+    if (t === "notes" || t === "bio" || t === "scouting" || t === "funfact") return "notes";
+    return "overview";
   };
 
   const [data, setData] = useState<DossierPayload | null>(null);
@@ -297,12 +284,14 @@ export function PlayerDossier({
     data?.afStats?.player?.birth?.country ||
     null;
   const displayName =
-    ovDisplayName.trim() || p?.name || playerName || "Player dossier";
+    ovDisplayName.trim() || p?.name || playerName || "Player";
   const flagOptions = dualNationalities(p?.nationality, birthCountry);
   const rating =
     formatRating(p?.rating) !== "—"
       ? formatRating(p?.rating)
       : formatRating(af?.games?.rating);
+  const isGk = posCode(p?.position || "") === "GK";
+  const mps = data?.matchPlayerStats as any;
 
   async function saveOverrides(clear = false) {
     setOvSaving(true);
@@ -358,14 +347,10 @@ export function PlayerDossier({
   }
 
   const tabs: { key: Tab; label: string }[] = [
-    { key: "profile", label: "Profile" },
-    { key: "today", label: "Today's Match" },
-    { key: "statistics", label: "Statistics" },
-    { key: "bio", label: "Bio" },
-    { key: "scouting", label: "Scouting" },
-    { key: "funfact", label: "Funfact" },
+    { key: "overview", label: "Overview" },
     { key: "career", label: "Career" },
-    { key: "sidelined", label: "Sidelined" },
+    { key: "form", label: "Form" },
+    { key: "notes", label: "Notes" },
   ];
 
   const careerClubs = data?.career?.clubs || [];
@@ -381,17 +366,31 @@ export function PlayerDossier({
       /bio/i.test(n.category || "") ||
       /narrative/i.test(n.title || "")
   );
-  const profileNotes = notesList.length ? notesList : bioNotes;
-
   const hookNotes = notesList.filter(
     (n) =>
       /hook|scout|verdict|sayable|lead/i.test(n.title || "") ||
       /hook|scout/i.test(n.category || "") ||
       n.pinned
   );
-  const sayableNote = hookNotes[0] || bioNotes[0] || notesList.find((n) => (n.body || "").trim()) || null;
+  const funNotes = notesList.filter(
+    (n) =>
+      /fun|fact|trivia/i.test(n.title || "") ||
+      /funfact|trivia/i.test(n.category || "")
+  );
+  const scoutNotes = notesList.filter(
+    (n) =>
+      /scout|hook|report/i.test(n.title || "") ||
+      /scout|hook/i.test(n.category || "")
+  );
+
+  const sayableNote =
+    hookNotes[0] ||
+    bioNotes[0] ||
+    notesList.find((n) => (n.body || "").trim()) ||
+    null;
   const sayableLine = sayableNote
-    ? (sayableNote.title || "").trim() || (sayableNote.body || "").split("\n")[0].trim()
+    ? (sayableNote.title || "").trim() ||
+      (sayableNote.body || "").split("\n")[0].trim()
     : p
       ? [
           p.club.shortName || p.club.name,
@@ -404,7 +403,12 @@ export function PlayerDossier({
           .join(" · ")
       : displayName;
   const sayableSub = sayableNote?.body
-    ? sayableNote.body.trim().split("\n").slice(sayableNote.title ? 0 : 1, 2).join(" ").slice(0, 180)
+    ? sayableNote.body
+        .trim()
+        .split("\n")
+        .slice(sayableNote.title ? 0 : 1, 2)
+        .join(" ")
+        .slice(0, 180)
     : null;
 
   async function quickCreateNote(withGemini: boolean) {
@@ -414,17 +418,21 @@ export function PlayerDossier({
       let body = "";
       let title = `${displayName} note`;
       if (withGemini) {
-        const r = await fetch(`/api/players/${playerId}/note-draft?matchId=${encodeURIComponent(matchId)}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-        });
+        const r = await fetch(
+          `/api/players/${playerId}/note-draft?matchId=${encodeURIComponent(matchId)}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+          }
+        );
         const j = await r.json().catch(() => ({}));
         if (r.ok && j.body) {
           body = String(j.body);
           if (j.title) title = String(j.title);
         } else {
-          // Soft-fail: still create empty note
-          setCreateNoteMsg(j.error || "No factual blurb available — empty note created");
+          setCreateNoteMsg(
+            j.error || "No factual blurb available — empty note created"
+          );
         }
       }
       const res = await fetch("/api/notes", {
@@ -443,11 +451,17 @@ export function PlayerDossier({
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Create failed");
       setTab("notes");
-      // refresh dossier notes
-      const reload = await fetch(`/api/players/${playerId}?matchId=${encodeURIComponent(matchId)}`);
+      const reload = await fetch(
+        `/api/players/${playerId}?matchId=${encodeURIComponent(matchId)}`
+      );
       const dj = await reload.json().catch(() => null);
       if (reload.ok && dj) setData(dj);
-      if (!createNoteMsg) setCreateNoteMsg(withGemini && body ? "Note created with factual blurb" : "Empty note created");
+      if (!createNoteMsg)
+        setCreateNoteMsg(
+          withGemini && body
+            ? "Note created with factual blurb"
+            : "Empty note created"
+        );
     } catch (e) {
       setCreateNoteMsg(e instanceof Error ? e.message : "Create failed");
     } finally {
@@ -455,19 +469,42 @@ export function PlayerDossier({
     }
   }
 
+  const formRows = data?.recentForm || [];
+
   return (
     <div
       className="player-dossier"
       data-player-dossier="1"
       data-dossier-kind="player"
+      data-dossier-craft="v2"
     >
-      {/* Identity strip */}
+      {/* Title bar — PLAYER DOSSIER + close (no SaaS chrome) */}
+      <div className="player-dossier-titlebar">
+        <div className="player-dossier-title">Player dossier</div>
+        <div className="player-dossier-titlebar-actions">
+          <button
+            type="button"
+            className="player-dossier-icon-btn focus-ring"
+            onClick={() => setGearOpen((v) => !v)}
+            aria-label="Pitch card overrides"
+            title="Name / pronunciation / flag / jersey (this match)"
+          >
+            <Settings2 className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            className="player-dossier-icon-btn focus-ring"
+            onClick={onClose}
+            aria-label="Close dossier"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Identity — large photo, loud condensed name, quiet meta */}
       <div className="player-dossier-identity">
-        {data?.clubLogoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={data.clubLogoUrl} alt="" className="crest-watermark" />
-        ) : null}
-        <div className="relative flex items-start gap-3">
+        <div className="player-dossier-identity-row">
           {photo ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -480,20 +517,22 @@ export function PlayerDossier({
             />
           ) : (
             <div className="player-dossier-photo player-dossier-photo-fallback">
-              <User className="h-7 w-7 opacity-70" />
+              <User className="h-9 w-9 opacity-70" />
             </div>
           )}
           <div className="min-w-0 flex-1">
-            <h2 className="player-dossier-name break-words">{displayName}</h2>
+            <h2 className="player-dossier-name">{displayName}</h2>
             {p && (
               <div className="player-dossier-meta">
                 <span className="player-dossier-hash">#{p.shirtNumber}</span>
+                <span className="player-dossier-meta-sep" aria-hidden>
+                  ·
+                </span>
                 <span className="player-dossier-age">
                   {p.age != null ? `${p.age} y/o` : "— y/o"}
                 </span>
                 <Flag nationality={p.nationality} />
-                {birthCountry &&
-                birthCountry !== p.nationality ? (
+                {birthCountry && birthCountry !== p.nationality ? (
                   <Flag nationality={birthCountry} />
                 ) : null}
                 <span
@@ -506,60 +545,12 @@ export function PlayerDossier({
                   {p.isCaptain ? "C · " : ""}
                   {posCode(p.position)}
                 </span>
-                {data?.clubLogoUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={data.clubLogoUrl}
-                    alt=""
-                    className="h-3.5 w-3.5 object-contain opacity-70"
-                  />
-                ) : null}
-                <span className="player-dossier-meta-quiet truncate">
-                  {p.club.shortName || p.club.name}
-                </span>
               </div>
             )}
           </div>
-          <div className="player-dossier-actions">
-            <button
-              type="button"
-              disabled={createNoteBusy}
-              className="player-dossier-action disabled:opacity-50"
-              onClick={() => void quickCreateNote(false)}
-              title="Quick-add empty note"
-            >
-              <Plus className="h-3 w-3" />
-              Note
-            </button>
-            <button
-              type="button"
-              disabled={createNoteBusy}
-              className="player-dossier-action disabled:opacity-50"
-              onClick={() => void quickCreateNote(true)}
-              title="Create note with one factual blurb from research/AF only (no invention)"
-            >
-              + Fill
-            </button>
-            <button
-              type="button"
-              className="player-dossier-icon-btn focus-ring"
-              onClick={() => setGearOpen((v) => !v)}
-              aria-label="Pitch card overrides"
-              title="Name / pronunciation / flag / jersey (this match)"
-            >
-              <Settings2 className="h-3.5 w-3.5" />
-            </button>
-            <button
-              type="button"
-              className="player-dossier-icon-btn focus-ring"
-              onClick={onClose}
-              aria-label="Close dossier"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </div>
         </div>
       </div>
+
       {createNoteMsg ? (
         <div className="player-dossier-msg">{createNoteMsg}</div>
       ) : null}
@@ -659,7 +650,7 @@ export function PlayerDossier({
         </div>
       )}
 
-      {/* Monochrome underline tabs */}
+      {/* Tabs — Overview | Career | Form | Notes */}
       <div className="player-dossier-tabs" role="tablist">
         {tabs.map((t) => (
           <button
@@ -687,207 +678,329 @@ export function PlayerDossier({
         )}
         {error && <p className="text-xs text-[#f87171]">{error}</p>}
 
-        {p && tab === "profile" && (
-          <div className="space-y-2.5">
-            {/* Verdict / sayable first */}
+        {/* OVERVIEW — verdict → GENERAL / ATTACKING → form chips */}
+        {p && tab === "overview" && !loading && (
+          <div className="player-dossier-overview space-y-3">
             <div className="player-dossier-verdict" data-dossier-verdict="1">
-              <div className="player-dossier-verdict-label">Sayable</div>
+              <div className="player-dossier-verdict-label">Verdict</div>
               <div className="player-dossier-verdict-line">{sayableLine}</div>
               {sayableSub ? (
                 <div className="player-dossier-verdict-sub">{sayableSub}</div>
               ) : null}
             </div>
 
-            <div className="grid md:grid-cols-2 gap-2.5">
-              <div className="space-y-2.5">
-                <div className="grid grid-cols-2 gap-2">
-                  {(() => {
-                    const mps = data?.matchPlayerStats as any;
-                    const chips = [
-                      {
-                        label: "This match",
-                        value:
-                          mps?.games?.rating != null
-                            ? formatRating(mps.games.rating)
-                            : "—",
-                        sub:
-                          mps?.games?.minutes != null
-                            ? `${mps.games.minutes}'`
-                            : "no live row",
-                      },
-                      {
-                        label: "Last goal",
-                        value: data?.lastGoal
-                          ? `${data.lastGoal.goals || 1}G`
-                          : "—",
-                        sub: data?.lastGoal
-                          ? `${(data.lastGoal.date || "").slice(5, 10)} vs ${data.lastGoal.opponent}`
-                          : "none in last 5",
-                      },
-                    ];
-                    return chips.map((c) => (
-                      <div key={c.label} className="player-dossier-stat-chip">
-                        <div className="player-dossier-stat-chip-label">
-                          {c.label}
-                        </div>
-                        <div className="player-dossier-stat-chip-value">
-                          {c.value}
-                        </div>
-                        <div className="player-dossier-stat-chip-sub truncate">
-                          {c.sub}
-                        </div>
-                      </div>
-                    ));
-                  })()}
-                </div>
-
-                <Section title="Transfer" dense>
+            <div className="player-dossier-overview-cols">
+              <Section title="General" dense quiet>
+                <div className="player-dossier-kv">
+                  <Kv label="Club" value={p.club.name} />
+                  <Kv
+                    label="Age"
+                    value={p.age != null ? String(p.age) : "—"}
+                  />
+                  <Kv
+                    label="Height"
+                    value={formatHeightValue(p.heightCm, heightUnit)}
+                  />
+                  <Kv
+                    label="Weight"
+                    value={formatWeightValue(p.weightKg, heightUnit)}
+                  />
+                  <Kv
+                    label="Foot"
+                    value={
+                      p.preferredFoot
+                        ? formatFoot(p.preferredFoot) === "—"
+                          ? p.preferredFoot
+                          : formatFoot(p.preferredFoot)
+                        : "—"
+                    }
+                  />
+                  <Kv label="Born" value={p.birthDate || "—"} />
+                  <Kv label="Nation" value={p.nationality || "—"} />
+                  <Kv
+                    label="Cards"
+                    value={`Y${p.yellowCards} R${p.redCards}`}
+                  />
                   {data?.transfers?.[0] ? (
-                    <div className="space-y-1.5">
-                      <div className="flex items-center gap-2 text-xs">
-                        {data.transfers[0].from.logo ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={data.transfers[0].from.logo}
-                            alt=""
-                            className="h-5 w-5 object-contain"
-                          />
-                        ) : null}
-                        <div className="min-w-0">
-                          <div className="font-semibold truncate text-[#e2e8f0]">
-                            {data.transfers[0].from.name} →{" "}
-                            {data.transfers[0].to.name}
-                          </div>
-                          <div className="text-[10px] text-[#64748b]">
-                            {data.transfers[0].date}
-                            {data.transfers[0].type
-                              ? ` · ${data.transfers[0].type}`
-                              : ""}
-                          </div>
-                        </div>
+                    <Kv
+                      label="Transfer"
+                      value={`${data.transfers[0].from.name} → ${data.transfers[0].to.name}`}
+                      sub={data.transfers[0].date}
+                    />
+                  ) : (
+                    <Kv label="Transfer" value="—" sub="No transfer in feed" />
+                  )}
+                </div>
+              </Section>
+
+              <Section title={isGk ? "Keeping" : "Attacking"} dense quiet>
+                <div className="player-dossier-kv">
+                  {isGk ? (
+                    <>
+                      <Kv
+                        label="Apps"
+                        value={
+                          p.seasonKeeper?.appearances != null
+                            ? String(p.seasonKeeper.appearances)
+                            : p.appearances
+                              ? String(p.appearances)
+                              : af?.games?.appearences != null
+                                ? String(af.games.appearences)
+                                : "—"
+                        }
+                      />
+                      <Kv
+                        label="Clean sheets"
+                        value={
+                          p.seasonKeeper?.cleanSheets != null
+                            ? String(p.seasonKeeper.cleanSheets)
+                            : p.cleanSheets
+                              ? String(p.cleanSheets)
+                              : "—"
+                        }
+                      />
+                      <Kv
+                        label="Saves"
+                        value={
+                          p.seasonKeeper?.saves != null
+                            ? String(p.seasonKeeper.saves)
+                            : af?.goals?.saves != null
+                              ? String(af.goals.saves)
+                              : "—"
+                        }
+                      />
+                      <Kv
+                        label="Conceded"
+                        value={
+                          af?.goals?.conceded != null
+                            ? String(af.goals.conceded)
+                            : "—"
+                        }
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <Kv
+                        label="Goals"
+                        value={
+                          p.seasonScorer?.goals != null
+                            ? String(p.seasonScorer.goals)
+                            : p.goals
+                              ? String(p.goals)
+                              : af?.goals?.total != null
+                                ? String(af.goals.total)
+                                : "—"
+                        }
+                      />
+                      <Kv
+                        label="Assists"
+                        value={
+                          p.seasonScorer?.assists != null
+                            ? String(p.seasonScorer.assists)
+                            : p.assists
+                              ? String(p.assists)
+                              : af?.goals?.assists != null
+                                ? String(af.goals.assists)
+                                : "—"
+                        }
+                      />
+                      <Kv
+                        label="Apps"
+                        value={
+                          p.appearances
+                            ? String(p.appearances)
+                            : af?.games?.appearences != null
+                              ? String(af.games.appearences)
+                              : "—"
+                        }
+                      />
+                    </>
+                  )}
+                  <Kv label="Rating" value={rating !== "—" ? rating : "—"} />
+                  <Kv
+                    label="This match"
+                    value={
+                      mps?.games?.rating != null
+                        ? formatRating(mps.games.rating)
+                        : "—"
+                    }
+                    sub={
+                      mps?.games?.minutes != null
+                        ? `${mps.games.minutes}'`
+                        : "no live row"
+                    }
+                  />
+                  <Kv
+                    label="Last goal"
+                    value={
+                      data?.lastGoal
+                        ? `${data.lastGoal.goals || 1}G`
+                        : "—"
+                    }
+                    sub={
+                      data?.lastGoal
+                        ? `${(data.lastGoal.date || "").slice(5, 10)} vs ${data.lastGoal.opponent}`
+                        : "none in last 5"
+                    }
+                  />
+                  {currentSeasonBlock ? (
+                    <div className="player-dossier-kv-block">
+                      <div className="player-dossier-kv-label">
+                        Season {currentSeasonBlock.season}
                       </div>
-                      {data.transfers.length > 1 && (
-                        <ul className="text-[10px] text-[#64748b] space-y-0.5 max-h-16 overflow-y-auto">
-                          {data.transfers.slice(1, 5).map((tr, i) => (
-                            <li key={i} className="truncate">
-                              {tr.date.slice(0, 10)} · {tr.from.name} →{" "}
-                              {tr.to.name}
-                              {tr.type ? ` (${tr.type})` : ""}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
+                      <ul className="player-dossier-comp-list">
+                        {currentSeasonBlock.competitions.slice(0, 5).map((row, i) => (
+                          <li key={i}>
+                            <span className="truncate">{row.league}</span>
+                            <span className="tabular-nums text-[#94a3b8]">
+                              {row.apps ?? "—"} app
+                              {isGk
+                                ? ""
+                                : ` · ${row.goals ?? 0}G · ${row.assists ?? 0}A`}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
                     </div>
                   ) : (
-                    <p className="text-[11px] text-[#64748b]">
-                      No transfer record from feed.
+                    <p className="text-[11px] text-[#64748b] pt-1">
+                      No season breakdown from feed.
                     </p>
                   )}
-                </Section>
+                </div>
+              </Section>
+            </div>
 
-                <Section title="Current club" dense>
-                  <div className="flex items-center gap-2 text-xs">
-                    {data?.clubLogoUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={data.clubLogoUrl}
-                        alt=""
-                        className="h-5 w-5 object-contain"
+            {/* Form chips last on overview */}
+            <div className="player-dossier-overview-form">
+              <div className="player-dossier-section-title">Form · last 5</div>
+              {formRows.length === 0 ? (
+                <p className="text-[11px] text-[#64748b]">
+                  No recent form rows from feed.
+                </p>
+              ) : (
+                <div className="player-dossier-form-chips">
+                  {formRows.map((row, i) => (
+                    <span
+                      key={i}
+                      className={cn(
+                        "player-dossier-form-chip",
+                        row.result === "W" && "is-w",
+                        row.result === "D" && "is-d",
+                        row.result === "L" && "is-l"
+                      )}
+                      title={`${(row.date || "").slice(5, 10)} vs ${row.opponent}${row.rating ? ` · ${formatRating(row.rating)}` : ""}`}
+                    >
+                      {row.result || "·"}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {(data?.injuries?.length ?? 0) > 0 && (
+              <Section title="Sidelined" tone="rose" dense>
+                <ul className="space-y-0.5">
+                  {(data?.injuries || []).map((inj) => (
+                    <li key={inj.id} className="text-xs">
+                      <span className="font-semibold">{inj.injuryType}</span>
+                      <span className="text-[#64748b]"> · {inj.status}</span>
+                    </li>
+                  ))}
+                </ul>
+              </Section>
+            )}
+          </div>
+        )}
+
+        {/* CAREER — clubs rail + seasons + transfers + sidelined history */}
+        {p && tab === "career" && !loading && (
+          <div className="space-y-3">
+            <div className="grid md:grid-cols-[200px_1fr] gap-2.5 min-h-0">
+              <div className="player-dossier-section !p-0 overflow-hidden">
+                <div className="px-3 py-2 border-b border-white/[0.06] player-dossier-section-title !mb-0">
+                  Clubs
+                </div>
+                {careerClubs.length === 0 ? (
+                  <p className="text-xs text-[#64748b] p-3">
+                    No club history from AF yet.
+                  </p>
+                ) : (
+                  <ul className="max-h-[40vh] overflow-y-auto">
+                    {careerClubs.map((c, i) => (
+                      <li key={`${c.teamId ?? c.name}-${i}`}>
+                        <button
+                          type="button"
+                          onClick={() => setCareerClubIdx(i)}
+                          className={cn(
+                            "club-rail-btn",
+                            i === careerClubIdx && "is-active"
+                          )}
+                        >
+                          <div className="flex items-center gap-2">
+                            {c.logo ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={c.logo}
+                                alt=""
+                                className="h-5 w-5 object-contain"
+                              />
+                            ) : (
+                              <span className="h-5 w-5 rounded-[2px] bg-[#1a2029] inline-block" />
+                            )}
+                            <span className="text-xs font-semibold truncate text-[#e2e8f0]">
+                              {c.name}
+                            </span>
+                          </div>
+                          <div className="mt-0.5 text-[10px] text-[#64748b] tabular-nums">
+                            {c.apps ? `${c.apps} apps` : "—"}
+                            {c.goals ? ` · ${c.goals}G` : ""}
+                            {c.assists ? ` · ${c.assists}A` : ""}
+                          </div>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                {activeCareerClub && (
+                  <Section title={`${activeCareerClub.name} · club totals`}>
+                    <div className="grid grid-cols-3 gap-2 text-xs">
+                      <Fact
+                        label="Apps"
+                        value={String(activeCareerClub.apps || "—")}
                       />
-                    ) : null}
-                    <div>
-                      <div className="font-semibold text-[#e2e8f0]">
-                        {p.club.name}
-                      </div>
-                      <div className="text-[10px] text-[#64748b]">
-                        Contract dates not in feed — honest empty.
-                      </div>
+                      <Fact
+                        label="Goals"
+                        value={String(activeCareerClub.goals || "—")}
+                      />
+                      <Fact
+                        label="Assists"
+                        value={String(activeCareerClub.assists || "—")}
+                      />
                     </div>
-                  </div>
-                </Section>
-
-                <Section title="All-time team stats" dense>
-                  {(careerClubs.length ? careerClubs : []).length === 0 ? (
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Team</th>
-                          <th>App</th>
-                          <th>G</th>
-                          <th>A</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr>
-                          <td className="font-medium">{p.club.name}</td>
-                          <td className="font-bold">{p.appearances || 0}</td>
-                          <td className="font-semibold">{p.goals || 0}</td>
-                          <td>{p.assists || 0}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  ) : (
-                    <div className="overflow-x-auto max-h-40 overflow-y-auto">
-                      <table>
-                        <thead>
-                          <tr>
-                            <th>Team</th>
-                            <th>Seasons</th>
-                            <th>App</th>
-                            <th>G</th>
-                            <th>A</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {careerClubs
-                            .filter((c) => c.apps > 0 || c.seasons.length > 0)
-                            .slice(0, 8)
-                            .map((c, i) => (
-                              <tr key={`${c.teamId ?? c.name}-${i}`}>
-                                <td className="font-medium">
-                                  <span className="inline-flex items-center gap-1.5">
-                                    {c.logo ? (
-                                      // eslint-disable-next-line @next/next/no-img-element
-                                      <img
-                                        src={c.logo}
-                                        alt=""
-                                        className="h-4 w-4 object-contain"
-                                      />
-                                    ) : null}
-                                    {c.name}
-                                  </span>
-                                </td>
-                                <td className="muted">
-                                  {c.seasons.length
-                                    ? c.seasons.length > 1
-                                      ? `${c.seasons[c.seasons.length - 1]}–${c.seasons[0]}`
-                                      : String(c.seasons[0])
-                                    : "—"}
-                                </td>
-                                <td className="font-bold">{c.apps || "—"}</td>
-                                <td className="font-semibold">
-                                  {c.goals || "—"}
-                                </td>
-                                <td>{c.assists || "—"}</td>
-                              </tr>
-                            ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </Section>
+                    {activeCareerClub.seasons.length > 0 && (
+                      <p className="mt-2 text-[10px] text-[#64748b]">
+                        Seasons:{" "}
+                        {activeCareerClub.seasons.slice(0, 8).join(", ")}
+                        {activeCareerClub.seasons.length > 8 ? "…" : ""}
+                      </p>
+                    )}
+                  </Section>
+                )}
 
                 <Section
                   title={
                     currentSeasonBlock
-                      ? `Season ${currentSeasonBlock.season} · by competition`
-                      : "Season · by competition"
+                      ? `Season ${currentSeasonBlock.season} · competitions`
+                      : "Season competitions"
                   }
-                  dense
                 >
                   {!currentSeasonBlock ? (
-                    <p className="text-[11px] text-[#64748b]">
-                      No season breakdown from feed.
+                    <p className="text-xs text-[#64748b]">
+                      No season breakdown available from AF for this player.
                     </p>
                   ) : (
                     <div className="overflow-x-auto">
@@ -895,26 +1008,24 @@ export function PlayerDossier({
                         <thead>
                           <tr>
                             <th>Comp</th>
+                            <th>Team</th>
                             <th>App</th>
                             <th>G</th>
                             <th>A</th>
                             <th>Min</th>
-                            <th>Rtg</th>
                           </tr>
                         </thead>
                         <tbody>
                           {currentSeasonBlock.competitions.map((row, i) => (
                             <tr key={i}>
-                              <td className="font-medium max-w-[9rem] truncate">
-                                {row.league}
-                              </td>
+                              <td className="font-medium">{row.league}</td>
+                              <td className="muted">{row.team}</td>
                               <td>{row.apps ?? "—"}</td>
                               <td className="font-semibold">
                                 {row.goals ?? "—"}
                               </td>
                               <td>{row.assists ?? "—"}</td>
                               <td className="muted">{row.minutes ?? "—"}</td>
-                              <td>{formatRating(row.rating)}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -923,708 +1034,77 @@ export function PlayerDossier({
                   )}
                 </Section>
 
-                <Section title="Physical" dense>
-                  <div className="grid grid-cols-3 gap-1.5 text-xs">
-                    <Fact
-                      label="Age"
-                      value={p.age != null ? String(p.age) : "—"}
-                    />
-                    <Fact
-                      label="Height"
-                      value={formatHeightValue(p.heightCm, heightUnit)}
-                    />
-                    <Fact
-                      label="Weight"
-                      value={formatWeightValue(p.weightKg, heightUnit)}
-                    />
-                    <Fact
-                      label="Foot"
-                      value={
-                        p.preferredFoot
-                          ? formatFoot(p.preferredFoot) === "—"
-                            ? p.preferredFoot
-                            : formatFoot(p.preferredFoot)
-                          : "—"
-                      }
-                    />
-                    <Fact label="Born" value={p.birthDate || "—"} />
-                    <Fact
-                      label="Cards"
-                      value={`Y${p.yellowCards} R${p.redCards}`}
-                    />
-                  </div>
-                </Section>
-
-                {(data?.injuries?.length ?? 0) > 0 && (
-                  <Section title="Sidelined" tone="rose" dense>
-                    <ul className="space-y-0.5">
-                      {(data?.injuries || []).map((inj) => (
-                        <li key={inj.id} className="text-xs">
-                          <span className="font-semibold">{inj.injuryType}</span>
-                          <span className="text-[#64748b]"> · {inj.status}</span>
-                        </li>
-                      ))}
+                {careerSeasons.length > 1 && (
+                  <Section title="Recent seasons">
+                    <ul className="space-y-2">
+                      {careerSeasons.slice(1, 4).map((block) => {
+                        const apps = block.competitions.reduce(
+                          (n, c) => n + (c.apps || 0),
+                          0
+                        );
+                        const goals = block.competitions.reduce(
+                          (n, c) => n + (c.goals || 0),
+                          0
+                        );
+                        return (
+                          <li
+                            key={block.season}
+                            className="text-xs flex items-center justify-between gap-2"
+                          >
+                            <span className="font-semibold text-[#e2e8f0]">
+                              {block.season}
+                            </span>
+                            <span className="text-[#64748b]">
+                              {block.competitions.length} comps · {apps} apps ·{" "}
+                              {goals}G
+                            </span>
+                          </li>
+                        );
+                      })}
                     </ul>
                   </Section>
                 )}
               </div>
-
-              <div className="space-y-2.5">
-                <Section title="Recent form · last 5" dense>
-                  {(data?.recentForm?.length || 0) === 0 ? (
-                    <p className="text-[11px] text-[#64748b]">
-                      No recent form rows from feed.
-                    </p>
-                  ) : (
-                    <>
-                      <div className="player-dossier-form-chips">
-                        {(data?.recentForm || []).map((row, i) => (
-                          <span
-                            key={i}
-                            className={cn(
-                              "player-dossier-form-chip",
-                              row.result === "W" && "is-w",
-                              row.result === "D" && "is-d",
-                              row.result === "L" && "is-l"
-                            )}
-                            title={`${(row.date || "").slice(5, 10)} vs ${row.opponent}${row.rating ? ` · ${formatRating(row.rating)}` : ""}`}
-                          >
-                            {row.result || "·"}
-                          </span>
-                        ))}
-                      </div>
-                      <div className="overflow-x-auto">
-                        <table>
-                          <thead>
-                            <tr>
-                              <th>Date</th>
-                              <th>Opp</th>
-                              <th>R</th>
-                              <th>H/A</th>
-                              <th>Res</th>
-                              <th>Rtg</th>
-                              <th>XI</th>
-                              <th>Min</th>
-                              <th>G</th>
-                              <th>A</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {(data?.recentForm || []).map((row, i) => (
-                              <tr key={i}>
-                                <td className="whitespace-nowrap">
-                                  {(row.date || "").slice(5, 10)}
-                                </td>
-                                <td className="max-w-[6.5rem] truncate">
-                                  {row.opponent}
-                                </td>
-                                <td
-                                  className={cn(
-                                    "font-bold",
-                                    row.result === "W" && "text-[#34d399]",
-                                    row.result === "L" && "text-[#f87171]"
-                                  )}
-                                >
-                                  {row.result || "—"}
-                                </td>
-                                <td>{row.homeAway || "—"}</td>
-                                <td>{row.score}</td>
-                                <td className="font-semibold">
-                                  {row.rating
-                                    ? formatRating(row.rating)
-                                    : "—"}
-                                </td>
-                                <td>
-                                  {row.started === true
-                                    ? "XI"
-                                    : row.started === false
-                                      ? "SUB"
-                                      : "—"}
-                                </td>
-                                <td>{row.minutes ?? "—"}</td>
-                                <td>{row.goals || "—"}</td>
-                                <td>{row.assists || "—"}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </>
-                  )}
-                </Section>
-
-                <div className="player-dossier-section overflow-hidden flex flex-col !p-0">
-                  <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 border-b border-white/[0.06]">
-                    <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-[#94a3b8]">
-                      <BookOpen className="h-3.5 w-3.5" />
-                      Notes ({profileNotes.length})
-                    </div>
-                    <button
-                      type="button"
-                      className="text-[10px] font-semibold text-[#94a3b8] hover:text-[#e2e8f0]"
-                      onClick={() => setTab("notes")}
-                    >
-                      + Add
-                    </button>
-                  </div>
-                  <div className="p-2 space-y-1.5 max-h-[220px] overflow-y-auto">
-                    {profileNotes.length === 0 ? (
-                      <p className="text-[11px] text-[#64748b] px-1 py-2 text-center">
-                        No notes yet — pack bios appear after generate.
-                      </p>
-                    ) : (
-                      profileNotes.slice(0, 6).map((n) => (
-                        <div key={n.id} className="note-preview">
-                          <div className="text-[11px] font-semibold truncate text-[#f1f5f9]">
-                            {n.pinned ? "📌 " : ""}
-                            {n.title}
-                          </div>
-                          <p className="text-[10px] text-[#94a3b8] mt-0.5 line-clamp-3 whitespace-pre-wrap">
-                            {n.body}
-                          </p>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-                {data?.afStub &&
-                  !/TURBOPACK|prisma|at\s+\S+/i.test(data.afStub) && (
-                    <p className="text-[10px] text-[#64748b] rounded-[2px] border border-white/[0.06] bg-[#10141a] px-2 py-1">
-                      {data.afStub}
-                    </p>
-                  )}
-              </div>
             </div>
-          </div>
-        )}
 
-        {p && tab === "today" && (
-          <div className="space-y-2.5">
-            {(() => {
-              const mps = data?.matchPlayerStats as any;
-              return (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {[
-                    [
-                      "Rating",
-                      mps?.games?.rating != null
-                        ? formatRating(mps.games.rating)
-                        : "—",
-                    ],
-                    ["Minutes", mps?.games?.minutes ?? "—"],
-                    ["Goals", mps?.goals?.total ?? "—"],
-                    ["Assists", mps?.goals?.assists ?? "—"],
-                    ["Shots", mps?.shots?.total ?? "—"],
-                    ["SoT", mps?.shots?.on ?? "—"],
-                    ["Key pass", mps?.passes?.key ?? "—"],
-                    ["Tackles", mps?.tackles?.total ?? "—"],
-                  ].map(([label, val]) => (
-                    <div
-                      key={label as string}
-                      className="player-dossier-stat-chip text-center"
-                    >
-                      <div className="player-dossier-stat-chip-label">
-                        {label}
-                      </div>
-                      <div className="player-dossier-stat-chip-value">
-                        {val as any}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              );
-            })()}
-            {!data?.matchPlayerStats ? (
-              <p className="text-[11px] text-[#64748b]">
-                Match metrics not in feed yet — events below still update live.
-              </p>
-            ) : null}
-            <div className="player-dossier-section">
-              <div className="player-dossier-section-title">
-                Events · {lastNameOf(p.name)}
-                {data?.opponentClub ? ` vs ${data.opponentClub.name}` : ""}
-              </div>
-              <EventTimeline
-                events={data?.events || []}
-                compact
-                emptyLabel="No match events for this player yet."
-                maxHeightClass="max-h-[50vh]"
-              />
-            </div>
-          </div>
-        )}
-
-        {p && tab === "statistics" && (
-          <div className="space-y-3">
-            {(() => {
-              const mps = data?.matchPlayerStats as any;
-              const rt =
-                mps?.games?.rating != null
-                  ? formatRating(mps.games.rating)
-                  : rating;
-              return (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  <div className="player-dossier-stat-chip text-center">
-                    <div className="player-dossier-stat-chip-label">Rating</div>
-                    <div
-                      className={cn(
-                        "player-dossier-stat-chip-value",
-                        Number(rt) >= 7 && "text-[#34d399]"
-                      )}
-                    >
-                      {rt !== "—" ? rt : "—"}
-                    </div>
-                  </div>
-                  <div className="player-dossier-stat-chip text-center">
-                    <div className="player-dossier-stat-chip-label">
-                      Minutes
-                    </div>
-                    <div className="player-dossier-stat-chip-value">
-                      {mps?.games?.minutes ?? "—"}
-                    </div>
-                  </div>
-                  <div className="player-dossier-stat-chip text-center">
-                    <div className="player-dossier-stat-chip-label">Goals</div>
-                    <div className="player-dossier-stat-chip-value">
-                      {mps?.goals?.total ?? "—"}
-                    </div>
-                  </div>
-                  <div className="player-dossier-stat-chip text-center">
-                    <div className="player-dossier-stat-chip-label">
-                      Assists
-                    </div>
-                    <div className="player-dossier-stat-chip-value">
-                      {mps?.goals?.assists ?? "—"}
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
-            {data?.matchPlayerStats ? (
-              <div className="grid md:grid-cols-3 gap-3">
-                {(
-                  [
-                    [
-                      "Offensive",
-                      [
-                        [
-                          "Shots on target",
-                          (data.matchPlayerStats as any)?.shots?.on,
-                        ],
-                        [
-                          "Shots total",
-                          (data.matchPlayerStats as any)?.shots?.total,
-                        ],
-                        [
-                          "Key passes",
-                          (data.matchPlayerStats as any)?.passes?.key,
-                        ],
-                        [
-                          "Pass accuracy",
-                          (data.matchPlayerStats as any)?.passes?.accuracy,
-                        ],
-                      ],
-                    ],
-                    [
-                      "Defensive",
-                      [
-                        [
-                          "Tackles",
-                          (data.matchPlayerStats as any)?.tackles?.total,
-                        ],
-                        [
-                          "Interceptions",
-                          (data.matchPlayerStats as any)?.tackles
-                            ?.interceptions,
-                        ],
-                        [
-                          "Blocks",
-                          (data.matchPlayerStats as any)?.tackles?.blocks,
-                        ],
-                        [
-                          "Fouls",
-                          (data.matchPlayerStats as any)?.fouls?.committed,
-                        ],
-                      ],
-                    ],
-                    [
-                      "Overall",
-                      [
-                        [
-                          "Passes",
-                          (data.matchPlayerStats as any)?.passes?.total,
-                        ],
-                        [
-                          "Duels won",
-                          (data.matchPlayerStats as any)?.duels?.won,
-                        ],
-                        [
-                          "Duels total",
-                          (data.matchPlayerStats as any)?.duels?.total,
-                        ],
-                        [
-                          "Yellow",
-                          (data.matchPlayerStats as any)?.cards?.yellow,
-                        ],
-                      ],
-                    ],
-                  ] as [string, [string, unknown][]][]
-                ).map(([title, rows]) => (
-                  <Section key={title} title={title}>
-                    <dl className="space-y-1 text-xs">
-                      {rows.map(([k, v]) => (
-                        <div key={k} className="flex justify-between gap-2">
-                          <dt className="text-[#64748b]">{k}</dt>
-                          <dd className="font-semibold tabular-nums text-[#e2e8f0]">
-                            {v == null || v === "" ? "—" : String(v)}
-                          </dd>
-                        </div>
-                      ))}
-                    </dl>
-                  </Section>
-                ))}
-              </div>
-            ) : (
-              <p className="text-xs text-[#64748b]">
-                Match-level metrics not in feed for this player yet.
-              </p>
-            )}
-            {currentSeasonBlock && (
-              <Section
-                title={`Season ${currentSeasonBlock.season} · competitions`}
-                dense
-              >
-                <div className="overflow-x-auto">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Comp</th>
-                        <th>Team</th>
-                        <th>App</th>
-                        <th>G</th>
-                        <th>A</th>
-                        <th>Min</th>
-                        <th>Rtg</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {currentSeasonBlock.competitions.map((row, i) => (
-                        <tr key={i}>
-                          <td className="font-medium">{row.league}</td>
-                          <td className="muted">{row.team}</td>
-                          <td>{row.apps ?? "—"}</td>
-                          <td className="font-semibold">
-                            {row.goals ?? "—"}
-                          </td>
-                          <td>{row.assists ?? "—"}</td>
-                          <td className="muted">{row.minutes ?? "—"}</td>
-                          <td>{formatRating(row.rating)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </Section>
-            )}
-            {afRows.length === 0 &&
-              !currentSeasonBlock &&
-              !p.seasonScorer &&
-              !p.seasonKeeper &&
-              !data?.matchPlayerStats && (
+            <Section title="Transfers" dense>
+              {(data?.transfers?.length || 0) === 0 ? (
                 <p className="text-xs text-[#64748b]">
-                  No season stats yet — Sync to load from feed.
-                </p>
-              )}
-            {afRows.length > 0 &&
-              !currentSeasonBlock &&
-              afRows.map((row, i) => (
-                <div
-                  key={i}
-                  className="player-dossier-section text-xs space-y-1"
-                >
-                  <div className="font-semibold text-[#e2e8f0]">
-                    {row.league?.name || "League"}
-                    {row.league?.season ? ` · ${row.league.season}` : ""}
-                    {row.team?.name ? ` · ${row.team.name}` : ""}
-                  </div>
-                  <div className="text-[#94a3b8]">
-                    Apps {row.games?.appearences ?? "—"} · Lineups{" "}
-                    {row.games?.lineups ?? "—"} · Minutes{" "}
-                    {row.games?.minutes ?? "—"}
-                    {row.games?.rating != null
-                      ? ` · RTG ${formatRating(row.games.rating)}`
-                      : ""}
-                  </div>
-                  <div className="text-[#94a3b8]">
-                    Goals {row.goals?.total ?? "—"} · Assists{" "}
-                    {row.goals?.assists ?? "—"}
-                    {row.goals?.saves != null
-                      ? ` · Saves ${row.goals.saves}`
-                      : ""}
-                    {row.goals?.conceded != null
-                      ? ` · Conceded ${row.goals.conceded}`
-                      : ""}
-                  </div>
-                  <div className="text-[#94a3b8]">
-                    Cards Y{row.cards?.yellow ?? 0} R{row.cards?.red ?? 0}
-                  </div>
-                </div>
-              ))}
-          </div>
-        )}
-
-        {p && tab === "career" && (
-          <div className="grid md:grid-cols-[200px_1fr] gap-2.5 min-h-0">
-            <div className="player-dossier-section !p-0 overflow-hidden">
-              <div className="px-3 py-2 border-b border-white/[0.06] player-dossier-section-title !mb-0">
-                Clubs
-              </div>
-              {careerClubs.length === 0 ? (
-                <p className="text-xs text-[#64748b] p-3">
-                  No club history from AF yet.
+                  No transfer record from feed.
                 </p>
               ) : (
-                <ul className="max-h-[55vh] overflow-y-auto">
-                  {careerClubs.map((c, i) => (
-                    <li key={`${c.teamId ?? c.name}-${i}`}>
-                      <button
-                        type="button"
-                        onClick={() => setCareerClubIdx(i)}
-                        className={cn(
-                          "club-rail-btn",
-                          i === careerClubIdx && "is-active"
-                        )}
-                      >
-                        <div className="flex items-center gap-2">
-                          {c.logo ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={c.logo}
-                              alt=""
-                              className="h-5 w-5 object-contain"
-                            />
-                          ) : (
-                            <span className="h-5 w-5 rounded-[2px] bg-[#1a2029] inline-block" />
-                          )}
-                          <span className="text-xs font-semibold truncate text-[#e2e8f0]">
-                            {c.name}
-                          </span>
-                        </div>
-                        <div className="mt-0.5 text-[10px] text-[#64748b] tabular-nums">
-                          {c.apps ? `${c.apps} apps` : "—"}
-                          {c.goals ? ` · ${c.goals}G` : ""}
-                          {c.assists ? ` · ${c.assists}A` : ""}
-                        </div>
-                      </button>
+                <ul className="space-y-1.5 text-xs">
+                  {(data?.transfers || []).slice(0, 8).map((tr, i) => (
+                    <li key={i} className="flex items-center gap-2">
+                      {tr.from.logo ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={tr.from.logo}
+                          alt=""
+                          className="h-4 w-4 object-contain"
+                        />
+                      ) : null}
+                      <span className="truncate text-[#e2e8f0]">
+                        {tr.from.name} → {tr.to.name}
+                      </span>
+                      <span className="text-[#64748b] ml-auto whitespace-nowrap">
+                        {tr.date}
+                        {tr.type ? ` · ${tr.type}` : ""}
+                      </span>
                     </li>
                   ))}
                 </ul>
               )}
-            </div>
+            </Section>
 
-            <div className="space-y-3">
-              {activeCareerClub && (
-                <Section title={`${activeCareerClub.name} · club totals`}>
-                  <div className="grid grid-cols-3 gap-2 text-xs">
-                    <Fact
-                      label="Apps"
-                      value={String(activeCareerClub.apps || "—")}
-                    />
-                    <Fact
-                      label="Goals"
-                      value={String(activeCareerClub.goals || "—")}
-                    />
-                    <Fact
-                      label="Assists"
-                      value={String(activeCareerClub.assists || "—")}
-                    />
-                  </div>
-                  {activeCareerClub.seasons.length > 0 && (
-                    <p className="mt-2 text-[10px] text-[#64748b]">
-                      Seasons:{" "}
-                      {activeCareerClub.seasons.slice(0, 8).join(", ")}
-                      {activeCareerClub.seasons.length > 8 ? "…" : ""}
-                    </p>
-                  )}
-                </Section>
-              )}
-
-              <Section
-                title={
-                  currentSeasonBlock
-                    ? `Season ${currentSeasonBlock.season} · competitions`
-                    : "Season competitions"
-                }
-              >
-                {!currentSeasonBlock ? (
-                  <p className="text-xs text-[#64748b]">
-                    No season breakdown available from AF for this player.
-                  </p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Comp</th>
-                          <th>Team</th>
-                          <th>App</th>
-                          <th>G</th>
-                          <th>A</th>
-                          <th>Min</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {currentSeasonBlock.competitions.map((row, i) => (
-                          <tr key={i}>
-                            <td className="font-medium">{row.league}</td>
-                            <td className="muted">{row.team}</td>
-                            <td>{row.apps ?? "—"}</td>
-                            <td className="font-semibold">
-                              {row.goals ?? "—"}
-                            </td>
-                            <td>{row.assists ?? "—"}</td>
-                            <td className="muted">{row.minutes ?? "—"}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </Section>
-
-              {careerSeasons.length > 1 && (
-                <Section title="Recent seasons">
-                  <ul className="space-y-2">
-                    {careerSeasons.slice(1, 4).map((block) => {
-                      const apps = block.competitions.reduce(
-                        (n, c) => n + (c.apps || 0),
-                        0
-                      );
-                      const goals = block.competitions.reduce(
-                        (n, c) => n + (c.goals || 0),
-                        0
-                      );
-                      return (
-                        <li
-                          key={block.season}
-                          className="text-xs flex items-center justify-between gap-2"
-                        >
-                          <span className="font-semibold text-[#e2e8f0]">
-                            {block.season}
-                          </span>
-                          <span className="text-[#64748b]">
-                            {block.competitions.length} comps · {apps} apps ·{" "}
-                            {goals}G
-                          </span>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </Section>
-              )}
-
-              {careerClubs.length === 0 && careerSeasons.length === 0 && (
-                <p className="text-xs text-[#64748b]">
-                  Career history is thin for this player in the feed — nothing
-                  to show yet.
-                </p>
-              )}
-            </div>
-          </div>
-        )}
-
-        {p && tab === "bio" && (
-          <div className="space-y-2">
-            {bioNotes.length === 0 && notesList.length === 0 ? (
-              <p className="text-xs text-[#64748b]">
-                No bio notes yet. Generate packs or add a Bio note.
-              </p>
-            ) : (
-              (bioNotes.length ? bioNotes : notesList).map((n) => (
-                <div key={n.id} className="player-dossier-section">
-                  <div className="text-xs font-bold mb-1 text-[#f1f5f9]">
-                    {n.title}
-                  </div>
-                  <p className="text-xs text-[#94a3b8] whitespace-pre-wrap">
-                    {n.body}
-                  </p>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-
-        {p && tab === "scouting" && (
-          <div className="space-y-2">
-            {notesList.filter(
-              (n) =>
-                /scout|hook|report/i.test(n.title || "") ||
-                /scout|hook/i.test(n.category || "")
-            ).length === 0 ? (
-              <p className="text-xs text-[#64748b]">
-                No scouting notes yet — add hooks/scouting from packs or Notes.
-              </p>
-            ) : (
-              notesList
-                .filter(
-                  (n) =>
-                    /scout|hook|report/i.test(n.title || "") ||
-                    /scout|hook/i.test(n.category || "")
-                )
-                .map((n) => (
-                  <div key={n.id} className="player-dossier-section">
-                    <div className="text-xs font-bold mb-1 text-[#f1f5f9]">
-                      {n.title}
-                    </div>
-                    <p className="text-xs text-[#94a3b8] whitespace-pre-wrap">
-                      {n.body}
-                    </p>
-                  </div>
-                ))
-            )}
-          </div>
-        )}
-
-        {p && tab === "funfact" && (
-          <div className="space-y-2">
-            {notesList.filter(
-              (n) =>
-                /fun|fact|trivia/i.test(n.title || "") ||
-                /funfact|trivia/i.test(n.category || "")
-            ).length === 0 ? (
-              <p className="text-xs text-[#64748b]">
-                No funfacts yet — add a Funfact note when you have one.
-              </p>
-            ) : (
-              notesList
-                .filter(
-                  (n) =>
-                    /fun|fact|trivia/i.test(n.title || "") ||
-                    /funfact|trivia/i.test(n.category || "")
-                )
-                .map((n) => (
-                  <div key={n.id} className="player-dossier-section">
-                    <div className="text-xs font-bold mb-1 text-[#f1f5f9]">
-                      {n.title}
-                    </div>
-                    <p className="text-xs text-[#94a3b8] whitespace-pre-wrap">
-                      {n.body}
-                    </p>
-                  </div>
-                ))
-            )}
-          </div>
-        )}
-
-        {p && tab === "sidelined" && (
-          <div className="space-y-3">
-            {(data?.injuries?.length || 0) > 0 && (
-              <Section title="Match injuries" tone="rose">
-                <ul className="space-y-1">
+            <Section title="Sidelined history" dense>
+              {(data?.injuries?.length || 0) > 0 && (
+                <ul className="space-y-1 mb-2">
                   {(data?.injuries || []).map((inj) => (
                     <li key={inj.id} className="text-xs">
-                      <span className="font-semibold">{inj.injuryType}</span>
+                      <span className="font-semibold text-[#f87171]">
+                        {inj.injuryType}
+                      </span>
                       <span className="text-[#64748b]"> · {inj.status}</span>
                       {inj.expectedReturn ? (
                         <span className="text-[#64748b]">
@@ -1635,14 +1115,13 @@ export function PlayerDossier({
                     </li>
                   ))}
                 </ul>
-              </Section>
-            )}
-            <Section title="Sidelined history">
-              {(data?.afSidelined?.length || 0) === 0 ? (
+              )}
+              {(data?.afSidelined?.length || 0) === 0 &&
+              (data?.injuries?.length || 0) === 0 ? (
                 <p className="text-xs text-[#64748b]">
                   No sidelined history in feed.
                 </p>
-              ) : (
+              ) : (data?.afSidelined?.length || 0) > 0 ? (
                 <ul className="space-y-1.5 text-xs">
                   {(data?.afSidelined || []).map((s, i) => (
                     <li key={i} className="flex gap-2">
@@ -1656,43 +1135,288 @@ export function PlayerDossier({
                     </li>
                   ))}
                 </ul>
-              )}
+              ) : null}
             </Section>
+
+            {careerClubs.length === 0 &&
+              careerSeasons.length === 0 &&
+              !(data?.transfers?.length || 0) && (
+                <p className="text-xs text-[#64748b]">
+                  Career history is thin for this player in the feed — nothing
+                  to show yet.
+                </p>
+              )}
           </div>
         )}
 
+        {/* FORM — chips + match table + today's match metrics/events */}
+        {p && tab === "form" && !loading && (
+          <div className="space-y-3">
+            <Section title="Recent form · last 5" dense>
+              {formRows.length === 0 ? (
+                <p className="text-[11px] text-[#64748b]">
+                  No recent form rows from feed.
+                </p>
+              ) : (
+                <>
+                  <div className="player-dossier-form-chips">
+                    {formRows.map((row, i) => (
+                      <span
+                        key={i}
+                        className={cn(
+                          "player-dossier-form-chip",
+                          row.result === "W" && "is-w",
+                          row.result === "D" && "is-d",
+                          row.result === "L" && "is-l"
+                        )}
+                        title={`${(row.date || "").slice(5, 10)} vs ${row.opponent}${row.rating ? ` · ${formatRating(row.rating)}` : ""}`}
+                      >
+                        {row.result || "·"}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Date</th>
+                          <th>Opp</th>
+                          <th>R</th>
+                          <th>H/A</th>
+                          <th>Res</th>
+                          <th>Rtg</th>
+                          <th>XI</th>
+                          <th>Min</th>
+                          <th>G</th>
+                          <th>A</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {formRows.map((row, i) => (
+                          <tr key={i}>
+                            <td className="whitespace-nowrap">
+                              {(row.date || "").slice(5, 10)}
+                            </td>
+                            <td className="max-w-[6.5rem] truncate">
+                              {row.opponent}
+                            </td>
+                            <td
+                              className={cn(
+                                "font-bold",
+                                row.result === "W" && "text-[#34d399]",
+                                row.result === "L" && "text-[#f87171]"
+                              )}
+                            >
+                              {row.result || "—"}
+                            </td>
+                            <td>{row.homeAway || "—"}</td>
+                            <td>{row.score}</td>
+                            <td className="font-semibold">
+                              {row.rating ? formatRating(row.rating) : "—"}
+                            </td>
+                            <td>
+                              {row.started === true
+                                ? "XI"
+                                : row.started === false
+                                  ? "SUB"
+                                  : "—"}
+                            </td>
+                            <td>{row.minutes ?? "—"}</td>
+                            <td>{row.goals || "—"}</td>
+                            <td>{row.assists || "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+            </Section>
+
+            <Section title="Today's match" dense>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
+                {[
+                  [
+                    "Rating",
+                    mps?.games?.rating != null
+                      ? formatRating(mps.games.rating)
+                      : "—",
+                  ],
+                  ["Minutes", mps?.games?.minutes ?? "—"],
+                  ["Goals", mps?.goals?.total ?? "—"],
+                  ["Assists", mps?.goals?.assists ?? "—"],
+                  ["Shots", mps?.shots?.total ?? "—"],
+                  ["SoT", mps?.shots?.on ?? "—"],
+                  ["Key pass", mps?.passes?.key ?? "—"],
+                  ["Tackles", mps?.tackles?.total ?? "—"],
+                ].map(([label, val]) => (
+                  <div
+                    key={label as string}
+                    className="player-dossier-stat-chip text-center"
+                  >
+                    <div className="player-dossier-stat-chip-label">
+                      {label}
+                    </div>
+                    <div className="player-dossier-stat-chip-value">
+                      {val as any}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {!mps ? (
+                <p className="text-[11px] text-[#64748b] mb-2">
+                  Match metrics not in feed yet — events below still update
+                  live.
+                </p>
+              ) : null}
+              <div className="player-dossier-section-title !mb-1.5">
+                Events · {lastNameOf(p.name)}
+                {data?.opponentClub ? ` vs ${data.opponentClub.name}` : ""}
+              </div>
+              <EventTimeline
+                events={data?.events || []}
+                compact
+                emptyLabel="No match events for this player yet."
+                maxHeightClass="max-h-[36vh]"
+              />
+            </Section>
+
+            {data?.matchPlayerStats ? (
+              <div className="grid md:grid-cols-3 gap-2.5">
+                {(
+                  [
+                    [
+                      "Offensive",
+                      [
+                        ["Shots on target", mps?.shots?.on],
+                        ["Shots total", mps?.shots?.total],
+                        ["Key passes", mps?.passes?.key],
+                        ["Pass accuracy", mps?.passes?.accuracy],
+                      ],
+                    ],
+                    [
+                      "Defensive",
+                      [
+                        ["Tackles", mps?.tackles?.total],
+                        ["Interceptions", mps?.tackles?.interceptions],
+                        ["Blocks", mps?.tackles?.blocks],
+                        ["Fouls", mps?.fouls?.committed],
+                      ],
+                    ],
+                    [
+                      "Overall",
+                      [
+                        ["Passes", mps?.passes?.total],
+                        ["Duels won", mps?.duels?.won],
+                        ["Duels total", mps?.duels?.total],
+                        ["Yellow", mps?.cards?.yellow],
+                      ],
+                    ],
+                  ] as [string, [string, unknown][]][]
+                ).map(([title, rows]) => (
+                  <Section key={title} title={title} dense>
+                    <dl className="space-y-1 text-xs">
+                      {rows.map(([k, v]) => (
+                        <div key={k} className="flex justify-between gap-2">
+                          <dt className="text-[#64748b]">{k}</dt>
+                          <dd className="font-semibold tabular-nums text-[#e2e8f0]">
+                            {v == null || v === "" ? "—" : String(v)}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </Section>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        )}
+
+        {/* NOTES — panel + quiet create; absorbs Bio / Scouting / Funfact */}
         {tab === "notes" && (
-          <NotesPanel
-            matchId={matchId}
-            initialNotes={notesList}
-            entityType="player"
-            entityId={playerId}
-            entityLabel={displayName}
-          />
+          <div className="space-y-3">
+            <div className="player-dossier-notes-actions">
+              <button
+                type="button"
+                disabled={createNoteBusy}
+                className="player-dossier-action disabled:opacity-50"
+                onClick={() => void quickCreateNote(false)}
+                title="Quick-add empty note"
+              >
+                <Plus className="h-3 w-3" />
+                Note
+              </button>
+              <button
+                type="button"
+                disabled={createNoteBusy}
+                className="player-dossier-action disabled:opacity-50"
+                onClick={() => void quickCreateNote(true)}
+                title="Create note with one factual blurb from research/AF only (no invention)"
+              >
+                + Fill
+              </button>
+              <span className="text-[10px] text-[#64748b]">
+                Bio / scouting / funfact packs land here.
+              </span>
+            </div>
+
+            {(bioNotes.length > 0 ||
+              scoutNotes.length > 0 ||
+              funNotes.length > 0) && (
+              <div className="space-y-2">
+                {[...bioNotes, ...scoutNotes, ...funNotes]
+                  .filter(
+                    (n, i, arr) => arr.findIndex((x) => x.id === n.id) === i
+                  )
+                  .slice(0, 8)
+                  .map((n) => (
+                    <div key={n.id} className="note-preview">
+                      <div className="text-[11px] font-semibold truncate text-[#f1f5f9]">
+                        {n.pinned ? "📌 " : ""}
+                        {n.title}
+                      </div>
+                      <p className="text-[10px] text-[#94a3b8] mt-0.5 line-clamp-4 whitespace-pre-wrap">
+                        {n.body}
+                      </p>
+                    </div>
+                  ))}
+              </div>
+            )}
+
+            <NotesPanel
+              matchId={matchId}
+              initialNotes={notesList}
+              entityType="player"
+              entityId={playerId}
+              entityLabel={displayName}
+            />
+          </div>
         )}
       </div>
     </div>
   );
 }
 
-
 function Section({
   title,
   children,
   tone,
   dense,
+  quiet,
 }: {
   title: string;
   children: ReactNode;
   tone?: "rose";
   dense?: boolean;
+  quiet?: boolean;
 }) {
   return (
     <div
       className={cn(
         "player-dossier-section",
         dense && "is-dense",
-        tone === "rose" && "is-rose"
+        tone === "rose" && "is-rose",
+        quiet && "is-quiet"
       )}
     >
       <div className="player-dossier-section-title">{title}</div>
@@ -1706,6 +1430,26 @@ function Fact({ label, value }: { label: string; value: string }) {
     <div className="player-dossier-fact">
       <div className="player-dossier-fact-label">{label}</div>
       <div className="player-dossier-fact-value truncate">{value}</div>
+    </div>
+  );
+}
+
+function Kv({
+  label,
+  value,
+  sub,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+}) {
+  return (
+    <div className="player-dossier-kv-row">
+      <span className="player-dossier-kv-label">{label}</span>
+      <span className="player-dossier-kv-value">
+        <span className="truncate">{value}</span>
+        {sub ? <span className="player-dossier-kv-sub">{sub}</span> : null}
+      </span>
     </div>
   );
 }

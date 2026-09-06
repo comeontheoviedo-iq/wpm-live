@@ -295,7 +295,7 @@ export function SquadPageClient({
           playerId={dossierId}
           playerName={dossierPlayer?.name}
           onClose={() => setDossierId(null)}
-          initialTab="profile"
+          initialTab="overview"
         />
       )}
     </div>

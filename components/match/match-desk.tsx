@@ -2971,7 +2971,7 @@ export function MatchDesk({
         <PlayerDossier
           matchId={matchId}
           playerId={dossierId}
-          initialTab="profile"
+          initialTab="overview"
           initialNotes={notes.filter((n) => n.entityId === dossierId)}
           playerName={squad.find((s) => s.id === dossierId)?.name}
           initialOverride={overrideById.get(dossierId) || null}

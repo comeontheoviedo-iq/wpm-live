@@ -184,6 +184,8 @@ function resolvePitchFlags(
 
 /** Shrink surname font until it fits card width; ellipsis only at min size. */
 const TOKEN_NAME_MIN_PX = 6;
+/** Extra px of headroom so the final glyph is not clipped by overflow/subpixels. */
+const TOKEN_NAME_FIT_PAD_PX = 4;
 
 function useTokenNameAutoFit(
   text: string,
@@ -197,12 +199,30 @@ function useTokenNameAutoFit(
     const el = ref.current;
     if (!el) return;
 
+    /** Intrinsic text width — block scrollWidth === clientWidth when text fits. */
+    const measureNeeded = () => {
+      const prevWidth = el.style.width;
+      const prevMax = el.style.maxWidth;
+      el.style.maxWidth = "none";
+      el.style.width = "max-content";
+      const needed = el.scrollWidth;
+      el.style.width = prevWidth;
+      el.style.maxWidth = prevMax;
+      return needed;
+    };
+
+    const fits = () => {
+      const available = el.clientWidth;
+      if (available <= 0) return false;
+      return measureNeeded() + TOKEN_NAME_FIT_PAD_PX <= available;
+    };
+
     const fit = () => {
       const preferred = Math.max(preferredPx, minPx);
       // Measure at preferred first
       el.style.fontSize = `${preferred}px`;
-      // Force layout read
-      if (el.scrollWidth <= el.clientWidth + 0.5) {
+      // Force layout read — require pad so last letter is not clipped
+      if (fits()) {
         setFontPx((prev) => (Math.abs(prev - preferred) < 0.05 ? prev : preferred));
         return;
       }
@@ -212,7 +232,7 @@ function useTokenNameAutoFit(
       for (let i = 0; i < 18; i++) {
         const mid = (lo + hi) / 2;
         el.style.fontSize = `${mid}px`;
-        if (el.scrollWidth <= el.clientWidth + 0.5) {
+        if (fits()) {
           best = mid;
           lo = mid;
         } else {
@@ -221,7 +241,7 @@ function useTokenNameAutoFit(
       }
       // Snap to min if still overflowing (ellipsis CSS handles remainder)
       el.style.fontSize = `${best}px`;
-      if (el.scrollWidth > el.clientWidth + 0.5) best = minPx;
+      if (!fits()) best = minPx;
       const next = Math.round(best * 100) / 100;
       setFontPx((prev) => (Math.abs(prev - next) < 0.05 ? prev : next));
     };

@@ -2,7 +2,7 @@ import { chromium } from "playwright";
 import { writeFileSync } from "fs";
 
 const deskId = "cmtorhbeo08zm11zutipi5m3a"; // Newcastle
-const shot = ".pitchline-tokens-autofit-nufc.png";
+const shot = ".pitchline-tokens-fernandez-o-nufc.png";
 
 const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });

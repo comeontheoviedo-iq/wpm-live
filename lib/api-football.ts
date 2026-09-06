@@ -73,8 +73,12 @@ export type AfStatus = {
 
 type CacheEntry = { at: number; data: unknown };
 const cache = new Map<string, CacheEntry>();
+/** In-flight dedupe: concurrent identical AF GETs coalesce to one upstream call. */
+const inflight = new Map<string, Promise<unknown>>();
 const DEFAULT_TTL_MS = 30_000;
 const RATE_LIMIT_TTL_MS = 60_000;
+/** Live desk/overlay share window — fixture/events/stats. */
+export const AF_LIVE_TTL_MS = 25_000;
 
 export class ApiFootballError extends Error {
   status: number;
@@ -207,99 +211,111 @@ async function afFetch<T>(
     return hit.data as T;
   }
 
-  let res: Response;
-  try {
-    res = await fetch(url, {
-      headers: {
-        "x-apisports-key": key,
-        Accept: "application/json",
-      },
-      cache: "no-store",
-    });
-  } catch (e) {
-    throw new ApiFootballError(
-      `API-Football network error: ${e instanceof Error ? e.message : String(e)}`,
-      502,
-      "network"
-    );
-  }
+  const pending = inflight.get(cacheKey);
+  if (pending) return pending as Promise<T>;
 
-  if (res.status === 401 || res.status === 403) {
-    throw new ApiFootballError(
-      "API-Football rejected the key (401/403). Check API_FOOTBALL_KEY and restart the server.",
-      res.status,
-      "unauthorized"
-    );
-  }
-
-  if (res.status === 429) {
-    throw new ApiFootballError(
-      "API-Football rate limit hit (429). Wait a minute or upgrade your plan. Cached results may still appear.",
-      429,
-      "rate_limit"
-    );
-  }
-
-  if (!res.ok) {
-    throw new ApiFootballError(
-      `API-Football HTTP ${res.status}`,
-      res.status,
-      "http"
-    );
-  }
-
-  const json = (await res.json()) as {
-    errors?: unknown;
-    response?: T;
-    results?: number;
-  };
-
-  const errText = formatApiErrors(json.errors);
-  if (errText) {
-    const lower = errText.toLowerCase();
-    const planSeason =
-      lower.includes("free plan") ||
-      lower.includes("do not have access to this season") ||
-      (lower.includes("season") && lower.includes("try from"));
-    const rateLimited =
-      !planSeason &&
-      (lower.includes("rate") ||
-        lower.includes("request limit") ||
-        lower.includes("too many request"));
-    const badKey =
-      lower.includes("token") ||
-      lower.includes("key") ||
-      lower.includes("authoriz");
-    if (planSeason) {
+  const run = (async (): Promise<T> => {
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        headers: {
+          "x-apisports-key": key,
+          Accept: "application/json",
+        },
+        cache: "no-store",
+      });
+    } catch (e) {
       throw new ApiFootballError(
-        "API-Football Free plan cannot access this season (current seasons need Pro). " +
-          "Search by date only works on Free; upgrade to Pro for league+season on 2025+. " +
-          `Upstream: ${errText}`,
-        200,
-        "plan_season"
+        `API-Football network error: ${e instanceof Error ? e.message : String(e)}`,
+        502,
+        "network"
       );
     }
-    throw new ApiFootballError(
-      rateLimited
-        ? `API-Football rate limit: ${errText}`
-        : badKey
-          ? `API-Football auth error: ${errText}`
-          : `API-Football error: ${errText}`,
-      rateLimited ? 429 : badKey ? 401 : 502,
-      rateLimited ? "rate_limit" : badKey ? "unauthorized" : "api_error"
-    );
-  }
 
-  // Most endpoints return arrays; /status returns a single object.
-  const data = (
-    json.response !== undefined && json.response !== null
-      ? json.response
-      : path === "/status"
-        ? ({} as T)
-        : ([] as unknown as T)
-  ) as T;
-  cache.set(cacheKey, { at: Date.now(), data });
-  return data;
+    if (res.status === 401 || res.status === 403) {
+      throw new ApiFootballError(
+        "API-Football rejected the key (401/403). Check API_FOOTBALL_KEY and restart the server.",
+        res.status,
+        "unauthorized"
+      );
+    }
+
+    if (res.status === 429) {
+      throw new ApiFootballError(
+        "API-Football rate limit hit (429). Wait a minute or upgrade your plan. Cached results may still appear.",
+        429,
+        "rate_limit"
+      );
+    }
+
+    if (!res.ok) {
+      throw new ApiFootballError(
+        `API-Football HTTP ${res.status}`,
+        res.status,
+        "http"
+      );
+    }
+
+    const json = (await res.json()) as {
+      errors?: unknown;
+      response?: T;
+      results?: number;
+    };
+
+    const errText = formatApiErrors(json.errors);
+    if (errText) {
+      const lower = errText.toLowerCase();
+      const planSeason =
+        lower.includes("free plan") ||
+        lower.includes("do not have access to this season") ||
+        (lower.includes("season") && lower.includes("try from"));
+      const rateLimited =
+        !planSeason &&
+        (lower.includes("rate") ||
+          lower.includes("request limit") ||
+          lower.includes("too many request"));
+      const badKey =
+        lower.includes("token") ||
+        lower.includes("key") ||
+        lower.includes("authoriz");
+      if (planSeason) {
+        throw new ApiFootballError(
+          "API-Football Free plan cannot access this season (current seasons need Pro). " +
+            "Search by date only works on Free; upgrade to Pro for league+season on 2025+. " +
+            `Upstream: ${errText}`,
+          200,
+          "plan_season"
+        );
+      }
+      throw new ApiFootballError(
+        rateLimited
+          ? `API-Football rate limit: ${errText}`
+          : badKey
+            ? `API-Football auth error: ${errText}`
+            : `API-Football error: ${errText}`,
+        rateLimited ? 429 : badKey ? 401 : 502,
+        rateLimited ? "rate_limit" : badKey ? "unauthorized" : "api_error"
+      );
+    }
+
+    // Most endpoints return arrays; /status returns a single object.
+    const data = (
+      json.response !== undefined && json.response !== null
+        ? json.response
+        : path === "/status"
+          ? ({} as T)
+          : ([] as unknown as T)
+    ) as T;
+    cache.set(cacheKey, { at: Date.now(), data });
+    return data;
+  })();
+
+  inflight.set(cacheKey, run);
+  try {
+    return await run;
+  } finally {
+    if (inflight.get(cacheKey) === run) inflight.delete(cacheKey);
+  }
 }
 
 export async function searchFixtures(opts: {
@@ -503,16 +519,16 @@ export async function searchFixturesSmart(opts: {
 }
 
 export async function getFixture(id: number) {
-  const list = await afFetch<AfFixture[]>("/fixtures", { id }, 15_000);
+  const list = await afFetch<AfFixture[]>("/fixtures", { id }, AF_LIVE_TTL_MS);
   return list[0] || null;
 }
 
 export async function getLineups(fixtureId: number) {
-  return afFetch<AfLineup[]>("/fixtures/lineups", { fixture: fixtureId }, 25_000);
+  return afFetch<AfLineup[]>("/fixtures/lineups", { fixture: fixtureId }, 30_000);
 }
 
 export async function getEvents(fixtureId: number) {
-  return afFetch<AfEvent[]>("/fixtures/events", { fixture: fixtureId }, 12_000);
+  return afFetch<AfEvent[]>("/fixtures/events", { fixture: fixtureId }, AF_LIVE_TTL_MS);
 }
 
 export async function searchTeams(search: string) {
@@ -976,7 +992,7 @@ export async function getStatistics(fixtureId: number) {
   return afFetch<AfFixtureStatistics[]>(
     "/fixtures/statistics",
     { fixture: fixtureId },
-    20_000
+    AF_LIVE_TTL_MS
   );
 }
 
@@ -1475,7 +1491,7 @@ export async function getFixturePlayers(fixtureId: number) {
   return afFetch<AfFixturePlayerStat[]>(
     "/fixtures/players",
     { fixture: fixtureId },
-    60_000
+    30_000
   );
 }
 

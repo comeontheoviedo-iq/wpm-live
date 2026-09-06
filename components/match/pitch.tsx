@@ -300,9 +300,9 @@ function PitchCardToken({
   const matchG = player.matchGoals ?? 0;
   const matchA = player.matchAssists ?? 0;
   const matchApps = player.matchApps ?? 0;
-  // Display-time live season totals. Goals/assists: Sync may already bump DB —
-  // only add match tallies when snapshot clearly lags. Apps: Sync does not bump,
-  // so force +1 while Live if they appeared today.
+  // Display-time live season totals. Player.* is AF snapshot (sync does not
+  // live-bump G/A); add today's match contribution while Live. Apps also
+  // force +1 while Live if they appeared today.
   const apps = liveAdjustedSeasonStat(
     player.appearances ?? 0,
     matchApps > 0 ? 1 : 0,

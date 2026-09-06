@@ -42,7 +42,6 @@ import {
   aggregateForIngest,
   buildGoalSeasonLines,
   fetchPlayerSeasonSplit,
-  seasonOrdinal,
 } from "./season-tally";
 import { mapAfFixturePlayersToRows } from "./live-stat-triggers";
 
@@ -1977,79 +1976,11 @@ export async function syncMatchFromApiFootball(
     }
   }
 
-  // Idempotent bump: total after this match = seasonOrdinal(AF, inMatch, inMatch, status)
-  // so repeated live syncs do not double-count multi-goal games.
-  try {
-    for (const [afId, gCount] of matchGoalCountByAf) {
-      const pl = await prisma.player.findFirst({
-        where: {
-          apiFootballPlayerId: afId,
-          clubId: { in: [match.homeClubId, match.awayClubId] },
-        },
-      });
-      if (!pl) continue;
-      const split = await fetchPlayerSeasonSplit(
-        afId,
-        fixture.league.season,
-        fixture.league.id,
-        competitionName,
-        afId && matchGoalCountByAf
-          ? evTeamAfForPlayer(afId, events, homeAfId, awayAfId)
-          : null
-      );
-      const afG = split?.competitionGoals ?? pl.goals ?? 0;
-      const afAll = split?.allCompGoals ?? (pl as { goalsAllComps?: number }).goalsAllComps ?? afG;
-      const nextG = seasonOrdinal(afG, gCount, gCount, status);
-      const nextAll = seasonOrdinal(afAll, gCount, gCount, status);
-      const data: Record<string, number> = {};
-      if (nextG != null && nextG > (pl.goals || 0)) data.goals = nextG;
-      if (
-        nextAll != null &&
-        nextAll > ((pl as { goalsAllComps?: number }).goalsAllComps || 0)
-      ) {
-        data.goalsAllComps = nextAll;
-      }
-      if (Object.keys(data).length) {
-        await prisma.player.update({ where: { id: pl.id }, data });
-      }
-    }
-    for (const [afId, aCount] of matchAssistCountByAf) {
-      const pl = await prisma.player.findFirst({
-        where: {
-          apiFootballPlayerId: afId,
-          clubId: { in: [match.homeClubId, match.awayClubId] },
-        },
-      });
-      if (!pl) continue;
-      const split = await fetchPlayerSeasonSplit(
-        afId,
-        fixture.league.season,
-        fixture.league.id,
-        competitionName,
-        evTeamAfForPlayer(afId, events, homeAfId, awayAfId)
-      );
-      const afA = split?.competitionAssists ?? pl.assists ?? 0;
-      const afAll =
-        split?.allCompAssists ??
-        (pl as { assistsAllComps?: number }).assistsAllComps ??
-        afA;
-      const nextA = seasonOrdinal(afA, aCount, aCount, status);
-      const nextAll = seasonOrdinal(afAll, aCount, aCount, status);
-      const data: Record<string, number> = {};
-      if (nextA != null && nextA > (pl.assists || 0)) data.assists = nextA;
-      if (
-        nextAll != null &&
-        nextAll > ((pl as { assistsAllComps?: number }).assistsAllComps || 0)
-      ) {
-        data.assistsAllComps = nextAll;
-      }
-      if (Object.keys(data).length) {
-        await prisma.player.update({ where: { id: pl.id }, data });
-      }
-    }
-  } catch (err) {
-    console.error("[sync] reconcile in-match season tallies failed", matchId, err);
-  }
+  // Do NOT write live-adjusted season G/A into Player.* here.
+  // Player.goals/assists/appearances stay as the AF season snapshot;
+  // pitch cards add today's match contribution at display time
+  // (liveAdjustedSeasonStat). Writing seasonOrdinal bumps caused
+  // double-count (e.g. Mbeumo DB=2 + card +1 → 3).
 
   await dedupeMatchEvents(matchId).catch((err) =>
     console.error("[sync] dedupe events failed", matchId, err)

@@ -121,16 +121,14 @@ export function seasonOrdinal(
 /**
  * Display-time season total including today's match contribution.
  *
- * IMPORTANT: Sync may already seasonOrdinal-bump player.goals/assists into the
- * DB while the match is still LIVE. Blindly doing af+inMatch on Live double-counts
- * (Mbeumo: DB=2 after bump + matchG=1 → card showed 3).
+ * Contract: Player.goals / assists / appearances are the AF season snapshot
+ * (sync does not live-bump them). While the match is in progress, treat the
+ * snapshot as excluding today and add inMatch. After FT, trust the snapshot
+ * unless it still clearly lags (af < inMatch).
  *
- * Rules:
- * - If snapshot clearly lags (af < inMatch): af + inMatch
- * - Else trust snapshot (already includes today, or no reason to add)
- * - forceExcludeToday: for fields Sync does NOT bump (appearances) — while Live,
- *   treat snapshot as excluding today and add inMatch
  * Soft-fail: null/NaN AF → just inMatch (or 0).
+ * forceExcludeToday: kept for callers that always want the live +inMatch path
+ * while the match is ongoing (e.g. appearances).
  */
 export function liveAdjustedSeasonStat(
   afTotal: number | null | undefined,
@@ -143,17 +141,18 @@ export function liveAdjustedSeasonStat(
     afTotal != null && Number.isFinite(Number(afTotal)) ? Number(afTotal) : null;
   if (af == null) return inMatch;
   if (inMatch <= 0) return af;
-  // AF/DB clearly behind this match's events
+  // AF/DB clearly behind this match's events (also covers FT lag)
   if (af < inMatch) return af + inMatch;
-  if (opts?.forceExcludeToday) {
-    const st = matchStatus || "";
-    const live =
-      st === "Live" ||
-      st === "Half Time" ||
-      /^(1H|2H|LIVE|HT|ET|BT|P|PEN)$/i.test(st);
+  const st = matchStatus || "";
+  const live =
+    st === "Live" ||
+    st === "Half Time" ||
+    /^(1H|2H|LIVE|HT|ET|BT|P|PEN)$/i.test(st);
+  // Live (or forceExcludeToday while live): snapshot excludes today
+  if (live || opts?.forceExcludeToday) {
     if (live) return af + inMatch;
   }
-  // Trust snapshot — Sync live-bump or AF already includes today
+  // FT / finished: trust AF snapshot
   return af;
 }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { leagueIdForCompetition } from "@/lib/competitions";
 import {
@@ -91,6 +91,19 @@ export function ObsOverlayClient(props: {
   } = props;
 
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const scorebugParam = (searchParams.get("scorebug") || "").trim().toLowerCase();
+  const noscorebugParam = (searchParams.get("noscorebug") || "").trim().toLowerCase();
+  const showScorebug =
+    scorebugParam !== "0" &&
+    scorebugParam !== "off" &&
+    scorebugParam !== "false" &&
+    noscorebugParam !== "1" &&
+    noscorebugParam !== "true" &&
+    noscorebugParam !== "yes";
+  const flashesLower =
+    (searchParams.get("flashes") || "").trim().toLowerCase() === "lower";
+
 
   const [status, setStatus] = useState(props.status);
   const [period, setPeriod] = useState<string | null>(props.period ?? null);
@@ -724,7 +737,8 @@ export function ObsOverlayClient(props: {
         position: "relative",
       }}
     >
-      {/* Scorebug — top center, craft TV eyebar */}
+      {/* Scorebug — top center, craft TV eyebar (off via ?scorebug=0|off or ?noscorebug=1) */}
+      {showScorebug ? (
       <div className="obs-overlay-scorebug pointer-events-none absolute left-1/2 top-10 z-20 flex -translate-x-1/2 flex-col items-center">
         <div className="scorebug pointer-events-auto">
           {leagueLogoUrl ? (
@@ -776,10 +790,19 @@ export function ObsOverlayClient(props: {
           </div>
         </div>
       </div>
+      ) : null}
 
-      {/* Live intel + data-viz flashes */}
+      {/* Live intel + data-viz flashes — default under scorebug; ?flashes=lower → lower-third */}
       {livePopups.length > 0 ? (
-        <div className="obs-overlay-flashes absolute left-1/2 top-28 z-[60] flex w-[min(94%,26rem)] -translate-x-1/2 flex-col gap-2">
+        <div
+          className={cn(
+            "obs-overlay-flashes absolute left-1/2 z-[60] flex w-[min(94%,26rem)] -translate-x-1/2 flex-col gap-2",
+            flashesLower
+              ? "bottom-[20%] top-auto items-center drop-shadow-[0_8px_24px_rgba(0,0,0,0.45)]"
+              : "top-28"
+          )}
+          data-flashes-placement={flashesLower ? "lower" : "top"}
+        >
           {livePopups.map((popup) => {
             const titleU = `${popup.title} ${popup.subtitle || ""}`.toUpperCase();
             const flashTier =

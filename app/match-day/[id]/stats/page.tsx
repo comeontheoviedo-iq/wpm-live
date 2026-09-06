@@ -18,20 +18,11 @@ export default async function MatchStatsPage({
       <div>
         <h1 className="text-lg font-bold">Match Statistics</h1>
         <p className="text-xs text-slate-500">
-          Possession, shots, corners, free xG where covered, and the event
-          timeline.
+          Score, scorers, attendance, and key team lines — then deep stats.
         </p>
       </div>
 
-      <AdvancedStatsCard
-        matchId={match.id}
-        homeName={match.homeClub.shortName}
-        awayName={match.awayClub.shortName}
-        homeColor={match.homeClub.primaryColor}
-        awayColor={match.awayClub.primaryColor}
-        showCoverage
-      />
-
+      {/* Unmistakable above-fold overview first */}
       <MatchStatisticsView
         homeName={match.homeClub.shortName}
         awayName={match.awayClub.shortName}
@@ -44,6 +35,8 @@ export default async function MatchStatsPage({
         kickoffLabel={formatKickoff(match.kickoff)}
         venueName={match.venue?.name}
         venueCity={match.venue?.city}
+        attendance={match.attendance ?? null}
+        venueCapacity={match.venue?.capacity ?? null}
         statistics={match.statistics.map((s) => ({
           label: s.label,
           homeValue: s.homeValue,
@@ -57,6 +50,15 @@ export default async function MatchStatsPage({
           teamSide: e.teamSide,
           playerId: e.playerId,
         }))}
+      />
+
+      <AdvancedStatsCard
+        matchId={match.id}
+        homeName={match.homeClub.shortName}
+        awayName={match.awayClub.shortName}
+        homeColor={match.homeClub.primaryColor}
+        awayColor={match.awayClub.primaryColor}
+        showCoverage
       />
     </div>
   );

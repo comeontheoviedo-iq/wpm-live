@@ -8,7 +8,7 @@ export function Card({
   return (
     <div
       className={cn(
-        "rounded-xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-700/70 dark:bg-slate-900/95",
+        "rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] shadow-xs dark:bg-[var(--surface)]",
         className
       )}
       {...props}
@@ -23,7 +23,7 @@ export function CardHeader({
   return (
     <div
       className={cn(
-        "border-b border-slate-100/90 bg-gradient-to-b from-slate-50/80 to-transparent px-4 py-3 dark:border-slate-800 dark:from-slate-900/80",
+        "border-b border-[var(--border)] bg-[var(--surface-muted)]/60 px-4 py-2.5",
         className
       )}
       {...props}

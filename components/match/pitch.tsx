@@ -123,7 +123,7 @@ function StatCell({
 }) {
   return (
     <div className="min-w-0 px-px text-center leading-none" title={title || label}>
-      <div className="truncate text-[5.5px] font-semibold uppercase tracking-[0.05em] text-slate-500/85">
+      <div className="truncate text-[5.5px] font-bold uppercase tracking-[0.08em] text-slate-500">
         {label}
       </div>
       <div
@@ -325,7 +325,7 @@ function PitchCardToken({
     >
       <span
         className={cn(
-          "group relative flex flex-col overflow-hidden rounded-[7px] border shadow-[0_2px_10px_rgba(0,0,0,0.32),0_0_0_1px_rgba(0,0,0,0.06)]",
+          "group relative flex flex-col overflow-hidden rounded-[5px] border shadow-[0_1px_4px_rgba(0,0,0,0.35),0_0_0_1px_rgba(0,0,0,0.08)]",
           band,
           selected &&
             "ring-[3px] ring-blue-500 shadow-[0_0_14px_rgba(37,99,235,0.85)]",
@@ -1294,15 +1294,15 @@ export function PitchBoard({
           })}
         </div>
 
-        {/* Center scoreboard — kept clear of corner chrome */}
-        <div className="pointer-events-none absolute left-1/2 top-2 z-20 flex w-[min(46%,22rem)] -translate-x-1/2 flex-col items-center gap-1">
+        {/* Center scorebug — solid opaque broadcast bug (never glass into grass) */}
+        <div className="pointer-events-none absolute left-1/2 top-2 z-20 flex w-[min(52%,24rem)] -translate-x-1/2 flex-col items-center gap-1">
           {showScore && (
-            <div className="pitch-overlay-chip pointer-events-auto flex items-center gap-2 rounded-full px-2.5 py-1">
+            <div className="scorebug pointer-events-auto gap-1.5 sm:gap-2">
               {leagueLogoUrl ? (
                 <button
                   type="button"
                   onClick={onLeagueLogoClick}
-                  className="shrink-0 rounded-sm overflow-hidden hover:ring-2 hover:ring-teal-500"
+                  className="shrink-0 overflow-hidden rounded-[2px] ring-1 ring-white/20 hover:ring-teal-400"
                   title="League notes"
                   aria-label="Open league notes"
                 >
@@ -1310,7 +1310,7 @@ export function PitchBoard({
                   <img
                     src={leagueLogoUrl}
                     alt=""
-                    className="h-6 w-6 object-contain"
+                    className="h-5 w-5 object-contain bg-white/95"
                   />
                 </button>
               ) : null}
@@ -1331,7 +1331,7 @@ export function PitchBoard({
                       <button
                         type="button"
                         onClick={onLeft}
-                        className="shrink-0 rounded-sm overflow-hidden hover:ring-2 hover:ring-teal-500"
+                        className="shrink-0 overflow-hidden rounded-[2px] ring-1 ring-white/20 hover:ring-teal-400"
                         title={leftTitle}
                         aria-label={leftTitle}
                       >
@@ -1339,22 +1339,20 @@ export function PitchBoard({
                         <img
                           src={leftLogo}
                           alt=""
-                          className="h-6 w-6 object-contain"
+                          className="h-5 w-5 object-contain bg-white/95"
                         />
                       </button>
                     ) : (
-                      <span className="text-[11px] font-bold text-slate-700 tracking-wide">
-                        {leftCode}
-                      </span>
+                      <span className="scorebug-code">{leftCode}</span>
                     )}
-                    <span className="text-base font-black tabular-nums text-slate-900 leading-none">
+                    <span className="scorebug-score">
                       {leftScore}-{rightScore}
                     </span>
                     {rightLogo ? (
                       <button
                         type="button"
                         onClick={onRight}
-                        className="shrink-0 rounded-sm overflow-hidden hover:ring-2 hover:ring-teal-500"
+                        className="shrink-0 overflow-hidden rounded-[2px] ring-1 ring-white/20 hover:ring-teal-400"
                         title={rightTitle}
                         aria-label={rightTitle}
                       >
@@ -1362,26 +1360,25 @@ export function PitchBoard({
                         <img
                           src={rightLogo}
                           alt=""
-                          className="h-6 w-6 object-contain"
+                          className="h-5 w-5 object-contain bg-white/95"
                         />
                       </button>
                     ) : (
-                      <span className="text-[11px] font-bold text-slate-700 tracking-wide">
-                        {rightCode}
-                      </span>
+                      <span className="scorebug-code">{rightCode}</span>
                     )}
                   </>
                 );
               })()}
+              {statusShort ? (
+                <span className="scorebug-clock ml-0.5">{statusShort}</span>
+              ) : null}
             </div>
           )}
 
-          {/* Compact tools: clock + swap + field (desk also has Field/Full) */}
+          {/* Compact tools: swap + field (clock lives in scorebug) */}
           <div className="pointer-events-auto flex items-center gap-0.5">
-            {statusShort && (
-              <span className="pitch-overlay-chip-dark rounded px-1.5 py-0.5 text-[9px] font-bold tracking-wider text-white tabular-nums">
-                {statusShort}
-              </span>
+            {!showScore && statusShort && (
+              <span className="scorebug-clock">{statusShort}</span>
             )}
             {(onToggleHomeOnLeft || onOpenFieldSettings) && !onAirMode && (
               <div className="pitch-overlay-chip inline-flex items-center gap-px p-0.5">
@@ -1389,7 +1386,7 @@ export function PitchBoard({
                   <button
                     type="button"
                     onClick={onToggleHomeOnLeft}
-                    className="inline-flex h-5 w-5 items-center justify-center rounded text-slate-800 hover:bg-white/90"
+                    className="inline-flex h-5 w-5 items-center justify-center rounded-[2px] text-slate-800 hover:bg-slate-100"
                     title={
                       homeOnLeft
                         ? "Swap sides · home moves to right"
@@ -1404,7 +1401,7 @@ export function PitchBoard({
                   <button
                     type="button"
                     onClick={() => onOpenFieldSettings("player")}
-                    className="inline-flex h-5 w-5 items-center justify-center rounded text-slate-800 hover:bg-white/90"
+                    className="inline-flex h-5 w-5 items-center justify-center rounded-[2px] text-slate-800 hover:bg-slate-100"
                     title="Field Settings · Pitch Card"
                     aria-label="Field Settings"
                   >
@@ -1417,7 +1414,7 @@ export function PitchBoard({
               <button
                 type="button"
                 onClick={onToggleHomeOnLeft}
-                className="pitch-overlay-chip inline-flex h-5 w-5 items-center justify-center text-slate-800 hover:bg-white"
+                className="pitch-overlay-chip inline-flex h-5 w-5 items-center justify-center text-slate-800 hover:bg-slate-100"
                 title={
                   homeOnLeft
                     ? "Swap sides · home moves to right"

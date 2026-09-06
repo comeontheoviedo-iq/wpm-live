@@ -1963,17 +1963,23 @@ export function MatchDesk({
     <div
       ref={deskRootRef}
       className={cn(
-        "relative flex flex-col gap-1.5 overflow-hidden bg-slate-50 dark:bg-slate-950",
+        "relative flex flex-col gap-1.5 overflow-hidden bg-[var(--background)] text-[var(--foreground)]",
+        onAirMode && "onair-desk",
         isFullscreen
           ? "fixed inset-0 z-[100] h-[100dvh] max-h-[100dvh] min-h-0 p-2"
           : "h-[calc(100dvh-11rem)] max-h-[100dvh] min-h-[380px]"
       )}
     >
-      {/* Slim top bar — score / meta / stats / actions */}
-      <header className="shrink-0 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 px-2.5 py-1.5">
+      {/* Slim top bar — score / meta / stats / actions · broadcast desk chrome */}
+      <header
+        className={cn(
+          "desk-header shrink-0 flex flex-wrap items-center gap-x-3 gap-y-1 px-2.5 py-1.5",
+          onAirMode && "opacity-90"
+        )}
+      >
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <span className="font-bold text-sm truncate">
+            <span className="font-bold text-sm truncate tracking-tight">
               {homeName}{" "}
               <span className="text-slate-400 font-normal">vs</span>{" "}
               {awayName}
@@ -1981,15 +1987,15 @@ export function MatchDesk({
             {(status === "Live" || status === "Full Time" || homeScore > 0 || awayScore > 0) && (
               <span
                 className={cn(
-                  "font-semibold tabular-nums text-sm",
-                  status === "Live" ? "text-rose-600" : "text-slate-700 dark:text-slate-200"
+                  "font-black tabular-nums text-sm tracking-tight",
+                  status === "Live" ? "text-[var(--live)]" : "text-slate-800 dark:text-slate-100"
                 )}
               >
                 {status === "Live" && clockLabel ? `${clockLabel} ` : ""}
                 {homeScore}–{awayScore}
               </span>
             )}
-            <span className="text-[11px] text-slate-500 truncate">
+            <span className="text-desk-label text-slate-500 truncate normal-case tracking-[0.04em]">
               {competition} · {kickoffLabel} · {status}
             </span>
           </div>
@@ -2080,7 +2086,7 @@ export function MatchDesk({
           <div className="relative">
             <button
               type="button"
-              className="inline-flex items-center gap-1 rounded-md border border-slate-200 dark:border-slate-700 px-2 py-1 text-[11px] font-medium hover:bg-slate-50 dark:hover:bg-slate-900"
+              className="desk-btn"
               onClick={() => setIntelOpen((v) => !v)}
               aria-expanded={intelOpen}
             >
@@ -2155,10 +2161,8 @@ export function MatchDesk({
             <button
               type="button"
               className={cn(
-                "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium",
-                intelHistoryOpen
-                  ? "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-100"
-                  : "border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-900"
+                "desk-btn",
+                intelHistoryOpen && "border-amber-400/70 bg-amber-50 text-amber-950 dark:bg-amber-950/40 dark:text-amber-100"
               )}
               onClick={() => setIntelHistoryOpen((v) => !v)}
               aria-expanded={intelHistoryOpen}
@@ -2181,7 +2185,7 @@ export function MatchDesk({
                   onClick={() => setIntelHistoryOpen(false)}
                 />
                 <div
-                  className="absolute right-0 top-full mt-1 z-40 w-[min(92vw,22rem)] max-h-[min(70vh,28rem)] overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 shadow-xl p-2"
+                  className="absolute right-0 top-full mt-1 z-40 w-[min(92vw,22rem)] max-h-[min(70vh,28rem)] overflow-y-auto rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] shadow-lg p-2"
                   role="list"
                   aria-label="Live intel history"
                 >
@@ -2206,13 +2210,10 @@ export function MatchDesk({
                             type="button"
                             role="listitem"
                             className={cn(
-                              "w-full text-left rounded-md border px-2.5 py-2 hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors",
-                              item.kind === "goal" &&
-                                "border-emerald-200 dark:border-emerald-900",
-                              item.kind === "sub" &&
-                                "border-sky-200 dark:border-sky-900",
-                              item.kind === "fact" &&
-                                "border-amber-200 dark:border-amber-900"
+                              "w-full text-left rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-2.5 py-2 hover:bg-[var(--surface-muted)] transition-colors",
+                              item.kind === "goal" && "live-flash-goal",
+                              item.kind === "sub" && "live-flash-sub",
+                              item.kind === "fact" && "live-flash-fact"
                             )}
                             onClick={() => reopenIntelHistory(item)}
                           >
@@ -2259,13 +2260,11 @@ export function MatchDesk({
           <button
             type="button"
             className={cn(
-              "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium",
-              onAirMode
-                ? "border-rose-400 bg-rose-600 text-white dark:border-rose-500"
-                : onAirOpen
-                  ? "border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-200"
-                  : "border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-900"
+              "desk-btn desk-btn-live",
+              onAirMode && "is-active",
+              !onAirMode && onAirOpen && "border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-200"
             )}
+            aria-pressed={onAirMode}
             onClick={() => setOnAirMode((v) => !v)}
             onContextMenu={(e) => {
               e.preventDefault();
@@ -2273,13 +2272,13 @@ export function MatchDesk({
             }}
             title="On-air mode (O) · right-click events drawer"
           >
-            <Radio className="h-3 w-3 text-rose-500" />
+            <Radio className={cn("h-3 w-3", !onAirMode && "text-[var(--live)]")} />
             {onAirMode ? "On-air ON" : "On-air"}
-            <span className="tabular-nums text-slate-500">{events.length}</span>
+            <span className={cn("tabular-nums", onAirMode ? "text-white/80" : "text-slate-500")}>{events.length}</span>
           </button>
           <button
             type="button"
-            className="inline-flex items-center rounded-md border border-slate-200 dark:border-slate-700 px-1.5 py-1 text-[11px] hover:bg-slate-50 dark:hover:bg-slate-900"
+            className="desk-btn px-1.5"
             onClick={() => setHotkeyHelpOpen(true)}
             title="Hotkeys (?)"
           >
@@ -2288,7 +2287,7 @@ export function MatchDesk({
 
           <Link
             href={`/match-day/${matchId}/packs`}
-            className="inline-flex items-center gap-1 rounded-md bg-violet-600 hover:bg-violet-500 text-white px-2 py-1 text-[11px] font-semibold"
+            className="desk-btn desk-btn-accent"
           >
             <Sparkles className="h-3 w-3" />
             Research{packCount ? ` (${packCount})` : ""}
@@ -2296,14 +2295,14 @@ export function MatchDesk({
           {!apiFootballFixtureId && (
             <Link
               href={`/match-day/${matchId}/prep`}
-              className="inline-flex items-center gap-1 rounded-md border border-slate-300 dark:border-slate-700 px-2 py-1 text-[11px]"
+              className="desk-btn"
             >
               <Link2 className="h-3 w-3" /> Link
             </Link>
           )}
           <button
             type="button"
-            className="inline-flex items-center gap-1 rounded-md border border-slate-200 dark:border-slate-700 px-2 py-1 text-[11px] font-medium hover:bg-slate-50 dark:hover:bg-slate-900"
+            className="desk-btn"
             onClick={() => openFieldSettings("player")}
             title="Field Settings · Pitch Card"
           >
@@ -2312,7 +2311,7 @@ export function MatchDesk({
           </button>
           <button
             type="button"
-            className="inline-flex items-center gap-1 rounded-md border border-slate-200 dark:border-slate-700 px-2 py-1 text-[11px] font-medium hover:bg-slate-50 dark:hover:bg-slate-900"
+            className="desk-btn"
             onClick={() => void toggleFullscreen()}
             title={isFullscreen ? "Exit fullscreen (Esc)" : "Fullscreen desk"}
             aria-pressed={isFullscreen}
@@ -2383,33 +2382,42 @@ export function MatchDesk({
 
       {/* Flash toast — overlay, not a permanent band */}
       {flash && (
-        <div className="pointer-events-none absolute left-1/2 top-12 z-50 -translate-x-1/2 max-w-[min(90%,36rem)] rounded-lg border border-amber-300 bg-amber-50/95 dark:bg-amber-950/95 dark:border-amber-800 px-3 py-1.5 text-xs font-medium text-amber-900 dark:text-amber-100 shadow-lg animate-pulse">
+        <div className="pointer-events-none absolute left-1/2 top-12 z-50 -translate-x-1/2 max-w-[min(90%,36rem)] rounded-[var(--radius-sm)] border border-amber-400/60 bg-[var(--surface)] px-3 py-1.5 text-xs font-semibold text-amber-950 dark:text-amber-100 shadow-md live-flash-fact">
           {flash}
         </div>
       )}
 
-      {/* Live intel popups — prominent stacked cards; click pin or dismiss */}
+      {/* Live intel popups — interrupt then settle; severity via left edge only */}
       {livePopups.length > 0 && (
         <div className="absolute left-1/2 top-12 z-[60] flex w-[min(94%,26rem)] -translate-x-1/2 flex-col gap-2">
-          {livePopups.map((popup) => (
+          {livePopups.map((popup) => {
+            const titleU = `${popup.title} ${popup.subtitle || ""}`.toUpperCase();
+            const flashTier =
+              popup.kind === "goal"
+                ? "live-flash-goal"
+                : popup.kind === "sub"
+                  ? "live-flash-sub"
+                  : /\bRED\b|VAR/.test(titleU)
+                    ? "live-flash-red"
+                    : /YELLOW|CARD/.test(titleU)
+                      ? "live-flash-card"
+                      : /INJUR|STRETCHER/.test(titleU)
+                        ? "live-flash-injury"
+                        : "live-flash-fact";
+            return (
             <div
               key={popup.id}
               role="dialog"
               aria-label={popup.title}
               className={cn(
-                "rounded-2xl border-2 px-4 py-3 text-left shadow-2xl ring-1 ring-black/5",
-                popup.kind === "goal" &&
-                  "border-emerald-500 bg-emerald-50/98 dark:bg-emerald-950/98 dark:border-emerald-500",
-                popup.kind === "sub" &&
-                  "border-sky-500 bg-sky-50/98 dark:bg-sky-950/98 dark:border-sky-500",
-                popup.kind === "fact" &&
-                  "border-amber-500 bg-amber-50/98 dark:bg-amber-950/98 dark:border-amber-500",
-                popup.pinned && "ring-2 ring-amber-400"
+                "live-flash px-3.5 py-2.5 text-left",
+                flashTier,
+                popup.pinned && "ring-2 ring-amber-400/80"
               )}
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  <div className="text-desk-label text-slate-500">
                     {popup.kind === "goal"
                       ? "Goal"
                       : popup.kind === "sub"
@@ -2417,7 +2425,7 @@ export function MatchDesk({
                         : "Live"}
                     {popup.pinned ? " · pinned" : ""}
                   </div>
-                  <div className="mt-0.5 text-base font-black text-slate-900 dark:text-white">
+                  <div className="mt-0.5 text-[15px] font-black tracking-tight text-slate-900 dark:text-white">
                     {popup.title}
                     {popup.subtitle ? (
                       <span className="ml-2 text-sm font-bold text-slate-700 dark:text-slate-200">
@@ -2426,7 +2434,7 @@ export function MatchDesk({
                     ) : null}
                   </div>
                   {popup.scoreline ? (
-                    <div className="mt-0.5 text-sm font-semibold tabular-nums text-slate-800 dark:text-slate-100">
+                    <div className="mt-0.5 text-sm font-bold tabular-nums text-slate-800 dark:text-slate-100">
                       {popup.scoreline}
                     </div>
                   ) : null}
@@ -2434,7 +2442,7 @@ export function MatchDesk({
                 <div className="flex shrink-0 gap-1">
                   <button
                     type="button"
-                    className="rounded-md border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 hover:text-amber-600"
+                    className="desk-btn px-1.5 py-0.5 text-[10px] text-slate-600 hover:text-amber-600"
                     title={popup.pinned ? "Unpin" : "Pin (keep open)"}
                     onClick={() =>
                       setLivePopups((prev) =>
@@ -2453,7 +2461,7 @@ export function MatchDesk({
                   </button>
                   <button
                     type="button"
-                    className="rounded-md border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 hover:text-rose-600"
+                    className="desk-btn px-1.5 py-0.5 text-[10px] text-slate-600 hover:text-rose-600"
                     title="Dismiss"
                     onClick={() =>
                       dismissLivePopup(popup.id, { force: true })
@@ -2500,7 +2508,8 @@ export function MatchDesk({
                 Auto-hides · pin to keep
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -2574,7 +2583,7 @@ export function MatchDesk({
         </aside>
         )}
 
-        <section className="relative min-h-0 flex flex-col overflow-hidden order-1 lg:order-2">
+        <section className="relative min-h-0 flex flex-col overflow-hidden order-1 lg:order-2 onair-primary">
           <div className="min-h-0 flex-1">
             <PitchBoard
               homeName={homeName}
@@ -2681,10 +2690,10 @@ export function MatchDesk({
 
           {/* On-air drawer — overlays pitch, does not steal permanent height */}
           {onAirOpen && (
-            <div className="absolute inset-x-0 bottom-0 z-30 max-h-[min(28%,168px)] rounded-t-xl border border-slate-200 dark:border-slate-700 bg-white/95 dark:bg-slate-950/95 backdrop-blur shadow-2xl overflow-hidden flex flex-col">
-              <div className="shrink-0 flex items-center gap-2 px-3 py-1.5 border-b border-slate-100 dark:border-slate-800">
-                <Radio className="h-3.5 w-3.5 text-rose-500" />
-                <span className="text-xs font-bold uppercase tracking-wide">On-air</span>
+            <div className="absolute inset-x-0 bottom-0 z-30 max-h-[min(28%,168px)] rounded-t-[var(--radius-md)] border border-[var(--border-strong)] bg-[var(--surface)] shadow-lg overflow-hidden flex flex-col">
+              <div className="shrink-0 flex items-center gap-2 px-3 py-1.5 border-b border-[var(--border)] bg-[var(--surface-muted)]">
+                <Radio className="h-3.5 w-3.5 text-[var(--live)]" />
+                <span className="text-desk-label">On-air</span>
                 <span className="text-[10px] text-slate-500">
                   {events.length} events
                   {status === "Live" && clockLabel ? ` · ${clockLabel}` : ""}

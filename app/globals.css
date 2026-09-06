@@ -3,83 +3,126 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  /* Surfaces */
-  --background: #f4f7fb;
+  /* Surfaces — monochrome desk at rest */
+  --background: #f1f3f6;
   --foreground: #0b1220;
   --surface: #ffffff;
   --surface-elevated: #ffffff;
-  --surface-muted: #eef2f7;
-  --surface-glass: rgba(255, 255, 255, 0.82);
+  --surface-muted: #e8ecf1;
+  --surface-glass: rgba(255, 255, 255, 0.94);
 
   /* Ink / contrast */
   --muted: #64748b;
   --muted-foreground: #475569;
-  --border: rgba(15, 23, 42, 0.1);
-  --border-strong: rgba(15, 23, 42, 0.16);
+  --border: rgba(15, 23, 42, 0.12);
+  --border-strong: rgba(15, 23, 42, 0.2);
   --ring: #14b8a6;
 
-  /* Brand */
+  /* Brand — thin accent only */
   --brand: #0d9488;
   --brand-dark: #0f766e;
   --brand-soft: #ccfbf1;
-  --brand-glow: rgba(13, 148, 136, 0.28);
+  --brand-glow: rgba(13, 148, 136, 0.18);
 
-  /* Broadcast accents */
+  /* Broadcast accents — live edge only (goal/card/injury/break) */
   --live: #e11d48;
   --live-soft: #ffe4e6;
   --warning: #f59e0b;
   --success: #059669;
+  --edge-goal: #059669;
+  --edge-card: #eab308;
+  --edge-red: #dc2626;
+  --edge-injury: #ea580c;
+  --edge-break: #0284c7;
+  --edge-sub: #0369a1;
 
-  /* Elevation */
-  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
-  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05), 0 1px 3px rgba(15, 23, 42, 0.04);
-  --shadow-md: 0 4px 14px rgba(15, 23, 42, 0.08), 0 1px 3px rgba(15, 23, 42, 0.05);
-  --shadow-lg: 0 12px 32px rgba(15, 23, 42, 0.12), 0 2px 8px rgba(15, 23, 42, 0.06);
-  --shadow-glow: 0 0 0 1px rgba(13, 148, 136, 0.12), 0 8px 24px rgba(13, 148, 136, 0.12);
+  /* Scorebug / broadcast bug desk */
+  --bug-bg: #0a0c0f;
+  --bug-bg-elevated: #12151a;
+  --bug-fg: #f8fafc;
+  --bug-muted: #94a3b8;
+  --bug-border: rgba(255, 255, 255, 0.14);
+  --bug-accent-home: rgba(255, 255, 255, 0.55);
+  --bug-accent-away: rgba(255, 255, 255, 0.55);
 
-  /* Type */
+  /* Radii — quieter broadcast tool feel */
+  --radius-xs: 0.125rem;
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.625rem;
+
+  /* Elevation — flatter, less glass */
+  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 2px 8px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow-lg: 0 8px 24px rgba(15, 23, 42, 0.12), 0 2px 6px rgba(15, 23, 42, 0.06);
+  --shadow-glow: 0 0 0 1px rgba(13, 148, 136, 0.14), 0 4px 14px rgba(13, 148, 136, 0.1);
+  --shadow-bug: 0 2px 8px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(0, 0, 0, 0.35);
+
+  /* Type — condensed broadcast labels */
   --text-2xs: 0.625rem;
   --text-xs: 0.6875rem;
   --text-sm: 0.8125rem;
   --text-base: 0.875rem;
   --text-lg: 1.0625rem;
   --text-xl: 1.25rem;
-  --tracking-label: 0.06em;
+  --tracking-label: 0.08em;
+  --font-tabular: ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono", Menlo, monospace;
+
+  /* Mission-control luminance weights */
+  --weight-scan: 1;
+  --weight-investigate: 0.72;
+  --weight-onair-rail: 0.45;
 
   /* Motion */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --duration-fast: 120ms;
   --duration: 180ms;
   --duration-slow: 280ms;
+  --duration-flash: 420ms;
 }
 
 .dark {
-  --background: #030712;
+  --background: #05070b;
   --foreground: #e2e8f0;
-  --surface: #0b1220;
-  --surface-elevated: #111827;
-  --surface-muted: #0f172a;
-  --surface-glass: rgba(3, 7, 18, 0.78);
+  --surface: #0b0f14;
+  --surface-elevated: #12171f;
+  --surface-muted: #0a0e14;
+  --surface-glass: rgba(8, 12, 18, 0.92);
 
   --muted: #94a3b8;
   --muted-foreground: #cbd5e1;
-  --border: rgba(148, 163, 184, 0.14);
-  --border-strong: rgba(148, 163, 184, 0.22);
+  --border: rgba(148, 163, 184, 0.16);
+  --border-strong: rgba(148, 163, 184, 0.26);
   --ring: #2dd4bf;
 
   --brand: #14b8a6;
   --brand-dark: #0d9488;
-  --brand-soft: rgba(20, 184, 166, 0.14);
-  --brand-glow: rgba(45, 212, 191, 0.2);
+  --brand-soft: rgba(20, 184, 166, 0.12);
+  --brand-glow: rgba(45, 212, 191, 0.16);
 
   --live: #fb7185;
   --live-soft: rgba(244, 63, 94, 0.16);
+  --edge-goal: #34d399;
+  --edge-card: #facc15;
+  --edge-red: #f87171;
+  --edge-injury: #fb923c;
+  --edge-break: #38bdf8;
+  --edge-sub: #7dd3fc;
 
-  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.35);
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.25);
-  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.45), 0 1px 3px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 18px 44px rgba(0, 0, 0, 0.55), 0 4px 12px rgba(0, 0, 0, 0.35);
-  --shadow-glow: 0 0 0 1px rgba(45, 212, 191, 0.18), 0 10px 28px rgba(13, 148, 136, 0.18);
+  --bug-bg: #050608;
+  --bug-bg-elevated: #0e1116;
+  --bug-fg: #f8fafc;
+  --bug-muted: #94a3b8;
+  --bug-border: rgba(255, 255, 255, 0.12);
+
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.45), 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-glow: 0 0 0 1px rgba(45, 212, 191, 0.16), 0 6px 18px rgba(13, 148, 136, 0.14);
+  --shadow-bug: 0 2px 10px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(0, 0, 0, 0.5);
 }
 
 @theme inline {
@@ -114,10 +157,7 @@
   }
 
   body {
-    background:
-      radial-gradient(1200px 500px at 10% -10%, rgba(13, 148, 136, 0.07), transparent 55%),
-      radial-gradient(900px 420px at 90% 0%, rgba(14, 165, 233, 0.05), transparent 50%),
-      var(--background);
+    background: var(--background);
     color: var(--foreground);
     font-family: var(--font-geist-sans), system-ui, sans-serif;
     font-size: var(--text-base);
@@ -127,10 +167,7 @@
 
   .dark body,
   :where(.dark) body {
-    background:
-      radial-gradient(1000px 480px at 12% -8%, rgba(20, 184, 166, 0.1), transparent 55%),
-      radial-gradient(800px 400px at 92% 0%, rgba(56, 189, 248, 0.06), transparent 50%),
-      var(--background);
+    background: var(--background);
   }
 
   ::selection {
@@ -183,44 +220,160 @@
   .surface-glass {
     background: var(--surface-glass);
     border: 1px solid var(--border);
-    backdrop-filter: blur(12px) saturate(1.2);
-    -webkit-backdrop-filter: blur(12px) saturate(1.2);
+    /* Opaque preferred — light frost only when needed */
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
   }
 
   .desk-chrome {
-    background: linear-gradient(
-      180deg,
-      color-mix(in oklab, var(--surface) 92%, transparent),
-      color-mix(in oklab, var(--surface) 88%, var(--surface-muted))
-    );
+    background: var(--surface);
     border-bottom: 1px solid var(--border);
+    box-shadow: none;
+  }
+
+  .desk-header {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
     box-shadow: var(--shadow-xs);
   }
 
+  .desk-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    padding: 0.25rem 0.5rem;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--foreground);
+    transition:
+      background-color var(--duration) var(--ease-out),
+      border-color var(--duration) var(--ease-out),
+      color var(--duration) var(--ease-out);
+  }
+  .desk-btn:hover {
+    background: var(--surface-muted);
+    border-color: var(--border-strong);
+  }
+  .desk-btn-live {
+    border-color: color-mix(in oklab, var(--live) 45%, var(--border));
+    color: var(--live);
+  }
+  .desk-btn-live[aria-pressed="true"],
+  .desk-btn-live.is-active {
+    background: var(--live);
+    border-color: var(--live);
+    color: #fff;
+  }
+  .desk-btn-accent {
+    background: var(--foreground);
+    border-color: var(--foreground);
+    color: var(--surface);
+  }
+  .desk-btn-accent:hover {
+    background: color-mix(in oklab, var(--foreground) 88%, white);
+  }
+
+  /* Broadcast scorebug — solid opaque, never glass into grass */
+  .scorebug {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--bug-border);
+    background: var(--bug-bg);
+    color: var(--bug-fg);
+    box-shadow: var(--shadow-bug);
+    padding: 0.3rem 0.55rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .scorebug-score {
+    font-size: 1.05rem;
+    font-weight: 900;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    color: var(--bug-fg);
+  }
+  .scorebug-clock {
+    border-radius: var(--radius-xs);
+    background: var(--bug-bg-elevated);
+    border: 1px solid var(--bug-border);
+    padding: 0.15rem 0.4rem;
+    font-size: 0.625rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-variant-numeric: tabular-nums;
+    color: var(--bug-fg);
+  }
+  .scorebug-code {
+    font-size: 0.6875rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--bug-muted);
+  }
+
   .pitch-overlay-chip {
-    border-radius: 0.375rem;
-    border: 1px solid rgba(148, 163, 184, 0.5);
-    background: rgba(255, 255, 255, 0.94);
-    box-shadow:
-      0 1px 2px rgba(0, 0, 0, 0.1),
-      0 6px 16px rgba(0, 0, 0, 0.08);
-    backdrop-filter: blur(8px) saturate(1.15);
-    -webkit-backdrop-filter: blur(8px) saturate(1.15);
+    border-radius: var(--radius-sm);
+    border: 1px solid rgba(15, 23, 42, 0.18);
+    background: rgba(252, 252, 253, 0.97);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+    /* no glass dying into grass */
   }
 
   .pitch-overlay-chip-dark {
-    border-radius: 0.375rem;
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    background: rgba(8, 12, 10, 0.58);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.22);
-    backdrop-filter: blur(8px) saturate(1.1);
-    -webkit-backdrop-filter: blur(8px) saturate(1.1);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--bug-border);
+    background: var(--bug-bg);
+    color: var(--bug-fg);
+    box-shadow: var(--shadow-bug);
   }
 
   .pitch-chrome {
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.06),
-      0 10px 28px rgba(0, 0, 0, 0.18);
+      inset 0 1px 0 rgba(255, 255, 255, 0.04),
+      0 6px 18px rgba(0, 0, 0, 0.2);
+  }
+
+  /* Live intel flash — interrupt then settle */
+  .live-flash {
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    box-shadow: var(--shadow-lg);
+    animation: live-flash-in var(--duration-flash) var(--ease-out) both;
+  }
+  .live-flash-goal {
+    border-left: 3px solid var(--edge-goal);
+  }
+  .live-flash-sub {
+    border-left: 3px solid var(--edge-sub);
+  }
+  .live-flash-fact {
+    border-left: 3px solid var(--edge-break);
+  }
+  .live-flash-card {
+    border-left: 3px solid var(--edge-card);
+  }
+  .live-flash-red {
+    border-left: 3px solid var(--edge-red);
+  }
+  .live-flash-injury {
+    border-left: 3px solid var(--edge-injury);
+  }
+
+  .onair-quiet {
+    opacity: var(--weight-onair-rail);
+    filter: saturate(0.85);
+  }
+  .onair-primary {
+    opacity: 1;
   }
 
   .crest-watermark {
@@ -240,23 +393,11 @@
     position: relative;
     overflow: hidden;
     border-bottom: 1px solid var(--border);
-    background:
-      linear-gradient(
-        120deg,
-        color-mix(in oklab, var(--brand) 8%, var(--surface)) 0%,
-        var(--surface) 42%,
-        var(--surface) 100%
-      );
+    background: var(--surface-muted);
   }
 
   .dark .modal-header-shell {
-    background:
-      linear-gradient(
-        120deg,
-        color-mix(in oklab, var(--brand) 14%, var(--surface)) 0%,
-        var(--surface) 48%,
-        var(--surface) 100%
-      );
+    background: var(--surface-elevated);
   }
 
   .interactive-press {
@@ -300,6 +441,33 @@
   .animate-slide-up {
     animation: desk-slide-up var(--duration-slow) var(--ease-out) both;
   }
+}
+
+@keyframes live-flash-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-10px) scale(1.02);
+    box-shadow: 0 0 0 0 transparent;
+  }
+  35% {
+    opacity: 1;
+    transform: translateY(0) scale(1.015);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--live) 22%, transparent);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    box-shadow: var(--shadow-lg);
+  }
+}
+
+
+/* On-air presentation: scorebug+pitch primary; secondary chrome quieter */
+.onair-desk .desk-header {
+  border-color: color-mix(in oklab, var(--border) 70%, transparent);
+}
+.onair-desk [data-desk-rail] {
+  opacity: var(--weight-onair-rail);
 }
 
 @keyframes desk-fade-in {

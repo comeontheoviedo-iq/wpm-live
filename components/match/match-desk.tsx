@@ -338,6 +338,7 @@ export function MatchDesk({
   awayScore,
   minute,
   minuteExtra = null,
+  period: periodProp = null,
   notes,
   injuryCount,
   predictionsAdvice,
@@ -389,6 +390,8 @@ export function MatchDesk({
   minute: number;
   /** AF status.extra stoppage — null when feed omits it */
   minuteExtra?: number | null;
+  /** AF/synced period — often "HT" while status stays "Live" (mapAfStatus). */
+  period?: string | null;
   notes: NoteRow[];
   injuryCount: number;
   predictionsAdvice: string | null;
@@ -1858,8 +1861,13 @@ export function MatchDesk({
 
 
   // Half-time data-viz flash (once per HT spell)
+  // AF maps HT→status Live; period/clock still indicate HT
+  const isHalfTime =
+    status === "Half Time" ||
+    periodProp === "HT" ||
+    formatLiveClock(minute, minuteExtra, { status }) === "HT";
   useEffect(() => {
-    if (status !== "Half Time") {
+    if (!isHalfTime) {
       if (status === "Live" || status === "Not Started") htVizEmittedRef.current = false;
       return;
     }
@@ -1880,7 +1888,7 @@ export function MatchDesk({
       16_000
     );
     window.setTimeout(() => void attachVizToPopup(id, "xg_race", "ht"), 100);
-  }, [status, homeName, awayName, homeScore, awayScore, attachVizToPopup, pushLivePopup]);
+  }, [isHalfTime, status, homeName, awayName, homeScore, awayScore, attachVizToPopup, pushLivePopup]);
 
   // Periodic moment flash only when fingerprint changes (not spam)
   useEffect(() => {

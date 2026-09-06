@@ -32,6 +32,7 @@ export default async function ObsOverlayPage({
       awayScore={match.awayScore}
       minute={match.minute}
       minuteExtra={(match as { minuteExtra?: number | null }).minuteExtra ?? null}
+      period={(match as { period?: string | null }).period ?? null}
       events={match.events.map((e) => ({
         id: e.id,
         type: e.type,

@@ -71,6 +71,8 @@ export function ObsOverlayClient(props: {
   awayScore: number;
   minute: number;
   minuteExtra?: number | null;
+  /** AF/synced period — often "HT" while status stays "Live" (mapAfStatus). */
+  period?: string | null;
   events: EventRow[];
   statistics: StatRow[];
 }) {
@@ -91,6 +93,7 @@ export function ObsOverlayClient(props: {
   const router = useRouter();
 
   const [status, setStatus] = useState(props.status);
+  const [period, setPeriod] = useState<string | null>(props.period ?? null);
   const [homeScore, setHomeScore] = useState(props.homeScore);
   const [awayScore, setAwayScore] = useState(props.awayScore);
   const [minute, setMinute] = useState(props.minute);
@@ -136,6 +139,7 @@ export function ObsOverlayClient(props: {
   // Mirror desk: after router.refresh(), adopt fresh server props
   useEffect(() => {
     setStatus(props.status);
+    setPeriod(props.period ?? null);
     setHomeScore(props.homeScore);
     setAwayScore(props.awayScore);
     setMinute(props.minute);
@@ -148,6 +152,7 @@ export function ObsOverlayClient(props: {
     eventsRef.current = props.events || [];
   }, [
     props.status,
+    props.period,
     props.homeScore,
     props.awayScore,
     props.minute,
@@ -201,19 +206,26 @@ export function ObsOverlayClient(props: {
   const awayCode = (awayAbbr || awayName).slice(0, 3).toUpperCase();
 
   const statusShortBase =
-    status === "Full Time"
+    status === "Full Time" || period === "FT"
       ? "FT"
-      : status === "Live"
-        ? "LIVE"
-        : status === "Half Time"
-          ? "HT"
+      : status === "Half Time" || period === "HT"
+        ? "HT"
+        : status === "Live"
+          ? "LIVE"
           : null;
   const statusShort = formatPitchClockBadge(
     minute,
     minuteExtra,
     statusShortBase
   );
-  const clockLabel = formatLiveClock(minute, minuteExtra, { status });
+  const clockLabel = formatLiveClock(minute, minuteExtra, {
+    status: status === "Half Time" || period === "HT" ? "Half Time" : status,
+  });
+  const isHalfTime =
+    status === "Half Time" ||
+    period === "HT" ||
+    statusShort === "HT" ||
+    clockLabel === "HT";
 
   const accentsCollide =
     homeColor.trim().toLowerCase() === awayColor.trim().toLowerCase();
@@ -363,6 +375,11 @@ export function ObsOverlayClient(props: {
           json.match?.status || json.status || null;
         if (typeof nextStatus === "string" && nextStatus) {
           setStatus(nextStatus);
+        }
+        const nextPeriod =
+          json.match?.period || json.period || null;
+        if (typeof nextPeriod === "string" && nextPeriod) {
+          setPeriod(nextPeriod);
         }
 
         if (Array.isArray(json.statistics)) {
@@ -597,9 +614,9 @@ export function ObsOverlayClient(props: {
     return () => clearInterval(t);
   }, [configured, apiFootballFixtureId, status, sync]);
 
-  // HT viz once
+  // HT viz once — AF maps HT→status Live but period/clock still say HT
   useEffect(() => {
-    if (status !== "Half Time") {
+    if (!isHalfTime) {
       if (status === "Live" || status === "Not Started" || status === "Assigned") {
         htVizEmittedRef.current = false;
       }
@@ -621,8 +638,10 @@ export function ObsOverlayClient(props: {
       },
       16_000
     );
+    // Soft-fail: attachVizToPopup no-ops when advanced-stats/xG unavailable
     window.setTimeout(() => void attachVizToPopup(id, "xg_race", "ht"), 100);
   }, [
+    isHalfTime,
     status,
     homeName,
     awayName,

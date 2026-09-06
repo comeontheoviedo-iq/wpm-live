@@ -68,6 +68,7 @@ export default async function MatchOverviewPage({
       awayScore={match.awayScore}
       minute={match.minute}
       minuteExtra={(match as { minuteExtra?: number | null }).minuteExtra ?? null}
+      period={(match as { period?: string | null }).period ?? null}
       notes={match.notes.map((n) => ({
         id: n.id,
         title: n.title,

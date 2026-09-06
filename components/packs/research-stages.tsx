@@ -70,8 +70,16 @@ export function ResearchStagesHeader({
       {showDiscourage && (
         <p className="text-[11px] font-medium text-[var(--foreground)] rounded-[var(--radius-sm)] border border-[var(--warning)]/40 bg-[var(--surface-muted)] px-2 py-1">
           Notebook paste detected on Research — use{" "}
-          <strong>Use my draft → desk notes</strong> instead of Generate.
-          Generate will ask to confirm before replacing your paste.
+          <strong>Use my draft → desk notes</strong> to route intro scripts,
+          hooks, and notes (Notebook wins over Gemini Intro). Generate will ask
+          to confirm before replacing your paste.
+        </p>
+      )}
+      {prog.done.organised && !prog.done.intro_filled && (
+        <p className="text-[11px] text-[var(--muted)] rounded-[var(--radius-sm)] border border-[var(--border)] px-2 py-1">
+          Organised — if Intro is still empty, re-run{" "}
+          <strong>Use my draft → desk notes</strong> so SECTION 1 syncs into
+          Scripts.
         </p>
       )}
 

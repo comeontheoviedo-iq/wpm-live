@@ -30,19 +30,19 @@ export const RESEARCH_STAGES: ResearchStage[] = [
   {
     id: "organised",
     label: "Organised",
-    hint: "Use my draft → desk notes (organise/tag). Do not re-Generate over paste.",
+    hint: "Use my draft → desk notes: routes Notebook into Notes + Intro Scripts. Do not re-Generate over paste.",
     templateKeys: ["research"],
   },
   {
     id: "intro_filled",
     label: "Intro filled",
-    hint: "Intro pack section has usable content.",
+    hint: "Auto-fills from Notebook intro/script on organise — or paste into Intro.",
     templateKeys: ["intro"],
   },
   {
     id: "lineup_filled",
     label: "Lineup filled",
-    hint: "Lineup announce section ready.",
+    hint: "Lineup script — from Notebook organise or auto on Official XI confirm.",
     templateKeys: ["lineup"],
   },
   {

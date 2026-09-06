@@ -68,13 +68,34 @@ async function upsertSpeak(args: {
   timing: string;
   order: number;
 }) {
-  const existing = await prisma.speak.findFirst({
+  // Prefer exact title; also reclaim common Gemini/placeholder intro titles
+  // so Notebook SoT wins over leftover generated Speaks.
+  let existing = await prisma.speak.findFirst({
     where: { matchId: args.matchId, title: args.title },
   });
+  if (!existing && /intro/i.test(args.title)) {
+    existing = await prisma.speak.findFirst({
+      where: {
+        matchId: args.matchId,
+        OR: [
+          { title: { equals: "Intro script" } },
+          { title: { equals: "Cold open" } },
+          { title: { contains: "Intro" } },
+        ],
+        timing: "pre-match",
+      },
+      orderBy: { order: "asc" },
+    });
+  }
   if (existing) {
     await prisma.speak.update({
       where: { id: existing.id },
-      data: { body: args.body, timing: args.timing, order: args.order },
+      data: {
+        title: args.title,
+        body: args.body,
+        timing: args.timing,
+        order: args.order,
+      },
     });
   } else {
     await prisma.speak.create({
@@ -88,6 +109,37 @@ async function upsertSpeak(args: {
       },
     });
   }
+}
+
+/** Notebook SoT: mirror extracted script/note blobs into PackSection editors. */
+async function upsertPackSectionFromNotebook(args: {
+  matchId: string;
+  templateKey: string;
+  title: string;
+  content: string;
+}) {
+  const content = args.content.trim();
+  if (content.length < 40) return;
+  await prisma.packSection.upsert({
+    where: {
+      matchId_templateKey: {
+        matchId: args.matchId,
+        templateKey: args.templateKey,
+      },
+    },
+    create: {
+      matchId: args.matchId,
+      templateKey: args.templateKey,
+      title: args.title,
+      content,
+      status: "edited",
+    },
+    update: {
+      title: args.title,
+      content,
+      status: "edited",
+    },
+  });
 }
 
 export type DistributeArgs = {
@@ -166,8 +218,52 @@ async function applyOrganised(
       order: s.order,
     });
     distributed.scripts += 1;
-    if (/intro/i.test(s.title)) distributed.intro += 1;
-    if (/lineup/i.test(s.title)) distributed.lineup += 1;
+    if (/intro/i.test(s.title)) {
+      distributed.intro += 1;
+      // Research paste → Intro pack editor + Scripts (Notebook SoT beats Gemini)
+      await upsertPackSectionFromNotebook({
+        matchId: args.matchId,
+        templateKey: "intro",
+        title: "Intro script",
+        content: s.body,
+      });
+    }
+    if (/lineup/i.test(s.title)) {
+      distributed.lineup += 1;
+      await upsertPackSectionFromNotebook({
+        matchId: args.matchId,
+        templateKey: "lineup",
+        title: "Lineup read",
+        content: s.body,
+      });
+    }
+  }
+
+  // Mirror other Notebook-extracted packs so section editors stay findable
+  const refNote = organised.notes.find(
+    (n) => n.title === "Referee" && n.entityType === "match"
+  );
+  if (refNote) {
+    await upsertPackSectionFromNotebook({
+      matchId: args.matchId,
+      templateKey: "referee",
+      title: "Referee paragraph",
+      content: refNote.body,
+    });
+  }
+  const hookNotes = organised.notes.filter(
+    (n) => n.category === "Hook" && n.entityType === "match"
+  );
+  if (hookNotes.length >= 3) {
+    const hooksBody = hookNotes
+      .map((h, i) => `${i + 1}. ${h.title.replace(/^Hook:\s*/i, "")}\n${h.body}`)
+      .join("\n\n");
+    await upsertPackSectionFromNotebook({
+      matchId: args.matchId,
+      templateKey: "hooks",
+      title: "Hooks & fillers (factual)",
+      content: hooksBody,
+    });
   }
 
   return distributed;

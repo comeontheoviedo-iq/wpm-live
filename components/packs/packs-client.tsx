@@ -681,9 +681,15 @@ export function PacksClient({ matchId }: { matchId: string }) {
               >
                 Use my draft → desk notes
               </Button>
-              <Button size="sm" disabled={busy || packBusy} onClick={generate}>
-                <Sparkles className="h-3.5 w-3.5 mr-1" />
-                {busy ? "Working…" : "Generate"}
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy || packBusy}
+                onClick={generate}
+                title="Generate this section with Gemini (confirms before replacing a Notebook paste)"
+              >
+                <Sparkles className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                <span>{busy ? "Working…" : "Generate"}</span>
               </Button>
             </div>
           </CardHeader>

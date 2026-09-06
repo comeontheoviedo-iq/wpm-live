@@ -96,9 +96,12 @@ function classifySection(heading: string): {
     /pre-?match commentary monologue|cold open|air-?ready intro|broadcast intro|i\.\s*pre-?match/i.test(
       h
     ) ||
+    /section\s*1\b|timed\s+matchday\s+intro|introductory\s+script|intro(ductory)?\s+script|matchday\s+introductory/i.test(
+      h
+    ) ||
     (/monologue|awaits|kad[ıi]k[oö]y|scene setting|institutional friction|player narrative|final warm-?up|unofficial broadcast declaration/i.test(
       h
-    ) && /commentator|timed script|pre-?match/i.test(h + " " + n)) ||
+    ) && /commentator|timed\s+script|timed\s+matchday|pre-?match|introductory/i.test(h + " " + n)) ||
     (/^i\b/.test(n) && /monologue|awaits|kad|intro/.test(h))
   ) {
     return { kind: "intro" };
@@ -112,7 +115,7 @@ function classifySection(heading: string): {
     return { kind: "lineup" };
   }
   if (
-    /commentary hooks|dead-?air|goldmines|must[- ]?mention|key facts|air[- ]?ready facts|fillers/i.test(
+    /commentary hooks|dead-?air|goldmines|must[- ]?mention|key facts|air[- ]?ready facts|fillers|section\s*\d+\s*:\s*.*hooks/i.test(
       h
     )
   ) {
@@ -347,8 +350,12 @@ export function organiseNotebookPack(args: OrganiseArgs): OrganisedPack {
     const heading = s.heading.trim();
     if (!heading) continue;
 
-    // Major section resets sticky (roman numeral / top-level ## titles)
-    if (/^(?:[IVX]+)\.\s+/i.test(heading) || /^#{0,2}\s*[IVX]+\./i.test(heading)) {
+    // Major section resets sticky (roman numeral / SECTION N / top-level ## titles)
+    const isMajor =
+      /^(?:[IVX]+)\.\s+/i.test(heading) ||
+      /^#{0,2}\s*[IVX]+\./i.test(heading) ||
+      /^section\s*\d+\s*:/i.test(heading);
+    if (isMajor) {
       const major = classifySection(heading).kind;
       if (
         major === "intro" ||
@@ -360,13 +367,13 @@ export function organiseNotebookPack(args: OrganiseArgs): OrganisedPack {
         major === "team_news"
       ) {
         sticky = major;
-      } else if (/season-to-date|state of the division/i.test(heading)) {
+      } else if (/season-to-date|state of the division|divisional context/i.test(heading)) {
         sticky = "table";
       } else if (/officials|referee/i.test(heading)) {
         sticky = "referee";
       } else if (/hooks|goldmines|fillers/i.test(heading)) {
         sticky = "hooks";
-      } else if (/monologue|awaits/i.test(heading)) {
+      } else if (/monologue|awaits|introductory\s+script|timed\s+matchday\s+intro/i.test(heading)) {
         sticky = "intro";
       } else if (/team sheets|lineups/i.test(heading)) {
         sticky = "lineup";
@@ -685,8 +692,16 @@ export function looksLikeNotebookPack(text: string): boolean {
   const t = text || "";
   if (t.length < 800) return false;
   const hasRoman = /(?:^|\n)\s*#{0,3}\s*[IVX]+\.\s+\S/m.test(t);
+  const hasSections =
+    (t.match(/(?:^|\n)\s*#{1,3}\s*SECTION\s*\d+\s*:/gim) || []).length >= 2;
   const hasPlayerHeads = (t.match(/#{2,4}\s*\d{1,3}\.\s+[A-Za-zÀ-ÿ]/g) || []).length >= 4;
-  const hasHooks = /commentary hooks|goldmines|must[- ]?mention/i.test(t);
+  const hasHooks = /commentary hooks|goldmines|must[- ]?mention|matchday commentary hooks/i.test(t);
   const hasManager = /manager profile/i.test(t);
-  return (hasRoman && hasPlayerHeads) || (hasPlayerHeads && hasHooks) || (hasManager && hasPlayerHeads);
+  const hasIntroScript = /introductory script|timed matchday intro|cold open/i.test(t);
+  return (
+    (hasRoman && hasPlayerHeads) ||
+    (hasPlayerHeads && hasHooks) ||
+    (hasManager && hasPlayerHeads) ||
+    (hasSections && (hasHooks || hasIntroScript))
+  );
 }

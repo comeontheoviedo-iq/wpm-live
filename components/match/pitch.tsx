@@ -39,6 +39,7 @@ import {
   fitMarkerPctForContainer,
   resolveCardOverlaps,
 } from "@/lib/pitch-layout";
+import { liveAdjustedSeasonStat } from "@/lib/season-tally";
 
 export type PitchPlayer = {
   id: string;
@@ -265,6 +266,7 @@ function PitchCardToken({
   placing,
   cardSettings = DEFAULT_FIELD_SETTINGS,
   markerPct = 0,
+  matchStatus,
 }: {
   player: PitchPlayer;
   side: "home" | "away";
@@ -274,6 +276,8 @@ function PitchCardToken({
   placing?: boolean;
   cardSettings?: FieldSettings;
   markerPct?: number;
+  /** Desk match status — used for live-adjusted season APP/G/A display. */
+  matchStatus?: string;
 }) {
   const isHome = side === "home";
   const isGk =
@@ -293,13 +297,30 @@ function PitchCardToken({
     player.jerseyNumber != null && Number.isFinite(player.jerseyNumber)
       ? Number(player.jerseyNumber)
       : player.shirtNumber;
-  const apps = player.appearances ?? 0;
-  const seasonG = player.goals ?? 0;
-  const seasonA = player.assists ?? 0;
-  const rating = formatRating(player.rating);
-  const age = player.age != null ? String(player.age) : "—";
   const matchG = player.matchGoals ?? 0;
   const matchA = player.matchAssists ?? 0;
+  const matchApps = player.matchApps ?? 0;
+  // Display-time live season totals. Goals/assists: Sync may already bump DB —
+  // only add match tallies when snapshot clearly lags. Apps: Sync does not bump,
+  // so force +1 while Live if they appeared today.
+  const apps = liveAdjustedSeasonStat(
+    player.appearances ?? 0,
+    matchApps > 0 ? 1 : 0,
+    matchStatus,
+    { forceExcludeToday: true }
+  );
+  const seasonG = liveAdjustedSeasonStat(
+    player.goals ?? 0,
+    matchG,
+    matchStatus
+  );
+  const seasonA = liveAdjustedSeasonStat(
+    player.assists ?? 0,
+    matchA,
+    matchStatus
+  );
+  const rating = formatRating(player.rating);
+  const age = player.age != null ? String(player.age) : "—";
   const sub =
     player.subMinute != null
       ? `${player.subMinute}'`
@@ -329,11 +350,27 @@ function PitchCardToken({
   const valueFor = (id: CardStatField): StatTuple => {
     switch (id) {
       case "APP":
-        return ["APP", apps || "—", "Season appearances"];
+        return [
+          "APP",
+          apps || "—",
+          matchApps > 0
+            ? "Season appearances (incl. today)"
+            : "Season appearances",
+        ];
       case "S_GOL":
-        return ["S GOL", seasonG, "Season goals"];
+        return [
+          "S GOL",
+          seasonG,
+          matchG > 0 ? "Season goals (incl. today)" : "Season goals",
+          matchG > 0,
+        ];
       case "S_AST":
-        return ["S AST", seasonA, "Season assists"];
+        return [
+          "S AST",
+          seasonA,
+          matchA > 0 ? "Season assists (incl. today)" : "Season assists",
+          matchA > 0,
+        ];
       case "M_APP": {
         const mApp = player.matchApps ?? 0;
         return ["M APP", mApp || "—", "Appeared this match", mApp > 0];
@@ -1739,6 +1776,7 @@ export function PitchBoard({
                     placing={isPlacingHere}
                     cardSettings={liveSettings}
                     markerPct={fittedMarkerPct}
+                    matchStatus={matchStatus}
                   />
                 ) : (
                   <span

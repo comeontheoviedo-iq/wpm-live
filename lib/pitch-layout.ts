@@ -15,12 +15,12 @@ export const CARD_GAP_PX = 8;
 
 /** Honest unscaled pitch card height — real DOM is taller than CSS estimate. */
 export function baseCardHeight(settings: FieldSettings): number {
-  // Slightly tighter than prior 152/118 so windowed desks aren't floored at -40%.
-  return settings.dataRows === 2 ? 128 : 102;
+  // Surname sits full-width under photo+#; slightly taller than side-by-side craft.
+  return settings.dataRows === 2 ? 138 : 112;
 }
 
 export function baseCardWidth(): number {
-  return 78;
+  return 94;
 }
 
 /** Approximate rendered card size (matches PitchCardToken baseW + scaled transform). */

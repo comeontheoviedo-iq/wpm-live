@@ -2,7 +2,7 @@ import { chromium } from "playwright";
 import { writeFileSync } from "fs";
 
 const deskId = "cmtorhbeo08zm11zutipi5m3a"; // Newcastle
-const shot = ".pitchline-tokens-craft-nufc.png";
+const shot = ".pitchline-tokens-names-fixed-nufc.png";
 
 const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
@@ -54,22 +54,42 @@ const pre = await page.evaluate(() => {
   const scorebug = document.querySelector(".scorebug");
   const root = document.querySelector("[data-desk-mode]");
 
-  const samples = tokens.slice(0, 6).map((t) => {
+  const samples = tokens.map((t) => {
     const el = t.querySelector(".pitch-token") || t.firstElementChild;
     const num = el?.querySelector(".pitch-token-id");
     const hl = el?.querySelector(".pitch-token-hairline");
+    const nameEl = el?.querySelector(".pitch-token-name");
+    const nameText = nameEl?.textContent?.trim() || null;
+    const truncated = nameEl
+      ? nameEl.scrollWidth > nameEl.clientWidth + 1
+      : false;
     return {
       idText: num?.textContent?.trim() || null,
       idColor: num ? getComputedStyle(num).color : null,
       hairColor: hl ? getComputedStyle(hl).backgroundColor : null,
-      name: el?.querySelector(".pitch-token-name")?.textContent?.trim() || null,
+      name: nameText,
+      nameClientW: nameEl ? nameEl.clientWidth : null,
+      nameScrollW: nameEl ? nameEl.scrollWidth : null,
+      truncated,
       age: el?.querySelector(".pitch-token-age")?.textContent?.trim() || null,
       hasPhoto: !!el?.querySelector(".pitch-token-photo"),
+      tokenW: el ? Math.round(el.getBoundingClientRect().width) : null,
       statCount: el
         ? [...el.querySelectorAll(".pitch-token-stat-value")].length
         : 0,
     };
   });
+  const mustRead = ["LIVRAMENTO", "BARNES", "RAMSEY", "TRUFFERT", "BOTMAN"];
+  const nameHits = mustRead.map((n) => {
+    const hit = samples.find((s) => (s.name || "").includes(n));
+    return {
+      want: n,
+      found: !!hit,
+      truncated: hit?.truncated ?? null,
+      name: hit?.name ?? null,
+    };
+  });
+  const truncatedCount = samples.filter((s) => s.truncated).length;
 
   return {
     mode: root?.getAttribute("data-desk-mode"),
@@ -92,7 +112,10 @@ const pre = await page.evaluate(() => {
     statsBg: stats ? getComputedStyle(stats).backgroundColor : null,
     coachSlim: !!coach,
     scorebugOk: !!scorebug,
-    samples,
+    samples: samples.slice(0, 8),
+    allNames: samples.map((s) => s.name),
+    truncatedCount,
+    nameHits,
   };
 });
 
@@ -146,6 +169,7 @@ await browser.close();
 
 const result = { pre, dossier, shot };
 writeFileSync(".pitchline-tokens-craft-probe.json", JSON.stringify(result, null, 2));
+writeFileSync(".pitchline-tokens-names-fixed-probe.json", JSON.stringify(result, null, 2));
 console.log(JSON.stringify(result, null, 2));
 
 const idPx = pre.idFont ? parseFloat(pre.idFont) : 0;
@@ -153,6 +177,11 @@ const hairMatchesId =
   pre.samples?.some(
     (s) => s.idColor && s.hairColor && s.idColor === s.hairColor
   ) ?? false;
+
+const namesOk =
+  Array.isArray(pre.nameHits) &&
+  pre.nameHits.every((h) => h.found && h.truncated === false) &&
+  (pre.truncatedCount ?? 99) <= 2; // allow rare ultra-long edge names only
 
 const ok =
   dossier.dossierOpen &&
@@ -168,7 +197,8 @@ const ok =
   pre.ageText?.includes("y/o") &&
   pre.scorebugOk &&
   pre.coachSlim &&
-  hairMatchesId;
+  hairMatchesId &&
+  namesOk;
 
 console.log(ok ? "TOKENS CRAFT OK" : "TOKENS CRAFT FAIL");
 if (!ok) {
@@ -184,6 +214,9 @@ if (!ok) {
     idPx,
     ageText: pre.ageText,
     hairMatchesId,
+    namesOk,
+    truncatedCount: pre.truncatedCount,
+    nameHits: pre.nameHits,
   });
 }
 process.exit(ok ? 0 : 1);

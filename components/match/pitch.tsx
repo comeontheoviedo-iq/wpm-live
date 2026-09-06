@@ -238,7 +238,7 @@ function PitchCardToken({
   const cols = cardSettings.fieldsPerRow;
   const namePx = 9 * scaleFactor(cardSettings.nameSizePct);
   const markerScale = scaleFactor(markerPct);
-  const baseW = 78;
+  const baseW = 94;
 
   // Build cells from Field Settings visibility (S = season, M = match).
   type StatTuple = [string, string | number, string?, boolean?];
@@ -347,66 +347,68 @@ function PitchCardToken({
           aria-hidden
         />
 
-        {/* Primary triad: photo + loud # + surname */}
+        {/* Primary triad: photo + loud #; surname full-width below (no 4-char clamp) */}
         <div className="pitch-token-identity">
-          <span className="pitch-token-photo">
-            {photo ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={photo}
-                alt=""
-                className="h-full w-full object-cover object-[center_18%]"
-                loading="lazy"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = "none";
-                  const sib = (e.target as HTMLImageElement)
-                    .nextElementSibling as HTMLElement | null;
-                  if (sib) sib.style.display = "flex";
-                }}
-              />
-            ) : null}
-            <span
-              className={cn(
-                "absolute inset-0 items-center justify-center text-white/45",
-                photo ? "hidden" : "flex"
-              )}
-            >
-              <User className="h-3.5 w-3.5" strokeWidth={1.5} />
-            </span>
-          </span>
-
-          <div className="pitch-token-copy min-w-0 flex-1">
-            <div className="flex items-start justify-between gap-0.5">
-              <span className="pitch-token-id" style={{ color: accent }}>
-                {shirt}
-              </span>
-              <div
-                className="pitch-token-meta flex flex-col items-end gap-[1px] pt-px"
-                title={flagTitle || undefined}
+          <div className="pitch-token-identity-top">
+            <span className="pitch-token-photo">
+              {photo ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={photo}
+                  alt=""
+                  className="h-full w-full object-cover object-[center_18%]"
+                  loading="lazy"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = "none";
+                    const sib = (e.target as HTMLImageElement)
+                      .nextElementSibling as HTMLElement | null;
+                    if (sib) sib.style.display = "flex";
+                  }}
+                />
+              ) : null}
+              <span
+                className={cn(
+                  "absolute inset-0 items-center justify-center text-white/45",
+                  photo ? "hidden" : "flex"
+                )}
               >
-                <div className="flex items-center gap-px opacity-75">
-                  {flagNats.length ? (
-                    flagNats.map((n) => <FlagImg key={n} nationality={n} />)
-                  ) : (
-                    <FlagImg nationality={player.nationality} />
-                  )}
+                <User className="h-3.5 w-3.5" strokeWidth={1.5} />
+              </span>
+            </span>
+
+            <div className="pitch-token-copy min-w-0 flex-1">
+              <div className="flex items-start justify-between gap-0.5">
+                <span className="pitch-token-id" style={{ color: accent }}>
+                  {shirt}
+                </span>
+                <div
+                  className="pitch-token-meta flex flex-col items-end gap-[1px] pt-px"
+                  title={flagTitle || undefined}
+                >
+                  <div className="flex items-center gap-px opacity-75">
+                    {flagNats.length ? (
+                      flagNats.map((n) => <FlagImg key={n} nationality={n} />)
+                    ) : (
+                      <FlagImg nationality={player.nationality} />
+                    )}
+                  </div>
+                  <span className="pitch-token-pos">{pos}</span>
                 </div>
-                <span className="pitch-token-pos">{pos}</span>
               </div>
             </div>
-            <span
-              className="pitch-token-name mt-0.5 w-full truncate"
-              style={{ fontSize: `${Math.max(namePx, 9)}px` }}
-            >
-              {player.isCaptain ? "© " : ""}
-              {fieldName}
-            </span>
-            {player.age != null && Number.isFinite(player.age) ? (
-              <span className="pitch-token-age mt-px">
-                {Math.round(player.age)} y/o
-              </span>
-            ) : null}
           </div>
+          <span
+            className="pitch-token-name"
+            style={{ fontSize: `${Math.max(namePx, 9)}px` }}
+          >
+            {player.isCaptain ? "© " : ""}
+            {fieldName}
+          </span>
+          {player.age != null && Number.isFinite(player.age) ? (
+            <span className="pitch-token-age">
+              {Math.round(player.age)} y/o
+            </span>
+          ) : null}
         </div>
 
         {/* Quiet dense stats — Field Settings still drives which/how many */}

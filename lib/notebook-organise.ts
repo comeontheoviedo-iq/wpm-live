@@ -6,6 +6,11 @@
 
 import { namesLooselyMatch, normalizePlayerKey, lastToken } from "./player-name";
 import { splitByHeadings, type SquadMember } from "./pack-distribute";
+import {
+  chunkPackBody,
+  packBodyToCards,
+  LEAGUE_NOTE_MAX_CHARS,
+} from "./pack-chunker";
 
 export type CoachMember = { id: string; name: string; clubId: string; side: "home" | "away" };
 
@@ -316,70 +321,15 @@ export type OrganiseArgs = {
  * Parse a Notebook-shaped research pack into entity-attached notes + speaks.
  */
 
-/** Split pack text into air-ready chunks (League notes ≤ maxChars). */
-export function chunkPackBody(text: string, maxChars = 280): string[] {
-  const raw = (text || "").trim();
-  if (!raw) return [];
-  if (raw.length <= maxChars) return [raw];
+export {
+  chunkPackBody,
+  packBodyToCards,
+  cardTitleForChunk,
+  bodyWithoutLeadingHeading,
+  isLeagueBucketFatNote,
+  LEAGUE_NOTE_MAX_CHARS,
+} from "./pack-chunker";
 
-  const paras = raw
-    .split(/\n{2,}/)
-    .map((p) => p.trim())
-    .filter(Boolean);
-  const chunks: string[] = [];
-  let buf = "";
-
-  const flush = () => {
-    if (buf.trim()) chunks.push(buf.trim());
-    buf = "";
-  };
-
-  const pushPiece = (piece: string) => {
-    const p = piece.trim();
-    if (!p) return;
-    if (p.length > maxChars) {
-      // Hard-split long sentences on word boundaries
-      let rest = p;
-      while (rest.length > maxChars) {
-        let cut = rest.lastIndexOf(" ", maxChars);
-        if (cut < maxChars * 0.5) cut = maxChars;
-        chunks.push(rest.slice(0, cut).trim());
-        rest = rest.slice(cut).trim();
-      }
-      if (rest) {
-        if (buf && buf.length + 1 + rest.length <= maxChars) {
-          buf = `${buf} ${rest}`.trim();
-        } else {
-          flush();
-          buf = rest;
-        }
-      }
-      return;
-    }
-    if (!buf) {
-      buf = p;
-      return;
-    }
-    if (buf.length + 2 + p.length <= maxChars) {
-      buf = `${buf}\n\n${p}`;
-    } else {
-      flush();
-      buf = p;
-    }
-  };
-
-  for (const para of paras.length ? paras : [raw]) {
-    if (para.length <= maxChars) {
-      pushPiece(para);
-      continue;
-    }
-    // Sentence-ish split
-    const sentences = para.split(/(?<=[.!?])\s+/);
-    for (const s of sentences) pushPiece(s);
-  }
-  flush();
-  return chunks.filter(Boolean);
-}
 
 export function organiseNotebookPack(args: OrganiseArgs): OrganisedPack {
   const {
@@ -732,17 +682,31 @@ export function organiseNotebookPack(args: OrganiseArgs): OrganisedPack {
     }
   }
 
-  // Match-level scannable notes (not one blob)
-  const matchBits: { title: string; chunks: string[] }[] = [
+  // Match-level scannable notes (not one blob).
+  // Table & form (league-bucket) always chunked ≤280; other long bits too.
+  const matchBits: { title: string; chunks: string[]; forceChunk?: boolean }[] = [
     { title: "Venue & atmosphere", chunks: venueChunks },
-    { title: "Table & form", chunks: tableChunks },
+    { title: "Table & form", chunks: tableChunks, forceChunk: true },
     { title: "H2H & rivalry", chunks: h2hChunks },
     { title: "Tactical battle lines", chunks: tacticalChunks },
     { title: "Team news", chunks: teamNewsChunks },
   ];
   for (const bit of matchBits) {
     const body = bit.chunks.join("\n\n").trim();
-    if (body.length >= 40) {
+    if (body.length < 40) continue;
+    const shouldChunk =
+      bit.forceChunk || body.length > LEAGUE_NOTE_MAX_CHARS;
+    if (shouldChunk) {
+      for (const card of packBodyToCards(bit.title, body, LEAGUE_NOTE_MAX_CHARS)) {
+        notes.push({
+          title: card.title,
+          body: card.body,
+          category: "Match",
+          entityType: "match",
+          entityId: matchId,
+        });
+      }
+    } else {
       notes.push({
         title: bit.title,
         body,
@@ -773,25 +737,25 @@ export function organiseNotebookPack(args: OrganiseArgs): OrganisedPack {
     });
   }
 
-  // League / competition Notes (league dossier tab) — chunk ≤280 for air
+  // League / competition Notes (league dossier tab) — always ≤280 cards
   const leagueBody = leagueChunks.join("\n\n").trim();
   if (leagueBody.length >= 40) {
     const leagueTitle = competition
       ? `${competition} — Season context`
       : "League — Season context";
-    const parts = chunkPackBody(leagueBody, 280);
-    parts.forEach((body, i) => {
+    for (const card of packBodyToCards(
+      leagueTitle,
+      leagueBody,
+      LEAGUE_NOTE_MAX_CHARS
+    )) {
       notes.push({
-        title:
-          parts.length > 1
-            ? `${leagueTitle} · ${i + 1}/${parts.length}`
-            : leagueTitle,
-        body,
+        title: card.title,
+        body: card.body,
         category: "Match",
         entityType: "league",
         entityId: leagueKey,
       });
-    });
+    }
   }
 
   // Optional full archive (secondary) — off by default

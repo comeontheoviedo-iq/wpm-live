@@ -1,3 +1,4 @@
+import { rechunkOverlongLeagueNotes } from "./rechunk-league-notes";
 import { prisma } from "./prisma";
 
 const matchFullInclude = {
@@ -45,11 +46,39 @@ export async function getMatchFull(id: string) {
     where: { id },
     include: matchFullInclude,
   });
-  if (byMatch) return byMatch;
+  if (byMatch) {
+    try {
+      const result = await rechunkOverlongLeagueNotes(byMatch.id);
+      if (result.split > 0 || result.created > 0) {
+        const refreshed = await prisma.match.findUnique({
+          where: { id: byMatch.id },
+          include: matchFullInclude,
+        });
+        if (refreshed) return refreshed;
+      }
+    } catch {
+      /* soft-fail */
+    }
+    return byMatch;
+  }
 
-  return prisma.match.findFirst({
+  const byDay = await prisma.match.findFirst({
     where: { matchDayId: id },
     orderBy: { kickoff: "asc" },
     include: matchFullInclude,
   });
+  if (!byDay) return byDay;
+  try {
+    const result = await rechunkOverlongLeagueNotes(byDay.id);
+    if (result.split > 0 || result.created > 0) {
+      const refreshed = await prisma.match.findUnique({
+        where: { id: byDay.id },
+        include: matchFullInclude,
+      });
+      if (refreshed) return refreshed;
+    }
+  } catch {
+    /* soft-fail */
+  }
+  return byDay;
 }

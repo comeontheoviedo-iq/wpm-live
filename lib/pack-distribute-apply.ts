@@ -213,6 +213,23 @@ async function applyOrganised(
     keepFullArchive: args.keepFullArchive === true,
   });
 
+  // Replace prior League-bucket novels so chunked cards win (no orphan blobs)
+  try {
+    await prisma.note.deleteMany({
+      where: {
+        matchId: args.matchId,
+        OR: [
+          { entityType: "league" },
+          { title: "Table & form" },
+          { title: { contains: "Season context" } },
+          { title: { startsWith: "Table & form ·" } },
+        ],
+      },
+    });
+  } catch {
+    /* soft-fail — still upsert cards below */
+  }
+
   for (const n of organised.notes) {
     await upsertEntityNote({
       matchId: args.matchId,

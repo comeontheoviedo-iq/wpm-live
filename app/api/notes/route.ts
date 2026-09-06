@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { NOTE_CATEGORIES } from "@/lib/defaults";
 import { normalizeApostrophes } from "@/lib/utils";
+import { rechunkOverlongLeagueNotes } from "@/lib/rechunk-league-notes";
 
 export async function GET(req: Request) {
   const session = await getSession();
@@ -12,6 +13,15 @@ export async function GET(req: Request) {
   const entityType = searchParams.get("entityType") || undefined;
   const entityId = searchParams.get("entityId") || undefined;
   const category = searchParams.get("category") || undefined;
+
+  // Soft-fail rechunk: League-bucket novels → ≤280 cards before return
+  if (matchId) {
+    try {
+      await rechunkOverlongLeagueNotes(matchId);
+    } catch {
+      /* soft-fail */
+    }
+  }
 
   const notes = await prisma.note.findMany({
     where: {

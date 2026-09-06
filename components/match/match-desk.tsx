@@ -566,13 +566,14 @@ export function MatchDesk({
 
   useEffect(() => {
     const onFs = () => {
-      const el = deskRootRef.current;
-      const active =
-        document.fullscreenElement === el ||
+      // Whole-page fullscreen (documentElement) — any FS element counts as active
+      const active = Boolean(
+        document.fullscreenElement ||
         // Safari
         (document as Document & { webkitFullscreenElement?: Element | null })
-          .webkitFullscreenElement === el;
-      setIsFullscreen(Boolean(active));
+          .webkitFullscreenElement
+      );
+      setIsFullscreen(active);
     };
     document.addEventListener("fullscreenchange", onFs);
     document.addEventListener("webkitfullscreenchange", onFs as EventListener);
@@ -643,8 +644,6 @@ export function MatchDesk({
   }, []);
 
   const toggleFullscreen = useCallback(async () => {
-    const el = deskRootRef.current;
-    if (!el) return;
     type FsEl = HTMLElement & {
       webkitRequestFullscreen?: () => Promise<void> | void;
     };
@@ -653,14 +652,15 @@ export function MatchDesk({
       webkitFullscreenElement?: Element | null;
     };
     const doc = document as FsDoc;
-    const active =
-      document.fullscreenElement === el || doc.webkitFullscreenElement === el;
+    const active = Boolean(
+      document.fullscreenElement || doc.webkitFullscreenElement
+    );
     try {
       if (active) {
         if (document.exitFullscreen) await document.exitFullscreen();
         else if (doc.webkitExitFullscreen) await doc.webkitExitFullscreen();
       } else {
-        const node = el as FsEl;
+        const node = document.documentElement as FsEl;
         if (node.requestFullscreen) await node.requestFullscreen();
         else if (node.webkitRequestFullscreen) await node.webkitRequestFullscreen();
       }
@@ -1977,12 +1977,33 @@ export function MatchDesk({
         deskMode === "onair" && "onair-desk",
         deskMode === "scan" && "scan-desk",
         isFullscreen
-          ? "fixed inset-0 z-[100] h-[100dvh] max-h-[100dvh] min-h-0 p-2"
+          ? "h-[calc(100dvh-8.5rem)] max-h-[100dvh] min-h-0 p-1.5"
           : "h-[calc(100dvh-11rem)] max-h-[100dvh] min-h-[380px]"
       )}
     >
       {/* Slim top bar — score / meta / stats / actions · broadcast desk chrome */}
       <header className="desk-header shrink-0 flex flex-wrap items-center gap-x-2 gap-y-0.5 px-2 py-1" data-desk-chrome="1">
+        {isFullscreen ? (
+          <nav className="flex w-full flex-wrap items-center gap-1 border-b border-white/10 pb-1 mb-0.5" aria-label="Match sections">
+            {[
+              ["", "Desk"],
+              ["packs", "Research"],
+              ["scripts", "Scripts"],
+              ["notes", "Notes"],
+              ["league", "League"],
+              ["news", "News"],
+              ["stats", "Stats"],
+            ].map(([slug, label]) => (
+              <Link
+                key={slug || "desk"}
+                href={slug ? `/match-day/${matchId}/${slug}` : `/match-day/${matchId}`}
+                className="rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-300 hover:bg-white/10 hover:text-white"
+              >
+                {label}
+              </Link>
+            ))}
+          </nav>
+        ) : null}
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0">
             <span className="font-semibold text-[12px] truncate tracking-tight text-slate-200">

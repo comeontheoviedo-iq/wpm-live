@@ -121,15 +121,15 @@ function StatCell({
   /** Highlight live match tallies (e.g. M GOL after a goal). */
   emphasize?: boolean;
 }) {
+  // Condensed broadcast labels — quieter than number+name hierarchy
+  const short = label.replace(/\s+/g, "");
   return (
     <div className="min-w-0 px-px text-center leading-none" title={title || label}>
-      <div className="truncate text-[5.5px] font-bold uppercase tracking-[0.08em] text-[var(--card-muted)]">
-        {label}
-      </div>
+      <div className="pitch-token-stat-label truncate">{short}</div>
       <div
         className={cn(
-          "mt-px truncate text-[9px] font-extrabold tabular-nums tracking-tight",
-          emphasize ? "text-emerald-400" : "text-[var(--card-fg)]"
+          "pitch-token-stat-value mt-px truncate",
+          emphasize && "is-hot"
         )}
       >
         {value}
@@ -234,9 +234,9 @@ function PitchCardToken({
   // Both sides: dark broadcast card surfaces; home/away = thin accent only
   const band = "bg-[var(--card-bg)] text-[var(--card-fg)]";
   const borderStyle = {
-    borderColor: "rgba(255,255,255,0.12)",
+    borderColor: "rgba(255,255,255,0.1)",
     borderTopColor: teamColor || (isHome ? "#ffffff" : "#94a3b8"),
-    borderTopWidth: 2.5 as number,
+    borderTopWidth: 2 as number,
   };
 
   const cols = cardSettings.fieldsPerRow;
@@ -324,14 +324,14 @@ function PitchCardToken({
     >
       <span
         className={cn(
-          "group relative flex flex-col overflow-hidden rounded-[5px] border shadow-[0_1px_4px_rgba(0,0,0,0.35),0_0_0_1px_rgba(0,0,0,0.08)]",
+          "pitch-token group relative flex flex-col",
           band,
           selected &&
             "ring-[3px] ring-blue-500 shadow-[0_0_14px_rgba(37,99,235,0.85)]",
           placing && "ring-2 ring-amber-400",
           player.subbedOff && "opacity-50 grayscale-[25%]"
         )}
-        style={{ width: baseW, borderWidth: 1.5, ...borderStyle }}
+        style={{ width: baseW, ...borderStyle }}
         title={[
           player.displayName || player.name,
           player.isCaptain ? "Captain" : null,
@@ -344,28 +344,26 @@ function PitchCardToken({
           .filter(Boolean)
           .join(" · ")}
       >
-        {/* Header: # + flag/pos */}
-        <div className="flex items-center justify-between gap-0.5 bg-[var(--card-bg-header)] px-1 pb-px pt-0.5">
-          <span className="text-[15px] sm:text-[16px] font-black leading-none tabular-nums tracking-tight text-[var(--card-fg)]">
-            {shirt}
-          </span>
-          <div className="flex flex-col items-end gap-[1px]">
-            <div className="flex items-center gap-px" title={flagTitle || undefined}>
+        {/* Primary: # + short name (+ quiet flag/pos) */}
+        <div className="flex items-start justify-between gap-0.5 bg-[#0a0d12] px-1 pb-0 pt-0.5">
+          <span className="pitch-token-id">{shirt}</span>
+          <div className="flex flex-col items-end gap-[1px] pt-px">
+            <div className="flex items-center gap-px opacity-80" title={flagTitle || undefined}>
               {flagNats.length ? (
                 flagNats.map((n) => <FlagImg key={n} nationality={n} />)
               ) : (
                 <FlagImg nationality={player.nationality} />
               )}
             </div>
-            <span className="text-[6.5px] font-bold uppercase leading-none tracking-[0.06em] text-[var(--card-muted)]">
+            <span className="text-[5.5px] font-bold uppercase leading-none tracking-[0.08em] text-[#64748b]">
               {pos}
             </span>
           </div>
         </div>
 
-        {/* Photo + name */}
-        <div className="flex flex-col items-center bg-[var(--card-bg)] px-1 pb-0.5 pt-0.5">
-          <span className="relative flex h-8 w-8 sm:h-[34px] sm:w-[34px] items-center justify-center overflow-hidden rounded-[5px] bg-black/50 ring-1 ring-white/15">
+        {/* Photo + name + age — name is co-primary with number */}
+        <div className="flex flex-col items-center bg-[#0c0f14] px-1 pb-0.5 pt-0.5">
+          <span className="relative flex h-7 w-7 sm:h-[30px] sm:w-[30px] items-center justify-center overflow-hidden rounded-[2px] bg-black/60 ring-1 ring-white/10">
             {photo ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -383,31 +381,31 @@ function PitchCardToken({
             ) : null}
             <span
               className={cn(
-                "absolute inset-0 items-center justify-center text-white/50",
+                "absolute inset-0 items-center justify-center text-white/45",
                 photo ? "hidden" : "flex"
               )}
             >
-              <User className="h-4 w-4" strokeWidth={1.5} />
+              <User className="h-3.5 w-3.5" strokeWidth={1.5} />
             </span>
           </span>
           <span
-            className="mt-0.5 w-full truncate text-center font-extrabold uppercase leading-[1.05] tracking-[0.02em] text-[var(--card-fg)]"
-            style={{ fontSize: `${namePx}px` }}
+            className="pitch-token-name mt-0.5 w-full truncate text-center"
+            style={{ fontSize: `${Math.max(namePx, 9)}px` }}
           >
             {player.isCaptain ? "© " : ""}
             {fieldName}
           </span>
           {player.age != null && Number.isFinite(player.age) ? (
-            <span className="mt-px text-[6.5px] font-semibold leading-none tabular-nums tracking-wide text-[var(--card-muted)]">
+            <span className="pitch-token-age mt-px">
               {Math.round(player.age)} y/o
             </span>
           ) : null}
         </div>
 
-        {/* Dark stats strip */}
-        <div className="border-t border-white/10 bg-[var(--card-bg-stats)] px-0.5 py-[3px]">
+        {/* Quiet dense stats strip */}
+        <div className="pitch-token-stats px-0.5 py-[2px]">
           <div
-            className="grid gap-y-0.5"
+            className="grid gap-y-px"
             style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
           >
             {row1.map(([label, value, tip, emph]) => (
@@ -422,7 +420,7 @@ function PitchCardToken({
           </div>
           {row2 ? (
             <div
-              className="mt-[3px] grid gap-y-0.5 border-t border-white/10 pt-[3px]"
+              className="mt-[2px] grid gap-y-px border-t border-white/[0.06] pt-[2px]"
               style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
             >
               {row2.map(([label, value, tip, emph]) => (
@@ -439,7 +437,7 @@ function PitchCardToken({
         </div>
 
         {(player.matchYellow || player.matchRed) && (
-          <span className="absolute left-0.5 top-[20px] flex flex-col gap-px">
+          <span className="absolute left-0.5 top-[18px] flex flex-col gap-px">
             {player.matchYellow ? (
               <span className="h-2 w-1.5 rounded-[1px] bg-yellow-400 shadow" />
             ) : null}
@@ -1259,15 +1257,15 @@ export function PitchBoard({
           })}
         </div>
 
-        {/* Center scorebug — solid opaque broadcast bug (never glass into grass) */}
-        <div className="pointer-events-none absolute left-1/2 top-2 z-20 flex w-[min(52%,24rem)] -translate-x-1/2 flex-col items-center gap-1">
+        {/* Center scorebug — TV eyebar: solid opaque insert, score+clock dominate */}
+        <div className="pointer-events-none absolute left-1/2 top-1.5 z-20 flex w-[min(58%,26rem)] -translate-x-1/2 flex-col items-center gap-1">
           {showScore && (
-            <div className="scorebug pointer-events-auto gap-1.5 sm:gap-2">
+            <div className="scorebug pointer-events-auto">
               {leagueLogoUrl ? (
                 <button
                   type="button"
                   onClick={onLeagueLogoClick}
-                  className="shrink-0 overflow-hidden rounded-[2px] ring-1 ring-white/20 hover:ring-teal-400"
+                  className="shrink-0 self-stretch flex items-center px-1.5 bg-[#050608] border-r border-white/10 hover:bg-white/5"
                   title="League notes"
                   aria-label="Open league notes"
                 >
@@ -1275,7 +1273,7 @@ export function PitchBoard({
                   <img
                     src={leagueLogoUrl}
                     alt=""
-                    className="h-5 w-5 object-contain bg-white/95"
+                    className="h-3.5 w-3.5 object-contain bg-white/95 rounded-[1px]"
                   />
                 </button>
               ) : null}
@@ -1292,50 +1290,56 @@ export function PitchBoard({
                   : "Home club notes";
                 return (
                   <>
-                    {leftLogo ? (
-                      <button
-                        type="button"
-                        onClick={onLeft}
-                        className="shrink-0 overflow-hidden rounded-[2px] ring-1 ring-white/20 hover:ring-teal-400"
-                        title={leftTitle}
-                        aria-label={leftTitle}
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={leftLogo}
-                          alt=""
-                          className="h-5 w-5 object-contain bg-white/95"
-                        />
-                      </button>
-                    ) : (
+                    <div className="scorebug-team scorebug-team-home">
+                      {leftLogo ? (
+                        <button
+                          type="button"
+                          onClick={onLeft}
+                          className="shrink-0 overflow-hidden rounded-[1px] ring-1 ring-white/15 hover:ring-teal-400"
+                          title={leftTitle}
+                          aria-label={leftTitle}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={leftLogo}
+                            alt=""
+                            className="h-3.5 w-3.5 object-contain bg-white/95"
+                          />
+                        </button>
+                      ) : null}
                       <span className="scorebug-code">{leftCode}</span>
-                    )}
+                    </div>
                     <span className="scorebug-score">
-                      {leftScore}-{rightScore}
+                      {leftScore}
+                      <span className="mx-0.5 text-[0.85em] font-bold text-white/45">
+                        –
+                      </span>
+                      {rightScore}
                     </span>
-                    {rightLogo ? (
-                      <button
-                        type="button"
-                        onClick={onRight}
-                        className="shrink-0 overflow-hidden rounded-[2px] ring-1 ring-white/20 hover:ring-teal-400"
-                        title={rightTitle}
-                        aria-label={rightTitle}
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={rightLogo}
-                          alt=""
-                          className="h-5 w-5 object-contain bg-white/95"
-                        />
-                      </button>
-                    ) : (
+                    <div className="scorebug-team scorebug-team-away">
                       <span className="scorebug-code">{rightCode}</span>
-                    )}
+                      {rightLogo ? (
+                        <button
+                          type="button"
+                          onClick={onRight}
+                          className="shrink-0 overflow-hidden rounded-[1px] ring-1 ring-white/15 hover:ring-teal-400"
+                          title={rightTitle}
+                          aria-label={rightTitle}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={rightLogo}
+                            alt=""
+                            className="h-3.5 w-3.5 object-contain bg-white/95"
+                          />
+                        </button>
+                      ) : null}
+                    </div>
                   </>
                 );
               })()}
               {statusShort ? (
-                <span className="scorebug-clock ml-0.5">{statusShort}</span>
+                <span className="scorebug-clock">{statusShort}</span>
               ) : null}
             </div>
           )}

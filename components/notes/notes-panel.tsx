@@ -363,13 +363,23 @@ export function NotesPanel({
             <div
               className={cn(
                 "font-semibold text-[var(--foreground)]",
-                expanded && "text-[var(--brand-dark)] dark:text-[var(--brand)]",
+                expanded && "text-[var(--brand)]",
+                n.pinned && !expanded && "text-amber-100",
                 expanded ? "whitespace-normal" : "truncate",
-                liveMode ? "text-[11px] leading-tight" : "text-xs"
+                liveMode ? "text-[10.5px] leading-tight" : "text-xs"
               )}
             >
               {normalizeApostrophes(n.title)}
-              <span className="ml-1.5 text-[9px] font-normal text-slate-400">
+              <span
+                className={cn(
+                  "ml-1.5 text-[8.5px] font-semibold uppercase tracking-[0.04em]",
+                  n.pinned
+                    ? "text-amber-400/90"
+                    : expanded
+                      ? "text-teal-400/80"
+                      : "text-slate-500"
+                )}
+              >
                 {n.category}
                 {n.pinned ? " · pin" : ""}
                 {relevantSet.has(n.id) ? " · now" : ""}

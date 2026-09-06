@@ -1977,30 +1977,30 @@ export function MatchDesk({
       )}
     >
       {/* Slim top bar — score / meta / stats / actions · broadcast desk chrome */}
-      <header className="desk-header shrink-0 flex flex-wrap items-center gap-x-3 gap-y-1 px-2.5 py-1.5">
+      <header className="desk-header shrink-0 flex flex-wrap items-center gap-x-2 gap-y-0.5 px-2 py-1" data-desk-chrome="1">
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <span className="font-bold text-sm truncate tracking-tight">
+          <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0">
+            <span className="font-semibold text-[12px] truncate tracking-tight text-slate-200">
               {homeName}{" "}
-              <span className="text-slate-400 font-normal">vs</span>{" "}
+              <span className="text-slate-500 font-normal">vs</span>{" "}
               {awayName}
             </span>
             {(status === "Live" || status === "Full Time" || homeScore > 0 || awayScore > 0) && (
               <span
                 className={cn(
-                  "font-black tabular-nums text-sm tracking-tight",
-                  status === "Live" ? "text-[var(--live)]" : "text-slate-800 dark:text-slate-100"
+                  "font-black tabular-nums text-[12px] tracking-tight",
+                  status === "Live" ? "text-[var(--live)]" : "text-slate-100"
                 )}
               >
                 {status === "Live" && clockLabel ? `${clockLabel} ` : ""}
                 {homeScore}–{awayScore}
               </span>
             )}
-            <span className="text-desk-label text-slate-500 truncate normal-case tracking-[0.04em]">
+            <span className="text-[9px] font-medium text-slate-500 truncate tracking-[0.02em]">
               {competition} · {kickoffLabel} · {status}
             </span>
           </div>
-          <div className="text-[10px] text-slate-500 truncate flex flex-wrap items-center gap-x-2 gap-y-0.5">
+          <div className="text-[9px] text-slate-500/90 truncate flex flex-wrap items-center gap-x-1.5 gap-y-0">
             {(venueName || venueCity) && (
               <span className="inline-flex items-center gap-0.5">
                 <MapPin className="h-3 w-3 shrink-0" />
@@ -2411,39 +2411,35 @@ export function MatchDesk({
               role="dialog"
               aria-label={popup.title}
               className={cn(
-                "live-flash px-3.5 py-2.5 text-left",
+                "live-flash px-3 py-2 text-left",
                 flashTier,
-                popup.pinned && "ring-2 ring-amber-400/80"
+                popup.pinned && "ring-1 ring-amber-400/70"
               )}
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <div className="text-desk-label text-slate-500">
+                  <div className="live-flash-meta">
                     {popup.kind === "goal"
                       ? "Goal"
                       : popup.kind === "sub"
-                        ? "Substitution"
+                        ? "Sub"
                         : "Live"}
                     {popup.pinned ? " · pinned" : ""}
+                    {popup.scoreline ? ` · ${popup.scoreline}` : ""}
                   </div>
-                  <div className="mt-0.5 text-[15px] font-black tracking-tight text-slate-900 dark:text-white">
+                  <div className="live-flash-headline mt-0.5">
                     {popup.title}
                     {popup.subtitle ? (
-                      <span className="ml-2 text-sm font-bold text-slate-700 dark:text-slate-200">
+                      <span className="ml-1.5 text-[0.8em] font-bold text-slate-300">
                         {popup.subtitle}
                       </span>
                     ) : null}
                   </div>
-                  {popup.scoreline ? (
-                    <div className="mt-0.5 text-sm font-bold tabular-nums text-slate-800 dark:text-slate-100">
-                      {popup.scoreline}
-                    </div>
-                  ) : null}
                 </div>
-                <div className="flex shrink-0 gap-1">
+                <div className="flex shrink-0 gap-0.5">
                   <button
                     type="button"
-                    className="desk-btn px-1.5 py-0.5 text-[10px] text-slate-600 hover:text-amber-600"
+                    className="desk-btn px-1 py-0.5 text-[10px] text-slate-400 hover:text-amber-400"
                     title={popup.pinned ? "Unpin" : "Pin (keep open)"}
                     onClick={() =>
                       setLivePopups((prev) =>
@@ -2462,7 +2458,7 @@ export function MatchDesk({
                   </button>
                   <button
                     type="button"
-                    className="desk-btn px-1.5 py-0.5 text-[10px] text-slate-600 hover:text-rose-600"
+                    className="desk-btn px-1 py-0.5 text-[10px] text-slate-400 hover:text-rose-400"
                     title="Dismiss"
                     onClick={() =>
                       dismissLivePopup(popup.id, { force: true })
@@ -2472,7 +2468,7 @@ export function MatchDesk({
                   </button>
                 </div>
               </div>
-              <ul className="mt-2 space-y-1 text-xs text-slate-800 dark:text-slate-100">
+              <ul className="mt-1.5 space-y-0.5 live-flash-body">
                 {popup.lines.map((line, i) => (
                   <li key={i} className="leading-snug">
                     {line}
@@ -2505,7 +2501,7 @@ export function MatchDesk({
                   momentumSamples={popup.viz.momentumSamples}
                 />
               ) : null}
-              <div className="mt-2 text-[9px] text-slate-400">
+              <div className="mt-1.5 text-[8px] uppercase tracking-[0.08em] text-slate-600">
                 Auto-hides · pin to keep
               </div>
             </div>

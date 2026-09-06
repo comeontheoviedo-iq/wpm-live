@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { NOTE_CATEGORIES } from "@/lib/defaults";
 import { Pin, Plus, Trash2, Search } from "lucide-react";
 import { cn, normalizeApostrophes } from "@/lib/utils";
@@ -355,14 +354,20 @@ export function NotesPanel({
   }
 
   function noteSeverityClass(n: NoteRow): string {
-    if (n.pinned) return "queue-row-pin";
-    if (relevantSet.has(n.id)) return "queue-row-now";
+    // Event severity wins over pin/relevant so MATCH goals stay green (--edge-goal)
     const t = `${normalizeApostrophes(n.title)} ${normalizeApostrophes(n.body)}`.toLowerCase();
-    if (/\b(own\s*goal|goal|scored)\b/.test(t)) return "queue-row-goal";
+    const isMatch = n.category === "Match" || isLiveEventNote(n);
+    if (
+      /\b(own\s*goal|goal|scored)\b/.test(t) ||
+      (isMatch && /\b(og|own.?goal)\b/.test(t))
+    )
+      return "queue-row-goal";
     if (/\bred\b/.test(t)) return "queue-row-red";
     if (/\byellow\b|\bcard\b/.test(t)) return "queue-row-card";
     if (/\binjur|stretcher/.test(t)) return "queue-row-injury";
     if (/\bsub(stitution)?\b/.test(t)) return "queue-row-sub";
+    if (relevantSet.has(n.id)) return "queue-row-now";
+    if (n.pinned) return "queue-row-pin";
     if (isLiveEventNote(n)) return "queue-row-live";
     if (n.category === "Hook" || n.category === "Funfact") return "queue-row-fact";
     return "";
@@ -578,29 +583,37 @@ export function NotesPanel({
             ))}
           </div>
 
-          {/* Sticky compact composer — always reachable during LIVE */}
+          {/* Sticky compact composer — quiet call-queue craft, fully functional */}
           {(fillHeight || liveMode || !compact) && (
-            <div className="space-y-1 rounded-[2px] border border-white/10 bg-[#0a0d12] p-1.5">
+            <div className="notes-composer space-y-0.5 pt-0.5">
+              <label className="notes-composer-label" htmlFor="notes-composer-title">
+                Title
+              </label>
               <input
-                className="w-full rounded-[2px] border border-white/10 bg-[#10141a] px-1.5 py-1 text-[11px] text-slate-200 placeholder:text-slate-600"
-                placeholder="Title"
+                id="notes-composer-title"
+                className="notes-composer-input"
+                placeholder="Sayable line…"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 aria-label="New note title"
               />
+              <label className="notes-composer-label" htmlFor="notes-composer-body">
+                Body
+              </label>
               <textarea
+                id="notes-composer-body"
                 className={cn(
-                  "w-full rounded-[2px] border border-white/10 bg-[#10141a] px-1.5 py-1 text-[11px] text-slate-200 placeholder:text-slate-600",
-                  liveMode ? "min-h-[40px]" : "min-h-[52px]"
+                  "notes-composer-input notes-composer-body",
+                  liveMode ? "min-h-[36px]" : "min-h-[48px]"
                 )}
-                placeholder="Note body"
+                placeholder="Detail…"
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
                 aria-label="New note body"
               />
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1 pt-0.5">
                 <select
-                  className="min-w-0 flex-1 rounded-[2px] border border-white/10 bg-[#10141a] px-1.5 py-1 text-[11px] text-slate-200"
+                  className="notes-composer-input notes-composer-select min-w-0 flex-1"
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
                   aria-label="Note category"
@@ -612,15 +625,16 @@ export function NotesPanel({
                     </option>
                   ))}
                 </select>
-                <Button
-                  size="sm"
+                <button
+                  type="button"
                   onClick={createNote}
                   disabled={pending || !title.trim() || !body.trim()}
-                  className="shrink-0 h-7 px-2 text-[11px]"
+                  className="notes-composer-add shrink-0"
+                  aria-label="Add note"
                 >
-                  <Plus className="h-3 w-3 mr-0.5" />
+                  <Plus className="h-3 w-3" />
                   Add
-                </Button>
+                </button>
               </div>
             </div>
           )}

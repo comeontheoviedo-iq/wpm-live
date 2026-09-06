@@ -2,8 +2,8 @@ import { chromium } from "playwright";
 import { writeFileSync } from "fs";
 
 const deskId = "cmtorhbeo08zm11zutipi5m3a"; // Newcastle
-const shot = ".pitchline-notes-craft-nufc.png";
-const probe = ".pitchline-notes-craft-probe.json";
+const shot = ".pitchline-notes-nits-nufc.png";
+const probe = ".pitchline-notes-nits-probe.json";
 
 const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext({
@@ -81,7 +81,7 @@ if (railBox) {
 const craft = await page.evaluate(() => {
   const railEl = document.querySelector('[data-desk-rail="notes"]');
   const rows = [...(railEl?.querySelectorAll(".queue-row") || [])];
-  const sample = rows.slice(0, 8).map((r) => {
+  const sample = rows.slice(0, 12).map((r) => {
     const cs = getComputedStyle(r);
     return {
       height: Math.round(r.getBoundingClientRect().height),
@@ -96,11 +96,45 @@ const craft = await page.evaluate(() => {
       classes: r.className,
     };
   });
+  const goalRows = sample.filter((s) =>
+    /\b(own\s*goal|goal|scored)\b/i.test(s.title || "")
+  );
+  const goalGreen = goalRows.every((s) => {
+    const m = (s.borderLeftColor || "").match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+    if (!m) return false;
+    const [r, g, b] = m.slice(1).map(Number);
+    // --edge-goal dark #34d399 ≈ rgb(52,211,153); light #059669 ≈ rgb(5,150,105)
+    return g > r + 40 && g > b;
+  });
+  const composer = railEl?.querySelector(".notes-composer");
+  const composerInput = composer?.querySelector(".notes-composer-input");
+  const composerAdd = composer?.querySelector(".notes-composer-add");
+  const composerCs = composer ? getComputedStyle(composer) : null;
+  const inputCs = composerInput ? getComputedStyle(composerInput) : null;
+  const addCs = composerAdd ? getComputedStyle(composerAdd) : null;
   const shell = railEl?.querySelector(".notes-rail-shell") || railEl?.firstElementChild;
   const shellCs = shell ? getComputedStyle(shell) : null;
   return {
     rowCount: rows.length,
     sample,
+    goalRows: goalRows.map((g) => ({
+      title: g.title,
+      borderLeftColor: g.borderLeftColor,
+      classes: g.classes,
+    })),
+    goalGreen,
+    composer: {
+      found: !!composer,
+      border: composerCs?.border || null,
+      background: composerCs?.backgroundColor || null,
+      inputBg: inputCs?.backgroundColor || null,
+      inputBorder: inputCs?.borderTopWidth || null,
+      addBg: addCs?.backgroundColor || null,
+      quiet:
+        !!composer &&
+        (!composerCs?.border || composerCs.border.includes("0px") || composerCs.border.includes("none")) &&
+        !!composerAdd,
+    },
     shellBg: shellCs?.backgroundColor || null,
     hasMinute: sample.some((s) => s.minute && /\d+'/.test(s.minute)),
     hasChip: sample.some((s) => !!s.chip),
@@ -160,7 +194,16 @@ const dossier = await page.evaluate(() => {
   };
 });
 
-const out = { shot, craft, dossier, ok: craft.edge4px && dossier.fixedRight };
+const out = {
+  shot,
+  craft,
+  dossier,
+  ok:
+    craft.edge4px &&
+    dossier.fixedRight &&
+    craft.goalGreen &&
+    craft.composer?.quiet,
+};
 writeFileSync(probe, JSON.stringify(out, null, 2));
 console.log(JSON.stringify(out, null, 2));
 

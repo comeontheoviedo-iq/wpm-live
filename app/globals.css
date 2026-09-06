@@ -816,6 +816,81 @@
     border-color: rgba(255, 255, 255, 0.06);
   }
 
+  /* Notes create form — quieter than SaaS card; match call-queue charcoal */
+  .notes-composer {
+    border: none;
+    background: transparent;
+    padding: 0;
+  }
+  .notes-composer-label {
+    display: block;
+    font-size: 0.5625rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #475569;
+    line-height: 1.2;
+  }
+  .notes-composer-input {
+    width: 100%;
+    border-radius: 2px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: #0a0d12;
+    color: #cbd5e1;
+    font-size: 0.6875rem;
+    line-height: 1.35;
+    padding: 0.25rem 0.4rem;
+    box-shadow: none;
+  }
+  .notes-composer-input::placeholder {
+    color: #334155;
+  }
+  .notes-composer-input:focus {
+    outline: none;
+    border-color: rgba(148, 163, 184, 0.28);
+    background: #0c1016;
+  }
+  .notes-composer-body {
+    resize: vertical;
+  }
+  .notes-composer-select {
+    appearance: none;
+    color: #94a3b8;
+    padding-right: 1.1rem;
+    background-image: linear-gradient(45deg, transparent 50%, #64748b 50%),
+      linear-gradient(135deg, #64748b 50%, transparent 50%);
+    background-position:
+      calc(100% - 10px) calc(50% - 1px),
+      calc(100% - 6px) calc(50% - 1px);
+    background-size: 4px 4px, 4px 4px;
+    background-repeat: no-repeat;
+  }
+  .notes-composer-add {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    height: 1.5rem;
+    padding: 0 0.45rem;
+    border-radius: 2px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: #10141a;
+    color: #94a3b8;
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    box-shadow: none;
+  }
+  .notes-composer-add:hover:not(:disabled) {
+    color: #e2e8f0;
+    border-color: rgba(255, 255, 255, 0.14);
+    background: #12171f;
+  }
+  .notes-composer-add:disabled {
+    opacity: 0.4;
+    pointer-events: none;
+  }
+
   .crest-watermark {
     pointer-events: none;
     position: absolute;

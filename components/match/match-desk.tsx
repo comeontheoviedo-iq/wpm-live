@@ -28,6 +28,17 @@ import {
   type NotesFilterScope,
 } from "@/components/notes/notes-panel";
 import { defaultNotesBucket } from "@/lib/notes-buckets";
+import {
+  RELEVANT_CAP,
+  RELEVANT_TTL_MS,
+  armTriggersFromNotes,
+  clearRelevant,
+  expireRelevant,
+  fireTriggers,
+  mergeRelevant,
+  type ArmedTrigger,
+  type RelevantEntry,
+} from "@/lib/relevance-engine";
 import { PlayerDossier } from "@/components/match/player-dossier";
 import { ClubDossier } from "@/components/match/club-dossier";
 import { FieldSettingsModal } from "@/components/match/field-settings-modal";
@@ -458,6 +469,8 @@ export function MatchDesk({
   const [relevantLoading, setRelevantLoading] = useState(false);
   const relevantFetchedAtRef = useRef(0);
   const relevantInFlightRef = useRef(false);
+  const armedTriggersRef = useRef<ArmedTrigger[]>([]);
+  const relevantEntriesRef = useRef<RelevantEntry[]>([]);
   const [dossierId, setDossierId] = useState<string | null>(null);
   const [clubDossierId, setClubDossierId] = useState<string | null>(null);
   const [onAirOpen, setOnAirOpen] = useState(false);
@@ -506,6 +519,28 @@ export function MatchDesk({
   notesRef.current = notes;
   const relevantNoteIdsRef = useRef(relevantNoteIds);
   relevantNoteIdsRef.current = relevantNoteIds;
+
+  const applyRelevantEntries = useCallback((entries: RelevantEntry[]) => {
+    const next = expireRelevant(entries);
+    relevantEntriesRef.current = next;
+    setRelevantNoteIds(next.map((e) => e.noteId));
+  }, []);
+
+  // Arm relevance triggers whenever desk notes change (post-organise / refresh)
+  useEffect(() => {
+    armedTriggersRef.current = armTriggersFromNotes(notes);
+  }, [notes]);
+
+  // TTL: drop expired relevant notes
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      const cur = relevantEntriesRef.current;
+      if (!cur.length) return;
+      const next = expireRelevant(cur);
+      if (next.length !== cur.length) applyRelevantEntries(next);
+    }, 15_000);
+    return () => window.clearInterval(id);
+  }, [applyRelevantEntries]);
   const statisticsRef = useRef(statistics);
   statisticsRef.current = statistics;
   // Sample home possession % + momentum proxy (cap length — no spam)
@@ -969,7 +1004,7 @@ export function MatchDesk({
     [pushIntelHistory]
   );
 
-  /** Force-dismiss every live intel flash (Esc / Clear). */
+  /** Force-dismiss every live intel flash (Esc / Clear). Also clears RELEVANT. */
   const clearAllLivePopups = useCallback(() => {
     setLivePopups((prev) => {
       if (prev.length === 0) return prev;
@@ -978,6 +1013,8 @@ export function MatchDesk({
       }
       return [];
     });
+    relevantEntriesRef.current = clearRelevant();
+    setRelevantNoteIds([]);
     // Also clear sticky live banners (one-away / VAR) via DeskLiveExtras listener
     try {
       window.dispatchEvent(new CustomEvent("pitchline:clear-live-banners"));
@@ -1154,17 +1191,27 @@ export function MatchDesk({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             events: news || [],
-            limit: 10,
+            limit: RELEVANT_CAP,
             gameState,
           }),
         });
         const json = await res.json();
         if (!res.ok) return;
         const ids = (json.noteIds || []) as string[];
-        setRelevantNoteIds(ids);
+        const merged = mergeRelevant(
+          relevantEntriesRef.current,
+          ids.slice(0, RELEVANT_CAP).map((noteId) => ({
+            noteId,
+            reason: "api",
+          })),
+          Date.now(),
+          { cap: RELEVANT_CAP, ttlMs: RELEVANT_TTL_MS }
+        );
+        relevantEntriesRef.current = merged;
+        setRelevantNoteIds(merged.map((e) => e.noteId));
         relevantFetchedAtRef.current = Date.now();
         const f = notesFilterRef.current;
-        if (opts?.autoSwitch && ids.length && (f === "all" || f === "relevant" || f === "prematch" || f === "tonight")) {
+        if (opts?.autoSwitch && merged.length && (f === "all" || f === "relevant" || f === "prematch" || f === "tonight")) {
           setNotesFilter("relevant");
         }
       } catch {
@@ -1269,6 +1316,36 @@ export function MatchDesk({
               /goal|yellow|red|sub|penalty/i.test(e.type || "")
             );
             if (actionable.length) {
+              // Local relevance engine: fire armed triggers immediately
+              const localHits: { noteId: string; reason: string }[] = [];
+              for (const ev of actionable) {
+                const fired = fireTriggers(armedTriggersRef.current, ev, {
+                  limit: RELEVANT_CAP,
+                });
+                for (const h of fired) {
+                  localHits.push({ noteId: h.noteId, reason: h.reason });
+                }
+              }
+              if (localHits.length) {
+                const merged = mergeRelevant(
+                  relevantEntriesRef.current,
+                  localHits,
+                  Date.now(),
+                  { cap: RELEVANT_CAP, ttlMs: RELEVANT_TTL_MS }
+                );
+                relevantEntriesRef.current = merged;
+                setRelevantNoteIds(merged.map((e) => e.noteId));
+                const f = notesFilterRef.current;
+                if (
+                  /goal|sub/i.test(actionable.map((a) => a.type).join(" ")) &&
+                  (f === "all" ||
+                    f === "relevant" ||
+                    f === "prematch" ||
+                    f === "tonight")
+                ) {
+                  setNotesFilter("relevant");
+                }
+              }
               void loadSuggestions(actionable);
               void loadRelevantNotes(actionable, {
                 force: true,

@@ -31,6 +31,7 @@ type Distributed = {
   hookNotes?: number;
   intro?: number;
   lineup?: number;
+  relevanceArmed?: number;
 };
 
 function sumDistributed(parts: Distributed[]): Distributed {
@@ -44,6 +45,7 @@ function sumDistributed(parts: Distributed[]): Distributed {
       hookNotes: (a.hookNotes || 0) + (b?.hookNotes || 0),
       intro: (a.intro || 0) + (b?.intro || 0),
       lineup: (a.lineup || 0) + (b?.lineup || 0),
+      relevanceArmed: (a.relevanceArmed || 0) + (b?.relevanceArmed || 0),
     }),
     {
       scripts: 0,
@@ -54,6 +56,7 @@ function sumDistributed(parts: Distributed[]): Distributed {
       hookNotes: 0,
       intro: 0,
       lineup: 0,
+      relevanceArmed: 0,
     }
   );
 }

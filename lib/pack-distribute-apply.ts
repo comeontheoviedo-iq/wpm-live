@@ -14,6 +14,10 @@ import {
   splitHookBullets,
   type CoachMember,
 } from "./notebook-organise";
+import {
+  armTriggersFromNotes,
+  summariseArmedTriggers,
+} from "./relevance-engine";
 
 async function upsertEntityNote(args: {
   matchId: string;
@@ -281,7 +285,24 @@ async function applyOrganised(
     });
   }
 
-  return distributed;
+  
+  // Arm relevance triggers from organised notes (IDs resolved post-upsert)
+  const deskNotes = await prisma.note.findMany({
+    where: { matchId: args.matchId },
+    select: {
+      id: true,
+      title: true,
+      body: true,
+      category: true,
+      entityType: true,
+      entityId: true,
+      pinned: true,
+    },
+  });
+  const armed = armTriggersFromNotes(deskNotes);
+  distributed.relevanceArmed = summariseArmedTriggers(armed).armedCount;
+
+return distributed;
 }
 
 /** Distribute bite-sized hooks from a hooks pack (not one wall of text). */
@@ -334,6 +355,22 @@ async function distributeHooksPack(
     });
     distributed.playerNotes += 1;
   }
+
+  const deskNotes = await prisma.note.findMany({
+    where: { matchId: args.matchId },
+    select: {
+      id: true,
+      title: true,
+      body: true,
+      category: true,
+      entityType: true,
+      entityId: true,
+      pinned: true,
+    },
+  });
+  distributed.relevanceArmed = summariseArmedTriggers(
+    armTriggersFromNotes(deskNotes)
+  ).armedCount;
 
   return distributed;
 }

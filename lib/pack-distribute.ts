@@ -14,6 +14,8 @@ export type DistributedCounts = {
   hookNotes: number;
   intro: number;
   lineup: number;
+  /** Relevance triggers armed from organised notes */
+  relevanceArmed: number;
 };
 
 export function emptyDistributed(): DistributedCounts {
@@ -27,6 +29,7 @@ export function emptyDistributed(): DistributedCounts {
     hookNotes: 0,
     intro: 0,
     lineup: 0,
+    relevanceArmed: 0,
   };
 }
 
@@ -38,6 +41,7 @@ export function formatDistributeSummary(d: DistributedCounts): string {
   if (d.hookNotes) bits.push(`${d.hookNotes} hook${d.hookNotes === 1 ? "" : "s"}`);
   if (d.intro) bits.push("intro");
   if (d.lineup) bits.push("lineup");
+  if (d.relevanceArmed) bits.push(`${d.relevanceArmed} relevance armed`);
   if (d.clubNotes) bits.push(`${d.clubNotes} club`);
   if (d.leagueNotes) bits.push(`${d.leagueNotes} league`);
   if (d.matchNotes) bits.push(`${d.matchNotes} match`);

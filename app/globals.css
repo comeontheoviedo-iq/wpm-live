@@ -1635,6 +1635,14 @@
 .player-dossier tbody tr.is-friendly td {
   font-style: italic;
 }
+
+/* Club dossier craft — reuse player-dossier shell; crest contains */
+.club-dossier .club-dossier-crest {
+  object-fit: contain;
+  object-position: center;
+  padding: 0.35rem;
+  background: #10141a;
+}
 .player-dossier .club-rail-btn {
   width: 100%;
   text-align: left;

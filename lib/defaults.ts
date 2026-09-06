@@ -58,3 +58,13 @@ export const NOTE_CATEGORIES = [
 ] as const;
 
 export type NoteCategory = (typeof NOTE_CATEGORIES)[number];
+
+export const SPEAK_TIMINGS = [
+  "pre-match",
+  "kickoff",
+  "half-time",
+  "full-time",
+] as const;
+
+export type SpeakTiming = (typeof SPEAK_TIMINGS)[number];
+

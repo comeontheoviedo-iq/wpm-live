@@ -88,6 +88,11 @@ async function upsertSpeak(args: {
     });
   }
   if (existing) {
+    // Preserve hand-edited Speaks — Notebook organise / lineup auto-gen
+    // must not silently wipe Chris's copy.
+    if (existing.status === "edited") {
+      return;
+    }
     await prisma.speak.update({
       where: { id: existing.id },
       data: {
@@ -95,6 +100,7 @@ async function upsertSpeak(args: {
         body: args.body,
         timing: args.timing,
         order: args.order,
+        status: "generated",
       },
     });
   } else {
@@ -106,6 +112,7 @@ async function upsertSpeak(args: {
         body: args.body,
         timing: args.timing,
         order: args.order,
+        status: "generated",
       },
     });
   }

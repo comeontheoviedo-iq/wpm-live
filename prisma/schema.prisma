@@ -217,6 +217,8 @@ model Speak {
   body      String
   timing    String   @default("pre-match")
   order     Int      @default(0)
+  /// generated | edited — user edits set edited; distribute skips overwrite
+  status    String   @default("generated")
   createdAt DateTime @default(now())
 }
 

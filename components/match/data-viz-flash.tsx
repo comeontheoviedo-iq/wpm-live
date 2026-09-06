@@ -14,7 +14,7 @@ export type { ShotPoint, VizFlashKind };
 
 function Label({ children }: { children: import("react").ReactNode }) {
   return (
-    <div className="text-[9px] font-bold uppercase tracking-wide text-slate-400 mb-1">
+    <div className="mb-1 text-[8px] font-bold uppercase tracking-[0.1em] text-slate-500">
       {children}
     </div>
   );
@@ -22,7 +22,7 @@ function Label({ children }: { children: import("react").ReactNode }) {
 
 function Soft({ children, className }: { children: import("react").ReactNode; className?: string }) {
   return (
-    <p className={cn("text-[11px] text-slate-500", className)}>{children}</p>
+    <p className={cn("text-[10px] text-slate-500", className)}>{children}</p>
   );
 }
 
@@ -42,10 +42,10 @@ export function ShotMapMini({
   }
   return (
     <div className={cn("relative w-full", className)}>
-      <Label>Shot map · Advanced stats</Label>
+      <Label>Shot map</Label>
       <svg
         viewBox="0 0 100 68"
-        className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-emerald-950/90"
+        className="w-full rounded-[2px] border border-white/10 bg-emerald-950/80"
       >
         <rect x="0" y="0" width="100" height="68" fill="#064e3b" />
         <rect
@@ -141,7 +141,7 @@ export function XgRaceBar({
   const t = homeXg + awayXg || 1;
   return (
     <div className={cn("space-y-1.5", className)}>
-      <Label>xG race · Advanced stats</Label>
+      <Label>xG race</Label>
       <div className="flex items-end justify-between gap-2 text-xs">
         <div className="min-w-0 flex-1">
           <div className="truncate text-[10px] text-slate-500">{homeName}</div>
@@ -157,7 +157,7 @@ export function XgRaceBar({
           </div>
         </div>
       </div>
-      <div className="flex h-2.5 rounded-full overflow-hidden bg-slate-100 dark:bg-slate-800">
+      <div className="flex h-1.5 overflow-hidden rounded-full bg-white/5">
         <div
           className="h-full"
           style={{ width: `${(homeXg / t) * 100}%`, backgroundColor: homeColor }}
@@ -220,10 +220,10 @@ export function XgTimeline({
   };
   return (
     <div className={cn("space-y-1", className)}>
-      <Label>xG timeline · Advanced stats</Label>
+      <Label>xG timeline</Label>
       <svg
         viewBox={`0 0 ${w} ${h}`}
-        className="w-full h-14 rounded bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800"
+        className="h-12 w-full rounded-[2px] border border-white/[0.06] bg-black/30"
       >
         <polyline
           fill="none"
@@ -311,7 +311,7 @@ export function ShotOutcomeMix({
   }
   return (
     <div className={cn("space-y-1", className)}>
-      <Label>Shot outcomes · Advanced stats</Label>
+      <Label>Shot outcomes</Label>
       <div className="flex items-center gap-3">
         <svg viewBox="0 0 80 80" className="h-16 w-16 shrink-0">
           {arcs.map((a) => (
@@ -321,7 +321,7 @@ export function ShotOutcomeMix({
             x="40"
             y="43"
             textAnchor="middle"
-            className="fill-slate-600 dark:fill-slate-300"
+            className="fill-slate-300"
             style={{ fontSize: 11, fontWeight: 700 }}
           >
             {total}
@@ -337,7 +337,7 @@ export function ShotOutcomeMix({
                 />
                 {k}
               </span>
-              <span className="tabular-nums font-semibold text-slate-700 dark:text-slate-200">
+              <span className="font-semibold tabular-nums text-slate-200">
                 {n}
               </span>
             </li>
@@ -382,13 +382,13 @@ export function XgVsGoals({
         </span>
       </div>
       <div className="flex h-2 gap-0.5">
-        <div className="flex flex-1 justify-end overflow-hidden rounded-l bg-slate-100 dark:bg-slate-800">
+        <div className="flex flex-1 justify-end overflow-hidden rounded-l bg-white/5">
           <div
             className="h-full rounded-l"
             style={{ width: `${(home / max) * 100}%`, backgroundColor: homeColor }}
           />
         </div>
-        <div className="flex flex-1 overflow-hidden rounded-r bg-slate-100 dark:bg-slate-800">
+        <div className="flex flex-1 overflow-hidden rounded-r bg-white/5">
           <div
             className="h-full rounded-r"
             style={{ width: `${(away / max) * 100}%`, backgroundColor: awayColor }}
@@ -399,7 +399,7 @@ export function XgVsGoals({
   );
   return (
     <div className={cn("space-y-2", className)}>
-      <Label>xG vs goals · Advanced stats</Label>
+      <Label>xG vs goals</Label>
       <div className="flex justify-between text-[10px] text-slate-500">
         <span className="truncate">{homeName}</span>
         <span className="truncate">{awayName}</span>
@@ -444,7 +444,7 @@ export function PossessionSparkline({
         </div>
         <svg
           viewBox={`0 0 ${w} ${h}`}
-          className="w-full h-9 rounded bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800"
+          className="h-8 w-full rounded-[2px] border border-white/[0.06] bg-black/30"
         >
           <line
             x1="0"
@@ -511,7 +511,7 @@ export function CompareBars({
               </span>
             </div>
             <div className="flex h-2 gap-0.5">
-              <div className="flex flex-1 justify-end overflow-hidden rounded-l bg-slate-100 dark:bg-slate-800">
+              <div className="flex flex-1 justify-end overflow-hidden rounded-l bg-white/5">
                 <div
                   className="h-full rounded-l"
                   style={{
@@ -520,7 +520,7 @@ export function CompareBars({
                   }}
                 />
               </div>
-              <div className="flex flex-1 overflow-hidden rounded-r bg-slate-100 dark:bg-slate-800">
+              <div className="flex flex-1 overflow-hidden rounded-r bg-white/5">
                 <div
                   className="h-full rounded-r"
                   style={{
@@ -644,7 +644,7 @@ export function LeaderboardBars({
         {rows.map((r, i) => (
           <li key={`${r.name}-${i}`} className="space-y-0.5">
             <div className="flex justify-between gap-2 text-[10px]">
-              <span className="truncate font-medium text-slate-700 dark:text-slate-200">
+              <span className="truncate font-medium text-slate-200">
                 {r.name}
               </span>
               <span
@@ -654,7 +654,7 @@ export function LeaderboardBars({
                 {r.value}
               </span>
             </div>
-            <div className="h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+            <div className="h-1 overflow-hidden rounded-full bg-white/5">
               <div
                 className="h-full rounded-full"
                 style={{
@@ -708,14 +708,14 @@ export function GkSaveBar({
       <Label>Goalkeeper saves</Label>
       <div className="flex items-end justify-between gap-2">
         <div className="min-w-0">
-          <div className="truncate text-[11px] font-semibold text-slate-700 dark:text-slate-200">
+          <div className="truncate text-[11px] font-semibold text-slate-200">
             {name}
           </div>
           <div className="text-2xl font-black tabular-nums" style={{ color }}>
             {saves}
           </div>
         </div>
-        <div className="mb-1 h-8 w-24 overflow-hidden rounded bg-slate-100 dark:bg-slate-800">
+        <div className="mb-1 h-7 w-24 overflow-hidden rounded-[2px] bg-white/5">
           <div className="h-full rounded" style={{ width: `${w}%`, backgroundColor: color }} />
         </div>
       </div>
@@ -741,8 +741,8 @@ export function EventTimelineMini({
   return (
     <div className={cn("space-y-1", className)}>
       <Label>{title}</Label>
-      <div className="relative h-10 rounded bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 px-1">
-        <div className="absolute left-1 right-1 top-1/2 h-px -translate-y-1/2 bg-slate-200 dark:bg-slate-700" />
+      <div className="relative h-9 rounded-[2px] border border-white/[0.06] bg-black/30 px-1">
+        <div className="absolute left-1 right-1 top-1/2 h-px -translate-y-1/2 bg-white/10" />
         {events.map((e, i) => {
           const left = `${(e.minute / maxMin) * 100}%`;
           const isRed = /red/i.test(e.type);
@@ -817,7 +817,7 @@ export function MomentumProxyChart({
           <Label>Momentum proxy · shot differential</Label>
           <svg
             viewBox={`0 0 ${w} ${h}`}
-            className="w-full h-10 rounded bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800"
+            className="h-9 w-full rounded-[2px] border border-white/[0.06] bg-black/30"
           >
             <line
               x1="0"
@@ -901,7 +901,7 @@ export function DataVizFlashCard({
   const hn = homeName || "Home";
   const an = awayName || "Away";
   return (
-    <div className="mt-2 rounded-xl border border-slate-200/80 dark:border-slate-700 bg-white/90 dark:bg-slate-950/80 p-2.5">
+    <div className="min-w-0">
       {kind === "shot_map" && shots ? (
         <ShotMapMini shots={shots} homeColor={homeColor} awayColor={awayColor} />
       ) : null}

@@ -1559,10 +1559,10 @@ export function MatchDesk({
                 {
                   id,
                   kind: "fact" as const,
-                  title: "Full-time · data viz",
+                  title: "Full-time",
                   lines: [
                     `${homeName} ${scoreRef.current.home}–${scoreRef.current.away} ${awayName}`,
-                    "Sample chart from available team / advanced stats",
+                    "Sample chart from available team stats",
                   ],
                   scoreline: `${homeName} ${scoreRef.current.home}–${scoreRef.current.away} ${awayName}`,
                 },
@@ -1865,7 +1865,7 @@ export function MatchDesk({
       {
         id,
         kind: "fact" as const,
-        title: "Half-time · Advanced stats",
+        title: "Half-time",
         lines: [
           `${homeName} ${homeScore}–${awayScore} ${awayName}`,
           "xG race / possession when available",
@@ -2186,16 +2186,16 @@ export function MatchDesk({
                   onClick={() => setIntelHistoryOpen(false)}
                 />
                 <div
-                  className="absolute right-0 top-full mt-1 z-40 w-[min(92vw,22rem)] max-h-[min(70vh,28rem)] overflow-y-auto rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] shadow-lg p-2"
+                  className="absolute right-0 top-full mt-1 z-40 w-[min(92vw,22rem)] max-h-[min(70vh,28rem)] overflow-y-auto rounded-[2px] border border-white/10 bg-[#10141a] p-2 shadow-lg"
                   role="list"
                   aria-label="Live intel history"
                 >
-                  <div className="sticky top-0 bg-[var(--surface)] pb-1 mb-1 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2 px-1">
-                    <div className="font-semibold text-slate-500 uppercase tracking-wide text-[10px]">
+                  <div className="sticky top-0 mb-1 flex items-center justify-between gap-2 border-b border-white/[0.06] bg-[#10141a] px-1 pb-1">
+                    <div className="live-flash-meta">
                       Live intel history
                     </div>
-                    <span className="text-[10px] text-slate-400 tabular-nums">
-                      newest first · {intelHistory.length}/{INTEL_HISTORY_CAP}
+                    <span className="live-flash-time">
+                      {intelHistory.length}/{INTEL_HISTORY_CAP}
                     </span>
                   </div>
                   {intelHistory.length === 0 ? (
@@ -2205,52 +2205,69 @@ export function MatchDesk({
                     </p>
                   ) : (
                     <ul className="space-y-1.5">
-                      {intelHistory.map((item) => (
+                      {intelHistory.map((item) => {
+                        const titleU = `${item.title} ${item.subtitle || ""}`.toUpperCase();
+                        const histTier =
+                          item.kind === "goal"
+                            ? "live-flash-goal"
+                            : item.kind === "sub"
+                              ? "live-flash-sub"
+                              : /\bRED\b|VAR/.test(titleU)
+                                ? "live-flash-red"
+                                : /YELLOW|CARD/.test(titleU)
+                                  ? "live-flash-card"
+                                  : /INJUR|STRETCHER/.test(titleU)
+                                    ? "live-flash-injury"
+                                    : "live-flash-fact";
+                        const minMatch = item.title.match(/(\d{1,3})\s*['′]/);
+                        const histTime = minMatch
+                          ? `${minMatch[1]}'`
+                          : new Date(item.createdAt).toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            });
+                        return (
                         <li key={item.id}>
                           <button
                             type="button"
                             role="listitem"
                             className={cn(
-                              "w-full text-left rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-2.5 py-2 hover:bg-[var(--surface-muted)] transition-colors",
-                              item.kind === "goal" && "live-flash-goal",
-                              item.kind === "sub" && "live-flash-sub",
-                              item.kind === "fact" && "live-flash-fact"
+                              "live-flash-history w-full px-2.5 py-1.5 text-left transition-colors",
+                              histTier
                             )}
                             onClick={() => reopenIntelHistory(item)}
                           >
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
+                            <div className="flex items-start justify-between gap-2">
+                              <span className="live-flash-meta">
                                 {item.kind === "goal"
                                   ? "Goal"
                                   : item.kind === "sub"
                                     ? "Sub"
                                     : "Live"}
-                                {item.viz ? " · viz" : ""}
+                                {item.scoreline ? ` · ${item.scoreline}` : ""}
                               </span>
-                              <span className="text-[9px] tabular-nums text-slate-400">
-                                {new Date(item.createdAt).toLocaleTimeString([], {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                  second: "2-digit",
-                                })}
-                              </span>
+                              <span className="live-flash-time shrink-0">{histTime}</span>
                             </div>
-                            <div className="mt-0.5 text-[12px] font-bold text-slate-900 dark:text-white line-clamp-2">
+                            <div className="live-flash-headline mt-0.5 line-clamp-2 text-[12px]">
                               {item.title}
+                              {item.subtitle ? (
+                                <span className="ml-1.5 text-[0.85em] font-bold text-slate-300">
+                                  {item.subtitle}
+                                </span>
+                              ) : null}
                             </div>
-                            {item.scoreline ? (
-                              <div className="text-[10px] tabular-nums text-slate-600 dark:text-slate-300">
-                                {item.scoreline}
-                              </div>
+                            {item.viz ? (
+                              <span className="live-flash-chip mt-1">Advanced stats</span>
                             ) : null}
                             {item.lines[0] ? (
-                              <div className="mt-0.5 text-[10px] text-slate-500 line-clamp-2">
+                              <div className="live-flash-body mt-0.5 line-clamp-2">
                                 {item.lines[0]}
                               </div>
                             ) : null}
                           </button>
                         </li>
-                      ))}
+                        );
+                      })}
                     </ul>
                   )}
                 </div>
@@ -2405,41 +2422,41 @@ export function MatchDesk({
                       : /INJUR|STRETCHER/.test(titleU)
                         ? "live-flash-injury"
                         : "live-flash-fact";
+            const minMatch = popup.title.match(/(\d{1,3})\s*['′]/);
+            const flashMinute = minMatch
+              ? `${minMatch[1]}'`
+              : liveMinute > 0
+                ? `${liveMinute}'`
+                : new Date(popup.createdAt).toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  });
             return (
             <div
               key={popup.id}
               role="dialog"
               aria-label={popup.title}
               className={cn(
-                "live-flash px-3 py-2 text-left",
+                "live-flash px-2.5 py-1.5 text-left",
                 flashTier,
-                popup.pinned && "ring-1 ring-amber-400/70"
+                popup.pinned && "is-pinned"
               )}
             >
               <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="live-flash-meta">
-                    {popup.kind === "goal"
-                      ? "Goal"
-                      : popup.kind === "sub"
-                        ? "Sub"
-                        : "Live"}
-                    {popup.pinned ? " · pinned" : ""}
-                    {popup.scoreline ? ` · ${popup.scoreline}` : ""}
-                  </div>
-                  <div className="live-flash-headline mt-0.5">
-                    {popup.title}
-                    {popup.subtitle ? (
-                      <span className="ml-1.5 text-[0.8em] font-bold text-slate-300">
-                        {popup.subtitle}
-                      </span>
-                    ) : null}
-                  </div>
+                <div className="live-flash-meta min-w-0 truncate">
+                  {popup.kind === "goal"
+                    ? "Goal"
+                    : popup.kind === "sub"
+                      ? "Sub"
+                      : "Live"}
+                  {popup.pinned ? " · pinned" : ""}
+                  {popup.scoreline ? ` · ${popup.scoreline}` : ""}
                 </div>
-                <div className="flex shrink-0 gap-0.5">
+                <div className="flex shrink-0 items-center gap-1">
+                  <span className="live-flash-time">{flashMinute}</span>
                   <button
                     type="button"
-                    className="desk-btn px-1 py-0.5 text-[10px] text-slate-400 hover:text-amber-400"
+                    className="live-flash-chrome rounded p-0.5"
                     title={popup.pinned ? "Unpin" : "Pin (keep open)"}
                     onClick={() =>
                       setLivePopups((prev) =>
@@ -2452,13 +2469,13 @@ export function MatchDesk({
                     <Pin
                       className={cn(
                         "h-3 w-3",
-                        popup.pinned && "fill-amber-400 text-amber-500"
+                        popup.pinned && "fill-amber-400/80 text-amber-400"
                       )}
                     />
                   </button>
                   <button
                     type="button"
-                    className="desk-btn px-1 py-0.5 text-[10px] text-slate-400 hover:text-rose-400"
+                    className="live-flash-chrome rounded p-0.5 hover:text-rose-400"
                     title="Dismiss"
                     onClick={() =>
                       dismissLivePopup(popup.id, { force: true })
@@ -2468,42 +2485,56 @@ export function MatchDesk({
                   </button>
                 </div>
               </div>
-              <ul className="mt-1.5 space-y-0.5 live-flash-body">
-                {popup.lines.map((line, i) => (
-                  <li key={i} className="leading-snug">
-                    {line}
-                  </li>
-                ))}
-              </ul>
-              {popup.viz ? (
-                <DataVizFlashCard
-                  kind={popup.viz.kind}
-                  shots={popup.viz.shots}
-                  homeXg={popup.viz.homeXg}
-                  awayXg={popup.viz.awayXg}
-                  homeGoals={popup.viz.homeGoals}
-                  awayGoals={popup.viz.awayGoals}
-                  homeName={homeName}
-                  awayName={awayName}
-                  homeColor={homeColor}
-                  awayColor={awayColor}
-                  possessionSamples={popup.viz.possessionSamples}
-                  compare={popup.viz.compare}
-                  compareTitle={popup.viz.compareTitle}
-                  dna={popup.viz.dna}
-                  leaderboard={popup.viz.leaderboard}
-                  leaderboardTitle={popup.viz.leaderboardTitle}
-                  gkName={popup.viz.gkName}
-                  gkSaves={popup.viz.gkSaves}
-                  gkSide={popup.viz.gkSide}
-                  timelineEvents={popup.viz.timelineEvents}
-                  timelineTitle={popup.viz.timelineTitle}
-                  momentumSamples={popup.viz.momentumSamples}
-                />
-              ) : null}
-              <div className="mt-1.5 text-[8px] uppercase tracking-[0.08em] text-slate-600">
-                Auto-hides · pin to keep
+              <div className="mt-0.5 flex items-start justify-between gap-2">
+                <div className="live-flash-headline min-w-0">
+                  {popup.title}
+                  {popup.subtitle ? (
+                    <span className="ml-1.5 text-[0.8em] font-bold text-slate-300">
+                      {popup.subtitle}
+                    </span>
+                  ) : null}
+                </div>
+                {popup.viz ? (
+                  <span className="live-flash-chip shrink-0">Advanced stats</span>
+                ) : null}
               </div>
+              {popup.lines.length > 0 ? (
+                <ul className="live-flash-body mt-1 space-y-0.5">
+                  {popup.lines.map((line, i) => (
+                    <li key={i} className="leading-snug">
+                      {line}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {popup.viz ? (
+                <div className="live-flash-viz">
+                  <DataVizFlashCard
+                    kind={popup.viz.kind}
+                    shots={popup.viz.shots}
+                    homeXg={popup.viz.homeXg}
+                    awayXg={popup.viz.awayXg}
+                    homeGoals={popup.viz.homeGoals}
+                    awayGoals={popup.viz.awayGoals}
+                    homeName={homeName}
+                    awayName={awayName}
+                    homeColor={homeColor}
+                    awayColor={awayColor}
+                    possessionSamples={popup.viz.possessionSamples}
+                    compare={popup.viz.compare}
+                    compareTitle={popup.viz.compareTitle}
+                    dna={popup.viz.dna}
+                    leaderboard={popup.viz.leaderboard}
+                    leaderboardTitle={popup.viz.leaderboardTitle}
+                    gkName={popup.viz.gkName}
+                    gkSaves={popup.viz.gkSaves}
+                    gkSide={popup.viz.gkSide}
+                    timelineEvents={popup.viz.timelineEvents}
+                    timelineTitle={popup.viz.timelineTitle}
+                    momentumSamples={popup.viz.momentumSamples}
+                  />
+                </div>
+              ) : null}
             </div>
             );
           })}

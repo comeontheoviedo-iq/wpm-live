@@ -2,6 +2,7 @@
 
 import {
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -180,6 +181,61 @@ function resolvePitchFlags(
   return dual;
 }
 
+
+/** Shrink surname font until it fits card width; ellipsis only at min size. */
+const TOKEN_NAME_MIN_PX = 6;
+
+function useTokenNameAutoFit(
+  text: string,
+  preferredPx: number,
+  minPx = TOKEN_NAME_MIN_PX
+) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [fontPx, setFontPx] = useState(preferredPx);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    const fit = () => {
+      const preferred = Math.max(preferredPx, minPx);
+      // Measure at preferred first
+      el.style.fontSize = `${preferred}px`;
+      // Force layout read
+      if (el.scrollWidth <= el.clientWidth + 0.5) {
+        setFontPx((prev) => (Math.abs(prev - preferred) < 0.05 ? prev : preferred));
+        return;
+      }
+      let lo = minPx;
+      let hi = preferred;
+      let best = minPx;
+      for (let i = 0; i < 18; i++) {
+        const mid = (lo + hi) / 2;
+        el.style.fontSize = `${mid}px`;
+        if (el.scrollWidth <= el.clientWidth + 0.5) {
+          best = mid;
+          lo = mid;
+        } else {
+          hi = mid;
+        }
+      }
+      // Snap to min if still overflowing (ellipsis CSS handles remainder)
+      el.style.fontSize = `${best}px`;
+      if (el.scrollWidth > el.clientWidth + 0.5) best = minPx;
+      const next = Math.round(best * 100) / 100;
+      setFontPx((prev) => (Math.abs(prev - next) < 0.05 ? prev : next));
+    };
+
+    fit();
+    const ro = new ResizeObserver(() => fit());
+    ro.observe(el);
+    if (el.parentElement) ro.observe(el.parentElement);
+    return () => ro.disconnect();
+  }, [text, preferredPx, minPx]);
+
+  return { ref, fontPx };
+}
+
 function PitchCardToken({
   player,
   side,
@@ -237,6 +293,14 @@ function PitchCardToken({
 
   const cols = cardSettings.fieldsPerRow;
   const namePx = 9 * scaleFactor(cardSettings.nameSizePct);
+  // Preferred craft size (floor 9 via settings); autofit may shrink below for long surnames.
+  const preferredNamePx = Math.max(namePx, 9);
+  const nameText = `${player.isCaptain ? "© " : ""}${fieldName}`;
+  const { ref: nameRef, fontPx: fitNamePx } = useTokenNameAutoFit(
+    nameText,
+    preferredNamePx,
+    TOKEN_NAME_MIN_PX
+  );
   const markerScale = scaleFactor(markerPct);
   const baseW = 94;
 
@@ -398,11 +462,12 @@ function PitchCardToken({
             </div>
           </div>
           <span
+            ref={nameRef}
             className="pitch-token-name"
-            style={{ fontSize: `${Math.max(namePx, 9)}px` }}
+            data-name-fit={fitNamePx < preferredNamePx - 0.05 ? "shrunk" : "full"}
+            style={{ fontSize: `${fitNamePx}px` }}
           >
-            {player.isCaptain ? "© " : ""}
-            {fieldName}
+            {nameText}
           </span>
           {player.age != null && Number.isFinite(player.age) ? (
             <span className="pitch-token-age">

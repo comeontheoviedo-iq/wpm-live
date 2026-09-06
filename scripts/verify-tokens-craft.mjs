@@ -2,7 +2,7 @@ import { chromium } from "playwright";
 import { writeFileSync } from "fs";
 
 const deskId = "cmtorhbeo08zm11zutipi5m3a"; // Newcastle
-const shot = ".pitchline-tokens-names-fixed-nufc.png";
+const shot = ".pitchline-tokens-autofit-nufc.png";
 
 const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
@@ -63,11 +63,14 @@ const pre = await page.evaluate(() => {
     const truncated = nameEl
       ? nameEl.scrollWidth > nameEl.clientWidth + 1
       : false;
+    const nameFont = nameEl ? parseFloat(getComputedStyle(nameEl).fontSize) : null;
     return {
       idText: num?.textContent?.trim() || null,
       idColor: num ? getComputedStyle(num).color : null,
       hairColor: hl ? getComputedStyle(hl).backgroundColor : null,
       name: nameText,
+      nameFont,
+      nameFit: nameEl?.getAttribute("data-name-fit") || null,
       nameClientW: nameEl ? nameEl.clientWidth : null,
       nameScrollW: nameEl ? nameEl.scrollWidth : null,
       truncated,
@@ -79,7 +82,14 @@ const pre = await page.evaluate(() => {
         : 0,
     };
   });
-  const mustRead = ["LIVRAMENTO", "BARNES", "RAMSEY", "TRUFFERT", "BOTMAN"];
+  const mustRead = [
+    "LIVRAMENTO",
+    "FERNANDEZ-PARDO",
+    "BARNES",
+    "RAMSEY",
+    "TRUFFERT",
+    "BOTMAN",
+  ];
   const nameHits = mustRead.map((n) => {
     const hit = samples.find((s) => (s.name || "").includes(n));
     return {
@@ -87,8 +97,16 @@ const pre = await page.evaluate(() => {
       found: !!hit,
       truncated: hit?.truncated ?? null,
       name: hit?.name ?? null,
+      nameFont: hit?.nameFont ?? null,
+      nameFit: hit?.nameFit ?? null,
     };
   });
+  const fern = samples.find((s) => (s.name || "").includes("FERNANDEZ-PARDO"));
+  const fernShrunk =
+    !!fern &&
+    typeof fern.nameFont === "number" &&
+    fern.nameFont < 8.95 &&
+    fern.truncated === false;
   const truncatedCount = samples.filter((s) => s.truncated).length;
 
   return {
@@ -116,6 +134,17 @@ const pre = await page.evaluate(() => {
     allNames: samples.map((s) => s.name),
     truncatedCount,
     nameHits,
+    fernShrunk,
+    fern: fern
+      ? {
+          name: fern.name,
+          nameFont: fern.nameFont,
+          nameFit: fern.nameFit,
+          truncated: fern.truncated,
+          clientW: fern.nameClientW,
+          scrollW: fern.nameScrollW,
+        }
+      : null,
   };
 });
 
@@ -169,7 +198,7 @@ await browser.close();
 
 const result = { pre, dossier, shot };
 writeFileSync(".pitchline-tokens-craft-probe.json", JSON.stringify(result, null, 2));
-writeFileSync(".pitchline-tokens-names-fixed-probe.json", JSON.stringify(result, null, 2));
+writeFileSync(".pitchline-tokens-autofit-probe.json", JSON.stringify(result, null, 2));
 console.log(JSON.stringify(result, null, 2));
 
 const idPx = pre.idFont ? parseFloat(pre.idFont) : 0;
@@ -181,7 +210,8 @@ const hairMatchesId =
 const namesOk =
   Array.isArray(pre.nameHits) &&
   pre.nameHits.every((h) => h.found && h.truncated === false) &&
-  (pre.truncatedCount ?? 99) <= 2; // allow rare ultra-long edge names only
+  (pre.truncatedCount ?? 99) === 0 &&
+  pre.fernShrunk === true;
 
 const ok =
   dossier.dossierOpen &&
@@ -217,6 +247,8 @@ if (!ok) {
     namesOk,
     truncatedCount: pre.truncatedCount,
     nameHits: pre.nameHits,
+    fernShrunk: pre.fernShrunk,
+    fern: pre.fern,
   });
 }
 process.exit(ok ? 0 : 1);

@@ -513,6 +513,7 @@
     line-height: 1.05;
     color: #f8fafc;
     overflow: hidden;
+    /* Ellipsis only if still overflowing after JS autofit hits min size */
     text-overflow: ellipsis;
     white-space: nowrap;
   }

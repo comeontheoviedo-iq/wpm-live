@@ -667,10 +667,11 @@
     padding: 0.4rem 0.45rem;
   }
   .live-flash-chrome {
-    color: #475569;
+    /* Higher contrast on dark craft skin — was #475569 (too dim) */
+    color: #cbd5e1;
   }
   .live-flash-chrome:hover {
-    color: #94a3b8;
+    color: #f8fafc;
   }
   /* History drawer rows — same edge language as live flash */
   .live-flash-history {

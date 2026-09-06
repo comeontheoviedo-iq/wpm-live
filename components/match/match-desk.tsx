@@ -439,6 +439,10 @@ export function MatchDesk({
   const [intelHistoryOpen, setIntelHistoryOpen] = useState(false);
   const [coachSide, setCoachSide] = useState<"home" | "away" | null>(null);
   const seenEventKeysRef = useRef<Set<string>>(new Set());
+  const livePopupsRef = useRef<LivePopup[]>([]);
+  const intelHistoryRef = useRef<LivePopup[]>([]);
+  livePopupsRef.current = livePopups;
+  intelHistoryRef.current = intelHistory;
   const [configured, setConfigured] = useState<boolean | null>(null);
   const locked = false;
   const [homeForm, setHomeForm] = useState(homeFormation);
@@ -820,17 +824,7 @@ export function MatchDesk({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [squad]);
 
-  useEffect(() => {
-    if (!placing) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        setPlacing(null);
-        setMsg(null);
-      }
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [placing]);
+
 
   useEffect(() => {
     return bindDeskHotkeys({
@@ -949,6 +943,11 @@ export function MatchDesk({
     });
   }, []);
 
+  /** Strip trailing |Date.now() / |reopen|Date.now() so the same event cannot re-fire. */
+  const normalizeLivePopupKey = useCallback((id: string) => {
+    return id.replace(/\|reopen\|\d+$/, "").replace(/\|\d+$/, "");
+  }, []);
+
   /** Remove a live popup and archive it (skip archive if still pinned unless force). */
   const dismissLivePopup = useCallback(
     (id: string, opts?: { force?: boolean }) => {
@@ -964,9 +963,30 @@ export function MatchDesk({
     [pushIntelHistory]
   );
 
+  /** Force-dismiss every live intel flash (Esc / Clear). */
+  const clearAllLivePopups = useCallback(() => {
+    setLivePopups((prev) => {
+      if (prev.length === 0) return prev;
+      for (const hit of prev) {
+        queueMicrotask(() => pushIntelHistory({ ...hit, pinned: false }));
+      }
+      return [];
+    });
+  }, [pushIntelHistory]);
+
   const pushLivePopup = useCallback(
     (popup: Omit<LivePopup, "id" | "createdAt" | "pinned"> & { id?: string }, ttlMs: number) => {
       const id = popup.id || `live|${Date.now()}`;
+      const baseKey = normalizeLivePopupKey(id);
+      const alreadyLive = livePopupsRef.current.some(
+        (p) => normalizeLivePopupKey(p.id) === baseKey
+      );
+      const alreadyHist = intelHistoryRef.current.some(
+        (p) => normalizeLivePopupKey(p.id) === baseKey
+      );
+      if (alreadyLive || alreadyHist) {
+        return id;
+      }
       const full: LivePopup = {
         ...popup,
         id,
@@ -974,6 +994,10 @@ export function MatchDesk({
         pinned: false,
       };
       setLivePopups((prev) => {
+        // Re-check inside updater in case of concurrent pushes
+        if (prev.some((p) => normalizeLivePopupKey(p.id) === baseKey)) {
+          return prev;
+        }
         const next = [...prev, full];
         if (next.length > 5) {
           const overflow = next.slice(0, next.length - 5);
@@ -985,12 +1009,24 @@ export function MatchDesk({
         return next;
       });
       if (ttlMs > 0) {
-        window.setTimeout(() => dismissLivePopup(id), ttlMs);
+        // force:true so pinned cards still expire (or auto-unpin via force dismiss)
+        window.setTimeout(() => dismissLivePopup(id, { force: true }), ttlMs);
       }
       return id;
     },
-    [dismissLivePopup, pushIntelHistory]
+    [dismissLivePopup, pushIntelHistory, normalizeLivePopupKey]
   );
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      setPlacing(null);
+      setMsg(null);
+      clearAllLivePopups();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [clearAllLivePopups]);
 
   const reopenIntelHistory = useCallback(
     (item: LivePopup) => {
@@ -2192,6 +2228,19 @@ export function MatchDesk({
             )}
           </div>
 
+          {livePopups.length > 0 ? (
+            <button
+              type="button"
+              className="desk-btn border-amber-400/50 text-amber-100"
+              onClick={() => clearAllLivePopups()}
+              title="Force-dismiss all live intel flashes (Esc)"
+            >
+              <X className="h-3 w-3" />
+              Clear
+              <span className="tabular-nums text-amber-300/80">{livePopups.length}</span>
+            </button>
+          ) : null}
+
           <div className="relative">
             <button
               type="button"
@@ -2490,7 +2539,7 @@ export function MatchDesk({
                   <span className="live-flash-time">{flashMinute}</span>
                   <button
                     type="button"
-                    className="live-flash-chrome rounded p-0.5"
+                    className="live-flash-chrome rounded p-1.5"
                     title={popup.pinned ? "Unpin" : "Pin (keep open)"}
                     onClick={() =>
                       setLivePopups((prev) =>
@@ -2509,13 +2558,13 @@ export function MatchDesk({
                   </button>
                   <button
                     type="button"
-                    className="live-flash-chrome rounded p-0.5 hover:text-rose-400"
+                    className="live-flash-chrome rounded p-1.5 text-slate-200 hover:text-rose-300"
                     title="Dismiss"
                     onClick={() =>
                       dismissLivePopup(popup.id, { force: true })
                     }
                   >
-                    <X className="h-3 w-3" />
+                    <X className="h-3.5 w-3.5" />
                   </button>
                 </div>
               </div>

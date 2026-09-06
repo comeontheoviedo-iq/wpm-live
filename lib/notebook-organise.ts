@@ -315,6 +315,72 @@ export type OrganiseArgs = {
 /**
  * Parse a Notebook-shaped research pack into entity-attached notes + speaks.
  */
+
+/** Split pack text into air-ready chunks (League notes ≤ maxChars). */
+export function chunkPackBody(text: string, maxChars = 280): string[] {
+  const raw = (text || "").trim();
+  if (!raw) return [];
+  if (raw.length <= maxChars) return [raw];
+
+  const paras = raw
+    .split(/\n{2,}/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  const chunks: string[] = [];
+  let buf = "";
+
+  const flush = () => {
+    if (buf.trim()) chunks.push(buf.trim());
+    buf = "";
+  };
+
+  const pushPiece = (piece: string) => {
+    const p = piece.trim();
+    if (!p) return;
+    if (p.length > maxChars) {
+      // Hard-split long sentences on word boundaries
+      let rest = p;
+      while (rest.length > maxChars) {
+        let cut = rest.lastIndexOf(" ", maxChars);
+        if (cut < maxChars * 0.5) cut = maxChars;
+        chunks.push(rest.slice(0, cut).trim());
+        rest = rest.slice(cut).trim();
+      }
+      if (rest) {
+        if (buf && buf.length + 1 + rest.length <= maxChars) {
+          buf = `${buf} ${rest}`.trim();
+        } else {
+          flush();
+          buf = rest;
+        }
+      }
+      return;
+    }
+    if (!buf) {
+      buf = p;
+      return;
+    }
+    if (buf.length + 2 + p.length <= maxChars) {
+      buf = `${buf}\n\n${p}`;
+    } else {
+      flush();
+      buf = p;
+    }
+  };
+
+  for (const para of paras.length ? paras : [raw]) {
+    if (para.length <= maxChars) {
+      pushPiece(para);
+      continue;
+    }
+    // Sentence-ish split
+    const sentences = para.split(/(?<=[.!?])\s+/);
+    for (const s of sentences) pushPiece(s);
+  }
+  flush();
+  return chunks.filter(Boolean);
+}
+
 export function organiseNotebookPack(args: OrganiseArgs): OrganisedPack {
   const {
     text,
@@ -707,18 +773,24 @@ export function organiseNotebookPack(args: OrganiseArgs): OrganisedPack {
     });
   }
 
-  // League / competition Notes (league dossier tab)
+  // League / competition Notes (league dossier tab) — chunk ≤280 for air
   const leagueBody = leagueChunks.join("\n\n").trim();
   if (leagueBody.length >= 40) {
     const leagueTitle = competition
       ? `${competition} — Season context`
       : "League — Season context";
-    notes.push({
-      title: leagueTitle,
-      body: leagueBody,
-      category: "Match",
-      entityType: "league",
-      entityId: leagueKey,
+    const parts = chunkPackBody(leagueBody, 280);
+    parts.forEach((body, i) => {
+      notes.push({
+        title:
+          parts.length > 1
+            ? `${leagueTitle} · ${i + 1}/${parts.length}`
+            : leagueTitle,
+        body,
+        category: "Match",
+        entityType: "league",
+        entityId: leagueKey,
+      });
     });
   }
 

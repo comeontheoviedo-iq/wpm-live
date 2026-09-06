@@ -1636,6 +1636,27 @@
   font-style: italic;
 }
 
+/* League dossier craft — same shell, page (not fixed drawer) */
+.league-dossier.player-dossier {
+  position: relative;
+  inset: auto;
+  right: auto;
+  z-index: auto;
+  width: 100%;
+  max-width: none;
+  border-left: none;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  box-shadow: none;
+  min-height: 70vh;
+}
+.league-dossier .league-dossier-crest {
+  object-fit: contain;
+  object-position: center;
+  padding: 0.35rem;
+  background: #10141a;
+}
+
 /* Club dossier craft — reuse player-dossier shell; crest contains */
 .club-dossier .club-dossier-crest {
   object-fit: contain;

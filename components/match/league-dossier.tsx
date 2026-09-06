@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { cn } from "@/lib/utils";
-import { AlertTriangle, Loader2, RefreshCw, BookOpen, X } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { Loader2, RefreshCw, X } from "lucide-react";
 import { NotesPanel, type NoteRow } from "@/components/notes/notes-panel";
+import { cn } from "@/lib/utils";
 
 type StandingRow = {
   rank: number;
@@ -67,15 +67,15 @@ type LeaguePayload = {
   lastRunnerUp?: { season: number; name: string; logo?: string | null } | null;
 };
 
-type Tab = "profile" | "schedule" | "standings" | "hof" | "map" | "seasons";
+type Tab = "overview" | "table" | "results" | "fixtures" | "history" | "notes";
 
 const TABS: { key: Tab; label: string }[] = [
-  { key: "profile", label: "Profile" },
-  { key: "schedule", label: "Schedule" },
-  { key: "standings", label: "Standings & Playoff" },
-  { key: "hof", label: "Hall of Fame" },
-  { key: "map", label: "Map" },
-  { key: "seasons", label: "Seasons" },
+  { key: "overview", label: "Overview" },
+  { key: "table", label: "Table" },
+  { key: "results", label: "Results" },
+  { key: "fixtures", label: "Fixtures" },
+  { key: "history", label: "History" },
+  { key: "notes", label: "Notes" },
 ];
 
 function whenLabel(iso: string) {
@@ -93,6 +93,13 @@ function whenLabel(iso: string) {
   }
 }
 
+function scoreLabel(fx: SlimFx) {
+  if (fx.goals.home != null && fx.goals.away != null) {
+    return `${fx.goals.home}–${fx.goals.away}`;
+  }
+  return "–";
+}
+
 export function LeagueDossier({
   matchId,
   notes = [],
@@ -103,8 +110,8 @@ export function LeagueDossier({
   const [data, setData] = useState<LeaguePayload | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>("profile");
-  const [fixtureDetail, setFixtureDetail] = useState<string | null>(null);
+  const [tab, setTab] = useState<Tab>("overview");
+  const [selectedFx, setSelectedFx] = useState<SlimFx | null>(null);
 
   async function load() {
     setBusy(true);
@@ -145,318 +152,553 @@ export function LeagueDossier({
     return [...map.entries()].sort((a, b) => b[1] - a[1]);
   })();
 
+  const leagueNotes = notes.filter((n) => (n.body || n.title || "").trim());
+  const hookNotes = leagueNotes.filter(
+    (n) =>
+      /hook|scout|verdict|sayable|lead|league/i.test(n.title || "") ||
+      /hook|scout|verdict/i.test(n.category || "") ||
+      n.pinned
+  );
+  const sayableNote = hookNotes[0] || leagueNotes[0] || null;
+
+  const leagueName = meta?.name || data?.competition || "League";
+  const sayableLine = sayableNote
+    ? (sayableNote.title || "").trim() ||
+      (sayableNote.body || "").split("\n")[0].trim()
+    : [
+        leagueName,
+        meta?.country || null,
+        data?.season != null ? `Season ${data.season}` : null,
+        data?.lastChampion
+          ? `Last champion ${data.lastChampion.name}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+
+  const sayableSub = sayableNote?.body
+    ? sayableNote.body
+        .trim()
+        .split("\n")
+        .slice(sayableNote.title ? 0 : 1, 2)
+        .join(" ")
+        .slice(0, 180)
+    : [
+        data?.standings?.length
+          ? `${data.standings.length} clubs in table`
+          : null,
+        data?.live?.length ? `${data.live.length} live` : null,
+        data?.todayFixtures?.length
+          ? `${data.todayFixtures.length} today`
+          : null,
+        data?.lastRunnerUp
+          ? `Runner-up ${data.lastRunnerUp.name}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" · ") || null;
+
+  function openFx(fx: SlimFx) {
+    setSelectedFx(fx);
+  }
+
   return (
-    <div className="space-y-3">
-      {/* Header */}
-      <div className="relative overflow-hidden rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
-        {logo ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={logo} alt="" className="pointer-events-none absolute right-8 top-1/2 -translate-y-1/2 h-24 w-24 object-contain opacity-[0.1]" />
-        ) : null}
-        <div className="relative flex items-start gap-3">
-          {logo ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={logo} alt="" className="h-14 w-14 object-contain" />
-          ) : (
-            <div className="h-14 w-14 rounded-md bg-[var(--surface-muted)]" />
-          )}
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-xl font-black tracking-tight">
-                {meta?.name || data?.competition || "League"}
-              </h1>
-              <span className="rounded-[var(--radius-sm)] bg-[var(--surface-muted)] text-[var(--foreground)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[var(--tracking-label)] border border-[var(--border)]">
-                Active
-              </span>
-            </div>
-            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-[var(--muted-foreground)]">
-              {meta?.countryFlag ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={meta.countryFlag} alt="" className="h-3 w-4 object-cover inline rounded-[1px]" />
-              ) : null}
-              {meta?.country ? <span>{meta.country}</span> : null}
-              <span>Federation / FA</span>
-              <span>Male · Senior</span>
-              {data?.season != null ? <span>Season {data.season}</span> : null}
-            </div>
-          </div>
+    <div
+      className="player-dossier league-dossier"
+      data-league-dossier="1"
+      data-dossier-kind="league"
+      data-dossier-craft="v2"
+    >
+      <div className="player-dossier-titlebar">
+        <div className="player-dossier-title">League dossier</div>
+        <div className="player-dossier-titlebar-actions">
           <button
             type="button"
+            className="player-dossier-icon-btn focus-ring"
             onClick={() => void load()}
             disabled={busy}
-            className="desk-btn text-[11px] inline-flex items-center gap-1"
+            aria-label="Refresh league dossier"
+            title="Refresh"
           >
-            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-            Refresh
+            {busy ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="h-3.5 w-3.5" />
+            )}
           </button>
         </div>
       </div>
 
-      <div className="flex gap-1 overflow-x-auto rounded-[var(--radius-md)] bg-[var(--surface-muted)] p-1">
+      <div className="player-dossier-identity">
+        <div className="player-dossier-identity-row">
+          {logo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={logo}
+              alt=""
+              className="player-dossier-photo league-dossier-crest"
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = "none";
+              }}
+            />
+          ) : (
+            <div className="player-dossier-photo player-dossier-photo-fallback" />
+          )}
+          <div className="min-w-0 flex-1">
+            <h2 className="player-dossier-name">{leagueName}</h2>
+            <div className="player-dossier-meta">
+              {meta?.countryFlag ? (
+                <span className="player-dossier-flag">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={meta.countryFlag} alt="" />
+                </span>
+              ) : null}
+              {meta?.country ? <span>{meta.country}</span> : null}
+              {meta?.type ? (
+                <>
+                  <span className="player-dossier-meta-sep" aria-hidden>
+                    ·
+                  </span>
+                  <span className="player-dossier-meta-quiet">{meta.type}</span>
+                </>
+              ) : null}
+              {data?.season != null ? (
+                <>
+                  <span className="player-dossier-meta-sep" aria-hidden>
+                    ·
+                  </span>
+                  <span className="player-dossier-meta-quiet">
+                    Season {data.season}
+                  </span>
+                </>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="player-dossier-tabs" role="tablist">
         {TABS.map((t) => (
           <button
             key={t.key}
             type="button"
-            onClick={() => setTab(t.key)}
+            role="tab"
+            aria-selected={tab === t.key}
+            onClick={() => {
+              setTab(t.key);
+              if (t.key !== "results" && t.key !== "fixtures") setSelectedFx(null);
+            }}
             className={cn(
-              "tab-chip focus-ring rounded-[var(--radius-sm)] px-2.5 py-1.5 text-[11px] font-semibold border whitespace-nowrap",
-              tab === t.key
-                ? "bg-[var(--surface)] border-[var(--border-strong)] shadow-xs text-[var(--foreground)]"
-                : "border-transparent text-[var(--muted)] hover:bg-[var(--surface)]"
+              "player-dossier-tab",
+              tab === t.key && "is-active"
             )}
           >
             {t.label}
+            {t.key === "notes" && notes.length ? ` (${notes.length})` : ""}
+            {t.key === "table" && data?.standings?.length
+              ? ` (${data.standings.length})`
+              : ""}
           </button>
         ))}
       </div>
 
-      {err && (
-        <div className="rounded-[var(--radius-sm)] border border-[var(--warning)]/40 bg-[var(--surface-muted)] px-3 py-2 text-xs flex gap-2 text-[var(--foreground)]">
-          <AlertTriangle className="h-4 w-4 shrink-0" /> {err}
-        </div>
-      )}
-      {data?.message && (
-        <div className="rounded-[var(--radius-sm)] border px-3 py-2 text-xs text-[var(--muted-foreground)]">{data.message}</div>
-      )}
-
-      {busy && !data ? (
-        <div className="flex justify-center gap-2 text-sm text-[var(--muted)] py-10">
-          <Loader2 className="h-4 w-4 animate-spin" /> Loading league dossier…
-        </div>
-      ) : (
-        <div className="grid lg:grid-cols-2 gap-3">
-          <div className="space-y-3">
-            {tab === "profile" && (
-              <>
-                <Panel title="Seasons tracked">
-                  {(meta?.seasonsTracked?.length || 0) === 0 ? (
-                    <p className="text-xs text-[var(--muted)]">No season list from feed.</p>
-                  ) : (
-                    <ul className="flex flex-wrap gap-1">
-                      {meta!.seasonsTracked.map((s) => (
-                        <li
-                          key={s.year}
-                          className={cn(
-                            "rounded-[var(--radius-sm)] px-2 py-0.5 text-[10px] font-semibold border",
-                            s.current
-                              ? "border-[var(--border-strong)] bg-[var(--surface)] text-[var(--foreground)] shadow-xs"
-                              : "border-[var(--border)] text-[var(--muted)]"
-                          )}
-                        >
-                          {s.year}{s.current ? " · current" : ""}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </Panel>
-                <Panel title="Last champion">
-                  {data?.lastChampion ? (
-                    <div className="flex items-center gap-2 text-xs">
-                      {data.lastChampion.logo ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={data.lastChampion.logo} alt="" className="h-6 w-6 object-contain" />
-                      ) : null}
-                      <span className="font-semibold">{data.lastChampion.name}</span>
-                      <span className="text-[var(--muted)]">· {data.lastChampion.season}</span>
-                    </div>
-                  ) : (
-                    <p className="text-xs text-[var(--muted)]">Champion not in feed yet (plan/season limits).</p>
-                  )}
-                </Panel>
-                <Panel title="Last runner-up">
-                  {data?.lastRunnerUp ? (
-                    <div className="flex items-center gap-2 text-xs">
-                      {data.lastRunnerUp.logo ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={data.lastRunnerUp.logo} alt="" className="h-6 w-6 object-contain" />
-                      ) : null}
-                      <span className="font-semibold">{data.lastRunnerUp.name}</span>
-                      <span className="text-[var(--muted)]">· {data.lastRunnerUp.season}</span>
-                    </div>
-                  ) : (
-                    <p className="text-xs text-[var(--muted)]">Runner-up not in feed yet.</p>
-                  )}
-                </Panel>
-              </>
-            )}
-
-            {tab === "schedule" && (
-              <>
-                <Panel title="Live">
-                  <FxList items={data?.live || []} empty="No live matches." highlight={highlight} />
-                </Panel>
-                <Panel title="Today">
-                  <FxList items={data?.todayFixtures || []} empty="No fixtures today." highlight={highlight} />
-                </Panel>
-                <Panel title="Upcoming">
-                  <FxList items={data?.upcoming || []} empty="No upcoming fixtures." highlight={highlight} />
-                </Panel>
-                <Panel title="Recent results">
-                  <FxList items={data?.recent || []} empty="No recent results." highlight={highlight} />
-                </Panel>
-              </>
-            )}
-
-            {tab === "standings" && (
-              <Panel title="Table">
-                {!(data?.standings?.length) ? (
-                  <p className="text-xs text-[var(--muted)]">No standings returned.</p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-[11px]">
-                      <thead>
-                        <tr className="text-left text-[var(--muted)] border-b">
-                          <th className="py-1.5 pr-1">#</th>
-                          <th className="py-1.5 pr-2">Club</th>
-                          <th className="py-1.5 px-1 text-right">MP</th>
-                          <th className="py-1.5 px-1 text-right">W</th>
-                          <th className="py-1.5 px-1 text-right">D</th>
-                          <th className="py-1.5 px-1 text-right">L</th>
-                          <th className="py-1.5 px-1 text-right">GD</th>
-                          <th className="py-1.5 pl-1 text-right">Pts</th>
-                          <th className="py-1.5 pl-2">Form</th>
-                          <th className="py-1.5 pl-2">Zone</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {data!.standings.map((r) => (
-                          <tr
-                            key={`${r.rank}-${r.teamId}`}
-                            className={cn(
-                              "border-b border-[var(--border)]",
-                              highlight.has(r.teamId) && "bg-[var(--surface-muted)] font-semibold"
-                            )}
-                          >
-                            <td className="py-1.5 pr-1 tabular-nums text-[var(--muted)]">{r.rank}</td>
-                            <td className="py-1.5 pr-2 truncate max-w-[10rem]">
-                              {r.logo ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img src={r.logo} alt="" className="inline h-3.5 w-3.5 mr-1 object-contain" />
-                              ) : null}
-                              {r.team}
-                            </td>
-                            <td className="py-1.5 px-1 text-right tabular-nums">{r.played}</td>
-                            <td className="py-1.5 px-1 text-right tabular-nums">{r.won}</td>
-                            <td className="py-1.5 px-1 text-right tabular-nums">{r.drawn}</td>
-                            <td className="py-1.5 px-1 text-right tabular-nums">{r.lost}</td>
-                            <td className="py-1.5 px-1 text-right tabular-nums">{r.gd}</td>
-                            <td className="py-1.5 pl-1 text-right tabular-nums font-semibold">{r.points}</td>
-                            <td className="py-1.5 pl-2 font-mono text-[10px] text-[var(--muted)]">{r.form || "—"}</td>
-                            <td className="py-1.5 pl-2 text-[10px] text-[var(--muted)] max-w-[8rem] truncate" title={r.description || ""}>
-                              {r.description || "—"}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </Panel>
-            )}
-
-            {tab === "hof" && (
-              <>
-                <Panel title="Season winners">
-                  {(data?.hallOfFame?.length || 0) === 0 ? (
-                    <p className="text-xs text-[var(--muted)]">Hall of Fame empty — prior-season tables soft-failed or plan-limited.</p>
-                  ) : (
-                    <ul className="space-y-1.5 text-xs">
-                      {data!.hallOfFame!.map((row) => (
-                        <li key={row.season} className="flex gap-2 items-center">
-                          <span className="tabular-nums text-[var(--muted)] w-12">{row.season}</span>
-                          <span className="font-semibold flex-1 truncate">{row.champion || "—"}</span>
-                          <span className="text-[var(--muted)] truncate">2nd {row.runnerUp || "—"}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </Panel>
-                <Panel title="Titles tally">
-                  {titleTally.length === 0 ? (
-                    <p className="text-xs text-[var(--muted)]">No title tally yet.</p>
-                  ) : (
-                    <ul className="space-y-1 text-xs">
-                      {titleTally.map(([name, n]) => (
-                        <li key={name} className="flex justify-between gap-2">
-                          <span className="font-semibold">{name}</span>
-                          <span className="tabular-nums">{n}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </Panel>
-              </>
-            )}
-
-            {tab === "map" && (
-              <Panel title="Map">
-                <p className="text-xs text-[var(--muted)]">
-                  Geographic club map is not in the feed — showing country only.
-                </p>
-                <div className="mt-2 text-sm font-semibold">
-                  {meta?.country || data?.competition || "—"}
-                </div>
-              </Panel>
-            )}
-
-            {tab === "seasons" && (
-              <Panel title="Seasons">
-                {(meta?.seasonsTracked?.length || 0) === 0 ? (
-                  <p className="text-xs text-[var(--muted)]">No seasons list from feed.</p>
-                ) : (
-                  <ul className="space-y-1.5 text-xs">
-                    {meta!.seasonsTracked.map((s) => (
-                      <li key={s.year} className="flex gap-2">
-                        <span className="font-semibold tabular-nums w-12">{s.year}</span>
-                        <span className="text-[var(--muted)]">
-                          {s.start || "?"} → {s.end || "?"}
-                          {s.current ? " · current" : ""}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </Panel>
-            )}
+      <div className="player-dossier-body">
+        {busy && !data ? (
+          <div className="flex items-center gap-2 text-xs text-[#64748b] py-8 justify-center">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading league dossier…
           </div>
+        ) : null}
 
-          {tab === "profile" ? (
-            <div className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] overflow-hidden flex flex-col min-h-[280px]">
-              <div className="flex items-center gap-1.5 px-3 py-2 border-b text-xs font-bold uppercase tracking-wide">
-                <BookOpen className="h-3.5 w-3.5" /> League notes
-              </div>
-              <div className="p-2 flex-1 min-h-0">
-                <NotesPanel
-                  matchId={matchId}
-                  initialNotes={notes}
-                  entityType="league"
-                  entityId={String(data?.leagueId || data?.competition || "league")}
-                  entityLabel={meta?.name || data?.competition || "League"}
-                  fillHeight
-                />
-              </div>
-            </div>
-          ) : (
-            <Panel title="Desk tips">
-              <p className="text-xs text-[var(--muted)]">
-                European qualification zones appear in the Zone column when the feed provides descriptions (CL / EL / relegation).
-              </p>
-              {fixtureDetail ? (
-                <p className="text-[10px] mt-2 text-[var(--muted)]">{fixtureDetail}</p>
+        {err ? <p className="text-xs text-[#f87171]">{err}</p> : null}
+        {data?.message ? (
+          <p className="text-xs text-[#64748b] mb-2">{data.message}</p>
+        ) : null}
+        {(data?.warnings?.length || 0) > 0 ? (
+          <ul className="mb-2 space-y-0.5">
+            {data!.warnings!.map((w) => (
+              <li key={w} className="text-[10px] text-[#64748b]">
+                {w}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+
+        {!busy && data && tab === "overview" && (
+          <div className="player-dossier-overview space-y-3">
+            <div className="player-dossier-verdict" data-dossier-verdict="1">
+              <div className="player-dossier-verdict-label">Verdict</div>
+              <div className="player-dossier-verdict-line">{sayableLine}</div>
+              {sayableSub ? (
+                <div className="player-dossier-verdict-sub">{sayableSub}</div>
               ) : null}
-            </Panel>
-          )}
-        </div>
-      )}
+            </div>
+
+            <div className="player-dossier-overview-cols">
+              <Section title="Identity" dense quiet>
+                <div className="player-dossier-kv">
+                  <Kv label="League" value={leagueName} />
+                  <Kv label="Country" value={meta?.country || "—"} />
+                  <Kv label="Type" value={meta?.type || "—"} />
+                  <Kv
+                    label="Season"
+                    value={data.season != null ? String(data.season) : "—"}
+                  />
+                  <Kv
+                    label="Clubs"
+                    value={
+                      data.standings?.length
+                        ? String(data.standings.length)
+                        : "—"
+                    }
+                  />
+                </div>
+              </Section>
+
+              <Section title="Last season" dense quiet>
+                {data.lastChampion || data.lastRunnerUp ? (
+                  <div className="player-dossier-kv">
+                    <Kv
+                      label="Champion"
+                      value={
+                        data.lastChampion
+                          ? `${data.lastChampion.name} (${data.lastChampion.season})`
+                          : "—"
+                      }
+                    />
+                    <Kv
+                      label="Runner-up"
+                      value={
+                        data.lastRunnerUp
+                          ? `${data.lastRunnerUp.name} (${data.lastRunnerUp.season})`
+                          : "—"
+                      }
+                    />
+                  </div>
+                ) : (
+                  <p className="text-xs text-[#64748b]">
+                    Prior champion / runner-up not in feed yet (plan or season
+                    limits).
+                  </p>
+                )}
+              </Section>
+            </div>
+
+            <Section title="Seasons tracked" dense quiet>
+              {(meta?.seasonsTracked?.length || 0) === 0 ? (
+                <p className="text-xs text-[#64748b]">No season list from feed.</p>
+              ) : (
+                <ul className="flex flex-wrap gap-1">
+                  {meta!.seasonsTracked.map((s) => (
+                    <li
+                      key={s.year}
+                      className={cn(
+                        "rounded-[2px] px-2 py-0.5 text-[10px] font-semibold border",
+                        s.current
+                          ? "border-white/20 bg-[#12161c] text-[#e2e8f0]"
+                          : "border-white/8 text-[#64748b]"
+                      )}
+                    >
+                      {s.year}
+                      {s.current ? " · current" : ""}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Section>
+          </div>
+        )}
+
+        {!busy && data && tab === "table" && (
+          <Section title="Table">
+            {!(data.standings?.length) ? (
+              <p className="text-xs text-[#64748b]">No standings returned.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Club</th>
+                      <th>MP</th>
+                      <th>W</th>
+                      <th>D</th>
+                      <th>L</th>
+                      <th>GD</th>
+                      <th>Pts</th>
+                      <th>Form</th>
+                      <th>Zone</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.standings.map((r) => (
+                      <tr
+                        key={`${r.rank}-${r.teamId}`}
+                        className={cn(highlight.has(r.teamId) && "font-semibold")}
+                      >
+                        <td className="muted">{r.rank}</td>
+                        <td>
+                          {r.logo ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={r.logo}
+                              alt=""
+                              className="inline h-3.5 w-3.5 mr-1 object-contain align-middle"
+                            />
+                          ) : null}
+                          {r.team}
+                        </td>
+                        <td>{r.played}</td>
+                        <td>{r.won}</td>
+                        <td>{r.drawn}</td>
+                        <td>{r.lost}</td>
+                        <td>{r.gd}</td>
+                        <td className="font-semibold">{r.points}</td>
+                        <td className="muted font-mono text-[10px]">
+                          {r.form || "—"}
+                        </td>
+                        <td
+                          className="muted text-[10px] max-w-[8rem] truncate"
+                          title={r.description || ""}
+                        >
+                          {r.description || "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <p className="mt-2 text-[10px] text-[#64748b]">
+              Qualification / relegation zones appear in Zone when the feed
+              provides descriptions.
+            </p>
+          </Section>
+        )}
+
+        {!busy && data && tab === "results" && (
+          <div className="space-y-3">
+            <Section title="Recent results">
+              <FxList
+                items={data.recent || []}
+                empty="No recent results."
+                highlight={highlight}
+                onSelect={openFx}
+                selectedId={selectedFx?.id}
+              />
+            </Section>
+            {selectedFx ? (
+              <MatchInfoPanel fx={selectedFx} onClose={() => setSelectedFx(null)} />
+            ) : null}
+          </div>
+        )}
+
+        {!busy && data && tab === "fixtures" && (
+          <div className="space-y-3">
+            <Section title="Live" dense>
+              <FxList
+                items={data.live || []}
+                empty="No live matches."
+                highlight={highlight}
+                onSelect={openFx}
+                selectedId={selectedFx?.id}
+              />
+            </Section>
+            <Section title="Today" dense>
+              <FxList
+                items={data.todayFixtures || []}
+                empty="No fixtures today."
+                highlight={highlight}
+                onSelect={openFx}
+                selectedId={selectedFx?.id}
+              />
+            </Section>
+            <Section title="Upcoming">
+              <FxList
+                items={data.upcoming || []}
+                empty="No upcoming fixtures."
+                highlight={highlight}
+                onSelect={openFx}
+                selectedId={selectedFx?.id}
+              />
+            </Section>
+            {selectedFx ? (
+              <MatchInfoPanel fx={selectedFx} onClose={() => setSelectedFx(null)} />
+            ) : null}
+          </div>
+        )}
+
+        {!busy && data && tab === "history" && (
+          <div className="space-y-3">
+            <Section title="Season winners">
+              {(data.hallOfFame?.length || 0) === 0 ? (
+                <p className="text-xs text-[#64748b]">
+                  Hall of Fame empty — prior-season tables soft-failed or
+                  plan-limited.
+                </p>
+              ) : (
+                <div className="overflow-x-auto max-h-[40vh]">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Season</th>
+                        <th>Champion</th>
+                        <th>Runner-up</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.hallOfFame!.map((row) => (
+                        <tr key={row.season}>
+                          <td className="muted">{row.season}</td>
+                          <td className="font-semibold">{row.champion || "—"}</td>
+                          <td className="muted">{row.runnerUp || "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Section>
+
+            <Section title="Titles tally" dense quiet>
+              {titleTally.length === 0 ? (
+                <p className="text-xs text-[#64748b]">No title tally yet.</p>
+              ) : (
+                <div className="player-dossier-kv">
+                  {titleTally.map(([name, n]) => (
+                    <Kv key={name} label={name} value={String(n)} />
+                  ))}
+                </div>
+              )}
+            </Section>
+
+            <Section title="Seasons" dense quiet>
+              {(meta?.seasonsTracked?.length || 0) === 0 ? (
+                <p className="text-xs text-[#64748b]">No seasons list from feed.</p>
+              ) : (
+                <ul className="space-y-1.5 text-xs">
+                  {meta!.seasonsTracked.map((s) => (
+                    <li key={s.year} className="flex gap-2">
+                      <span className="font-semibold tabular-nums w-12 text-[#e2e8f0]">
+                        {s.year}
+                      </span>
+                      <span className="text-[#64748b]">
+                        {s.start || "?"} → {s.end || "?"}
+                        {s.current ? " · current" : ""}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Section>
+
+            <Section title="Map" dense quiet>
+              <p className="text-xs text-[#64748b]">
+                Geographic club map is not in the feed — showing country only.
+              </p>
+              <div className="mt-2 text-sm font-semibold text-[#e2e8f0]">
+                {meta?.country || data.competition || "—"}
+              </div>
+            </Section>
+          </div>
+        )}
+
+        {!busy && data && tab === "notes" && (
+          <div className="space-y-3">
+            <NotesPanel
+              matchId={matchId}
+              initialNotes={notes}
+              entityType="league"
+              entityId={String(data.leagueId || data.competition || "league")}
+              entityLabel={leagueName}
+              fillHeight
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
-function Panel({ title, children }: { title: string; children: React.ReactNode }) {
+function MatchInfoPanel({
+  fx,
+  onClose,
+}: {
+  fx: SlimFx;
+  onClose: () => void;
+}) {
   return (
-    <div className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] p-3">
-      <div className="text-desk-label text-[var(--muted)] mb-2">{title}</div>
+    <Section title="Match info" dense>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 space-y-1 text-xs">
+          <div className="font-semibold text-[#e2e8f0]">
+            {fx.home.name}{" "}
+            <span className="tabular-nums">{scoreLabel(fx)}</span>{" "}
+            {fx.away.name}
+          </div>
+          <div className="text-[#64748b] tabular-nums">{whenLabel(fx.date)}</div>
+          <div className="text-[#64748b]">
+            {fx.statusLong || fx.status}
+            {fx.elapsed != null ? ` · ${fx.elapsed}'` : ""}
+            {fx.round ? ` · ${fx.round}` : ""}
+          </div>
+          <div className="text-[10px] text-[#64748b] tabular-nums">
+            Fixture id {fx.id}
+          </div>
+        </div>
+        <button
+          type="button"
+          className="player-dossier-icon-btn focus-ring shrink-0"
+          onClick={onClose}
+          aria-label="Close match info"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </Section>
+  );
+}
+
+function Section({
+  title,
+  children,
+  dense,
+  quiet,
+}: {
+  title: string;
+  children: ReactNode;
+  dense?: boolean;
+  quiet?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "player-dossier-section",
+        dense && "is-dense",
+        quiet && "is-quiet"
+      )}
+    >
+      <div className="player-dossier-section-title">{title}</div>
       {children}
+    </div>
+  );
+}
+
+function Kv({
+  label,
+  value,
+  sub,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+}) {
+  return (
+    <div className="player-dossier-kv-row">
+      <span className="player-dossier-kv-label">{label}</span>
+      <span className="player-dossier-kv-value">
+        <span className="truncate">{value}</span>
+        {sub ? <span className="player-dossier-kv-sub">{sub}</span> : null}
+      </span>
     </div>
   );
 }
@@ -465,36 +707,46 @@ function FxList({
   items,
   empty,
   highlight,
+  onSelect,
+  selectedId,
 }: {
   items: SlimFx[];
   empty: string;
   highlight: Set<number>;
+  onSelect: (fx: SlimFx) => void;
+  selectedId?: number;
 }) {
-  if (!items.length) return <p className="text-xs text-[var(--muted)]">{empty}</p>;
+  if (!items.length) return <p className="text-xs text-[#64748b]">{empty}</p>;
   return (
-    <ul className="space-y-1.5 text-xs">
+    <ul className="space-y-1 text-xs">
       {items.map((fx) => {
         const hi = highlight.has(fx.home.id) || highlight.has(fx.away.id);
-        const score =
-          fx.goals.home != null && fx.goals.away != null
-            ? `${fx.goals.home}–${fx.goals.away}`
-            : "–";
+        const selected = selectedId === fx.id;
         return (
-          <li
-            key={fx.id}
-            className={cn(
-              "flex gap-2 items-center rounded-md px-1.5 py-1",
-              hi && "bg-[var(--surface-muted)] font-semibold"
-            )}
-          >
-            <span className="text-[var(--muted)] w-28 shrink-0 tabular-nums text-[10px]">
-              {whenLabel(fx.date)}
-            </span>
-            <span className="flex-1 truncate">
-              {fx.home.name} vs {fx.away.name}
-            </span>
-            <span className="tabular-nums font-semibold">{score}</span>
-            <span className="text-[10px] text-[var(--muted)] w-8">{fx.status}</span>
+          <li key={fx.id}>
+            <button
+              type="button"
+              onClick={() => onSelect(fx)}
+              className={cn(
+                "w-full flex gap-2 items-center rounded-[2px] px-1.5 py-1 text-left border border-transparent hover:bg-[#12161c] hover:border-white/[0.06]",
+                hi && "bg-[#12161c] font-semibold",
+                selected && "border-white/20 bg-[#161b22]"
+              )}
+              data-league-fx={fx.id}
+            >
+              <span className="text-[#64748b] w-28 shrink-0 tabular-nums text-[10px]">
+                {whenLabel(fx.date)}
+              </span>
+              <span className="flex-1 truncate text-[#e2e8f0]">
+                {fx.home.name} vs {fx.away.name}
+              </span>
+              <span className="tabular-nums font-semibold text-[#e2e8f0]">
+                {scoreLabel(fx)}
+              </span>
+              <span className="text-[10px] text-[#64748b] w-8 shrink-0">
+                {fx.status}
+              </span>
+            </button>
           </li>
         );
       })}

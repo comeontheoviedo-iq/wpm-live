@@ -36,6 +36,7 @@ import { leagueIdForCompetition } from "./competitions";
 import { resolveWeatherForVenue } from "./weather";
 import { nationalityToIso } from "./flags";
 import { maybeAutoGenerateLineupPack } from "./pack-generate";
+import { maybeReconcileNotesOnXiConfirm } from "./reconcile-notes-on-xi";
 import { namesLooselyMatch } from "./player-name";
 import {
   aggregateForIngest,
@@ -2087,6 +2088,10 @@ export async function syncMatchFromApiFootball(
 
   const previousStatus = match.lineupStatus || "expected";
   let lineupPack: { triggered: boolean; reason: string } | null = null;
+  let notesReconcile: {
+    triggered: boolean;
+    reason: string;
+  } | null = null;
   if (lineupStatus === "confirmed") {
     // Fire-and-forget so sync stays fast; await only the decision kickoff
     void maybeAutoGenerateLineupPack({
@@ -2102,6 +2107,30 @@ export async function syncMatchFromApiFootball(
       .catch((err) => console.error("[sync] auto lineup pack failed", matchId, err));
     lineupPack = { triggered: true, reason: "queued" };
     // Refine: if already confirmed same XI, maybeAuto… returns quickly — still ok
+
+    // Purge out-of-squad player notes + soft-create Bios from Research packs
+    void maybeReconcileNotesOnXiConfirm({
+      matchId,
+      previousStatus,
+      newStatus: lineupStatus,
+    })
+      .then((r) => {
+        if (r.triggered) {
+          console.info(
+            "[sync] reconcile notes on XI",
+            matchId,
+            r.reason,
+            `purged=${r.purged}`,
+            `createdPlayers=${r.createdPlayers}`,
+            `createdCoaches=${r.createdCoaches}`,
+            `squad=${r.squadSize}`
+          );
+        }
+      })
+      .catch((err) =>
+        console.error("[sync] reconcile notes on XI failed", matchId, err)
+      );
+    notesReconcile = { triggered: true, reason: "queued" };
   }
 
   return {
@@ -2112,6 +2141,7 @@ export async function syncMatchFromApiFootball(
     lineupStatus,
     previousLineupStatus: previousStatus,
     lineupPack,
+    notesReconcile,
     squadHome: squadHome.upserted,
     squadAway: squadAway.upserted,
     injuryCount,

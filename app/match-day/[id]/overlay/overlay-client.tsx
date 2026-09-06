@@ -798,7 +798,7 @@ export function ObsOverlayClient(props: {
           className={cn(
             "obs-overlay-flashes absolute left-1/2 z-[60] flex -translate-x-1/2 flex-col gap-2",
             flashesLower
-              ? "bottom-[28%] top-auto w-[min(94%,30rem)] items-center text-center drop-shadow-[0_10px_28px_rgba(0,0,0,0.5)]"
+              ? "bottom-[14%] top-auto w-[min(56%,28rem)] items-center text-center drop-shadow-[0_10px_28px_rgba(0,0,0,0.5)]"
               : "top-28 w-[min(94%,26rem)]"
           )}
           data-flashes-placement={flashesLower ? "lower" : "top"}

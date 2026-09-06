@@ -1257,7 +1257,7 @@ export function PitchBoard({
           })}
         </div>
 
-        {/* Center scorebug — TV eyebar: solid opaque insert, score+clock dominate */}
+        {/* Center scorebug — craft TV eyebar (crest | score | clock | crest) */}
         <div className="pointer-events-none absolute left-1/2 top-1.5 z-20 flex w-[min(58%,26rem)] -translate-x-1/2 flex-col items-center gap-1">
           {showScore && (
             <div className="scorebug pointer-events-auto">
@@ -1265,7 +1265,7 @@ export function PitchBoard({
                 <button
                   type="button"
                   onClick={onLeagueLogoClick}
-                  className="shrink-0 self-stretch flex items-center px-1.5 bg-[#050608] border-r border-white/10 hover:bg-white/5"
+                  className="scorebug-league"
                   title="League notes"
                   aria-label="Open league notes"
                 >
@@ -1273,13 +1273,22 @@ export function PitchBoard({
                   <img
                     src={leagueLogoUrl}
                     alt=""
-                    className="h-3.5 w-3.5 object-contain bg-white/95 rounded-[1px]"
+                    className="scorebug-league-img"
                   />
                 </button>
               ) : null}
               {(() => {
                 const leftLogo = homeOnLeft ? homeLogoUrl : awayLogoUrl;
                 const rightLogo = homeOnLeft ? awayLogoUrl : homeLogoUrl;
+                const leftAccentRaw = homeOnLeft ? homeColor : awayColor;
+                const rightAccentRaw = homeOnLeft ? awayColor : homeColor;
+                const accentsCollide =
+                  leftAccentRaw.trim().toLowerCase() ===
+                  rightAccentRaw.trim().toLowerCase();
+                // When clubs share the same primary (common in seed data),
+                // keep distinct home/away hairlines for broadcast identity.
+                const leftAccent = accentsCollide ? "#f8fafc" : leftAccentRaw;
+                const rightAccent = accentsCollide ? "#e11d48" : rightAccentRaw;
                 const onLeft = homeOnLeft ? onHomeLogoClick : onAwayLogoClick;
                 const onRight = homeOnLeft ? onAwayLogoClick : onHomeLogoClick;
                 const leftTitle = homeOnLeft
@@ -1290,57 +1299,90 @@ export function PitchBoard({
                   : "Home club notes";
                 return (
                   <>
-                    <div className="scorebug-team scorebug-team-home">
-                      {leftLogo ? (
-                        <button
-                          type="button"
-                          onClick={onLeft}
-                          className="shrink-0 overflow-hidden rounded-[1px] ring-1 ring-white/15 hover:ring-teal-400"
-                          title={leftTitle}
-                          aria-label={leftTitle}
-                        >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={leftLogo}
-                            alt=""
-                            className="h-3.5 w-3.5 object-contain bg-white/95"
-                          />
-                        </button>
-                      ) : null}
-                      <span className="scorebug-code">{leftCode}</span>
-                    </div>
+                    {onLeft ? (
+                      <button
+                        type="button"
+                        onClick={onLeft}
+                        className="scorebug-crest"
+                        title={leftTitle}
+                        aria-label={leftTitle}
+                      >
+                        {leftLogo ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={leftLogo} alt="" className="scorebug-crest-img" />
+                        ) : (
+                          <span className="scorebug-code">{leftCode}</span>
+                        )}
+                        <span
+                          className="scorebug-hairline"
+                          style={{ backgroundColor: leftAccent }}
+                          aria-hidden
+                        />
+                      </button>
+                    ) : (
+                      <div className="scorebug-crest">
+                        {leftLogo ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={leftLogo} alt="" className="scorebug-crest-img" />
+                        ) : (
+                          <span className="scorebug-code">{leftCode}</span>
+                        )}
+                        <span
+                          className="scorebug-hairline"
+                          style={{ backgroundColor: leftAccent }}
+                          aria-hidden
+                        />
+                      </div>
+                    )}
                     <span className="scorebug-score">
                       {leftScore}
-                      <span className="mx-0.5 text-[0.85em] font-bold text-white/45">
-                        –
-                      </span>
+                      <span className="scorebug-score-sep">–</span>
                       {rightScore}
                     </span>
-                    <div className="scorebug-team scorebug-team-away">
-                      <span className="scorebug-code">{rightCode}</span>
-                      {rightLogo ? (
-                        <button
-                          type="button"
-                          onClick={onRight}
-                          className="shrink-0 overflow-hidden rounded-[1px] ring-1 ring-white/15 hover:ring-teal-400"
-                          title={rightTitle}
-                          aria-label={rightTitle}
-                        >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={rightLogo}
-                            alt=""
-                            className="h-3.5 w-3.5 object-contain bg-white/95"
-                          />
-                        </button>
-                      ) : null}
-                    </div>
+                    {statusShort ? (
+                      <>
+                        <span className="scorebug-divider" aria-hidden />
+                        <span className="scorebug-clock">{statusShort}</span>
+                      </>
+                    ) : null}
+                    {onRight ? (
+                      <button
+                        type="button"
+                        onClick={onRight}
+                        className="scorebug-crest"
+                        title={rightTitle}
+                        aria-label={rightTitle}
+                      >
+                        {rightLogo ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={rightLogo} alt="" className="scorebug-crest-img" />
+                        ) : (
+                          <span className="scorebug-code">{rightCode}</span>
+                        )}
+                        <span
+                          className="scorebug-hairline"
+                          style={{ backgroundColor: rightAccent }}
+                          aria-hidden
+                        />
+                      </button>
+                    ) : (
+                      <div className="scorebug-crest">
+                        {rightLogo ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={rightLogo} alt="" className="scorebug-crest-img" />
+                        ) : (
+                          <span className="scorebug-code">{rightCode}</span>
+                        )}
+                        <span
+                          className="scorebug-hairline"
+                          style={{ backgroundColor: rightAccent }}
+                          aria-hidden
+                        />
+                      </div>
+                    )}
                   </>
                 );
               })()}
-              {statusShort ? (
-                <span className="scorebug-clock">{statusShort}</span>
-              ) : null}
             </div>
           )}
 

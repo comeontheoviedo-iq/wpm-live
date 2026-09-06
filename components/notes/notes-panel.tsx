@@ -334,22 +334,59 @@ export function NotesPanel({
     { key: "hooks", label: "Hooks" },
   ];
 
+  function parseNoteMinute(title: string): {
+    minute: string | null;
+    sayable: string;
+  } {
+    const raw = normalizeApostrophes(title).trim();
+    const lead = raw.match(/^(\d{1,3}(?:\+\d{1,2})?)\s*['′']\s*(.*)$/);
+    if (lead) {
+      const rest = lead[2].trim();
+      return {
+        minute: `${lead[1]}'`,
+        sayable: rest || raw,
+      };
+    }
+    const mid = raw.match(/(\d{1,3}(?:\+\d{1,2})?)\s*['′']/);
+    if (mid) {
+      return { minute: `${mid[1]}'`, sayable: raw };
+    }
+    return { minute: null, sayable: raw };
+  }
+
+  function noteSeverityClass(n: NoteRow): string {
+    if (n.pinned) return "queue-row-pin";
+    if (relevantSet.has(n.id)) return "queue-row-now";
+    const t = `${normalizeApostrophes(n.title)} ${normalizeApostrophes(n.body)}`.toLowerCase();
+    if (/\b(own\s*goal|goal|scored)\b/.test(t)) return "queue-row-goal";
+    if (/\bred\b/.test(t)) return "queue-row-red";
+    if (/\byellow\b|\bcard\b/.test(t)) return "queue-row-card";
+    if (/\binjur|stretcher/.test(t)) return "queue-row-injury";
+    if (/\bsub(stitution)?\b/.test(t)) return "queue-row-sub";
+    if (isLiveEventNote(n)) return "queue-row-live";
+    if (n.category === "Hook" || n.category === "Funfact") return "queue-row-fact";
+    return "";
+  }
+
   function NoteCard({ n }: { n: NoteRow }) {
     const playerLinked =
       n.entityType === "player" && n.entityId && onNotePlayerClick;
     const playerName =
       (n.entityId && playerNameById?.[n.entityId]) || null;
     const expanded = expandedId === n.id;
+    const { minute, sayable } = parseNoteMinute(n.title);
+    const severity = noteSeverityClass(n);
+    // Dense call-queue: collapsed = title row only (~36–40px); body on expand
+    const showBody = expanded || !liveMode;
+
     return (
       <div
         className={cn(
           "queue-row cursor-pointer",
-          liveMode && "py-0.5 px-1.5",
-          n.pinned && "queue-row-pin",
-          relevantSet.has(n.id) && !expanded && "queue-row-now",
-          isLiveEventNote(n) && !n.pinned && !relevantSet.has(n.id) && "border-l-[3px] border-l-[var(--live)]",
+          liveMode && "px-1.5",
+          severity,
           expanded && "queue-row-active",
-          playerLinked && "hover:border-[var(--border-strong)]"
+          playerLinked && "hover:border-white/20"
         )}
         onClick={() => {
           setExpandedId((cur) => (cur === n.id ? null : n.id));
@@ -358,49 +395,88 @@ export function NotesPanel({
         aria-expanded={expanded}
         title={expanded ? "Collapse note" : "Expand note"}
       >
-        <div className="flex items-start justify-between gap-1.5">
+        <div className="flex items-center gap-1.5">
+          <span
+            className="note-queue-minute shrink-0"
+            aria-hidden={minute ? undefined : true}
+          >
+            {minute || "·"}
+          </span>
           <div className="min-w-0 flex-1">
-            <div
-              className={cn(
-                "font-semibold text-[var(--foreground)]",
-                expanded && "text-[var(--brand)]",
-                n.pinned && !expanded && "text-amber-100",
-                expanded ? "whitespace-normal" : "truncate",
-                liveMode ? "text-[10.5px] leading-tight" : "text-xs"
-              )}
-            >
-              {normalizeApostrophes(n.title)}
-              <span
+            <div className="flex items-center gap-1.5 min-w-0">
+              <div
                 className={cn(
-                  "ml-1.5 text-[8.5px] font-semibold uppercase tracking-[0.04em]",
-                  n.pinned
-                    ? "text-amber-400/90"
-                    : expanded
-                      ? "text-teal-400/80"
-                      : "text-slate-500"
+                  "note-queue-title min-w-0 flex-1",
+                  expanded ? "whitespace-normal" : "truncate"
                 )}
               >
+                {sayable}
+              </div>
+              <span
+                className="note-queue-chip shrink-0"
+                title={[
+                  n.category,
+                  n.pinned ? "pin" : null,
+                  relevantSet.has(n.id) ? "now" : null,
+                  playerName,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              >
                 {n.category}
-                {n.pinned ? " · pin" : ""}
-                {relevantSet.has(n.id) ? " · now" : ""}
-                {playerName ? ` · ${playerName}` : ""}
               </span>
+              <div
+                className="flex gap-0.5 shrink-0"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                  type="button"
+                  className="p-0.5 text-slate-500 hover:text-amber-400"
+                  onClick={() => togglePin(n.id, n.pinned)}
+                  aria-label="Pin note"
+                >
+                  <Pin
+                    className={cn(
+                      "h-3 w-3",
+                      n.pinned && "fill-amber-400 text-amber-400"
+                    )}
+                  />
+                </button>
+                <button
+                  type="button"
+                  className="p-0.5 text-slate-500 hover:text-rose-400"
+                  onClick={() => remove(n.id)}
+                  aria-label="Delete note"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              </div>
             </div>
-            <p
-              className={cn(
-                "text-slate-700 dark:text-slate-300 whitespace-pre-wrap",
-                liveMode
-                  ? "mt-0.5 text-[10px] leading-snug"
-                  : "mt-1 text-xs",
-                !expanded && (liveMode ? "line-clamp-2" : "line-clamp-3")
-              )}
-            >
-              {normalizeApostrophes(n.body)}
-            </p>
+            {showBody && (
+              <p
+                className={cn(
+                  "note-queue-body mt-1 whitespace-pre-wrap",
+                  !expanded && "line-clamp-2"
+                )}
+              >
+                {normalizeApostrophes(n.body)}
+              </p>
+            )}
+            {expanded && (playerName || n.pinned || relevantSet.has(n.id)) && (
+              <div className="mt-1 flex flex-wrap gap-1">
+                {playerName ? (
+                  <span className="note-queue-chip">{playerName}</span>
+                ) : null}
+                {relevantSet.has(n.id) ? (
+                  <span className="note-queue-chip">now</span>
+                ) : null}
+                {n.pinned ? <span className="note-queue-chip">pin</span> : null}
+              </div>
+            )}
             {expanded && playerLinked && n.entityId && (
               <button
                 type="button"
-                className="mt-1.5 text-[10px] font-semibold text-[var(--brand-dark)] dark:text-[var(--brand)] hover:underline"
+                className="mt-1.5 text-[10px] font-semibold text-slate-300 hover:text-white hover:underline"
                 onClick={(e) => {
                   e.stopPropagation();
                   onNotePlayerClick?.(n.entityId!);
@@ -410,40 +486,25 @@ export function NotesPanel({
               </button>
             )}
           </div>
-          <div
-            className="flex gap-0.5 shrink-0"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              type="button"
-              className="p-0.5 text-slate-400 hover:text-amber-500"
-              onClick={() => togglePin(n.id, n.pinned)}
-              aria-label="Pin note"
-            >
-              <Pin
-                className={cn(
-                  "h-3 w-3",
-                  n.pinned && "fill-amber-400 text-amber-500"
-                )}
-              />
-            </button>
-            <button
-              type="button"
-              className="p-0.5 text-slate-400 hover:text-rose-500"
-              onClick={() => remove(n.id)}
-              aria-label="Delete note"
-            >
-              <Trash2 className="h-3 w-3" />
-            </button>
-          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <Card className={cn(fillHeight && "h-full flex flex-col overflow-hidden")}>
-      <CardHeader className={cn("shrink-0", fillHeight && "px-2.5 py-1.5")}>
+    <Card
+      className={cn(
+        fillHeight && "h-full flex flex-col overflow-hidden",
+        (fillHeight || liveMode) && "notes-rail-shell rounded-[2px]"
+      )}
+    >
+      <CardHeader
+        className={cn(
+          "shrink-0",
+          fillHeight && "px-2.5 py-1.5",
+          (fillHeight || liveMode) && "border-white/[0.06] bg-[#0a0d12]"
+        )}
+      >
         <CardTitle className="flex items-center justify-between gap-2 text-xs">
           <span>
             Notes
@@ -453,7 +514,7 @@ export function NotesPanel({
               </span>
             ) : null}
           </span>
-          <span className="text-[10px] font-normal text-[var(--muted)] tabular-nums">
+          <span className="text-[10px] font-normal text-slate-500 tabular-nums">
             {visible.length}
           </span>
         </CardTitle>
@@ -461,17 +522,21 @@ export function NotesPanel({
       <CardBody
         className={cn(
           "space-y-2",
-          fillHeight && "flex-1 min-h-0 flex flex-col overflow-hidden p-2"
+          fillHeight && "flex-1 min-h-0 flex flex-col overflow-hidden p-2",
+          (fillHeight || liveMode) && "bg-[#0e1218]"
         )}
       >
         <div
           className={cn(
-            "shrink-0 space-y-1 bg-[var(--surface)] z-10 pb-1 border-b border-[var(--border)]",
-            fillHeight && "sticky top-0"
+            "shrink-0 space-y-1 z-10 pb-1 border-b",
+            fillHeight && "sticky top-0",
+            fillHeight || liveMode
+              ? "bg-[#0e1218] border-white/[0.06]"
+              : "bg-[var(--surface)] border-[var(--border)]"
           )}
         >
           <div className="relative">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-500" />
             <input
               ref={searchRef}
               data-pitchline-notes-search="1"
@@ -479,7 +544,7 @@ export function NotesPanel({
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search notes… press /"
               aria-label="Search notes"
-              className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-transparent pl-7 pr-2 py-0.5 text-[11px]"
+              className="w-full rounded-[2px] border border-white/10 bg-[#0a0d12] pl-7 pr-2 py-0.5 text-[11px] text-slate-200 placeholder:text-slate-600"
             />
           </div>
 
@@ -490,21 +555,21 @@ export function NotesPanel({
                 type="button"
                 onClick={() => setScope(c.key)}
                 className={cn(
-                  "shrink-0 rounded-[var(--radius-sm)] px-1.5 py-0.5 text-[9px] border inline-flex items-center gap-0.5 font-semibold tabular-nums",
+                  "shrink-0 rounded-[2px] px-1.5 py-0.5 text-[9px] border inline-flex items-center gap-0.5 font-semibold tabular-nums tracking-wide",
                   activeFilter === c.key
-                    ? "bg-[var(--foreground)] text-[var(--surface)] border-[var(--foreground)]"
+                    ? "bg-slate-200 text-[#0a0d12] border-slate-200"
                     : c.key === "relevant"
-                      ? "border-[var(--edge-break)]/40 text-[var(--edge-break)]"
-                      : "border-[var(--border)] text-[var(--muted-foreground)]"
+                      ? "border-[var(--edge-break)]/35 text-[var(--edge-break)]"
+                      : "border-white/10 text-slate-500"
                 )}
               >
                 {c.label}
                 <span
                   className={cn(
-                    "rounded-full px-1 text-[9px] tabular-nums",
+                    "rounded-[2px] px-1 text-[9px] tabular-nums",
                     activeFilter === c.key
-                      ? "bg-white/20"
-                      : "bg-slate-100 dark:bg-slate-800 text-slate-500"
+                      ? "bg-black/15"
+                      : "bg-[#0a0d12] text-slate-500"
                   )}
                 >
                   {counts[c.key] ?? 0}
@@ -515,9 +580,9 @@ export function NotesPanel({
 
           {/* Sticky compact composer — always reachable during LIVE */}
           {(fillHeight || liveMode || !compact) && (
-            <div className="space-y-1 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface-muted)] p-1.5">
+            <div className="space-y-1 rounded-[2px] border border-white/10 bg-[#0a0d12] p-1.5">
               <input
-                className="w-full rounded border border-slate-200 dark:border-slate-700 bg-[var(--surface)] px-1.5 py-1 text-[11px]"
+                className="w-full rounded-[2px] border border-white/10 bg-[#10141a] px-1.5 py-1 text-[11px] text-slate-200 placeholder:text-slate-600"
                 placeholder="Title"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
@@ -525,7 +590,7 @@ export function NotesPanel({
               />
               <textarea
                 className={cn(
-                  "w-full rounded border border-slate-200 dark:border-slate-700 bg-[var(--surface)] px-1.5 py-1 text-[11px]",
+                  "w-full rounded-[2px] border border-white/10 bg-[#10141a] px-1.5 py-1 text-[11px] text-slate-200 placeholder:text-slate-600",
                   liveMode ? "min-h-[40px]" : "min-h-[52px]"
                 )}
                 placeholder="Note body"
@@ -535,7 +600,7 @@ export function NotesPanel({
               />
               <div className="flex items-center gap-1.5">
                 <select
-                  className="min-w-0 flex-1 rounded border border-slate-200 dark:border-slate-700 bg-[var(--surface)] px-1.5 py-1 text-[11px]"
+                  className="min-w-0 flex-1 rounded-[2px] border border-white/10 bg-[#10141a] px-1.5 py-1 text-[11px] text-slate-200"
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
                   aria-label="Note category"
@@ -574,7 +639,7 @@ export function NotesPanel({
           {grouped
             ? grouped.map(([pid, list]) => (
                 <div key={pid} className="space-y-1">
-                  <div className="text-[10px] font-bold uppercase tracking-[var(--tracking-label)] text-[var(--muted)] sticky top-0 bg-[var(--surface)] py-0.5">
+                  <div className="text-[10px] font-bold uppercase tracking-[var(--tracking-label)] text-slate-500 sticky top-0 bg-[#0e1218] py-0.5">
                     {playerNameById?.[pid] || list[0]?.title || "Player"}{" "}
                     <span className="font-normal normal-case">
                       ({list.length})

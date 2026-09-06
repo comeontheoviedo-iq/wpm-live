@@ -704,31 +704,116 @@
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
   }
+  /* Call-queue notes rail — dense rows, 4px severity edge, no candy/glass */
   .queue-row {
-    border-radius: var(--radius-xs);
-    border: 1px solid rgba(148, 163, 184, 0.1);
-    background: #12161c;
-    padding: 0.22rem 0.4rem;
+    border-radius: 2px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-left-width: 4px;
+    border-left-color: rgba(148, 163, 184, 0.28);
+    background: #10141a;
+    padding: 0.35rem 0.45rem;
+    min-height: 36px;
+    box-shadow: none;
     transition:
       border-color var(--duration) var(--ease-out),
-      background-color var(--duration) var(--ease-out),
-      box-shadow var(--duration) var(--ease-out);
+      background-color var(--duration) var(--ease-out);
+  }
+  .queue-row:hover {
+    background: #12171f;
   }
   .queue-row-pin {
-    border-left: 3px solid var(--warning);
-    border-color: color-mix(in oklab, var(--warning) 35%, var(--border));
-    background: color-mix(in oklab, var(--warning) 12%, #12161c);
-    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--warning) 12%, transparent);
+    border-color: rgba(255, 255, 255, 0.08);
+    border-left-width: 4px;
+    border-left-color: var(--warning);
+    background: #10141a;
+    box-shadow: none;
+  }
+  .queue-row-pin:hover {
+    background: #14181f;
   }
   .queue-row-active {
-    border-left: 3px solid var(--brand);
-    border-color: color-mix(in oklab, var(--brand) 40%, var(--border));
-    background: color-mix(in oklab, var(--brand) 14%, #12161c);
-    box-shadow: 0 0 0 1px color-mix(in oklab, var(--brand) 22%, transparent);
+    /* expanded = slightly brighter charcoal; keep severity edge */
+    border-top-color: rgba(255, 255, 255, 0.12);
+    border-right-color: rgba(255, 255, 255, 0.12);
+    border-bottom-color: rgba(255, 255, 255, 0.12);
+    border-left-width: 4px;
+    background: #161b22;
+    box-shadow: none;
   }
   .queue-row-now {
-    border-left: 3px solid var(--edge-break);
-    background: color-mix(in oklab, var(--edge-break) 10%, #12161c);
+    border-left-color: var(--edge-break);
+    border-left-width: 4px;
+    background: #10141a;
+  }
+  .queue-row-goal {
+    border-left-color: var(--edge-goal);
+  }
+  .queue-row-card {
+    border-left-color: var(--edge-card);
+  }
+  .queue-row-red {
+    border-left-color: var(--edge-red);
+  }
+  .queue-row-injury {
+    border-left-color: var(--edge-injury);
+  }
+  .queue-row-sub {
+    border-left-color: var(--edge-sub);
+  }
+  .queue-row-live {
+    border-left-color: var(--live);
+  }
+  .queue-row-fact {
+    border-left-color: var(--edge-break);
+  }
+
+  .note-queue-minute {
+    flex: 0 0 2.1rem;
+    width: 2.1rem;
+    font-family: var(--font-tabular);
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    font-variant-numeric: tabular-nums;
+    color: #64748b;
+    line-height: 1.2;
+    text-align: right;
+  }
+  .note-queue-title {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: 1.25;
+    color: #f1f5f9;
+  }
+  .note-queue-chip {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 2px;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    background: #0a0d12;
+    padding: 0.06rem 0.28rem;
+    font-size: 0.5rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #64748b;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+  .note-queue-body {
+    font-size: 0.625rem;
+    line-height: 1.35;
+    color: #94a3b8;
+  }
+  .notes-rail-shell {
+    background: #0e1218;
+    border-color: rgba(255, 255, 255, 0.08);
+    box-shadow: none;
+  }
+  .notes-rail-shell > div:first-child {
+    background: #0a0d12;
+    border-color: rgba(255, 255, 255, 0.06);
   }
 
   .crest-watermark {
@@ -840,11 +925,45 @@
   opacity: 1;
   filter: none;
 }
-/* Scan rails quieter by border weight — no position overrides on drawers */
-.scan-desk [data-desk-rail] .panel-surface,
-.scan-desk [data-desk-rail] .queue-row {
+/* Scan rails quieter by border weight — keep 4px severity left-edge */
+.scan-desk [data-desk-rail] .panel-surface {
   border-color: rgba(148, 163, 184, 0.08);
 }
+.scan-desk [data-desk-rail] .queue-row {
+  border-top-color: rgba(148, 163, 184, 0.08);
+  border-right-color: rgba(148, 163, 184, 0.08);
+  border-bottom-color: rgba(148, 163, 184, 0.08);
+}
+
+/* Notes call-queue severity edges — after scan quieting so left edge wins */
+.queue-row.queue-row-pin {
+  border-left-color: var(--warning);
+}
+.queue-row.queue-row-now {
+  border-left-color: var(--edge-break);
+}
+.queue-row.queue-row-goal {
+  border-left-color: var(--edge-goal);
+}
+.queue-row.queue-row-card {
+  border-left-color: var(--edge-card);
+}
+.queue-row.queue-row-red {
+  border-left-color: var(--edge-red);
+}
+.queue-row.queue-row-injury {
+  border-left-color: var(--edge-injury);
+}
+.queue-row.queue-row-sub {
+  border-left-color: var(--edge-sub);
+}
+.queue-row.queue-row-live {
+  border-left-color: var(--live);
+}
+.queue-row.queue-row-fact {
+  border-left-color: var(--edge-break);
+}
+
 
 @keyframes desk-fade-in {
   from {

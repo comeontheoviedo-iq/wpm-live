@@ -87,6 +87,7 @@ export default async function MatchOverviewPage({
       venueName={match.venue?.name}
       venueCity={match.venue?.city}
       venueCapacity={match.venue?.capacity}
+      attendance={match.attendance ?? null}
       weatherSummary={match.weatherSummary}
       weatherTempC={match.weatherTempC}
       weatherWindKph={match.weatherWindKph}

@@ -965,6 +965,16 @@ function venueLabel(fx: SlimFx) {
   return name || city || null;
 }
 
+type PopupScorer = {
+  minute: number | null;
+  extra: number | null;
+  team: string | null;
+  teamId: number | null;
+  player: string | null;
+  assist: string | null;
+  detail: string | null;
+};
+
 function MatchInfoModal({
   fx,
   competition,
@@ -976,6 +986,10 @@ function MatchInfoModal({
   standings: StandingRow[];
   onClose: () => void;
 }) {
+  const [scorers, setScorers] = useState<PopupScorer[] | null>(null);
+  const [scorersLoading, setScorersLoading] = useState(false);
+  const [scorersErr, setScorersErr] = useState<string | null>(null);
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
@@ -986,6 +1000,39 @@ function MatchInfoModal({
 
   const finished = isFinished(fx);
   const live = isLiveStatus(fx);
+
+  // Results / live: load goal scorers for the popup (soft-fail)
+  useEffect(() => {
+    if (!finished && !live) {
+      setScorers(null);
+      setScorersErr(null);
+      return;
+    }
+    let cancelled = false;
+    setScorersLoading(true);
+    setScorersErr(null);
+    fetch(`/api/football/fixtures/${fx.id}`)
+      .then(async (r) => {
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error || "Scorers unavailable");
+        return j as { scorers?: PopupScorer[] };
+      })
+      .then((j) => {
+        if (cancelled) return;
+        setScorers(Array.isArray(j.scorers) ? j.scorers : []);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setScorers([]);
+        setScorersErr(e instanceof Error ? e.message : "Scorers soft-fail");
+      })
+      .finally(() => {
+        if (!cancelled) setScorersLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [fx.id, finished, live]);
   const venue = venueLabel(fx);
   const competitionLabel = fx.competition || competition || null;
   const roundLabel = fx.round || null;
@@ -1161,11 +1208,64 @@ function MatchInfoModal({
             )}
           </div>
 
-          <div className="league-match-popup-section">
-            <div className="league-match-popup-section-title">Key events</div>
-            <p className="league-match-popup-soft">
-              Match events not loaded for league fixtures.
-            </p>
+          <div className="league-match-popup-section" data-league-popup-scorers="1">
+            <div className="league-match-popup-section-title">Scorers</div>
+            {!(finished || live) ? (
+              <p className="league-match-popup-soft">
+                Scorers available after kick-off.
+              </p>
+            ) : scorersLoading ? (
+              <p className="league-match-popup-soft inline-flex items-center gap-1.5">
+                <Loader2 className="h-3 w-3 animate-spin" /> Loading scorers…
+              </p>
+            ) : scorers && scorers.length > 0 ? (
+              <ul className="league-match-popup-scorers space-y-1">
+                {scorers.map((g, i) => {
+                  const min =
+                    g.minute != null
+                      ? `${g.minute}${g.extra != null ? `+${g.extra}` : ""}'`
+                      : "·";
+                  const own = /own/i.test(g.detail || "");
+                  const pen = /penalty/i.test(g.detail || "");
+                  const label = [
+                    g.player || "Unknown",
+                    own ? "(OG)" : null,
+                    pen ? "(pen)" : null,
+                    g.assist ? `· ${g.assist}` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" ");
+                  const side =
+                    g.teamId === fx.home.id
+                      ? "home"
+                      : g.teamId === fx.away.id
+                        ? "away"
+                        : null;
+                  return (
+                    <li
+                      key={`${g.minute}-${g.player}-${i}`}
+                      className="flex items-baseline gap-2 text-[11px] text-slate-300"
+                    >
+                      <span className="note-queue-minute shrink-0 tabular-nums text-slate-500">
+                        {min}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate">{label}</span>
+                      <span className="shrink-0 text-[9px] uppercase tracking-wide text-slate-600">
+                        {side === "home"
+                          ? fx.home.name
+                          : side === "away"
+                            ? fx.away.name
+                            : g.team || ""}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="league-match-popup-soft">
+                {scorersErr || "No scorers in feed for this fixture."}
+              </p>
+            )}
           </div>
 
           <div className="league-match-popup-section">

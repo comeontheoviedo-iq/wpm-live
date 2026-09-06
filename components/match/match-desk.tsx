@@ -75,6 +75,7 @@ import {
   type VizPayload,
 } from "@/lib/viz-build";
 import { DeskLiveExtras } from "@/components/match/world-class/desk-live-extras";
+import { StatsStoryStrip } from "@/components/match/world-class/stats-story-strip";
 import {
   type FieldSettings,
   type FieldSettingsTab,
@@ -361,6 +362,7 @@ export function MatchDesk({
   venueName,
   venueCity,
   venueCapacity,
+  attendance = null,
   weatherSummary,
   weatherTempC,
   weatherWindKph,
@@ -416,6 +418,8 @@ export function MatchDesk({
   venueName?: string | null;
   venueCity?: string | null;
   venueCapacity?: number | null;
+  /** Live/FT attendance when AF provides it */
+  attendance?: number | null;
   weatherSummary?: string | null;
   weatherTempC?: number | null;
   weatherWindKph?: number | null;

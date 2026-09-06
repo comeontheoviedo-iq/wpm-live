@@ -39,16 +39,27 @@ export function FeedBanner({
       .catch(() => setConfigured(false));
   }, []);
 
-  // Live: 18s. Pre-match / Assigned / other non-terminal: 30s for Official XI pickup.
+  // AF diet: Live/HT 45s, pre-match 90s; pause when tab hidden.
   useEffect(() => {
     if (!configured || !apiFootballFixtureId) return;
     if (status === "Full Time" || status === "Finished") return;
     const intervalMs =
-      status === "Live" || status === "Half Time" ? 18_000 : 30_000;
-    const t = setInterval(() => {
-      sync(true);
-    }, intervalMs);
-    return () => clearInterval(t);
+      status === "Live" || status === "Half Time" ? 45_000 : 90_000;
+    const tick = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+        return;
+      }
+      void sync(true);
+    };
+    const t = setInterval(tick, intervalMs);
+    const onVis = () => {
+      if (document.visibilityState === "visible") void sync(true);
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onVis);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [configured, apiFootballFixtureId, status]);
 
@@ -60,7 +71,11 @@ export function FeedBanner({
     setBusy(true);
     if (!silent) setMsg(null);
     try {
-      const res = await fetch(`/api/matches/${matchId}/sync`, { method: "POST" });
+      const res = await fetch(`/api/matches/${matchId}/sync`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: silent ? "live" : "full" }),
+      });
       const json = await res.json();
       if (!res.ok) {
         setMsg(json.error || "Sync failed");

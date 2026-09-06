@@ -343,7 +343,11 @@ export function ObsOverlayClient(props: {
       try {
         const res = await fetch(`/api/matches/${matchId}/sync?obs=1`, {
           method: "POST",
-          headers: { "x-pitchline-obs": "1" },
+          headers: {
+            "x-pitchline-obs": "1",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ mode: "live" }),
         });
         const json = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -618,13 +622,28 @@ export function ObsOverlayClient(props: {
       .catch(() => setConfigured(false));
   }, []);
 
-  // Same feed as live desk: poll sync while Live; slower probe otherwise
+  // AF diet: Live/HT 45s, pre-match 90s; pause when OBS/browser tab hidden.
   useEffect(() => {
     if (!configured || !apiFootballFixtureId) return;
-    void sync(true);
-    const ms = status === "Live" ? 18_000 : 45_000;
-    const t = setInterval(() => void sync(true), ms);
-    return () => clearInterval(t);
+    if (status === "Full Time" || status === "Finished") return;
+    const tick = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+        return;
+      }
+      void sync(true);
+    };
+    tick();
+    const ms =
+      status === "Live" || status === "Half Time" ? 45_000 : 90_000;
+    const t = setInterval(tick, ms);
+    const onVis = () => {
+      if (document.visibilityState === "visible") void sync(true);
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onVis);
+    };
   }, [configured, apiFootballFixtureId, status, sync]);
 
   // HT viz once — AF maps HT→status Live but period/clock still say HT

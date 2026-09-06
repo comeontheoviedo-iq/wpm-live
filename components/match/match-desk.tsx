@@ -1264,6 +1264,8 @@ export function MatchDesk({
       try {
         const res = await fetch(`/api/matches/${matchId}/sync`, {
           method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mode: silent ? "live" : "full" }),
         });
         const json = await res.json();
         if (!res.ok) {
@@ -1744,15 +1746,27 @@ export function MatchDesk({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [configured, apiFootballFixtureId]);
 
-  // Live: 18s. Pre-match / Assigned / Preparation / Ready (and any other
-  // non-terminal): 30s so Official XI can land without a manual Sync.
+  // AF diet: Live/HT 45s, pre-match assigned 90s; pause when tab hidden.
   useEffect(() => {
     if (!configured || !apiFootballFixtureId) return;
     if (status === "Full Time" || status === "Finished") return;
     const intervalMs =
-      status === "Live" || status === "Half Time" ? 18_000 : 30_000;
-    const t = setInterval(() => sync(true), intervalMs);
-    return () => clearInterval(t);
+      status === "Live" || status === "Half Time" ? 45_000 : 90_000;
+    const tick = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+        return;
+      }
+      void sync(true);
+    };
+    const t = setInterval(tick, intervalMs);
+    const onVis = () => {
+      if (document.visibilityState === "visible") void sync(true);
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onVis);
+    };
   }, [configured, apiFootballFixtureId, status, sync]);
 
   // Full Time: one-shot sync so threshold flashes can verify from final AF player stats
@@ -2859,7 +2873,7 @@ export function MatchDesk({
                           await fetch(`/api/matches/${matchId}/sync`, {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ resetPlacements: true }),
+                            body: JSON.stringify({ resetPlacements: true, mode: "full" }),
                           });
                           setOverrides((prev) =>
                             prev

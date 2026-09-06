@@ -2278,6 +2278,40 @@
   }
 }
 
+
+/* OBS pitch underlay — opaque green 1920×1080 Official XI */
+html.obs-pitch-underlay-active,
+html.obs-pitch-underlay-active body,
+body.obs-pitch-underlay-active {
+  background: #0b1f12 !important;
+  background-color: #0b1f12 !important;
+  overflow: hidden !important;
+  min-height: 0 !important;
+}
+
+.obs-pitch-underlay {
+  width: 1920px;
+  height: 1080px;
+  max-width: 1920px;
+  max-height: 1080px;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  position: relative;
+  box-sizing: border-box;
+}
+
+.obs-pitch-underlay,
+.obs-pitch-underlay * {
+  scrollbar-width: none;
+}
+.obs-pitch-underlay::-webkit-scrollbar,
+.obs-pitch-underlay *::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 /* OBS Browser Source — transparent 1920×1080 overlay */
 
 html.obs-overlay-active,

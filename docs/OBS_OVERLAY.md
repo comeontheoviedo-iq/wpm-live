@@ -27,6 +27,22 @@ Polls the same `/api/matches/:id/sync` feed as the live desk (18s while Live). S
 
 CSS for this page is scoped under `.obs-overlay` / `html.obs-overlay-active` so league/desk styles stay untouched.
 
+## Pitch XI underlay (shipped)
+
+Opaque **1920×1080** green pitch + Official XI tokens (no scorebug — stack the transparent overlay source on top):
+
+```
+http://localhost:3002/match-day/<matchDayId|matchId>/overlay/pitch
+```
+
+Example (Everton desk / Pro):
+
+```
+http://localhost:3002/match-day/cmtots5dq011ma69s89vv9ffe/overlay/pitch
+```
+
+Public via `/overlay` middleware (no login cookie). Width **1920**, Height **1080**. Opaque background — do **not** enable OBS transparency for this source.
+
 ## JSON handoff (unchanged)
 
 ```

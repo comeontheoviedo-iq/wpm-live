@@ -2,6 +2,18 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+/** OBS / talent-cam handoff — allow when clearly from overlay context. */
+function isObsOverlayRequest(req: Request) {
+  const referer = req.headers.get("referer") || "";
+  const obsHeader = req.headers.get("x-pitchline-obs");
+  const url = new URL(req.url);
+  return (
+    obsHeader === "1" ||
+    referer.includes("/overlay") ||
+    url.searchParams.get("obs") === "1"
+  );
+}
+
 /**
  * Lightweight OBS / talent-cam handoff JSON.
  * GET /api/matches/:id/overlay
@@ -9,11 +21,11 @@ import { prisma } from "@/lib/prisma";
  * Returns current scoreboard, XI (starters on pitch), and latest event flash.
  */
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getSession();
-  if (!session) {
+  if (!session && !isObsOverlayRequest(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

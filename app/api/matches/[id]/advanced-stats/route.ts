@@ -4,12 +4,24 @@ import { prisma } from "@/lib/prisma";
 import { resolveAdvancedMatchStats } from "@/lib/advanced-stats";
 import { xgFromAfStatistics } from "@/lib/xg-alt";
 
+/** OBS Browser Source has no session — allow read when clearly from overlay. */
+function isObsOverlayRequest(req: Request) {
+  const referer = req.headers.get("referer") || "";
+  const obsHeader = req.headers.get("x-pitchline-obs");
+  const url = new URL(req.url);
+  return (
+    obsHeader === "1" ||
+    referer.includes("/overlay") ||
+    url.searchParams.get("obs") === "1"
+  );
+}
+
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getSession();
-  if (!session) {
+  if (!session && !isObsOverlayRequest(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

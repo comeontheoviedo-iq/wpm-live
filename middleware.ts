@@ -4,6 +4,15 @@ import { jwtVerify } from "jose";
 
 const publicPaths = ["/login", "/pricing"];
 
+/** OBS Browser Source has no login cookie — allow transparent overlay pages. */
+function isObsOverlayPath(pathname: string) {
+  return (
+    pathname === "/overlay" ||
+    pathname.endsWith("/overlay") ||
+    pathname.includes("/overlay/")
+  );
+}
+
 function withPathname(req: NextRequest, res: NextResponse) {
   // Request header so server layouts can read via headers()
   const requestHeaders = new Headers(req.headers);
@@ -31,7 +40,8 @@ export async function middleware(req: NextRequest) {
 
   const isPublic =
     publicPaths.some((p) => pathname === p || pathname.startsWith(p + "/")) ||
-    pathname === "/";
+    pathname === "/" ||
+    isObsOverlayPath(pathname);
 
   const token = req.cookies.get("pitchline_session")?.value;
   let authed = false;

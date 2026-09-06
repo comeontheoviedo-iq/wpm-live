@@ -249,8 +249,9 @@ export function ObsOverlayClient(props: {
     const cached = advStatsCacheRef.current;
     if (cached && Date.now() - cached.at < 60_000) return cached;
     try {
-      const res = await fetch(`/api/matches/${matchId}/advanced-stats`, {
+      const res = await fetch(`/api/matches/${matchId}/advanced-stats?obs=1`, {
         cache: "no-store",
+        headers: { "x-pitchline-obs": "1" },
       });
       if (!res.ok) return null;
       const json = await res.json();
@@ -315,8 +316,9 @@ export function ObsOverlayClient(props: {
     async (silent = true) => {
       if (!apiFootballFixtureId) return;
       try {
-        const res = await fetch(`/api/matches/${matchId}/sync`, {
+        const res = await fetch(`/api/matches/${matchId}/sync?obs=1`, {
           method: "POST",
+          headers: { "x-pitchline-obs": "1" },
         });
         const json = await res.json().catch(() => ({}));
         if (!res.ok) {

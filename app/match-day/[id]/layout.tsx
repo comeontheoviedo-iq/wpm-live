@@ -16,16 +16,19 @@ export default async function MatchDayLayout({
   children: React.ReactNode;
   params: Promise<{ id: string }>;
 }) {
-  const user = await getSession();
-  if (!user) redirect("/login");
   const { id } = await params;
 
   const pathname = (await headers()).get("x-pathname") || "";
-  const isObsOverlay = /\/match-day\/[^/]+\/overlay\/?$/.test(pathname);
+  const isObsOverlay =
+    /\/match-day\/[^/]+\/overlay\/?$/.test(pathname) ||
+    pathname.includes("/overlay");
   if (isObsOverlay) {
-    // Chrome-free transparent OBS page — auth already checked.
+    // Transparent OBS Browser Source — no session cookie available.
     return <>{children}</>;
   }
+
+  const user = await getSession();
+  if (!user) redirect("/login");
 
   const match = await getMatchFull(id);
   if (!match) notFound();

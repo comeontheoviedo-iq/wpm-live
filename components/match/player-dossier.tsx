@@ -434,7 +434,7 @@ export function PlayerDossier({
   }
 
   return (
-    <div className="fixed inset-y-0 right-0 z-50 w-full max-w-4xl shadow-2xl border-l border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 flex flex-col">
+    <div data-desk-focus="dossier" className="fixed inset-y-0 right-0 z-50 w-full max-w-4xl shadow-lg border-l border-[var(--border)] bg-[var(--surface)] flex flex-col">
       {/* Header */}
       <div className="modal-header-shell shrink-0 px-4 py-3">
         {data?.clubLogoUrl ? (
@@ -509,7 +509,7 @@ export function PlayerDossier({
               <button
                 type="button"
                 disabled={createNoteBusy}
-                className="inline-flex items-center gap-1 rounded-lg border border-teal-200 dark:border-teal-900 bg-teal-50 dark:bg-teal-950/40 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-teal-800 dark:text-teal-200 hover:bg-teal-100 disabled:opacity-50"
+                className="desk-btn text-[10px] font-bold uppercase tracking-[var(--tracking-label)] disabled:opacity-50"
                 onClick={() => void quickCreateNote(false)}
                 title="Quick-add empty note"
               >
@@ -527,7 +527,7 @@ export function PlayerDossier({
               </button>
               <button
                 type="button"
-                className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+                className="focus-ring interactive-press p-1.5 rounded-[var(--radius-sm)] hover:bg-[var(--surface-muted)]"
                 onClick={() => setGearOpen((v) => !v)}
                 aria-label="Pitch card overrides"
                 title="Name / pronunciation / flag / jersey (this match)"
@@ -536,7 +536,7 @@ export function PlayerDossier({
               </button>
               <button
                 type="button"
-                className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+                className="focus-ring interactive-press p-1.5 rounded-[var(--radius-sm)] hover:bg-[var(--surface-muted)]"
                 onClick={onClose}
                 aria-label="Close dossier"
               >
@@ -547,13 +547,13 @@ export function PlayerDossier({
         </div>
       </div>
       {createNoteMsg ? (
-        <div className="shrink-0 px-4 py-1.5 text-[11px] text-slate-600 dark:text-slate-300 border-b border-slate-100 dark:border-slate-800">
+        <div className="shrink-0 px-4 py-1.5 text-[11px] text-slate-600 dark:text-slate-300 border-b border-[var(--border)]">
           {createNoteMsg}
         </div>
       ) : null}
 
       {gearOpen && (
-        <div className="shrink-0 border-b border-slate-200 dark:border-slate-800 bg-amber-50/80 dark:bg-amber-950/30 px-4 py-3 space-y-2.5">
+        <div className="shrink-0 border-b border-[var(--border)] bg-amber-50/70 dark:bg-amber-950/25 px-4 py-3 space-y-2.5">
           <div className="text-[11px] font-bold uppercase tracking-wide text-amber-800 dark:text-amber-200">
             Pitch card overrides · this match only
           </div>
@@ -654,7 +654,7 @@ export function PlayerDossier({
       )}
 
       {/* Tabs */}
-      <div className="shrink-0 flex gap-1 px-3 py-2 border-b border-slate-200 dark:border-slate-800 bg-slate-100/80 dark:bg-slate-900/50 overflow-x-auto">
+      <div className="shrink-0 flex gap-1 px-3 py-2 border-b border-[var(--border)] bg-[var(--surface-muted)] overflow-x-auto">
         {tabs.map((t) => (
           <button
             key={t.key}
@@ -663,8 +663,8 @@ export function PlayerDossier({
             className={cn(
               "rounded-md px-3 py-1.5 text-[11px] font-semibold border whitespace-nowrap",
               tab === t.key
-                ? "bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 border-slate-300 dark:border-slate-600 shadow-sm"
-                : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                ? "bg-[var(--surface)] text-[var(--foreground)] border-[var(--border-strong)] shadow-xs"
+                : "border-transparent text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface)]"
             )}
           >
             {t.label}
@@ -780,7 +780,7 @@ export function PlayerDossier({
                       </tr>
                     </thead>
                     <tbody>
-                      <tr className="border-t border-slate-100 dark:border-slate-800">
+                      <tr className="border-t border-[var(--border)]">
                         <td className="py-1 font-medium">{p.club.name}</td>
                         <td className="py-1 tabular-nums font-bold">{p.appearances || 0}</td>
                         <td className="py-1 tabular-nums font-semibold">{p.goals || 0}</td>
@@ -802,7 +802,7 @@ export function PlayerDossier({
                       </thead>
                       <tbody>
                         {careerClubs.filter((c) => c.apps > 0 || c.seasons.length > 0).slice(0, 8).map((c, i) => (
-                          <tr key={`${c.teamId ?? c.name}-${i}`} className="border-t border-slate-100 dark:border-slate-800">
+                          <tr key={`${c.teamId ?? c.name}-${i}`} className="border-t border-[var(--border)]">
                             <td className="py-1 font-medium">
                               <span className="inline-flex items-center gap-1.5">
                                 {c.logo ? (
@@ -859,7 +859,7 @@ export function PlayerDossier({
                       </thead>
                       <tbody>
                         {currentSeasonBlock.competitions.map((row, i) => (
-                          <tr key={i} className="border-t border-slate-100 dark:border-slate-800">
+                          <tr key={i} className="border-t border-[var(--border)]">
                             <td className="py-1 font-medium max-w-[9rem] truncate">{row.league}</td>
                             <td className="py-1 tabular-nums">{row.apps ?? "—"}</td>
                             <td className="py-1 tabular-nums font-semibold">{row.goals ?? "—"}</td>
@@ -931,7 +931,7 @@ export function PlayerDossier({
                       </thead>
                       <tbody>
                         {(data?.recentForm || []).map((row, i) => (
-                          <tr key={i} className="border-t border-slate-100 dark:border-slate-800">
+                          <tr key={i} className="border-t border-[var(--border)]">
                             <td className="py-1 pr-1 tabular-nums whitespace-nowrap">{(row.date || "").slice(5, 10)}</td>
                             <td className="py-1 pr-1 max-w-[6.5rem] truncate">{row.opponent}</td>
                             <td className={cn(
@@ -954,15 +954,15 @@ export function PlayerDossier({
               </Section>
 
               {/* Notes — compact, no giant void */}
-              <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 overflow-hidden flex flex-col">
-                <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 border-b border-slate-100 dark:border-slate-800">
+              <div className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] overflow-hidden flex flex-col">
+                <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 border-b border-[var(--border)]">
                   <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-700 dark:text-slate-200">
                     <BookOpen className="h-3.5 w-3.5" />
                     Notes ({profileNotes.length})
                   </div>
                   <button
                     type="button"
-                    className="text-[10px] font-semibold text-teal-700 dark:text-teal-300 hover:underline"
+                    className="text-[10px] font-semibold text-[var(--brand-dark)] dark:text-[var(--brand)] hover:underline"
                     onClick={() => setTab("notes")}
                   >
                     + Add
@@ -977,7 +977,7 @@ export function PlayerDossier({
                     profileNotes.slice(0, 6).map((n) => (
                       <div
                         key={n.id}
-                        className="rounded-lg border border-slate-200 dark:border-slate-800 border-l-[3px] border-l-sky-500 bg-slate-50/80 dark:bg-slate-900/40 px-2 py-1.5"
+                        className="queue-row queue-row-now px-2 py-1.5"
                       >
                         <div className="text-[11px] font-semibold truncate">
                           {n.pinned ? "📌 " : ""}
@@ -1028,7 +1028,7 @@ export function PlayerDossier({
             {!data?.matchPlayerStats ? (
               <p className="text-[11px] text-slate-500">Match metrics not in feed yet — events below still update live.</p>
             ) : null}
-            <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-2.5">
+            <div className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] p-2.5">
               <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-2">
                 Events · {lastNameOf(p.name)}
                 {data?.opponentClub ? ` vs ${data.opponentClub.name}` : ""}
@@ -1050,19 +1050,19 @@ export function PlayerDossier({
               const rt = mps?.games?.rating != null ? formatRating(mps.games.rating) : rating;
               return (
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  <div className={cn("rounded-xl px-3 py-3 text-center", Number(rt) >= 7 ? "bg-emerald-500 text-white" : "bg-slate-100 dark:bg-slate-900")}>
+                  <div className={cn("rounded-[var(--radius-md)] px-3 py-3 text-center", Number(rt) >= 7 ? "bg-[var(--success)] text-white" : "bg-[var(--surface-muted)]")}>
                     <div className="text-[9px] font-bold uppercase opacity-80">Rating</div>
                     <div className="text-2xl font-black tabular-nums">{rt !== "—" ? rt : "—"}</div>
                   </div>
-                  <div className="rounded-xl px-3 py-3 text-center bg-slate-100 dark:bg-slate-900">
+                  <div className="rounded-[var(--radius-md)] px-3 py-3 text-center bg-[var(--surface-muted)]">
                     <div className="text-[9px] font-bold uppercase text-slate-400">Minutes</div>
                     <div className="text-2xl font-black tabular-nums">{mps?.games?.minutes ?? "—"}</div>
                   </div>
-                  <div className="rounded-xl px-3 py-3 text-center bg-slate-100 dark:bg-slate-900">
+                  <div className="rounded-[var(--radius-md)] px-3 py-3 text-center bg-[var(--surface-muted)]">
                     <div className="text-[9px] font-bold uppercase text-slate-400">Goals</div>
                     <div className="text-2xl font-black tabular-nums">{mps?.goals?.total ?? "—"}</div>
                   </div>
-                  <div className="rounded-xl px-3 py-3 text-center bg-slate-100 dark:bg-slate-900">
+                  <div className="rounded-[var(--radius-md)] px-3 py-3 text-center bg-[var(--surface-muted)]">
                     <div className="text-[9px] font-bold uppercase text-slate-400">Assists</div>
                     <div className="text-2xl font-black tabular-nums">{mps?.goals?.assists ?? "—"}</div>
                   </div>
@@ -1108,7 +1108,7 @@ export function PlayerDossier({
                     </thead>
                     <tbody>
                       {currentSeasonBlock.competitions.map((row, i) => (
-                        <tr key={i} className="border-t border-slate-100 dark:border-slate-800">
+                        <tr key={i} className="border-t border-[var(--border)]">
                           <td className="py-1.5 font-medium">{row.league}</td>
                           <td className="py-1.5 text-slate-600 dark:text-slate-300">{row.team}</td>
                           <td className="py-1.5 tabular-nums">{row.apps ?? "—"}</td>
@@ -1131,7 +1131,7 @@ export function PlayerDossier({
             {afRows.length > 0 && !currentSeasonBlock && afRows.map((row, i) => (
               <div
                 key={i}
-                className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-3 text-xs space-y-1"
+                className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] p-3 text-xs space-y-1"
               >
                 <div className="font-semibold text-slate-700 dark:text-slate-200">
                   {row.league?.name || "League"}
@@ -1164,8 +1164,8 @@ export function PlayerDossier({
 
         {p && tab === "career" && (
           <div className="grid md:grid-cols-[200px_1fr] gap-2.5 min-h-0">
-            <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 overflow-hidden">
-              <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 text-[10px] font-bold uppercase tracking-wide text-slate-400">
+            <div className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
+              <div className="px-3 py-2 border-b border-[var(--border)] text-[10px] font-bold uppercase tracking-wide text-slate-400">
                 Clubs
               </div>
               {careerClubs.length === 0 ? (
@@ -1246,7 +1246,7 @@ export function PlayerDossier({
                         {currentSeasonBlock.competitions.map((row, i) => (
                           <tr
                             key={i}
-                            className="border-t border-slate-100 dark:border-slate-800"
+                            className="border-t border-[var(--border)]"
                           >
                             <td className="py-1.5 font-medium">{row.league}</td>
                             <td className="py-1.5 text-slate-600 dark:text-slate-300">
@@ -1315,7 +1315,7 @@ export function PlayerDossier({
               (bioNotes.length ? bioNotes : notesList).map((n) => (
                 <div
                   key={n.id}
-                  className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-3"
+                  className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] p-3"
                 >
                   <div className="text-xs font-bold mb-1">{n.title}</div>
                   <p className="text-xs text-slate-600 dark:text-slate-300 whitespace-pre-wrap">
@@ -1333,7 +1333,7 @@ export function PlayerDossier({
               <p className="text-xs text-slate-500">No scouting notes yet — add hooks/scouting from packs or Notes.</p>
             ) : (
               notesList.filter((n) => /scout|hook|report/i.test(n.title || "") || /scout|hook/i.test(n.category || "")).map((n) => (
-                <div key={n.id} className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-3">
+                <div key={n.id} className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] p-3">
                   <div className="text-xs font-bold mb-1">{n.title}</div>
                   <p className="text-xs text-slate-600 dark:text-slate-300 whitespace-pre-wrap">{n.body}</p>
                 </div>
@@ -1348,7 +1348,7 @@ export function PlayerDossier({
               <p className="text-xs text-slate-500">No funfacts yet — add a Funfact note when you have one.</p>
             ) : (
               notesList.filter((n) => /fun|fact|trivia/i.test(n.title || "") || /funfact|trivia/i.test(n.category || "")).map((n) => (
-                <div key={n.id} className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-3">
+                <div key={n.id} className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] p-3">
                   <div className="text-xs font-bold mb-1">{n.title}</div>
                   <p className="text-xs text-slate-600 dark:text-slate-300 whitespace-pre-wrap">{n.body}</p>
                 </div>
@@ -1417,11 +1417,11 @@ function Section({
   return (
     <div
       className={cn(
-        "rounded-xl border bg-white dark:bg-slate-950",
+        "rounded-[var(--radius-md)] border bg-[var(--surface)]",
         dense ? "p-2.5" : "p-3",
         tone === "rose"
-          ? "border-rose-200 dark:border-rose-900/50 bg-rose-50/60 dark:bg-rose-950/20"
-          : "border-slate-200 dark:border-slate-800"
+          ? "border-[var(--edge-red)]/35 bg-rose-50/50 dark:bg-rose-950/20"
+          : "border-[var(--border)]"
       )}
     >
       <div

@@ -343,14 +343,13 @@ export function NotesPanel({
     return (
       <div
         className={cn(
-          "rounded-md border border-slate-100 dark:border-slate-800 px-2 py-1.5 cursor-pointer",
-          liveMode && "py-1",
-          n.pinned && "border-amber-200/80 dark:border-amber-900/50 bg-amber-50/40 dark:bg-amber-950/20",
-          relevantSet.has(n.id) &&
-            "border-violet-300 dark:border-violet-700 bg-violet-50/50 dark:bg-violet-950/30",
-          isLiveEventNote(n) && !n.pinned && !relevantSet.has(n.id) && "border-rose-100 dark:border-rose-900/40",
-          expanded && "border-teal-300 dark:border-teal-700 bg-teal-50/30 dark:bg-teal-950/20",
-          playerLinked && "hover:border-teal-300 dark:hover:border-teal-700"
+          "queue-row cursor-pointer",
+          liveMode && "py-0.5 px-1.5",
+          n.pinned && "queue-row-pin",
+          relevantSet.has(n.id) && !expanded && "queue-row-now",
+          isLiveEventNote(n) && !n.pinned && !relevantSet.has(n.id) && "border-l-[3px] border-l-[var(--live)]",
+          expanded && "queue-row-active",
+          playerLinked && "hover:border-[var(--border-strong)]"
         )}
         onClick={() => {
           setExpandedId((cur) => (cur === n.id ? null : n.id));
@@ -363,7 +362,8 @@ export function NotesPanel({
           <div className="min-w-0 flex-1">
             <div
               className={cn(
-                "font-semibold text-teal-700 dark:text-teal-300",
+                "font-semibold text-[var(--foreground)]",
+                expanded && "text-[var(--brand-dark)] dark:text-[var(--brand)]",
                 expanded ? "whitespace-normal" : "truncate",
                 liveMode ? "text-[11px] leading-tight" : "text-xs"
               )}
@@ -390,7 +390,7 @@ export function NotesPanel({
             {expanded && playerLinked && n.entityId && (
               <button
                 type="button"
-                className="mt-1.5 text-[10px] font-semibold text-teal-700 dark:text-teal-300 hover:underline"
+                className="mt-1.5 text-[10px] font-semibold text-[var(--brand-dark)] dark:text-[var(--brand)] hover:underline"
                 onClick={(e) => {
                   e.stopPropagation();
                   onNotePlayerClick?.(n.entityId!);
@@ -443,7 +443,7 @@ export function NotesPanel({
               </span>
             ) : null}
           </span>
-          <span className="text-[10px] font-normal text-slate-400 tabular-nums">
+          <span className="text-[10px] font-normal text-[var(--muted)] tabular-nums">
             {visible.length}
           </span>
         </CardTitle>
@@ -456,7 +456,7 @@ export function NotesPanel({
       >
         <div
           className={cn(
-            "shrink-0 space-y-1.5 bg-white/95 dark:bg-slate-950/95 backdrop-blur z-10 pb-1 border-b border-slate-100 dark:border-slate-800",
+            "shrink-0 space-y-1 bg-[var(--surface)] z-10 pb-1 border-b border-[var(--border)]",
             fillHeight && "sticky top-0"
           )}
         >
@@ -480,14 +480,12 @@ export function NotesPanel({
                 type="button"
                 onClick={() => setScope(c.key)}
                 className={cn(
-                  "shrink-0 rounded-full px-1.5 py-0.5 text-[9px] border inline-flex items-center gap-0.5",
+                  "shrink-0 rounded-[var(--radius-sm)] px-1.5 py-0.5 text-[9px] border inline-flex items-center gap-0.5 font-semibold tabular-nums",
                   activeFilter === c.key
-                    ? c.key === "relevant"
-                      ? "bg-violet-600 text-white border-violet-600"
-                      : "bg-teal-600 text-white border-teal-600"
+                    ? "bg-[var(--foreground)] text-[var(--surface)] border-[var(--foreground)]"
                     : c.key === "relevant"
-                      ? "border-violet-300 text-violet-700 dark:border-violet-700 dark:text-violet-300"
-                      : "border-slate-200 dark:border-slate-700"
+                      ? "border-[var(--edge-break)]/40 text-[var(--edge-break)]"
+                      : "border-[var(--border)] text-[var(--muted-foreground)]"
                 )}
               >
                 {c.label}
@@ -507,7 +505,7 @@ export function NotesPanel({
 
           {/* Sticky compact composer — always reachable during LIVE */}
           {(fillHeight || liveMode || !compact) && (
-            <div className="space-y-1 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/50 p-1.5">
+            <div className="space-y-1 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface-muted)] p-1.5">
               <input
                 className="w-full rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-1.5 py-1 text-[11px]"
                 placeholder="Title"
@@ -556,7 +554,7 @@ export function NotesPanel({
         <div
           className={cn(
             "overflow-y-auto",
-            liveMode ? "space-y-1" : "space-y-1.5",
+            liveMode ? "space-y-0.5" : "space-y-1",
             fillHeight ? "flex-1 min-h-0" : "max-h-64"
           )}
         >
@@ -566,7 +564,7 @@ export function NotesPanel({
           {grouped
             ? grouped.map(([pid, list]) => (
                 <div key={pid} className="space-y-1">
-                  <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400 sticky top-0 bg-white/90 dark:bg-slate-950/90 py-0.5">
+                  <div className="text-[10px] font-bold uppercase tracking-[var(--tracking-label)] text-[var(--muted)] sticky top-0 bg-[var(--surface)] py-0.5">
                     {playerNameById?.[pid] || list[0]?.title || "Player"}{" "}
                     <span className="font-normal normal-case">
                       ({list.length})

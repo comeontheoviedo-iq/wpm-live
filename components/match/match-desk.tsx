@@ -1959,24 +1959,25 @@ export function MatchDesk({
     return notes;
   }, [notes, dossierId]);
 
+  const investigating = Boolean(dossierId || clubDossierId);
+  const deskMode = onAirMode ? "onair" : investigating ? "investigate" : "scan";
+
   return (
     <div
       ref={deskRootRef}
+      data-desk-mode={deskMode}
       className={cn(
         "relative flex flex-col gap-1.5 overflow-hidden bg-[var(--background)] text-[var(--foreground)]",
-        onAirMode && "onair-desk",
+        deskMode === "onair" && "onair-desk",
+        deskMode === "investigate" && "investigate-desk",
+        deskMode === "scan" && "scan-desk",
         isFullscreen
           ? "fixed inset-0 z-[100] h-[100dvh] max-h-[100dvh] min-h-0 p-2"
           : "h-[calc(100dvh-11rem)] max-h-[100dvh] min-h-[380px]"
       )}
     >
       {/* Slim top bar — score / meta / stats / actions · broadcast desk chrome */}
-      <header
-        className={cn(
-          "desk-header shrink-0 flex flex-wrap items-center gap-x-3 gap-y-1 px-2.5 py-1.5",
-          onAirMode && "opacity-90"
-        )}
-      >
+      <header className="desk-header shrink-0 flex flex-wrap items-center gap-x-3 gap-y-1 px-2.5 py-1.5">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
             <span className="font-bold text-sm truncate tracking-tight">
@@ -2555,7 +2556,11 @@ export function MatchDesk({
         )}
       >
         {!onAirMode && (
-        <aside className="min-h-0 overflow-hidden order-2 lg:order-1">
+        <aside
+          data-desk-rail="notes"
+          data-desk-focus={investigating && dossierId ? "1" : undefined}
+          className="min-h-0 overflow-hidden order-2 lg:order-1"
+        >
           <NotesPanel
             matchId={matchId}
             initialNotes={deskNotes}
@@ -2583,7 +2588,10 @@ export function MatchDesk({
         </aside>
         )}
 
-        <section className="relative min-h-0 flex flex-col overflow-hidden order-1 lg:order-2 onair-primary">
+        <section
+          data-desk-primary="pitch"
+          className="relative min-h-0 flex flex-col overflow-hidden order-1 lg:order-2 onair-primary"
+        >
           <div className="min-h-0 flex-1">
             <PitchBoard
               homeName={homeName}
@@ -2790,7 +2798,7 @@ export function MatchDesk({
         </section>
 
         {!hideSquadRail && !onAirMode && (
-          <aside className="min-h-0 overflow-hidden order-3">
+          <aside data-desk-rail="squad" className="min-h-0 overflow-hidden order-3">
             <SquadRail
               players={squad}
               homeName={homeName}
@@ -2813,7 +2821,7 @@ export function MatchDesk({
 
       
       {coachSide && (
-        <div className="fixed inset-y-0 right-0 z-50 w-full max-w-md shadow-2xl border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 flex flex-col">
+        <div className="fixed inset-y-0 right-0 z-50 w-full max-w-md shadow-lg border-l border-[var(--border)] bg-[var(--surface)] flex flex-col">
           <div className="shrink-0 flex items-start justify-between gap-3 border-b border-slate-200 dark:border-slate-800 px-4 py-3">
             <div className="min-w-0">
               <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">

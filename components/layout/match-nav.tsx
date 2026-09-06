@@ -57,8 +57,8 @@ export function MatchNav({ matchId }: { matchId: string }) {
               className={cn(
                 "focus-ring relative flex items-center gap-1.5 whitespace-nowrap border-b-2 px-2.5 py-2 text-desk-xs font-bold uppercase tracking-[0.06em] transition-[color,border-color,background-color] duration-150 sm:text-[11px] sm:normal-case sm:tracking-tight sm:font-semibold",
                 active
-                  ? "border-slate-900 text-slate-900 dark:border-teal-400 dark:text-teal-300"
-                  : "border-transparent text-slate-500 hover:border-slate-300 hover:bg-[var(--surface-muted)] hover:text-slate-800 dark:hover:border-slate-700 dark:hover:text-slate-200"
+                  ? "border-[var(--foreground)] text-[var(--foreground)] dark:border-[var(--brand)] dark:text-[var(--brand)]"
+                  : "border-transparent text-[var(--muted)] hover:border-[var(--border-strong)] hover:bg-[var(--surface-muted)] hover:text-[var(--foreground)]"
               )}
             >
               <Icon

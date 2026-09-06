@@ -148,7 +148,7 @@ export function LeagueDossier({
   return (
     <div className="space-y-3">
       {/* Header */}
-      <div className="relative overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 px-4 py-3">
+      <div className="relative overflow-hidden rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
         {logo ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={logo} alt="" className="pointer-events-none absolute right-8 top-1/2 -translate-y-1/2 h-24 w-24 object-contain opacity-[0.1]" />
@@ -165,7 +165,7 @@ export function LeagueDossier({
               <h1 className="text-xl font-black tracking-tight">
                 {meta?.name || data?.competition || "League"}
               </h1>
-              <span className="rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200 px-2 py-0.5 text-[10px] font-bold uppercase">
+              <span className="rounded-[var(--radius-sm)] bg-[var(--surface-muted)] text-[var(--foreground)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[var(--tracking-label)] border border-[var(--border)]">
                 Active
               </span>
             </div>
@@ -184,7 +184,7 @@ export function LeagueDossier({
             type="button"
             onClick={() => void load()}
             disabled={busy}
-            className="rounded-md border px-2 py-1.5 text-[11px] font-semibold inline-flex items-center gap-1"
+            className="desk-btn text-[11px] inline-flex items-center gap-1"
           >
             {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
             Refresh
@@ -192,17 +192,17 @@ export function LeagueDossier({
         </div>
       </div>
 
-      <div className="flex gap-1 overflow-x-auto rounded-lg bg-slate-100/80 dark:bg-slate-900/50 p-1">
+      <div className="flex gap-1 overflow-x-auto rounded-[var(--radius-md)] bg-[var(--surface-muted)] p-1">
         {TABS.map((t) => (
           <button
             key={t.key}
             type="button"
             onClick={() => setTab(t.key)}
             className={cn(
-              "rounded-md px-3 py-1.5 text-[11px] font-semibold border whitespace-nowrap",
+              "tab-chip focus-ring rounded-[var(--radius-sm)] px-2.5 py-1.5 text-[11px] font-semibold border whitespace-nowrap",
               tab === t.key
-                ? "bg-white dark:bg-slate-950 border-slate-300 shadow-sm"
-                : "border-transparent text-slate-500"
+                ? "bg-[var(--surface)] border-[var(--border-strong)] shadow-xs text-[var(--foreground)]"
+                : "border-transparent text-[var(--muted)] hover:bg-[var(--surface)]"
             )}
           >
             {t.label}
@@ -421,7 +421,7 @@ export function LeagueDossier({
           </div>
 
           {tab === "profile" ? (
-            <div className="rounded-xl border bg-white dark:bg-slate-950 overflow-hidden flex flex-col min-h-[280px]">
+            <div className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] overflow-hidden flex flex-col min-h-[280px]">
               <div className="flex items-center gap-1.5 px-3 py-2 border-b text-xs font-bold uppercase tracking-wide">
                 <BookOpen className="h-3.5 w-3.5" /> League notes
               </div>
@@ -454,7 +454,7 @@ export function LeagueDossier({
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-3">
+    <div className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] p-3">
       <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-2">{title}</div>
       {children}
     </div>

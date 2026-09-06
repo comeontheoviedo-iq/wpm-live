@@ -109,8 +109,8 @@ function NewsCard({
               className={cn(
                 "rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide",
                 item.provenance === "web_brief"
-                  ? "bg-violet-100 text-violet-800 dark:bg-violet-950/50 dark:text-violet-200"
-                  : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                  ? "bg-[var(--surface-muted)] text-[var(--foreground)] border border-[var(--border)]"
+                  : "bg-[var(--surface-muted)] text-[var(--muted-foreground)]"
               )}
             >
               {item.provenance === "web_brief" ? "Web brief" : "RSS"}
@@ -428,10 +428,10 @@ export function NewsPanel({
             type="button"
             onClick={() => setScope(s.key)}
             className={cn(
-              "rounded-full px-2.5 py-1 text-[11px] font-medium border transition",
+              "rounded-[var(--radius-sm)] px-2.5 py-1 text-[11px] font-semibold border transition",
               scope === s.key
-                ? "border-teal-500 bg-teal-50 text-teal-800 dark:bg-teal-950/40 dark:text-teal-200"
-                : "border-slate-200 dark:border-slate-700 text-slate-600 hover:bg-slate-50 dark:hover:bg-slate-900"
+                ? "border-[var(--foreground)] bg-[var(--foreground)] text-[var(--surface)]"
+                : "border-[var(--border)] text-[var(--muted-foreground)] hover:bg-[var(--surface-muted)]"
             )}
           >
             {s.label}
@@ -440,7 +440,7 @@ export function NewsPanel({
       </div>
 
       {briefBusy && (
-        <div className="flex items-center gap-2 rounded-md border border-violet-200 bg-violet-50 dark:border-violet-900 dark:bg-violet-950/30 px-2.5 py-1.5 text-[11px] text-violet-800 dark:text-violet-200">
+        <div className="flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface-muted)] px-2.5 py-1.5 text-[11px] text-[var(--muted-foreground)]">
           <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
           Updating brief… headlines stay available.
         </div>

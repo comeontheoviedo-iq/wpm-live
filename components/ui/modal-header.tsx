@@ -58,7 +58,7 @@ export function ModalHeader({
           {onClose ? (
             <button
               type="button"
-              className="focus-ring interactive-press rounded-lg p-1.5 text-slate-500 hover:bg-slate-100/90 dark:hover:bg-slate-800/90"
+              className="focus-ring interactive-press rounded-[var(--radius-sm)] p-1.5 text-[var(--muted)] hover:bg-[var(--surface-muted)]"
               onClick={onClose}
               aria-label={closeLabel}
             >
@@ -84,7 +84,7 @@ export function ModalShell({
     return (
       <div
         className={cn(
-          "fixed inset-y-0 right-0 z-50 flex w-full max-w-4xl flex-col border-l border-slate-200/90 bg-slate-50 shadow-lg animate-slide-up dark:border-slate-800 dark:bg-slate-950",
+          "fixed inset-y-0 right-0 z-50 flex w-full max-w-4xl flex-col border-l border-[var(--border)] bg-[var(--surface)] shadow-lg animate-slide-up",
           className
         )}
       >
@@ -97,7 +97,7 @@ export function ModalShell({
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 animate-fade-in">
       <div
         className={cn(
-          "relative z-10 flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-950",
+          "relative z-10 flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] shadow-lg",
           className
         )}
       >

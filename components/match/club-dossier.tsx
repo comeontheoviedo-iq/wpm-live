@@ -116,7 +116,7 @@ export function ClubDossier({
   const funNotes = notes.filter((n) => /fun|fact|trivia/i.test(n.title || ""));
 
   return (
-    <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-4xl flex-col border-l border-slate-200/90 bg-slate-50 shadow-lg animate-slide-up dark:border-slate-800 dark:bg-slate-950">
+    <div data-desk-focus="dossier" className="fixed inset-y-0 right-0 z-50 flex w-full max-w-4xl flex-col border-l border-[var(--border)] bg-[var(--surface)] shadow-lg animate-slide-up">
       <div className="modal-header-shell shrink-0 px-4 py-3">
         {c?.logoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -143,14 +143,14 @@ export function ClubDossier({
           </div>
           <div className="flex flex-col items-end gap-1">
             <span className="text-[10px] font-bold uppercase text-amber-500">Club</span>
-            <button type="button" className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800" onClick={onClose}>
+            <button type="button" className="focus-ring interactive-press p-1.5 rounded-[var(--radius-sm)] hover:bg-[var(--surface-muted)]" onClick={onClose}>
               <X className="h-4 w-4" />
             </button>
           </div>
         </div>
       </div>
 
-      <div className="shrink-0 flex gap-1 overflow-x-auto border-b border-slate-200/80 bg-slate-100/70 px-3 py-2 dark:border-slate-800 dark:bg-slate-900/50">
+      <div className="shrink-0 flex gap-1 overflow-x-auto border-b border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2">
         {TABS.map((t) => (
           <button
             key={t.key}
@@ -159,8 +159,8 @@ export function ClubDossier({
             className={cn(
               "tab-chip focus-ring rounded-md border px-2.5 py-1.5 text-[11px] font-semibold whitespace-nowrap",
               tab === t.key
-                ? "border-slate-300/90 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-950"
-                : "border-transparent text-slate-500 hover:bg-white/70 hover:text-slate-800 dark:hover:bg-slate-800/70 dark:hover:text-slate-200"
+                ? "border-[var(--border-strong)] bg-[var(--surface)] shadow-xs"
+                : "border-transparent text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--foreground)]"
             )}
           >
             {t.label}
@@ -370,7 +370,7 @@ export function ClubDossier({
               )}
             </div>
 
-            <div className="rounded-xl border bg-white dark:bg-slate-950 overflow-hidden flex flex-col min-h-[160px] max-h-[420px]">
+            <div className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] overflow-hidden flex flex-col min-h-[160px] max-h-[420px]">
               <div className="flex items-center gap-1.5 px-3 py-2 border-b text-xs font-bold uppercase tracking-wide">
                 <BookOpen className="h-3.5 w-3.5" /> Notes
               </div>
@@ -394,7 +394,7 @@ export function ClubDossier({
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-2.5">
+    <div className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] p-2.5">
       <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1.5">{title}</div>
       {children}
     </div>
@@ -402,7 +402,7 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
 }
 function Fact({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg bg-slate-50 dark:bg-slate-900 px-2 py-1.5">
+    <div className="rounded-[var(--radius-sm)] bg-[var(--surface-muted)] px-2 py-1.5">
       <div className="text-[9px] uppercase text-slate-400 font-semibold">{label}</div>
       <div className="font-semibold">{value}</div>
     </div>
@@ -413,7 +413,7 @@ function NotesList({ notes, empty }: { notes: NoteRow[]; empty: string }) {
   return (
     <div className="space-y-2">
       {notes.map((n) => (
-        <div key={n.id} className="rounded-xl border bg-white dark:bg-slate-950 p-3">
+        <div key={n.id} className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] p-3">
           <div className="text-xs font-bold mb-1">{n.title}</div>
           <p className="text-xs text-slate-600 whitespace-pre-wrap">{n.body}</p>
         </div>

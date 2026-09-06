@@ -32,6 +32,8 @@ type SlimFx = {
   away: { id: number; name: string; logo?: string };
   goals: { home: number | null; away: number | null };
   round?: string | null;
+  competition?: string | null;
+  venue?: { name: string | null; city: string | null } | null;
 };
 
 type LeaguePayload = {
@@ -373,7 +375,7 @@ export function LeagueDossier({
   }, [data?.live, data?.todayFixtures, data?.upcoming]);
 
   function openFx(fx: SlimFx) {
-    setSelectedFx(fx);
+    setSelectedFx((prev) => (prev?.id === fx.id ? null : fx));
   }
 
   return (
@@ -706,9 +708,6 @@ export function LeagueDossier({
                 ))}
               </div>
             )}
-            {selectedFx ? (
-              <MatchInfoPanel fx={selectedFx} onClose={() => setSelectedFx(null)} />
-            ) : null}
           </div>
         )}
 
@@ -737,9 +736,6 @@ export function LeagueDossier({
                 ))}
               </div>
             )}
-            {selectedFx ? (
-              <MatchInfoPanel fx={selectedFx} onClose={() => setSelectedFx(null)} />
-            ) : null}
           </div>
         )}
 
@@ -831,6 +827,15 @@ export function LeagueDossier({
           </div>
         )}
       </div>
+
+      {selectedFx ? (
+        <MatchInfoModal
+          fx={selectedFx}
+          competition={leagueName}
+          standings={data?.standings || []}
+          onClose={() => setSelectedFx(null)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -923,44 +928,227 @@ function FxEliteRow({
   );
 }
 
-function MatchInfoPanel({
+function venueLabel(fx: SlimFx) {
+  const name = fx.venue?.name?.trim() || "";
+  const city = fx.venue?.city?.trim() || "";
+  if (name && city && name.toLowerCase() !== city.toLowerCase()) {
+    return `${name} · ${city}`;
+  }
+  return name || city || null;
+}
+
+function MatchInfoModal({
   fx,
+  competition,
+  standings,
   onClose,
 }: {
   fx: SlimFx;
+  competition?: string | null;
+  standings: StandingRow[];
   onClose: () => void;
 }) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const finished = isFinished(fx);
+  const live = isLiveStatus(fx);
+  const venue = venueLabel(fx);
+  const competitionLabel = fx.competition || competition || null;
+  const roundLabel = fx.round || null;
+  const homeStanding = standings.find((r) => r.teamId === fx.home.id) || null;
+  const awayStanding = standings.find((r) => r.teamId === fx.away.id) || null;
+  const homeForm = parseForm(homeStanding?.form);
+  const awayForm = parseForm(awayStanding?.form);
+  const hasForm = homeForm.length > 0 || awayForm.length > 0;
+  const score = scoreLabel(fx);
+  const showScore = finished || live || (fx.goals.home != null && fx.goals.away != null);
+  const statusText = [
+    fx.statusLong || fx.status || null,
+    fx.elapsed != null ? `${fx.elapsed}'` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   return (
-    <Section title="Match info" dense>
-      <div className="flex items-start justify-between gap-2" data-league-match-info="1">
-        <div className="min-w-0 space-y-1 text-xs">
-          <div className="font-semibold text-[#e2e8f0] flex items-center gap-2 flex-wrap">
-            <Crest src={fx.home.logo} />
-            <span>{fx.home.name}</span>
-            <span className="tabular-nums">{scoreLabel(fx)}</span>
-            <span>{fx.away.name}</span>
-            <Crest src={fx.away.logo} />
+    <div className="league-match-popup-root" data-league-match-popup="1">
+      <button
+        type="button"
+        className="league-match-popup-backdrop"
+        aria-label="Close match info"
+        onClick={onClose}
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="league-match-popup-title"
+        className="league-match-popup"
+        data-league-match-info="1"
+      >
+        <div className="league-match-popup-titlebar">
+          <div className="league-match-popup-kicker">Match info</div>
+          <button
+            type="button"
+            className="player-dossier-icon-btn focus-ring shrink-0"
+            onClick={onClose}
+            aria-label="Close match info"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+
+        <div className="league-match-popup-body">
+          <div className="league-match-popup-scoreboard">
+            <div className="league-match-popup-team is-home">
+              <Crest src={fx.home.logo} className="league-match-popup-crest" />
+              <div className="league-match-popup-team-name" id="league-match-popup-title">
+                {fx.home.name}
+              </div>
+              {homeStanding?.rank != null ? (
+                <div className="league-match-popup-rank">#{homeStanding.rank}</div>
+              ) : null}
+            </div>
+
+            <div className="league-match-popup-center">
+              {showScore ? (
+                <div className="league-match-popup-score tabular-nums">{score}</div>
+              ) : (
+                <div className="league-match-popup-vs">vs</div>
+              )}
+              <div className="league-match-popup-status">
+                {live ? (
+                  <span className="league-elite-live-badge">
+                    {fx.elapsed != null ? `${fx.elapsed}'` : "LIVE"}
+                  </span>
+                ) : finished ? (
+                  <span>FT</span>
+                ) : (
+                  <span>{fx.status || "NS"}</span>
+                )}
+              </div>
+            </div>
+
+            <div className="league-match-popup-team is-away">
+              <Crest src={fx.away.logo} className="league-match-popup-crest" />
+              <div className="league-match-popup-team-name">{fx.away.name}</div>
+              {awayStanding?.rank != null ? (
+                <div className="league-match-popup-rank">#{awayStanding.rank}</div>
+              ) : null}
+            </div>
           </div>
-          <div className="text-[#64748b] tabular-nums">{whenLabel(fx.date)}</div>
-          <div className="text-[#64748b]">
-            {fx.statusLong || fx.status}
-            {fx.elapsed != null ? ` · ${fx.elapsed}'` : ""}
-            {fx.round ? ` · ${fx.round}` : ""}
+
+          <div className="league-match-popup-meta">
+            <div className="league-match-popup-meta-row">
+              <span className="league-match-popup-meta-label">Kick-off</span>
+              <span className="league-match-popup-meta-value tabular-nums">
+                {whenLabel(fx.date)}
+              </span>
+            </div>
+            <div className="league-match-popup-meta-row">
+              <span className="league-match-popup-meta-label">Venue</span>
+              <span className="league-match-popup-meta-value">
+                {venue || <span className="is-soft">Not in feed</span>}
+              </span>
+            </div>
+            <div className="league-match-popup-meta-row">
+              <span className="league-match-popup-meta-label">Status</span>
+              <span className="league-match-popup-meta-value">
+                {statusText || "—"}
+              </span>
+            </div>
+            <div className="league-match-popup-meta-row">
+              <span className="league-match-popup-meta-label">Competition</span>
+              <span className="league-match-popup-meta-value">
+                {[competitionLabel, roundLabel].filter(Boolean).join(" · ") || (
+                  <span className="is-soft">Not in feed</span>
+                )}
+              </span>
+            </div>
+            <div className="league-match-popup-meta-row">
+              <span className="league-match-popup-meta-label">Fixture id</span>
+              <span className="league-match-popup-meta-value tabular-nums">{fx.id}</span>
+            </div>
           </div>
-          <div className="text-[10px] text-[#64748b] tabular-nums">
-            Fixture id {fx.id}
+
+          <div className="league-match-popup-section">
+            <div className="league-match-popup-section-title">Form</div>
+            {hasForm ? (
+              <div className="league-match-popup-form-grid">
+                <div className="league-match-popup-form-row">
+                  <span className="league-match-popup-form-label truncate">
+                    {fx.home.name}
+                  </span>
+                  <span className="league-elite-form">
+                    {homeForm.length ? (
+                      homeForm.map((letter, fi) => (
+                        <span
+                          key={`h-${fi}-${letter}`}
+                          className={cn(
+                            "player-dossier-form-chip league-elite-form-pill",
+                            letter === "W" && "is-w",
+                            letter === "D" && "is-d",
+                            letter === "L" && "is-l"
+                          )}
+                        >
+                          {letter}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="league-elite-form-empty">—</span>
+                    )}
+                  </span>
+                </div>
+                <div className="league-match-popup-form-row">
+                  <span className="league-match-popup-form-label truncate">
+                    {fx.away.name}
+                  </span>
+                  <span className="league-elite-form">
+                    {awayForm.length ? (
+                      awayForm.map((letter, fi) => (
+                        <span
+                          key={`a-${fi}-${letter}`}
+                          className={cn(
+                            "player-dossier-form-chip league-elite-form-pill",
+                            letter === "W" && "is-w",
+                            letter === "D" && "is-d",
+                            letter === "L" && "is-l"
+                          )}
+                        >
+                          {letter}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="league-elite-form-empty">—</span>
+                    )}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <p className="league-match-popup-soft">Form not in standings feed.</p>
+            )}
+          </div>
+
+          <div className="league-match-popup-section">
+            <div className="league-match-popup-section-title">Key events</div>
+            <p className="league-match-popup-soft">
+              Match events not loaded for league fixtures.
+            </p>
+          </div>
+
+          <div className="league-match-popup-section">
+            <div className="league-match-popup-section-title">H2H</div>
+            <p className="league-match-popup-soft">
+              Head-to-head not in league dossier payload.
+            </p>
           </div>
         </div>
-        <button
-          type="button"
-          className="player-dossier-icon-btn focus-ring shrink-0"
-          onClick={onClose}
-          aria-label="Close match info"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
       </div>
-    </Section>
+    </div>
   );
 }
 

@@ -18,6 +18,8 @@ import {
 import { PRIORITY_COMPETITIONS } from "@/lib/competitions";
 
 function slimFixture(fx: AfFixture) {
+  const venueName = fx.fixture.venue?.name || null;
+  const venueCity = fx.fixture.venue?.city || null;
   return {
     id: fx.fixture.id,
     date: fx.fixture.date,
@@ -36,6 +38,10 @@ function slimFixture(fx: AfFixture) {
     },
     goals: { home: fx.goals?.home ?? null, away: fx.goals?.away ?? null },
     round: fx.league?.round || null,
+    competition: fx.league?.name || null,
+    venue: venueName || venueCity
+      ? { name: venueName, city: venueCity }
+      : null,
   };
 }
 

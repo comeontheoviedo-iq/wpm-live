@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateWithGemini, isGeminiConfigured } from "@/lib/gemini";
+import { canGeminiRelevantRerank } from "@/lib/plan";
 import { namesLooselyMatch, lastToken } from "@/lib/player-name";
 import {
   classifyGameState,
@@ -308,7 +309,7 @@ export async function POST(
   }
 
   // Light Gemini re-rank over top heuristic candidates (titles only) — no invented facts
-  if (isGeminiConfigured() && hits.length >= 3 && events.length) {
+  if (canGeminiRelevantRerank() && hits.length >= 3 && events.length) {
     try {
       const cand = hits.slice(0, 16).map((h) => {
         const n = match.notes.find((x) => x.id === h.noteId)!;

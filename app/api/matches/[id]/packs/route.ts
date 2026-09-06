@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { isGeminiConfigured } from "@/lib/gemini";
+import { canAutoGenPack, getEffectivePlan, hasIntel } from "@/lib/plan";
 import { PACK_TEMPLATE_SEEDS } from "@/lib/pack-templates";
 
 export async function GET(
@@ -31,6 +32,9 @@ export async function GET(
     templates,
     sections,
     gemini: isGeminiConfigured(),
+    plan: getEffectivePlan(),
+    hasIntel: hasIntel(),
+    canAutoGen: canAutoGenPack(),
   });
 }
 

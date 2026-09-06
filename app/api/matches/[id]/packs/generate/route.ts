@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { generatePackForMatch } from "@/lib/pack-generate";
+import { INTEL_REQUIRED_MESSAGE } from "@/lib/plan";
 
 export async function POST(
   req: Request,
@@ -34,8 +35,13 @@ export async function POST(
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     console.error("[packs/generate]", message);
+    const intel = message === INTEL_REQUIRED_MESSAGE || message.includes("Intel add-on");
     const status =
-      message === "Match not found" || message === "Unknown template" ? 404 : 500;
-    return NextResponse.json({ error: message }, { status });
+      message === "Match not found" || message === "Unknown template"
+        ? 404
+        : intel
+          ? 403
+          : 500;
+    return NextResponse.json({ error: message, intelRequired: intel || undefined }, { status });
   }
 }

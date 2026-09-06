@@ -48,3 +48,8 @@ prisma/dev.db-journal
 
 *.db
 *.db-journal
+
+# Local plan / feedback (Chris testing; not for commit)
+data/plan-override.json
+data/feedback.json
+data/feedback.jsonl

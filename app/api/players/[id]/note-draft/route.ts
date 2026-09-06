@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { generateWithGemini, isGeminiConfigured } from "@/lib/gemini";
+import { canPlayerNoteDraft, INTEL_REQUIRED_MESSAGE } from "@/lib/plan";
 import { normalizeApostrophes } from "@/lib/utils";
 import { europeanSeasonYear } from "@/lib/season";
 import { getPlayerById } from "@/lib/api-football";
@@ -64,17 +65,29 @@ export async function POST(
     .map((n) => `NOTE "${n.title}": ${n.body}`.slice(0, 500))
     .join("\n");
 
-  if (!isGeminiConfigured()) {
-    // Prefer first existing factual note snippet
+  // Intel + Gemini required for AI draft; Base falls back to existing research snippet
+  if (!canPlayerNoteDraft()) {
     const first = notes.find((n) => n.body?.trim());
     if (first?.body?.trim()) {
       return NextResponse.json({
         title: normalizeApostrophes(`${player.name} — note`),
         body: normalizeApostrophes(first.body.trim().slice(0, 400)),
         stub: true,
+        intelRequired: isGeminiConfigured() || undefined,
+        hint: isGeminiConfigured()
+          ? INTEL_REQUIRED_MESSAGE
+          : "GEMINI_API_KEY not set — using existing research snippet.",
       });
     }
-    return NextResponse.json({ error: "No Gemini and no existing research" }, { status: 404 });
+    return NextResponse.json(
+      {
+        error: isGeminiConfigured()
+          ? INTEL_REQUIRED_MESSAGE
+          : "No Gemini and no existing research",
+        intelRequired: isGeminiConfigured() || undefined,
+      },
+      { status: isGeminiConfigured() ? 403 : 404 }
+    );
   }
 
   if (!research && !afLines.length) {

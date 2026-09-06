@@ -274,7 +274,7 @@ export function NewsPanel({
         // Progressive: headlines first, then auto-follow-up brief when Gemini is available
         if (
           autoEnrich &&
-          json.gemini?.configured &&
+          ((json.gemini?.available ?? json.gemini?.configured)) &&
           (!json.briefIncluded || json.gemini.pending)
         ) {
           void enrichBrief(false);
@@ -392,12 +392,14 @@ export function NewsPanel({
             variant="outline"
             size="sm"
             className="h-8 text-xs"
-            disabled={briefBusy || !data?.gemini?.configured}
+            disabled={briefBusy || !(data?.gemini?.available ?? data?.gemini?.configured)}
             onClick={() => void enrichBrief(false)}
             title={
-              data?.gemini?.configured
+              (data?.gemini?.available ?? data?.gemini?.configured)
                 ? "Pull Gemini grounded brief without blocking headlines"
-                : "GEMINI_API_KEY not set"
+                : data?.gemini?.configured
+                  ? "Intel add-on required for Gemini web brief"
+                  : "GEMINI_API_KEY not set"
             }
           >
             {briefBusy ? (
@@ -466,7 +468,7 @@ export function NewsPanel({
             ))}
           <span>
             Web brief:{" "}
-            {data.gemini.configured
+            {(data.gemini.available ?? data.gemini.configured)
               ? briefBusy || data.gemini.pending
                 ? "updating…"
                 : data.gemini.error
@@ -476,7 +478,9 @@ export function NewsPanel({
                     : data.gemini.used
                       ? "ok"
                       : "idle"
-              : "GEMINI_API_KEY not set"}
+              : data.gemini.configured
+                ? "Intel required"
+                : "GEMINI_API_KEY not set"}
           </span>
           <span>
             {data.stale ? "Stale (refreshing)" : data.cached ? "Cached" : "Fresh"} ·{" "}

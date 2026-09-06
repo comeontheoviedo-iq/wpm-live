@@ -5,6 +5,7 @@
  */
 
 import { generateWithGemini, isGeminiConfigured } from "@/lib/gemini";
+import { canUseGeminiBrief, getEffectivePlan, hasIntel } from "@/lib/plan";
 import { namesLooselyMatch, normalizePlayerKey } from "@/lib/player-name";
 
 export type NewsScope = "all" | "home" | "away" | "league" | "players";
@@ -66,7 +67,7 @@ export type NewsPayload = {
   cacheTtlMs: number;
   items: NewsItem[];
   feeds: NewsFeedStatus[];
-  gemini: { configured: boolean; used: boolean; grounded?: boolean; error?: string; pending?: boolean };
+  gemini: { configured: boolean; used: boolean; grounded?: boolean; error?: string; pending?: boolean; available?: boolean; plan?: string };
   /** False when response is RSS-only (brief not requested / not yet merged) */
   briefIncluded: boolean;
   warnings: string[];
@@ -758,7 +759,10 @@ function mapBriefItems(
 async function fetchGeminiMatchBrief(
   ctx: NewsMatchContext
 ): Promise<{ items: NewsItem[]; grounded: boolean; error?: string }> {
-  if (!isGeminiConfigured()) {
+  if (!canUseGeminiBrief()) {
+    if (!hasIntel()) {
+      return { items: [], grounded: false, error: "Intel add-on required for Gemini web brief" };
+    }
     return { items: [], grounded: false, error: "GEMINI_API_KEY not set" };
   }
 
@@ -832,7 +836,7 @@ async function fetchGeminiDomainBrief(
   ctx: NewsMatchContext,
   feed: FeedDef
 ): Promise<{ items: NewsItem[]; status: NewsFeedStatus }> {
-  if (!isGeminiConfigured() || !feed.domain) {
+  if (!canUseGeminiBrief() || !feed.domain) {
     return {
       items: [],
       status: {
@@ -1156,7 +1160,7 @@ async function collectBriefNews(
     }
   }
 
-  const geminiConfigured = isGeminiConfigured();
+  const geminiConfigured = canUseGeminiBrief();
   const brief = await fetchGeminiMatchBrief(ctx);
   const geminiUsed = geminiConfigured && !brief.error?.includes("not set");
   if (brief.error) {
@@ -1169,7 +1173,9 @@ async function collectBriefNews(
     feeds,
     warnings,
     gemini: {
-      configured: geminiConfigured,
+      configured: isGeminiConfigured(),
+      available: geminiConfigured,
+      plan: getEffectivePlan(),
       used: geminiUsed,
       grounded: brief.grounded,
       error: brief.error,
@@ -1241,8 +1247,10 @@ async function buildFreshNews(
       regionsActive: rss.regionsActive,
       gemini: {
         configured: isGeminiConfigured(),
+        available: canUseGeminiBrief(),
+        plan: getEffectivePlan(),
         used: false,
-        pending: isGeminiConfigured(),
+        pending: canUseGeminiBrief(),
       },
       briefIncluded: false,
     });
@@ -1284,7 +1292,7 @@ export async function getMatchNews(
   ctx: NewsMatchContext,
   opts?: GetMatchNewsOpts
 ): Promise<NewsPayload> {
-  const wantBrief = opts?.brief === true;
+  const wantBrief = opts?.brief === true && canUseGeminiBrief();
   const force = opts?.force === true;
   const cacheKey = ctx.matchId;
   const hit = cache.get(cacheKey);
@@ -1293,7 +1301,7 @@ export async function getMatchNews(
 
   if (!force && hit && fresh) {
     // Warm cache: paint immediately. If caller wants brief but cache is RSS-only, enrich.
-    if (wantBrief && !hit.payload.briefIncluded && isGeminiConfigured()) {
+    if (wantBrief && !hit.payload.briefIncluded && canUseGeminiBrief()) {
       const rssItems = hit.payload.items.filter((i) => i.provenance === "rss");
       const brief = await collectBriefNews(ctx, rssItems);
       const feedByKey = new Map(hit.payload.feeds.map((f) => [f.key, f]));

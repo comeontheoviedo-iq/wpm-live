@@ -2,6 +2,7 @@
 
 import { prisma } from "./prisma";
 import { generateWithGemini, isGeminiConfigured } from "./gemini";
+import { canAutoGenPack, INTEL_REQUIRED_MESSAGE } from "./plan";
 import {
   PACK_TEMPLATE_SEEDS,
   buildMatchContextPrompt,
@@ -372,6 +373,12 @@ export async function generatePackForMatch(args: {
       order: seed.order,
     };
   }
+
+  // Base plan: BYO / useDraft distribute only — Auto Gen (Gemini) is Intel
+  if (!args.useDraft && !canAutoGenPack()) {
+    throw new Error(INTEL_REQUIRED_MESSAGE);
+  }
+
 
   const homePlayers = match.homeClub.players;
   const awayPlayers = match.awayClub.players;
@@ -786,6 +793,9 @@ export async function maybeAutoGenerateLineupPack(args: {
   newStatus: string;
 }): Promise<{ triggered: boolean; reason: string }> {
   const { matchId, previousStatus, newStatus } = args;
+  if (!canAutoGenPack()) {
+    return { triggered: false, reason: "intel_required" };
+  }
   if (newStatus !== "confirmed") {
     return { triggered: false, reason: "not_confirmed" };
   }

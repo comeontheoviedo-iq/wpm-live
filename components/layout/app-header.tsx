@@ -13,6 +13,7 @@ import {
 import { Logo } from "./logo";
 import { useTheme } from "@/components/theme-provider";
 import { cn } from "@/lib/utils";
+import { FeedbackWidget } from "@/components/feedback/feedback-widget";
 
 export function AppHeader({
   user,
@@ -49,6 +50,7 @@ export function AppHeader({
   };
 
   return (
+    <>
     <header className="sticky top-0 z-40 border-b border-[var(--border)] bg-[var(--surface)] shadow-none dark:border-[var(--border)]">
       <div className="mx-auto flex h-14 max-w-[1600px] items-center gap-4 px-3 sm:px-4">
         <Logo />
@@ -95,6 +97,8 @@ export function AppHeader({
         </div>
       </div>
     </header>
+      <FeedbackWidget matchId={matchId} />
+    </>
   );
 }
 

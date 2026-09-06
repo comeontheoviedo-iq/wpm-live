@@ -90,6 +90,8 @@ export function PacksClient({ matchId }: { matchId: string }) {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [sections, setSections] = useState<Section[]>([]);
   const [gemini, setGemini] = useState(false);
+  const [canAutoGen, setCanAutoGen] = useState(false);
+  const [plan, setPlan] = useState<string>("base");
   const [active, setActive] = useState<string>("research");
   const [busy, setBusy] = useState(false);
   const [packBusy, setPackBusy] = useState(false);
@@ -129,6 +131,8 @@ export function PacksClient({ matchId }: { matchId: string }) {
     setTemplates(json.templates || []);
     setSections(json.sections || []);
     setGemini(Boolean(json.gemini));
+    setCanAutoGen(Boolean(json.canAutoGen));
+    setPlan(String(json.plan || "base"));
     const key = active || json.templates?.[0]?.key || "research";
     if (key) {
       setActive(key);
@@ -499,8 +503,13 @@ export function PacksClient({ matchId }: { matchId: string }) {
         </div>
         <Button
           size="sm"
-          disabled={packBusy || busy}
+          disabled={packBusy || busy || !canAutoGen}
           onClick={generateResearchPack}
+          title={
+            canAutoGen
+              ? "Auto Gen research pack with Gemini"
+              : "Intel + GEMINI_API_KEY required — paste Notebook + Use my draft on Base"
+          }
           className="desk-btn-accent"
         >
           <Wand2 className="h-3.5 w-3.5 mr-1" />
@@ -532,16 +541,31 @@ export function PacksClient({ matchId }: { matchId: string }) {
         fillBusy={busy || packBusy}
       />
 
-      {!gemini && (
+      {!canAutoGen && (
         <div className="rounded-[var(--radius-md)] border border-[var(--warning)]/40 bg-[var(--surface-muted)] px-3 py-2.5 text-sm text-[var(--foreground)] flex gap-2">
           <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
           <div>
-            <div className="font-semibold">Gemini not connected</div>
+            <div className="font-semibold">
+              {!gemini
+                ? "Gemini not connected"
+                : plan === "base"
+                  ? "Intel required for Auto Gen"
+                  : "Auto Gen unavailable"}
+            </div>
             <p className="text-xs mt-0.5">
-              Set <code className="font-mono">GEMINI_API_KEY</code> in .env to
-              run deep research with Google Search grounding. Without it, each
-              section returns a structured placeholder you can still edit and
-              save.
+              {!gemini ? (
+                <>
+                  Set <code className="font-mono">GEMINI_API_KEY</code> in .env.
+                  Paste Notebook research still works on Base — use{" "}
+                  <strong>Use my draft → desk notes</strong>.
+                </>
+              ) : (
+                <>
+                  Base plan keeps BYO Notebook / draft distribute. Enable Intel in
+                  Settings (or <code className="font-mono">PITCHLINE_PLAN=intel</code>)
+                  for Auto Gen. Stripe later.
+                </>
+              )}
             </p>
           </div>
         </div>
@@ -687,9 +711,13 @@ export function PacksClient({ matchId }: { matchId: string }) {
               <Button
                 size="sm"
                 variant="outline"
-                disabled={busy || packBusy}
+                disabled={busy || packBusy || !canAutoGen}
                 onClick={generate}
-                title="Generate this section with Gemini (confirms before replacing a Notebook paste)"
+                title={
+                  canAutoGen
+                    ? "Generate this section with Gemini (confirms before replacing a Notebook paste)"
+                    : "Intel + GEMINI_API_KEY required for Auto Gen — use Use my draft on Base"
+                }
               >
                 <Sparkles className="h-3.5 w-3.5 shrink-0" aria-hidden />
                 <span>{busy ? "Working…" : "Generate"}</span>

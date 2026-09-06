@@ -2581,6 +2581,17 @@ export function MatchDesk({
         }}
       />
 
+      {!onAirMode && (scorers.length > 0 || venueCapacity || attendance) ? (
+        <StatsStoryStrip
+          scorers={scorers}
+          attendance={attendance}
+          venueCapacity={venueCapacity}
+          homeName={homeName}
+          awayName={awayName}
+          className="mx-0.5"
+        />
+      ) : null}
+
       {/* Flash toast — overlay, not a permanent band */}
       {flash && (
         <div className="pointer-events-none absolute left-1/2 top-12 z-50 -translate-x-1/2 max-w-[min(90%,36rem)] rounded-[var(--radius-sm)] border border-amber-400/60 bg-[var(--surface)] px-3 py-1.5 text-xs font-semibold text-amber-950 dark:text-amber-100 shadow-md live-flash-fact">

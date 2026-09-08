@@ -254,7 +254,11 @@ function classifySection(heading: string): {
   if (/match officials|referee|ref:\s*|var:\s*|cards?\s*profile/i.test(h)) {
     return { kind: "referee" };
   }
-  if (/manager profile|touchline|head coach|dugout/i.test(h)) {
+  if (
+    /\bmanagers?\b|manager\s*profile|touchline|head\s+coaches?|dugout|co-?coaches?|\bmanager\s*[:—–-]/i.test(
+      h
+    )
+  ) {
     return { kind: "manager" };
   }
   if (/venue|atmosphere|stadium|chobani|saraco.lu|kad.koy fortress/i.test(h)) {
@@ -366,6 +370,53 @@ function matchCoach(
     }
   }
   return best;
+}
+
+/** All coaches named in a manager heading/body (co-coach pairs). */
+function matchAllCoaches(
+  heading: string,
+  body: string,
+  coaches: CoachMember[],
+  side: "home" | "away" | null,
+  homeClubId: string,
+  awayClubId: string
+): CoachMember[] {
+  const pool = coaches.filter((c) => {
+    if (side === "home") return c.side === "home" || c.clubId === homeClubId;
+    if (side === "away") return c.side === "away" || c.clubId === awayClubId;
+    return true;
+  });
+  const list = pool.length ? pool : coaches;
+  const blob = `${heading}\n${body.slice(0, 800)}`;
+  const blobKey = normalizePlayerKey(blob);
+  const headingKey = normalizePlayerKey(heading);
+  const hits: CoachMember[] = [];
+  for (const c of list) {
+    const cleaned = cleanPlayerHeading(heading);
+    const afterColon = heading.split(/:\s*/).slice(1).join(": ").trim();
+    const afterDash = heading.split(/[—–-]/).slice(1).join("-").trim();
+    const cKey = normalizePlayerKey(c.name);
+    const sur = lastToken(c.name);
+    const named =
+      namesLooselyMatch(cleaned, c.name) ||
+      (afterColon && namesLooselyMatch(afterColon, c.name)) ||
+      (afterDash &&
+        namesLooselyMatch(cleanPlayerHeading(afterDash), c.name)) ||
+      (cKey.length >= 4 && blobKey.includes(cKey)) ||
+      (sur.length >= 4 &&
+        (headingKey.includes(sur) || blobKey.split(" ").includes(sur)));
+    if (named) hits.push(c);
+  }
+  if (hits.length) return hits;
+  const fb = resolveCoachFallback(
+    heading,
+    body,
+    coaches,
+    side,
+    homeClubId,
+    awayClubId
+  );
+  return fb ? [fb] : [];
 }
 
 /** Prefer a resolvable coach id when manager section failed a direct name hit. */
@@ -603,7 +654,7 @@ export function organiseNotebookPack(args: OrganiseArgs): OrganisedPack {
         /\bFC\b|club background|institutional|rebuild|club profile|storylines?|nickname|history|founded|identity/i.test(
           heading
         ) &&
-        !/manager profile|expected starting|other .*squad|player/i.test(heading)
+        !/\bmanagers?\b|manager\s*profile|expected starting|other .*squad|player/i.test(heading)
       ) {
         kind = sideHint === "home" ? "club_home" : "club_away";
       }
@@ -611,7 +662,7 @@ export function organiseNotebookPack(args: OrganiseArgs): OrganisedPack {
     if (
       kind === "other" &&
       sticky &&
-      !/manager profile|institutional & squad|expected starting|other .*squad/i.test(
+      !/\bmanagers?\b|manager\s*profile|institutional & squad|expected starting|other .*squad/i.test(
         heading
       )
     ) {
@@ -668,30 +719,61 @@ export function organiseNotebookPack(args: OrganiseArgs): OrganisedPack {
         break;
       case "manager": {
         const side = clubSideFromHeading(heading, homeClub.name, awayClub.name);
-        const coach =
-          matchCoach(heading, body, coaches) ||
-          resolveCoachFallback(
-            heading,
-            body,
-            coaches,
-            side,
-            homeClub.id,
-            awayClub.id
-          );
-        if (coach && !seenCoach.has(coach.id) && body.length >= 40) {
-          seenCoach.add(coach.id);
+        const hits = matchAllCoaches(
+          heading,
+          body,
+          coaches,
+          side,
+          homeClub.id,
+          awayClub.id
+        );
+        if (hits.length && body.length >= 40) {
+          for (const coach of hits) {
+            if (seenCoach.has(coach.id)) continue;
+            seenCoach.add(coach.id);
+            notes.push({
+              title: `${coach.name} — Coach`,
+              body,
+              category: "Bio",
+              entityType: "coach",
+              entityId: coach.id,
+            });
+          }
+        } else if (body.length >= 40) {
+          // Fall back when coach row missing — prefer side synthetic coach id
+          // so desk cards with home-coach / away-coach still resolve.
+          let resolvedSide: "home" | "away" | null = side;
+          if (!resolvedSide) {
+            const bn = normalizePlayerKey(`${heading}\n${body.slice(0, 400)}`);
+            const homeTok = normalizePlayerKey(homeClub.name)
+              .split(" ")
+              .filter((t) => t.length >= 4);
+            const awayTok = normalizePlayerKey(awayClub.name)
+              .split(" ")
+              .filter((t) => t.length >= 4);
+            const homeHit = homeTok.some((t) => bn.includes(t));
+            const awayHit = awayTok.some((t) => bn.includes(t));
+            if (awayHit && !homeHit) resolvedSide = "away";
+            else if (homeHit && !awayHit) resolvedSide = "home";
+          }
+          const club =
+            resolvedSide === "away"
+              ? awayClub
+              : resolvedSide === "home"
+                ? homeClub
+                : homeClub;
+          const synthSide = resolvedSide || "home";
+          const label = cleanPlayerHeading(heading).slice(0, 60) || club.name;
           notes.push({
-            title: `${coach.name} — Coach`,
+            title: `Manager — ${label}`,
             body,
             category: "Bio",
             entityType: "coach",
-            entityId: coach.id,
+            entityId: `${synthSide}-coach`,
           });
-        } else if (body.length >= 40) {
-          // Fall back: club-level manager note if coach row missing
-          const club = side === "away" ? awayClub : homeClub;
+          // Also keep a club-linked copy for MANAGERS / club dossier
           notes.push({
-            title: `Manager — ${cleanPlayerHeading(heading).slice(0, 60)}`,
+            title: `Manager — ${label}`,
             body,
             category: "Bio",
             entityType: "club",

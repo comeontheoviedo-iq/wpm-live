@@ -3,6 +3,8 @@
 export function normalizePlayerKey(name: string): string {
   return name
     .toLowerCase()
+    // German ß is not NFD-decomposed; fold to ss before stripping non-ascii
+    .replace(/ß/g, "ss")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9\s]/g, " ")

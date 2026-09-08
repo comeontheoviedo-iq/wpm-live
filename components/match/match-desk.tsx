@@ -27,7 +27,7 @@ import {
   type NoteRow,
   type NotesFilterScope,
 } from "@/components/notes/notes-panel";
-import { defaultNotesBucket } from "@/lib/notes-buckets";
+import { defaultNotesBucket, noteMatchesCoachCard } from "@/lib/notes-buckets";
 import {
   RELEVANT_CAP,
   RELEVANT_TTL_MS,
@@ -3100,11 +3100,44 @@ export function MatchDesk({
           <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-4">
             {(() => {
               const c = coachSide === "home" ? homeCoach : awayCoach;
+              const coachId = c?.id || `${coachSide}-coach`;
+              const coachName =
+                c?.name ||
+                (coachSide === "home"
+                  ? homeFullName || homeName
+                  : awayFullName || awayName) ||
+                "Coach";
+              const clubId =
+                coachSide === "home" ? homeClubId : awayClubId;
+              const clubName =
+                coachSide === "home"
+                  ? homeFullName || homeName
+                  : awayFullName || awayName;
+              const coachNotes = notes.filter((n) =>
+                noteMatchesCoachCard(n, {
+                  coachId,
+                  coachName: c?.name || coachName,
+                  side: coachSide,
+                  clubId,
+                  clubName,
+                })
+              );
               if (!c) {
                 return (
-                  <p className="text-sm text-slate-500">
-                    No coach on file for this side.
-                  </p>
+                  <>
+                    <p className="text-sm text-slate-500">
+                      No coach staff row on file — showing Research manager notes
+                      for this side when available.
+                    </p>
+                    <NotesPanel
+                      matchId={matchId}
+                      entityType="coach"
+                      entityId={coachId}
+                      entityLabel={coachName}
+                      initialNotes={coachNotes}
+                      fillHeight
+                    />
+                  </>
                 );
               }
               return (
@@ -3150,43 +3183,9 @@ export function MatchDesk({
                   <NotesPanel
                     matchId={matchId}
                     entityType="coach"
-                    entityId={c.id || `${coachSide}-coach`}
+                    entityId={coachId}
                     entityLabel={c.name}
-                    initialNotes={notes.filter((n) => {
-                      if (c.id && n.entityId === c.id) return true;
-                      const name = (c.name || "").trim();
-                      const hay = `${n.title || ""} ${n.body || ""}`.toLowerCase();
-                      const nameL = name.toLowerCase();
-                      const sur = nameL.split(/\s+/).filter((t) => t.length >= 4).pop() || "";
-                      const nameHit =
-                        Boolean(nameL) &&
-                        (hay.includes(nameL) || (sur && hay.includes(sur)));
-                      if (
-                        n.entityType === "coach" &&
-                        (nameHit || (n.title || "").includes(name))
-                      ) {
-                        return true;
-                      }
-                      // Manager notes that fell back to club / MANAGERS bucket
-                      const clubId =
-                        coachSide === "home" ? homeClubId : awayClubId;
-                      const managerShaped =
-                        /manager|head coach|touchline|dugout|—\s*Coach\b/i.test(
-                          `${n.title || ""} ${n.category || ""}`
-                        ) ||
-                        (n.category === "Bio" &&
-                          /manager|coach/i.test(`${n.title || ""} ${n.body || ""}`));
-                      if (managerShaped && nameHit) return true;
-                      if (
-                        managerShaped &&
-                        n.entityType === "club" &&
-                        clubId &&
-                        n.entityId === clubId
-                      ) {
-                        return true;
-                      }
-                      return false;
-                    })}
+                    initialNotes={coachNotes}
                     fillHeight
                   />
                 </>

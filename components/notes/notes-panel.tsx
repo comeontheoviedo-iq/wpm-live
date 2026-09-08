@@ -604,41 +604,61 @@ export function NotesPanel({
           </div>
 
           {!isEntityScoped(entityType) && (
-          <div
-            className="relative z-20 flex gap-1 overflow-x-auto scrollbar-none pb-0.5 flex-nowrap pointer-events-auto"
-            data-notes-buckets="1"
-            role="tablist"
-            aria-label="Notes context buckets"
-          >
-            {scopeChips.map((c) => (
-              <button
-                key={c.key}
-                type="button"
-                role="tab"
-                aria-selected={activeFilter === c.key}
-                onClick={() => setScope(c.key)}
-                className={cn(
-                  "relative z-20 shrink-0 cursor-pointer rounded-[2px] px-1.5 py-0.5 text-[9px] border inline-flex items-center gap-0.5 font-semibold tabular-nums tracking-wide uppercase pointer-events-auto",
-                  activeFilter === c.key
-                    ? "bg-slate-200 text-[#0a0d12] border-slate-200"
-                    : c.key === "relevant"
-                      ? "border-[var(--edge-break)]/35 text-[var(--edge-break)]"
-                      : "border-white/10 text-slate-500 hover:text-slate-300 hover:border-white/20"
-                )}
+          <div className="space-y-1.5" data-notes-buckets-wrap="1">
+            <div
+              className="relative z-20 grid grid-cols-2 sm:grid-cols-3 gap-1 pointer-events-auto"
+              data-notes-buckets="1"
+              role="tablist"
+              aria-label="Notes context buckets"
+            >
+              {scopeChips.map((c) => {
+                const selected = activeFilter === c.key;
+                return (
+                  <button
+                    key={c.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={selected}
+                    onClick={() => setScope(c.key)}
+                    className={cn(
+                      "notes-bucket-chip relative z-20 cursor-pointer inline-flex items-center justify-between gap-1 font-semibold tabular-nums tracking-wide uppercase pointer-events-auto min-h-[28px]",
+                      selected
+                        ? "notes-bucket-chip-active"
+                        : c.key === "relevant"
+                          ? "notes-bucket-chip-relevant"
+                          : "notes-bucket-chip-idle"
+                    )}
+                  >
+                    <span className="truncate text-left">{c.label}</span>
+                    <span
+                      className={cn(
+                        "notes-bucket-count shrink-0",
+                        selected ? "notes-bucket-count-active" : ""
+                      )}
+                    >
+                      {counts[c.key] ?? 0}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            {isRailBucket(String(activeFilter)) && (
+              <div
+                className="notes-bucket-heading"
+                data-notes-active-bucket={String(activeFilter)}
               >
-                {c.label}
-                <span
-                  className={cn(
-                    "rounded-[2px] px-1 text-[9px] tabular-nums normal-case",
-                    activeFilter === c.key
-                      ? "bg-black/15"
-                      : "bg-[#0a0d12] text-slate-500"
+                <span>
+                  {notesBucketLabel(
+                    activeFilter as NotesBucket,
+                    homeName,
+                    awayName
                   )}
-                >
-                  {counts[c.key] ?? 0}
                 </span>
-              </button>
-            ))}
+                <span className="notes-bucket-heading-count">
+                  {counts[String(activeFilter)] ?? 0}
+                </span>
+              </div>
+            )}
           </div>
           )}
 

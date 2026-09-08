@@ -1,3 +1,4 @@
+import { lastToken, normalizePlayerKey } from "./player-name";
 /**
  * Notes rail context buckets — classify desk notes by entity/category/title.
  * No Players bucket: player notes roll into home/away.
@@ -361,6 +362,72 @@ export function notesBucketLabel(
     default:
       return String(bucket).toUpperCase();
   }
+}
+
+
+/**
+ * Coach / manager card on the desk — match Research notes by coach id,
+ * synthetic `${side}-coach`, normalised name/surname, or club-side managers.
+ */
+export function noteMatchesCoachCard(
+  n: NotesBucketNote,
+  opts: {
+    coachId?: string | null;
+    coachName?: string | null;
+    side: "home" | "away";
+    clubId?: string | null;
+    clubName?: string | null;
+  }
+): boolean {
+  const syntheticId = `${opts.side}-coach`;
+  if (opts.coachId && n.entityId === opts.coachId) return true;
+  if (n.entityId === syntheticId) return true;
+
+  const hayNorm = normalizePlayerKey(
+    `${n.title || ""} ${n.body || ""} ${n.category || ""}`
+  );
+  const nameNorm = normalizePlayerKey(opts.coachName || "");
+  const sur = lastToken(opts.coachName || "");
+  const nameHit =
+    Boolean(nameNorm) &&
+    ((nameNorm.length >= 4 && hayNorm.includes(nameNorm)) ||
+      (sur.length >= 4 &&
+        (hayNorm.split(" ").includes(sur) || hayNorm.includes(sur))));
+
+  // Direct coach entity or any managers-shaped note naming this coach
+  if (nameHit && (n.entityType === "coach" || isManagersNote(n))) return true;
+
+  if (!isManagersNote(n)) return false;
+
+  // Club-linked manager fallback — require name hit so a wrong-side
+  // club entityId (co-coach salvage) cannot leak onto the other manager card.
+  if (opts.clubId && n.entityId === opts.clubId && nameHit) return true;
+
+  // Side via club name in title/body, still gated on naming this coach
+  // OR a generic Manager title with this club and no other person surname.
+  const clubNorm = normalizePlayerKey(opts.clubName || "");
+  if (
+    clubNorm.length >= 4 &&
+    hayNorm.includes(clubNorm) &&
+    (n.entityType === "club" ||
+      n.entityType === "match" ||
+      n.entityType === "coach" ||
+      !n.entityType)
+  ) {
+    if (nameHit) return true;
+    const titleNorm = normalizePlayerKey(n.title || "");
+    const genericManager =
+      /^manager(\s|$)/i.test(n.title || "") &&
+      !/[a-z]{4,}/.test(
+        titleNorm
+          .replace(/manager/g, " ")
+          .replace(clubNorm, " ")
+          .replace(/profile|coach|touchline|dugout|head/g, " ")
+      );
+    if (genericManager) return true;
+  }
+
+  return false;
 }
 
 export const NOTES_BUCKET_ORDER = BUCKET_ORDER;

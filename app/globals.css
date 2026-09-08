@@ -807,6 +807,66 @@
     line-height: 1.35;
     color: #94a3b8;
   }
+
+  /* Desk Notes rail — larger bucket hit targets / clear selected state */
+  .notes-bucket-chip {
+    border-radius: 3px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: #0a0d12;
+    padding: 0.35rem 0.5rem;
+    font-size: 0.625rem;
+    letter-spacing: 0.06em;
+    color: #94a3b8;
+    line-height: 1.2;
+    transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+  }
+  .notes-bucket-chip-idle:hover {
+    color: #e2e8f0;
+    border-color: rgba(255, 255, 255, 0.22);
+    background: #121821;
+  }
+  .notes-bucket-chip-relevant {
+    border-color: color-mix(in oklab, var(--edge-break) 40%, transparent);
+    color: var(--edge-break);
+  }
+  .notes-bucket-chip-active {
+    background: #e2e8f0;
+    border-color: #e2e8f0;
+    color: #0a0d12;
+    box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.2);
+  }
+  .notes-bucket-count {
+    border-radius: 2px;
+    padding: 0.05rem 0.3rem;
+    font-size: 0.5625rem;
+    font-weight: 700;
+    background: #0a0d12;
+    color: #64748b;
+  }
+  .notes-bucket-count-active {
+    background: rgba(15, 23, 42, 0.18);
+    color: #0a0d12;
+  }
+  .notes-bucket-heading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.2rem 0.1rem 0.05rem;
+    font-size: 0.6875rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #f1f5f9;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  .notes-bucket-heading-count {
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: #94a3b8;
+  }
+
   .notes-rail-shell {
     background: #0e1218;
     border-color: rgba(255, 255, 255, 0.08);

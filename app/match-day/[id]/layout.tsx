@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import { getSession } from "@/lib/auth";
 import { getMatchFull } from "@/lib/match-data";
 import { AppHeader } from "@/components/layout/app-header";
-import { MatchNav } from "@/components/layout/match-nav";
+import { MatchSidebar } from "@/components/layout/match-sidebar";
 import { StatusControl } from "@/components/match/status-control";
 import { DeleteMatchDesk } from "@/components/match/delete-match-desk";
 import { StatusBadge } from "@/components/ui/badge";
@@ -80,8 +80,10 @@ export default async function MatchDayLayout({
           </div>
         </div>
       </div>
-      <MatchNav matchId={match.id} />
-      <div className="mx-auto max-w-[1600px] px-2 py-1.5 sm:px-3">{children}</div>
+      <div className="flex min-h-0 w-full items-stretch">
+        <MatchSidebar matchId={match.id} />
+        <div className="min-w-0 flex-1 px-2 py-1.5 sm:px-3">{children}</div>
+      </div>
     </div>
   );
 }

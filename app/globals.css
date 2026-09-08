@@ -258,6 +258,13 @@
     box-shadow: none;
   }
 
+  /* Match FM-style left rail — side border instead of bottom tab chrome */
+  .match-sidebar.desk-chrome,
+  [data-match-sidebar].desk-chrome,
+  [data-match-sidebar-mobile].desk-chrome {
+    border-bottom: none;
+  }
+
   .desk-header {
     background: #10141a;
     border: 1px solid rgba(148, 163, 184, 0.1);

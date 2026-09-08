@@ -2266,6 +2266,17 @@
   background: #10141a;
   padding: 0.35rem 0.45rem;
 }
+.player-dossier .note-preview-expandable {
+  cursor: pointer;
+}
+.player-dossier .note-preview-expandable:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: #12171f;
+}
+.player-dossier .note-preview-expandable:focus-visible {
+  outline: 1px solid rgba(148, 163, 184, 0.45);
+  outline-offset: 1px;
+}
 
 @media print {
   header,

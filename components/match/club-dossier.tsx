@@ -112,6 +112,7 @@ export function ClubDossier({
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("overview");
+  const [expandedPreviewId, setExpandedPreviewId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -612,16 +613,42 @@ export function ClubDossier({
           <div className="space-y-3">
             {(bioNotes.length > 0 || funNotes.length > 0) && (
               <div className="space-y-2">
-                {[...bioNotes, ...funNotes].slice(0, 4).map((n) => (
-                  <div key={n.id} className="note-preview">
-                    <div className="text-[11px] font-bold text-[#e2e8f0] mb-0.5">
+                {[...bioNotes, ...funNotes].slice(0, 4).map((n) => {
+                  const open = expandedPreviewId === n.id;
+                  return (
+                  <div
+                    key={n.id}
+                    className="note-preview note-preview-expandable"
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={open}
+                    title={open ? "Collapse note" : "Expand full note"}
+                    onClick={() =>
+                      setExpandedPreviewId((cur) => (cur === n.id ? null : n.id))
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setExpandedPreviewId((cur) =>
+                          cur === n.id ? null : n.id
+                        );
+                      }
+                    }}
+                  >
+                    <div className={`text-[11px] font-bold text-[#e2e8f0] mb-0.5 ${open ? "" : "truncate"}`}>
                       {n.title}
                     </div>
-                    <p className="text-[11px] text-[#94a3b8] whitespace-pre-wrap line-clamp-4">
+                    <p
+                      className={`text-[11px] text-[#94a3b8] whitespace-pre-wrap ${open ? "" : "line-clamp-4"}`}
+                    >
                       {n.body}
                     </p>
+                    <div className="mt-0.5 text-[9px] font-semibold uppercase tracking-wide text-[#64748b]">
+                      {open ? "Collapse" : "Expand"}
+                    </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
             <NotesPanel

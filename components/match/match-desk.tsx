@@ -3152,12 +3152,41 @@ export function MatchDesk({
                     entityType="coach"
                     entityId={c.id || `${coachSide}-coach`}
                     entityLabel={c.name}
-                    initialNotes={notes.filter(
-                      (n) =>
-                        n.entityId === c.id ||
-                        (n.entityType === "coach" &&
-                          (n.title || "").includes(c.name))
-                    )}
+                    initialNotes={notes.filter((n) => {
+                      if (c.id && n.entityId === c.id) return true;
+                      const name = (c.name || "").trim();
+                      const hay = `${n.title || ""} ${n.body || ""}`.toLowerCase();
+                      const nameL = name.toLowerCase();
+                      const sur = nameL.split(/\s+/).filter((t) => t.length >= 4).pop() || "";
+                      const nameHit =
+                        Boolean(nameL) &&
+                        (hay.includes(nameL) || (sur && hay.includes(sur)));
+                      if (
+                        n.entityType === "coach" &&
+                        (nameHit || (n.title || "").includes(name))
+                      ) {
+                        return true;
+                      }
+                      // Manager notes that fell back to club / MANAGERS bucket
+                      const clubId =
+                        coachSide === "home" ? homeClubId : awayClubId;
+                      const managerShaped =
+                        /manager|head coach|touchline|dugout|—\s*Coach\b/i.test(
+                          `${n.title || ""} ${n.category || ""}`
+                        ) ||
+                        (n.category === "Bio" &&
+                          /manager|coach/i.test(`${n.title || ""} ${n.body || ""}`));
+                      if (managerShaped && nameHit) return true;
+                      if (
+                        managerShaped &&
+                        n.entityType === "club" &&
+                        clubId &&
+                        n.entityId === clubId
+                      ) {
+                        return true;
+                      }
+                      return false;
+                    })}
                     fillHeight
                   />
                 </>

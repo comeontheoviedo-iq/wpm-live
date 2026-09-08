@@ -52,6 +52,16 @@ function isRailBucket(scope: string): scope is NotesBucket {
   return (RAIL_BUCKETS as string[]).includes(scope);
 }
 
+function isEntityScoped(entityType?: string | null): boolean {
+  return (
+    entityType === "player" ||
+    entityType === "coach" ||
+    entityType === "club" ||
+    entityType === "team" ||
+    entityType === "league"
+  );
+}
+
 export function NotesPanel({
   matchId,
   entityType,
@@ -112,10 +122,9 @@ export function NotesPanel({
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [category, setCategory] = useState<string>("Custom");
-  const initialBucket = defaultNotesBucket(
-    matchStatus || "Not Started",
-    kickoffAt ?? null
-  );
+  const initialBucket: NotesFilterScope = isEntityScoped(entityType)
+    ? "all"
+    : defaultNotesBucket(matchStatus || "Not Started", kickoffAt ?? null);
   const [filter, setFilter] = useState<NotesFilterScope>(initialBucket);
   const [search, setSearch] = useState("");
   const [pending, setPending] = useState(false);
@@ -184,6 +193,7 @@ export function NotesPanel({
     if (entityId && entityType === "player") {
       if (n.entityId !== entityId) return false;
     }
+    // entityType === "coach": parent (match-desk) already narrows initialNotes
     if (entityType === "club" || entityType === "team") {
       if (n.entityType !== "club" && n.entityType !== "team") return false;
       if (entityId && n.entityId !== entityId) return false;
@@ -200,8 +210,9 @@ export function NotesPanel({
       }
     }
 
-    // New context buckets
+    // New context buckets — entity dossiers show all linked notes
     if (isRailBucket(scope)) {
+      if (isEntityScoped(entityType)) return true;
       return noteMatchesBucket(n, scope, bucketCtx);
     }
 
@@ -592,8 +603,9 @@ export function NotesPanel({
             />
           </div>
 
+          {!isEntityScoped(entityType) && (
           <div
-            className="flex gap-1 overflow-x-auto scrollbar-none pb-0.5 flex-nowrap"
+            className="relative z-20 flex gap-1 overflow-x-auto scrollbar-none pb-0.5 flex-nowrap pointer-events-auto"
             data-notes-buckets="1"
             role="tablist"
             aria-label="Notes context buckets"
@@ -606,7 +618,7 @@ export function NotesPanel({
                 aria-selected={activeFilter === c.key}
                 onClick={() => setScope(c.key)}
                 className={cn(
-                  "shrink-0 rounded-[2px] px-1.5 py-0.5 text-[9px] border inline-flex items-center gap-0.5 font-semibold tabular-nums tracking-wide uppercase",
+                  "relative z-20 shrink-0 cursor-pointer rounded-[2px] px-1.5 py-0.5 text-[9px] border inline-flex items-center gap-0.5 font-semibold tabular-nums tracking-wide uppercase pointer-events-auto",
                   activeFilter === c.key
                     ? "bg-slate-200 text-[#0a0d12] border-slate-200"
                     : c.key === "relevant"
@@ -628,6 +640,7 @@ export function NotesPanel({
               </button>
             ))}
           </div>
+          )}
 
           {/* Sticky compact composer — quiet call-queue craft, fully functional */}
           {(fillHeight || liveMode || !compact) && (

@@ -237,6 +237,7 @@ export function PlayerDossier({
   const [ovMsg, setOvMsg] = useState<string | null>(null);
   const [createNoteBusy, setCreateNoteBusy] = useState(false);
   const [createNoteMsg, setCreateNoteMsg] = useState<string | null>(null);
+  const [expandedPreviewId, setExpandedPreviewId] = useState<string | null>(null);
 
   useEffect(() => {
     setHeightUnit(loadFieldSettings().heightUnit);
@@ -1400,17 +1401,43 @@ export function PlayerDossier({
                     (n, i, arr) => arr.findIndex((x) => x.id === n.id) === i
                   )
                   .slice(0, 8)
-                  .map((n) => (
-                    <div key={n.id} className="note-preview">
-                      <div className="text-[11px] font-semibold truncate text-[#f1f5f9]">
+                  .map((n) => {
+                    const open = expandedPreviewId === n.id;
+                    return (
+                    <div
+                      key={n.id}
+                      className="note-preview note-preview-expandable"
+                      role="button"
+                      tabIndex={0}
+                      aria-expanded={open}
+                      title={open ? "Collapse note" : "Expand full note"}
+                      onClick={() =>
+                        setExpandedPreviewId((cur) => (cur === n.id ? null : n.id))
+                      }
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setExpandedPreviewId((cur) =>
+                            cur === n.id ? null : n.id
+                          );
+                        }
+                      }}
+                    >
+                      <div className={`text-[11px] font-semibold text-[#f1f5f9] ${open ? "whitespace-normal" : "truncate"}`}>
                         {n.pinned ? "📌 " : ""}
                         {n.title}
                       </div>
-                      <p className="text-[10px] text-[#94a3b8] mt-0.5 line-clamp-4 whitespace-pre-wrap">
+                      <p
+                        className={`text-[10px] text-[#94a3b8] mt-0.5 whitespace-pre-wrap ${open ? "" : "line-clamp-4"}`}
+                      >
                         {n.body}
                       </p>
+                      <div className="mt-0.5 text-[9px] font-semibold uppercase tracking-wide text-[#64748b]">
+                        {open ? "Collapse" : "Expand"}
+                      </div>
                     </div>
-                  ))}
+                    );
+                  })}
               </div>
             )}
 

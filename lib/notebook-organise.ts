@@ -327,23 +327,65 @@ function matchCoach(
   body: string,
   coaches: CoachMember[]
 ): CoachMember | null {
-  const blob = `${heading}\n${body.slice(0, 200)}`;
+  const blob = `${heading}\n${body.slice(0, 500)}`;
+  const blobKey = normalizePlayerKey(blob);
+  const headingKey = normalizePlayerKey(heading);
   let best: CoachMember | null = null;
+  let bestScore = 0;
   for (const c of coaches) {
-    if (namesLooselyMatch(cleanPlayerHeading(heading), c.name)) return c;
-    // "Manager Profile: İsmail Kartal"
-    const after = heading.split(/:\s*/).slice(1).join(": ").trim();
-    if (after && namesLooselyMatch(after, c.name)) return c;
-    if (normalizePlayerKey(blob).includes(normalizePlayerKey(c.name))) {
-      best = c;
+    const cleaned = cleanPlayerHeading(heading);
+    if (namesLooselyMatch(cleaned, c.name)) return c;
+    // "Manager Profile: İsmail Kartal" / em-dash forms
+    const afterColon = heading.split(/:\s*/).slice(1).join(": ").trim();
+    if (afterColon && namesLooselyMatch(afterColon, c.name)) return c;
+    const afterDash = heading.split(/[—–-]/).slice(1).join("-").trim();
+    if (
+      afterDash &&
+      namesLooselyMatch(cleanPlayerHeading(afterDash), c.name)
+    ) {
+      return c;
     }
-    // Surname
+    const cKey = normalizePlayerKey(c.name);
+    if (cKey.length >= 4 && blobKey.includes(cKey)) {
+      const score = cKey.length + 40;
+      if (score > bestScore) {
+        best = c;
+        bestScore = score;
+      }
+    }
+    // Surname in heading or early body
     const sur = lastToken(c.name);
-    if (sur.length >= 4 && normalizePlayerKey(heading).includes(sur)) {
-      best = c;
+    if (sur.length >= 4) {
+      if (headingKey.includes(sur) || blobKey.split(" ").includes(sur)) {
+        const score = sur.length + 10;
+        if (score > bestScore) {
+          best = c;
+          bestScore = score;
+        }
+      }
     }
   }
   return best;
+}
+
+/** Prefer a resolvable coach id when manager section failed a direct name hit. */
+function resolveCoachFallback(
+  heading: string,
+  body: string,
+  coaches: CoachMember[],
+  side: "home" | "away" | null,
+  homeClubId: string,
+  awayClubId: string
+): CoachMember | null {
+  const sideCoaches = coaches.filter((c) => {
+    if (side === "home") return c.side === "home" || c.clubId === homeClubId;
+    if (side === "away") return c.side === "away" || c.clubId === awayClubId;
+    return true;
+  });
+  const hit = matchCoach(heading, body, sideCoaches.length ? sideCoaches : coaches);
+  if (hit) return hit;
+  if (sideCoaches.length === 1) return sideCoaches[0];
+  return null;
 }
 
 /** Split a hooks section body into bite-sized notes. */
@@ -625,7 +667,17 @@ export function organiseNotebookPack(args: OrganiseArgs): OrganisedPack {
         if (body.length >= 20) refereeChunks.push(chunk);
         break;
       case "manager": {
-        const coach = matchCoach(heading, body, coaches);
+        const side = clubSideFromHeading(heading, homeClub.name, awayClub.name);
+        const coach =
+          matchCoach(heading, body, coaches) ||
+          resolveCoachFallback(
+            heading,
+            body,
+            coaches,
+            side,
+            homeClub.id,
+            awayClub.id
+          );
         if (coach && !seenCoach.has(coach.id) && body.length >= 40) {
           seenCoach.add(coach.id);
           notes.push({
@@ -637,12 +689,11 @@ export function organiseNotebookPack(args: OrganiseArgs): OrganisedPack {
           });
         } else if (body.length >= 40) {
           // Fall back: club-level manager note if coach row missing
-          const side = clubSideFromHeading(heading, homeClub.name, awayClub.name);
           const club = side === "away" ? awayClub : homeClub;
           notes.push({
             title: `Manager — ${cleanPlayerHeading(heading).slice(0, 60)}`,
             body,
-            category: "Match",
+            category: "Bio",
             entityType: "club",
             entityId: club.id,
           });

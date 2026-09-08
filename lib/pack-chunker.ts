@@ -31,7 +31,17 @@ export function cardTitleForChunk(
     !/^[-*•]/.test(heading)
       ? heading
       : null;
-  if (short) return short.slice(0, 80);
+  if (short) {
+    // Chunk first-line headings often drop H2H / Venue / League keywords —
+    // keep the base title so desk bucket chips still match.
+    const bucketKey =
+      /\b(h2h|rivalry|venue|atmosphere|stadium|league|table\s*&?\s*form|standings|history|manager|tonight)\b/i;
+    if (bucketKey.test(baseTitle) && !bucketKey.test(short)) {
+      if (total > 1) return `${baseTitle} · ${index + 1}/${total}`.slice(0, 80);
+      return baseTitle.slice(0, 80);
+    }
+    return short.slice(0, 80);
+  }
   if (total > 1) return `${baseTitle} · ${index + 1}/${total}`;
   return baseTitle;
 }

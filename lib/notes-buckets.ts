@@ -89,25 +89,48 @@ function clubNameHit(text: string, name?: string | null): boolean {
   return Boolean(longest && text.includes(longest));
 }
 
+/** Title + first lines of body — chunk retitles often drop bucket keywords. */
+function titleOrLead(n: NotesBucketNote): string {
+  const lead = (n.body || "")
+    .split(/\n/)
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .slice(0, 4)
+    .join(" ");
+  return `${n.title || ""} ${lead} ${n.category || ""} ${n.entityType || ""}`.toLowerCase();
+}
+
 export function isManagersNote(n: NotesBucketNote): boolean {
   if (n.entityType === "coach") return true;
   const t = titleHay(n);
-  return /manager|head coach|touchline|dugout|coach\b/i.test(t);
+  if (/manager|head coach|touchline|dugout|coach\b|—\s*Coach\b/i.test(t)) {
+    return true;
+  }
+  // Bio / club fallback manager cards after organise
+  if (
+    (n.category === "Bio" || n.entityType === "club") &&
+    /manager|head coach|touchline|dugout|\bcoach\b/i.test(titleOrLead(n))
+  ) {
+    return true;
+  }
+  return false;
 }
 
 export function isVenueNote(n: NotesBucketNote): boolean {
-  const t = titleHay(n);
-  return /venue|atmosphere|stadium|ground\b|fortress/i.test(t);
+  return /venue|atmosphere|stadium|ground\b|fortress|arena\b/i.test(
+    titleOrLead(n)
+  );
 }
 
 export function isH2hNote(n: NotesBucketNote): boolean {
-  const t = titleHay(n);
-  return /\bh2h\b|head[- ]?to[- ]?head|rivalry/i.test(t);
+  return /\bh2h\b|head[- ]?to[- ]?head|rivalry|historical scorelines/i.test(
+    titleOrLead(n)
+  );
 }
 
 export function isLeagueNote(n: NotesBucketNote): boolean {
   if (n.entityType === "league") return true;
-  const t = titleHay(n);
+  const t = titleOrLead(n);
   return (
     /league|table\s*&?\s*form|standings|season context|divisional|competition\b/i.test(
       t
@@ -117,9 +140,16 @@ export function isLeagueNote(n: NotesBucketNote): boolean {
 
 export function isHistoryNote(n: NotesBucketNote): boolean {
   if (n.category === "Career") return true;
-  const t = titleHay(n);
+  // Organised club profile cards ("Stuttgart — Club") belong in History
+  if (
+    n.entityType === "club" &&
+    /—\s*Club\b/i.test(n.title || "") &&
+    !/^Manager\b/i.test(n.title || "")
+  ) {
+    return true;
+  }
   return /history|founded|centenary|institution|club (profile|story)|nickname|background|rebuild|heritage|legacy/i.test(
-    t
+    titleOrLead(n)
   );
 }
 

@@ -7,16 +7,41 @@
  * Stripe billing comes later; override is for Chris testing only.
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
-import { dirname, join } from "path";
 import { isGeminiConfigured } from "./gemini";
+
+type FsApi = {
+  existsSync: (p: string) => boolean;
+  mkdirSync: (p: string, o?: { recursive?: boolean }) => void;
+  readFileSync: (p: string, e: string) => string;
+  writeFileSync: (p: string, d: string, e: string) => void;
+};
+type PathApi = {
+  dirname: (p: string) => string;
+  join: (...p: string[]) => string;
+};
+
+function loadFs(): FsApi | null {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("fs") as FsApi;
+  } catch {
+    return null;
+  }
+}
+
+function loadPath(): PathApi {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require("path") as PathApi;
+}
+
 
 export type PitchlinePlan = "base" | "intel";
 
-const OVERRIDE_REL = join("data", "plan-override.json");
+const OVERRIDE_REL_PARTS = ["data", "plan-override.json"] as const;
 
 function overridePath(): string {
-  return join(process.cwd(), OVERRIDE_REL);
+  const path = loadPath();
+  return path.join(process.cwd(), ...OVERRIDE_REL_PARTS);
 }
 
 export type PlanOverrideFile = {
@@ -34,9 +59,11 @@ export function getEnvPlan(): PitchlinePlan {
 
 export function readPlanOverride(): PlanOverrideFile | null {
   try {
+    const f = loadFs();
+    if (!f) return null;
     const path = overridePath();
-    if (!existsSync(path)) return null;
-    const raw = readFileSync(path, "utf8");
+    if (!f.existsSync(path)) return null;
+    const raw = f.readFileSync(path, "utf8");
     const json = JSON.parse(raw) as { plan?: string; updatedAt?: string; note?: string };
     if (json.plan === "intel" || json.plan === "base") {
       return {
@@ -52,8 +79,13 @@ export function readPlanOverride(): PlanOverrideFile | null {
 }
 
 export function writePlanOverride(plan: PitchlinePlan, note?: string): PlanOverrideFile {
+  const f = loadFs();
+  const pathApi = loadPath();
+  if (!f) {
+    throw new Error("Plan override requires a Node.js filesystem (server only).");
+  }
   const path = overridePath();
-  mkdirSync(dirname(path), { recursive: true });
+  f.mkdirSync(pathApi.dirname(path), { recursive: true });
   const payload: PlanOverrideFile = {
     plan,
     updatedAt: new Date().toISOString(),
@@ -61,14 +93,16 @@ export function writePlanOverride(plan: PitchlinePlan, note?: string): PlanOverr
       note ||
       "Local Settings toggle for testing. Stripe billing not wired yet.",
   };
-  writeFileSync(path, JSON.stringify(payload, null, 2) + "\n", "utf8");
+  f.writeFileSync(path, JSON.stringify(payload, null, 2) + "\n", "utf8");
   return payload;
 }
 
 export function clearPlanOverride(): void {
+  const f = loadFs();
+  if (!f) return;
   const path = overridePath();
-  if (!existsSync(path)) return;
-  writeFileSync(
+  if (!f.existsSync(path)) return;
+  f.writeFileSync(
     path,
     JSON.stringify(
       {

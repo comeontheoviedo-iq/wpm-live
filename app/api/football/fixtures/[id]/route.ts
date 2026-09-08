@@ -61,7 +61,7 @@ export async function GET(
             name: fx.league.name,
             country: fx.league.country,
             round: fx.league.round,
-            logo: fx.league.logo,
+            logo: (fx.league as { logo?: string }).logo ?? null,
           }
         : null,
       teams: {

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Loader2, RefreshCw, X } from "lucide-react";
 import { NotesPanel, type NoteRow } from "@/components/notes/notes-panel";
 import { cn } from "@/lib/utils";
+import { VerdictBlock } from "@/components/match/verdict-block";
 
 type StandingRow = {
   rank: number;
@@ -530,13 +531,11 @@ export function LeagueDossier({
 
         {!busy && data && tab === "overview" && (
           <div className="player-dossier-overview space-y-3">
-            <div className="player-dossier-verdict" data-dossier-verdict="1">
-              <div className="player-dossier-verdict-label">Verdict</div>
-              <div className="player-dossier-verdict-line">{sayableLine}</div>
-              {sayableSub ? (
-                <div className="player-dossier-verdict-sub">{sayableSub}</div>
-              ) : null}
-            </div>
+            <VerdictBlock
+              line={sayableLine}
+              sub={sayableSub}
+              fullBody={sayableNote?.body || null}
+            />
 
             <div className="player-dossier-overview-cols">
               <Section title="Identity" dense quiet>

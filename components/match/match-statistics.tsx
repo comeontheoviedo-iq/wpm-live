@@ -2,6 +2,7 @@
 
 import { EventTimeline, type TimelineEvent } from "@/components/match/event-timeline";
 import { cn } from "@/lib/utils";
+import { deskVenueName } from "@/lib/venue-name";
 
 export type StatRow = { label: string; homeValue: string; awayValue: string };
 
@@ -191,7 +192,7 @@ export function MatchStatisticsView({
               {homeName} vs {awayName}
             </div>
             <div className="text-[11px] text-slate-500 truncate">
-              {[competition, kickoffLabel, venueName, venueCity]
+              {[competition, kickoffLabel, deskVenueName(venueName) || venueName, venueCity]
                 .filter(Boolean)
                 .join(" · ")}
             </div>

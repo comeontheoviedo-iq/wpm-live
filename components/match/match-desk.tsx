@@ -48,6 +48,8 @@ import { Button } from "@/components/ui/button";
 import { FORMATIONS } from "@/lib/formations"
 import { summarizeSubWindows } from "@/lib/sub-windows";
 import { leagueIdForCompetition } from "@/lib/competitions";
+import { deskVenueName } from "@/lib/venue-name";
+import { VerdictBlock } from "@/components/match/verdict-block";
 import { namesLooselyMatch, parseSubDescription } from "@/lib/player-name";
 import { cn } from "@/lib/utils";
 import { formatLiveClock } from "@/lib/live-clock";
@@ -2188,7 +2190,7 @@ export function MatchDesk({
             {(venueName || venueCity) && (
               <span className="inline-flex items-center gap-0.5">
                 <MapPin className="h-3 w-3 shrink-0" />
-                {venueName || "Venue"}
+                {deskVenueName(venueName) || venueName || "Venue"}
                 {venueCity ? `, ${venueCity}` : ""}
               </span>
             )}
@@ -3129,6 +3131,38 @@ export function MatchDesk({
                       No coach staff row on file — showing Research manager notes
                       for this side when available.
                     </p>
+                    {(() => {
+                      const hook =
+                        coachNotes.find(
+                          (n) =>
+                            /hook|scout|verdict|sayable|lead|manager/i.test(
+                              n.title || ""
+                            ) ||
+                            /hook|scout|verdict|manager/i.test(n.category || "")
+                        ) ||
+                        coachNotes.find((n) => (n.body || "").trim()) ||
+                        null;
+                      if (!hook && !coachNotes.length) return null;
+                      const line = hook
+                        ? (hook.title || "").trim() ||
+                          (hook.body || "").split("\n")[0].trim()
+                        : coachName;
+                      const sub = hook?.body
+                        ? hook.body
+                            .trim()
+                            .split("\n")
+                            .slice(hook.title ? 0 : 1, 2)
+                            .join(" ")
+                            .slice(0, 180)
+                        : null;
+                      return (
+                        <VerdictBlock
+                          line={line}
+                          sub={sub}
+                          fullBody={hook?.body || null}
+                        />
+                      );
+                    })()}
                     <NotesPanel
                       matchId={matchId}
                       entityType="coach"
@@ -3180,6 +3214,44 @@ export function MatchDesk({
                   <p className="text-xs text-slate-500">
                     Factual club staff only — no invented bio.
                   </p>
+                  {(() => {
+                    const hook =
+                      coachNotes.find(
+                        (n) =>
+                          /hook|scout|verdict|sayable|lead|manager/i.test(
+                            n.title || ""
+                          ) ||
+                          /hook|scout|verdict|manager/i.test(n.category || "")
+                      ) ||
+                      coachNotes.find((n) => (n.body || "").trim()) ||
+                      null;
+                    const line = hook
+                      ? (hook.title || "").trim() ||
+                        (hook.body || "").split("\n")[0].trim()
+                      : [
+                          c.name,
+                          c.nationality || null,
+                          c.age != null ? `${c.age}y` : null,
+                          c.role || "Head Coach",
+                        ]
+                          .filter(Boolean)
+                          .join(" · ");
+                    const sub = hook?.body
+                      ? hook.body
+                          .trim()
+                          .split("\n")
+                          .slice(hook.title ? 0 : 1, 2)
+                          .join(" ")
+                          .slice(0, 180)
+                      : null;
+                    return (
+                      <VerdictBlock
+                        line={line}
+                        sub={sub}
+                        fullBody={hook?.body || null}
+                      />
+                    );
+                  })()}
                   <NotesPanel
                     matchId={matchId}
                     entityType="coach"

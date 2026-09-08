@@ -4,6 +4,8 @@ import { useEffect, useState, type ReactNode } from "react";
 import { X, Loader2 } from "lucide-react";
 import { NotesPanel, type NoteRow } from "@/components/notes/notes-panel";
 import { cn } from "@/lib/utils";
+import { VerdictBlock } from "@/components/match/verdict-block";
+import { deskVenueName } from "@/lib/venue-name";
 
 type Tab = "overview" | "squad" | "season" | "history" | "notes";
 
@@ -253,7 +255,7 @@ export function ClubDossier({
                       ·
                     </span>
                     <span className="player-dossier-meta-quiet">
-                      {c.stadiumName || c.venue?.name}
+                      {c.stadiumName || deskVenueName(c.venue?.name) || c.venue?.name}
                     </span>
                   </>
                 ) : null}
@@ -295,13 +297,11 @@ export function ClubDossier({
 
         {!loading && c && tab === "overview" && (
           <div className="player-dossier-overview space-y-3">
-            <div className="player-dossier-verdict" data-dossier-verdict="1">
-              <div className="player-dossier-verdict-label">Verdict</div>
-              <div className="player-dossier-verdict-line">{sayableLine}</div>
-              {sayableSub ? (
-                <div className="player-dossier-verdict-sub">{sayableSub}</div>
-              ) : null}
-            </div>
+            <VerdictBlock
+              line={sayableLine}
+              sub={sayableSub}
+              fullBody={sayableNote?.body || null}
+            />
 
             <div className="player-dossier-overview-cols">
               <Section title="Identity" dense quiet>
@@ -313,7 +313,7 @@ export function ClubDossier({
                   <Kv label="City" value={c.city || "—"} />
                   <Kv
                     label="Stadium"
-                    value={c.stadiumName || c.venue?.name || "—"}
+                    value={c.stadiumName || deskVenueName(c.venue?.name) || c.venue?.name || "—"}
                   />
                   <Kv
                     label="Capacity"

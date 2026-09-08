@@ -19,7 +19,8 @@ export function splitVenueNames(raw: string): {
       return {
         sponsored,
         historic: rest,
-        primary: sponsored,
+        // Desk / pitch chrome prefer original (non-sponsored) name
+        primary: rest,
       };
     }
   }
@@ -27,12 +28,20 @@ export function splitVenueNames(raw: string): {
   // "Name (also known as X)" / "Name — formerly Y"
   const aka = name.match(/^(.+?)\s*[\(—–-]\s*(?:also known as|formerly|aka)\s*(.+?)\)?$/i);
   if (aka) {
+    const current = aka[1].trim();
+    const historic = aka[2].trim();
     return {
-      sponsored: aka[1].trim(),
-      historic: aka[2].trim(),
-      primary: aka[1].trim(),
+      sponsored: current,
+      historic,
+      primary: historic || current,
     };
   }
 
   return { sponsored: null, historic: null, primary: name };
+}
+
+/** Desk / scoreboard label: original/historic when known, else raw. */
+export function deskVenueName(raw: string | null | undefined): string | null {
+  if (!raw?.trim()) return null;
+  return splitVenueNames(raw).primary || raw.trim();
 }

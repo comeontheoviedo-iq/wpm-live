@@ -55,9 +55,9 @@ export default function PricingPage() {
               Base (Matchday)
             </div>
             <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-3xl font-bold">£15</span>
+              <span className="text-3xl font-bold">£19.99</span>
               <span className="text-sm text-slate-500">/mo</span>
-              <span className="text-xs text-slate-400 line-through">£12 intro</span>
+              <span className="text-xs text-slate-400 line-through">£15 intro</span>
             </div>
             <p className="mt-2 text-sm text-slate-500">
               Solo / freelance matchday core — your Notebook, RSS, AF sync.
@@ -83,7 +83,7 @@ export default function PricingPage() {
             <div className="mt-2 flex items-baseline gap-2">
               <span className="text-3xl font-bold">+£7</span>
               <span className="text-sm text-slate-500">/mo</span>
-              <span className="text-xs text-slate-400">(~£22 total)</span>
+              <span className="text-xs text-slate-400">(~£26.99 total)</span>
             </div>
             <p className="mt-2 text-sm text-slate-500">
               Gemini web brief, Auto Gen packs, note-draft, optional re-rank.

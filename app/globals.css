@@ -1451,6 +1451,24 @@
   padding: 0.5rem 0.65rem 0.55rem;
   margin-bottom: 0;
 }
+button.player-dossier-verdict {
+  display: block;
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  text-align: left;
+}
+button.player-dossier-verdict:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.02);
+}
+button.player-dossier-verdict:focus-visible {
+  outline: 2px solid rgba(45, 212, 191, 0.45);
+  outline-offset: 1px;
+}
 .player-dossier-verdict-label {
   font-size: 0.5rem;
   font-weight: 700;

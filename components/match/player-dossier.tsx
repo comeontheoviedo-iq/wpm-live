@@ -16,6 +16,7 @@ import {
 } from "@/lib/flags";
 import { speechLangFromNationality, speakPronunciation } from "@/lib/speech-lang";
 import type { PlayerOverrideRow } from "@/lib/player-overrides";
+import { VerdictBlock } from "@/components/match/verdict-block";
 import {
   formatHeightValue,
   formatWeightValue,
@@ -731,13 +732,11 @@ export function PlayerDossier({
         {/* OVERVIEW — verdict → GENERAL / ATTACKING → form chips */}
         {p && tab === "overview" && !loading && (
           <div className="player-dossier-overview space-y-3">
-            <div className="player-dossier-verdict" data-dossier-verdict="1">
-              <div className="player-dossier-verdict-label">Verdict</div>
-              <div className="player-dossier-verdict-line">{sayableLine}</div>
-              {sayableSub ? (
-                <div className="player-dossier-verdict-sub">{sayableSub}</div>
-              ) : null}
-            </div>
+            <VerdictBlock
+              line={sayableLine}
+              sub={sayableSub}
+              fullBody={sayableNote?.body || null}
+            />
 
             <div className="player-dossier-overview-cols">
               <Section title="General" dense quiet>

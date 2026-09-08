@@ -5,14 +5,14 @@ Brand: Pitchline. Demo login: demo@pitchline.app / demo1234
 
 ## Plans (business model)
 
-**Base (Matchday) ~£12–15/mo** — default. BYO research is the product core.
+**Base (Matchday) £19.99/mo** — default. BYO research is the product core.
 - BYO Notebook / Research paste (local organise — no Gemini)
 - News **RSS only**
 - Diet AF live sync
 - Notes buckets, relevance heuristics (no Gemini re-rank)
 - OBS overlay, dossiers, Stats, Speaks, Print, etc.
 
-**Intel add-on ~£6–8/mo** (+£7 shown on Pricing; ~£22 total)
+**Intel add-on +£7/mo** (~£26.99 total)
 - News Gemini web brief
 - Auto Gen pack (`pack-generate`)
 - Player note-draft

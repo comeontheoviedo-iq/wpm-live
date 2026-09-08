@@ -161,8 +161,8 @@ export const INTEL_REQUIRED_MESSAGE =
 export const PLAN_COPY = {
   base: {
     name: "Base (Matchday)",
-    price: "£15",
-    introPrice: "£12",
+    price: "£19.99",
+    introPrice: "£15",
     blurb: "Matchday desk with your own research. No Gemini.",
     includes: [
       "BYO Notebook / Research paste (local organise — no Gemini)",
@@ -175,7 +175,7 @@ export const PLAN_COPY = {
   intel: {
     name: "Intel",
     price: "+£7",
-    absolutePrice: "£22",
+    absolutePrice: "£26.99",
     blurb: "Gemini-powered briefs, Auto Gen packs, and note drafts.",
     includes: [
       "Everything in Base",

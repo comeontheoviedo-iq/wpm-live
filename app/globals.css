@@ -258,10 +258,11 @@
     box-shadow: none;
   }
 
-  /* Match FM-style left rail — side border instead of bottom tab chrome */
+  /* Match / hub FM-style left rail — side border instead of bottom tab chrome */
   .match-sidebar.desk-chrome,
   [data-match-sidebar].desk-chrome,
-  [data-match-sidebar-mobile].desk-chrome {
+  [data-match-sidebar-mobile].desk-chrome,
+  [data-app-sidebar].desk-chrome {
     border-bottom: none;
   }
 

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppHeader } from "@/components/layout/app-header";
+import { AppSidebar } from "@/components/layout/app-sidebar";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/components/theme-provider";
@@ -141,13 +142,16 @@ export default function SettingsPage() {
     { id: "feedback", label: "Feedback", icon: <MessageSquarePlus className="h-4 w-4" /> },
   ];
   return (
-    <div className="min-h-screen">
+    <div className="min-h-dvh bg-[var(--background)] text-[var(--foreground)]">
       <AppHeader user={user} />
-      <main className="mx-auto max-w-5xl px-3 sm:px-4 py-6">
-        <div className="mb-6">
-          <p className="text-xs text-teal-600 font-medium">Dashboard › Settings</p>
-          <h1 className="text-2xl font-bold mt-1">Settings</h1>
-          <p className="text-sm text-slate-500">
+      <div className="flex min-h-0 w-full items-stretch">
+        <AppSidebar />
+        <main className="min-w-0 flex-1 px-2 py-2 sm:px-3 sm:py-3">
+        <div className="mx-auto max-w-5xl">
+        <div className="mb-4 desk-header p-3">
+          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Hub · Settings</p>
+          <h1 className="mt-1 text-base font-bold tracking-tight sm:text-lg">Settings</h1>
+          <p className="mt-0.5 text-[11px] text-[var(--muted)]">
             BYO research is the default on Base. Gemini features require the Intel add-on.
           </p>
         </div>
@@ -285,7 +289,9 @@ export default function SettingsPage() {
             )}
           </div>
         </div>
+        </div>
       </main>
+      </div>
     </div>
   );
 }

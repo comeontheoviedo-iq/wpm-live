@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppHeader } from "@/components/layout/app-header";
+import { AppSidebar } from "@/components/layout/app-sidebar";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PRIORITY_COMPETITIONS } from "@/lib/competitions";
@@ -320,12 +321,16 @@ export default function NewMatchDayPage() {
   }
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-dvh bg-[var(--background)] text-[var(--foreground)]">
       <AppHeader user={user} />
-      <main className="mx-auto max-w-3xl px-3 sm:px-4 py-6 space-y-4">
-        <div>
-          <h1 className="text-2xl font-bold">Add Match Desk</h1>
-          <p className="text-sm text-slate-500">
+      <div className="flex min-h-0 w-full items-stretch">
+        <AppSidebar />
+        <main className="min-w-0 flex-1 px-2 py-2 sm:px-3 sm:py-3">
+        <div className="mx-auto max-w-3xl space-y-3">
+        <div className="desk-header p-3">
+          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Hub · New desk</p>
+          <h1 className="mt-1 text-base font-bold tracking-tight sm:text-lg">Add Match Desk</h1>
+          <p className="mt-0.5 text-[11px] text-[var(--muted)]">
             Create a match desk with default checklist and script slots.
           </p>
         </div>
@@ -533,7 +538,9 @@ export default function NewMatchDayPage() {
             </Button>
           </CardBody>
         </Card>
+        </div>
       </main>
+      </div>
     </div>
   );
 }

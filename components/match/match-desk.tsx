@@ -2817,6 +2817,7 @@ export function MatchDesk({
             onFilterChange={setNotesFilter}
             fillHeight
             liveMode={isLive || status === "Full Time"}
+            hideComposer
             playerNameById={Object.fromEntries(squad.map((p) => [p.id, p.name]))}
             onNotePlayerClick={(playerId) => {
               const p = squad.find((s) => s.id === playerId);

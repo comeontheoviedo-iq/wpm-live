@@ -12,7 +12,7 @@ import {
   notesBucketLabel,
   type NotesBucket,
 } from "@/lib/notes-buckets";
-import { Pin, Plus, Trash2, Search } from "lucide-react";
+import { Pin, Plus, Trash2, Search, X } from "lucide-react";
 import { cn, normalizeApostrophes } from "@/lib/utils";
 
 export type NoteRow = {
@@ -81,6 +81,7 @@ export function NotesPanel({
   onFilterChange,
   fillHeight,
   liveMode,
+  hideComposer,
   playerNameById,
   onNotePlayerClick,
   relevantNoteIds,
@@ -108,6 +109,8 @@ export function NotesPanel({
   fillHeight?: boolean;
   /** LIVE desk: denser rows, sticky add, match/pinned first */
   liveMode?: boolean;
+  /** Desk rail: hide add-note composer to free scroll space */
+  hideComposer?: boolean;
   /** Optional map for grouping player notes */
   playerNameById?: Record<string, string>;
   /** Click player-linked note → highlight on pitch / open dossier */
@@ -129,6 +132,7 @@ export function NotesPanel({
   const [search, setSearch] = useState("");
   const [pending, setPending] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [popupNoteId, setPopupNoteId] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const activeFilter = externalFilter ?? filter;
@@ -141,6 +145,11 @@ export function NotesPanel({
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape" && popupNoteId) {
+        e.preventDefault();
+        setPopupNoteId(null);
+        return;
+      }
       if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey) return;
       const t = e.target as HTMLElement | null;
       if (
@@ -156,7 +165,7 @@ export function NotesPanel({
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [popupNoteId]);
 
   function setScope(f: NotesFilterScope) {
     if (onFilterChange) onFilterChange(f);
@@ -422,15 +431,23 @@ export function NotesPanel({
     return "";
   }
 
+  const popupNote = useMemo(
+    () => (popupNoteId ? notes.find((n) => n.id === popupNoteId) || null : null),
+    [notes, popupNoteId]
+  );
+  const popupPlayerName =
+    (popupNote?.entityId && playerNameById?.[popupNote.entityId]) || null;
+
   function NoteCard({ n }: { n: NoteRow }) {
     const playerLinked =
       n.entityType === "player" && n.entityId && onNotePlayerClick;
     const playerName =
       (n.entityId && playerNameById?.[n.entityId]) || null;
-    const expanded = expandedId === n.id;
+    const expanded = !railDense && expandedId === n.id;
+    const popupOpen = popupNoteId === n.id;
     const { minute, sayable } = parseNoteMinute(n.title);
     const severity = noteSeverityClass(n);
-    // Hook line in list; Full body on click (rail / live)
+    // Rail: hook line only; full note opens in popup. Elsewhere: inline expand.
     const showBody = expanded || !railDense;
     const hookLine = sayable;
 
@@ -438,17 +455,21 @@ export function NotesPanel({
       <div
         className={cn(
           "queue-row cursor-pointer",
-          railDense && "px-1.5",
+          railDense && "px-1.5 py-1",
           severity,
-          expanded && "queue-row-active",
+          (expanded || popupOpen) && "queue-row-active",
           playerLinked && "hover:border-white/20"
         )}
         onClick={() => {
+          if (railDense) {
+            setPopupNoteId(n.id);
+            return;
+          }
           setExpandedId((cur) => (cur === n.id ? null : n.id));
         }}
         role="button"
-        aria-expanded={expanded}
-        title={expanded ? "Collapse note" : "Expand full note"}
+        aria-expanded={expanded || popupOpen}
+        title={railDense ? "Open full note" : expanded ? "Collapse note" : "Expand full note"}
       >
         <div className="flex items-center gap-1.5">
           <span
@@ -478,7 +499,7 @@ export function NotesPanel({
                   .filter(Boolean)
                   .join(" · ")}
               >
-                {expanded && railDense ? "Full" : n.category}
+                {n.category}
               </span>
               <div
                 className="flex gap-0.5 shrink-0"
@@ -497,14 +518,16 @@ export function NotesPanel({
                     )}
                   />
                 </button>
-                <button
-                  type="button"
-                  className="p-0.5 text-slate-500 hover:text-rose-400"
-                  onClick={() => remove(n.id)}
-                  aria-label="Delete note"
-                >
-                  <Trash2 className="h-3 w-3" />
-                </button>
+                {!railDense && (
+                  <button
+                    type="button"
+                    className="p-0.5 text-slate-500 hover:text-rose-400"
+                    onClick={() => remove(n.id)}
+                    aria-label="Delete note"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                )}
               </div>
             </div>
             {showBody && (
@@ -662,8 +685,8 @@ export function NotesPanel({
           </div>
           )}
 
-          {/* Sticky compact composer — quiet call-queue craft, fully functional */}
-          {(fillHeight || liveMode || !compact) && (
+          {/* Sticky compact composer — hidden on desk rail via hideComposer */}
+          {!hideComposer && (fillHeight || liveMode || !compact) && (
             <div className="notes-composer space-y-0.5 pt-0.5">
               <label className="notes-composer-label" htmlFor="notes-composer-title">
                 Title
@@ -734,6 +757,102 @@ export function NotesPanel({
           ))}
         </div>
       </CardBody>
+
+      {popupNote && (
+        <div
+          className="fixed inset-0 z-[90] flex items-center justify-center p-4 animate-fade-in"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="note-popup-title"
+        >
+          <button
+            type="button"
+            className="absolute inset-0 bg-slate-950/60 backdrop-blur-[2px]"
+            aria-label="Close note"
+            onClick={() => setPopupNoteId(null)}
+          />
+          <div className="relative z-10 flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-[4px] border border-white/10 bg-[#0e1218] shadow-2xl">
+            <div className="flex shrink-0 items-start gap-2 border-b border-white/[0.08] bg-[#0a0d12] px-3 py-2.5">
+              <div className="min-w-0 flex-1 space-y-1">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="note-queue-chip">{popupNote.category}</span>
+                  {popupNote.pinned ? (
+                    <span className="note-queue-chip">pin</span>
+                  ) : null}
+                  {relevantSet.has(popupNote.id) ? (
+                    <span className="note-queue-chip">now</span>
+                  ) : null}
+                  {popupPlayerName ? (
+                    <span className="note-queue-chip">{popupPlayerName}</span>
+                  ) : null}
+                </div>
+                <h2
+                  id="note-popup-title"
+                  className="text-sm font-semibold leading-snug text-slate-100"
+                >
+                  {normalizeApostrophes(popupNote.title)}
+                </h2>
+              </div>
+              <div className="flex shrink-0 items-center gap-0.5">
+                <button
+                  type="button"
+                  className="p-1.5 text-slate-400 hover:text-amber-400"
+                  onClick={() => togglePin(popupNote.id, popupNote.pinned)}
+                  aria-label="Pin note"
+                >
+                  <Pin
+                    className={cn(
+                      "h-3.5 w-3.5",
+                      popupNote.pinned && "fill-amber-400 text-amber-400"
+                    )}
+                  />
+                </button>
+                <button
+                  type="button"
+                  className="p-1.5 text-slate-400 hover:text-rose-400"
+                  onClick={() => {
+                    void remove(popupNote.id);
+                    setPopupNoteId(null);
+                  }}
+                  aria-label="Delete note"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  className="p-1.5 text-slate-400 hover:text-white"
+                  onClick={() => setPopupNoteId(null)}
+                  aria-label="Close"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+              <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-slate-200">
+                {normalizeApostrophes(popupNote.body) || "No body."}
+              </p>
+              {popupNote.entityType === "player" &&
+                popupNote.entityId &&
+                onNotePlayerClick && (
+                  <button
+                    type="button"
+                    className="mt-3 text-[11px] font-semibold text-slate-300 hover:text-white hover:underline"
+                    onClick={() => {
+                      onNotePlayerClick(popupNote.entityId!);
+                      setPopupNoteId(null);
+                    }}
+                  >
+                    Open player profile
+                  </button>
+                )}
+            </div>
+            <div className="shrink-0 border-t border-white/[0.06] px-3 py-2 text-[10px] text-slate-500">
+              Esc or × to close
+            </div>
+          </div>
+        </div>
+      )}
     </Card>
   );
 }

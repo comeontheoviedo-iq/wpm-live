@@ -11,7 +11,7 @@ export function Logo({ href = "/dashboard" }: { href?: string }) {
         <Mic2 className="h-4 w-4" />
       </span>
       <span className="font-bold tracking-tight text-[var(--foreground)]">
-        Pitch<span className="text-[var(--muted)]">line</span>
+        Co<span className="text-[var(--muted)]">Comms</span>
       </span>
     </Link>
   );

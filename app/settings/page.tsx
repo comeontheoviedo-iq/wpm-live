@@ -191,7 +191,7 @@ export default function SettingsPage() {
                   <CardTitle className="flex items-center gap-2"><Palette className="h-4 w-4" /> Appearance</CardTitle>
                 </CardHeader>
                 <CardBody>
-                  <p className="text-sm text-slate-500 mb-4">Customize how Pitchline looks on your device.</p>
+                  <p className="text-sm text-slate-500 mb-4">Customize how CoComms looks on your device.</p>
                   <div className="text-sm font-medium mb-2">Theme</div>
                   <div className="grid grid-cols-3 gap-2">
                     {(["light", "dark", "system"] as const).map((t) => (

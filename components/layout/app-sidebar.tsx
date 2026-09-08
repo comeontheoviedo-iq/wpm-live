@@ -33,9 +33,9 @@ export function AppSidebar({ liveCount = 0 }: { liveCount?: number }) {
     >
       <div className="flex items-center justify-between gap-1 border-b border-[var(--border)] px-2 py-2">
         <span className="hidden truncate px-1 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--muted)] md:inline">
-          Pitchline
+          CoComms
         </span>
-        <span className="sr-only md:hidden">Pitchline</span>
+        <span className="sr-only md:hidden">CoComms</span>
         {liveCount > 0 ? (
           <span
             className="ml-auto inline-flex items-center gap-1 rounded-[var(--radius-xs)] bg-[var(--live-soft)] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.08em] text-[var(--live)] md:ml-0"

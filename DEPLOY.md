@@ -1,4 +1,7 @@
-# Deploy Pitchline to Netlify (pitchline-app)
+# Deploy CoComms to Netlify (pitchline-app)
+
+# Product brand: CoComms. Planned custom domain: cocomms.online (attach in Netlify when DNS is ready; deploy does not require it).
+# Netlify project id stays pitchline-app for now.
 
 Site id: 3e40a3db-dedb-46d2-b8aa-00db29153dad
 Admin: https://app.netlify.com/projects/pitchline-app

@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Pitchline — Commentary prep & live desk",
+  title: "CoComms — Commentary prep & live desk",
   description:
     "Football commentary preparation and live desk. Prep, speaks, pitch board, and live events — built for matchday.",
 };

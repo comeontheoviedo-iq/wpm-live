@@ -85,7 +85,7 @@ export default function PrintPage() {
             <p className="text-sm text-slate-500">
               {data.kickoff} · {data.venue}
             </p>
-            <p className="text-xs text-slate-400 mt-1">Pitchline match pack</p>
+            <p className="text-xs text-slate-400 mt-1">CoComms match pack</p>
           </header>
 
           {sections.squads && (

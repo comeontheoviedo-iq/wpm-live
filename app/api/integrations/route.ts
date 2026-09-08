@@ -11,6 +11,6 @@ export async function GET() {
     hasIntel: plan.hasIntel,
     canUseGeminiBrief: plan.canUseGeminiBrief,
     canAutoGenPack: plan.canAutoGenPack,
-    hint: "After editing .env / .env.local, restart Next.js. PITCHLINE_PLAN=base|intel (default base). Settings override for testing; Stripe later.",
+    hint: "After editing .env / .env.local, restart Next.js. Plan env = base|intel (default base). Settings override for testing; Stripe later.",
   });
 }

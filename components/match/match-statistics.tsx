@@ -320,7 +320,7 @@ export function MatchStatisticsView({
           </div>
           {ordered.length === 0 ? (
             <p className="text-xs text-slate-500 py-6">
-              No statistics yet — Sync from API-Football.
+              No statistics yet — Sync from the live feed.
             </p>
           ) : (
             ordered.map((s) => (

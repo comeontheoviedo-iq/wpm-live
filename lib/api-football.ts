@@ -170,7 +170,7 @@ export function assertFixtureCompatible(opts: {
 
 
 function formatApiErrors(errors: unknown): string {
-  if (!errors) return "Unknown API-Football error";
+  if (!errors) return "Unknown live-feed error";
   if (typeof errors === "string") return errors;
   if (Array.isArray(errors)) {
     if (errors.length === 0) return "";
@@ -226,7 +226,7 @@ async function afFetch<T>(
       });
     } catch (e) {
       throw new ApiFootballError(
-        `API-Football network error: ${e instanceof Error ? e.message : String(e)}`,
+        `Live-feed network error: ${e instanceof Error ? e.message : String(e)}`,
         502,
         "network"
       );
@@ -234,7 +234,7 @@ async function afFetch<T>(
 
     if (res.status === 401 || res.status === 403) {
       throw new ApiFootballError(
-        "API-Football rejected the key (401/403). Check API_FOOTBALL_KEY and restart the server.",
+        "Live feed rejected the key (401/403). Check the live-feed key and restart the server.",
         res.status,
         "unauthorized"
       );
@@ -242,7 +242,7 @@ async function afFetch<T>(
 
     if (res.status === 429) {
       throw new ApiFootballError(
-        "API-Football rate limit hit (429). Wait a minute or upgrade your plan. Cached results may still appear.",
+        "Live-feed rate limit hit (429). Wait a minute or upgrade your plan. Cached results may still appear.",
         429,
         "rate_limit"
       );
@@ -250,7 +250,7 @@ async function afFetch<T>(
 
     if (!res.ok) {
       throw new ApiFootballError(
-        `API-Football HTTP ${res.status}`,
+        `Live-feed HTTP ${res.status}`,
         res.status,
         "http"
       );
@@ -280,7 +280,7 @@ async function afFetch<T>(
         lower.includes("authoriz");
       if (planSeason) {
         throw new ApiFootballError(
-          "API-Football Free plan cannot access this season (current seasons need Pro). " +
+          "Live-feed free plan cannot access this season (current seasons need a higher plan). " +
             "Search by date only works on Free; upgrade to Pro for league+season on 2025+. " +
             `Upstream: ${errText}`,
           200,
@@ -289,10 +289,10 @@ async function afFetch<T>(
       }
       throw new ApiFootballError(
         rateLimited
-          ? `API-Football rate limit: ${errText}`
+          ? `Live-feed rate limit: ${errText}`
           : badKey
-            ? `API-Football auth error: ${errText}`
-            : `API-Football error: ${errText}`,
+            ? `Live-feed auth error: ${errText}`
+            : `Live-feed error: ${errText}`,
         rateLimited ? 429 : badKey ? 401 : 502,
         rateLimited ? "rate_limit" : badKey ? "unauthorized" : "api_error"
       );
@@ -339,8 +339,8 @@ export type SmartFixturesResult = {
 };
 
 const FREE_PLAN_SEASON_MSG =
-  "API-Football Free plan does not include current seasons (often capped ~2022–2024). " +
-  "Date-only fixture search still works; league+season for 2025+ needs a Pro upgrade at api-football.com.";
+  "Live-feed free plan does not include current seasons (often capped ~2022–2024). " +
+  "Date-only fixture search still works; league+season for 2025+ needs a higher live-feed plan.";
 
 /**
  * Prefer date-only /fixtures (works on Free). If a league is requested, filter

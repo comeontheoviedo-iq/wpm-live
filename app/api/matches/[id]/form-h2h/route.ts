@@ -42,7 +42,7 @@ export async function GET(
   if (!isApiFootballConfigured()) {
     return NextResponse.json({
       ...base,
-      message: "API-Football not configured — showing desk H2H only",
+      message: "Live feed not configured — showing desk H2H only",
     });
   }
 

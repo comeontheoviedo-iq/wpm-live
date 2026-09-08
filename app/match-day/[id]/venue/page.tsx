@@ -31,7 +31,7 @@ export default async function VenuePage({
       </div>
       {!v ? (
         <p className="text-sm text-slate-500">
-          No venue linked — Sync to load from API-Football.
+          No venue linked — Sync to load from the live feed.
         </p>
       ) : (
         <div className="grid lg:grid-cols-3 gap-4">

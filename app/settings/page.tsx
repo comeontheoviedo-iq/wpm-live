@@ -213,14 +213,14 @@ export default function SettingsPage() {
               <Card>
                 <CardHeader><CardTitle className="flex items-center gap-2"><Plug className="h-4 w-4" /> Integrations</CardTitle></CardHeader>
                 <CardBody className="space-y-4 text-sm">
-                  <p className="text-slate-500">Optional keys in <code className="font-mono">.env</code>: <code className="font-mono">API_FOOTBALL_KEY</code>, <code className="font-mono">GEMINI_API_KEY</code>, <code className="font-mono">PITCHLINE_PLAN</code>. A Gemini key alone does <strong>not</strong> unlock Auto Gen / briefs on Base — Intel plan required.</p>
+                  <p className="text-slate-500">Optional keys in <code className="font-mono">.env</code>: live-feed key, <code className="font-mono">GEMINI_API_KEY</code>, plan env. A Gemini key alone does <strong>not</strong> unlock Auto Gen / briefs on Base — Intel plan required.</p>
                   <div className="flex flex-wrap gap-2">
-                    <span className={apiFootball ? "rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200 px-2.5 py-1 text-xs font-medium" : "rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 px-2.5 py-1 text-xs font-medium"}>API-Football {apiFootball ? "configured" : "not configured"}</span>
+                    <span className={apiFootball ? "rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200 px-2.5 py-1 text-xs font-medium" : "rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 px-2.5 py-1 text-xs font-medium"}>Live feed {apiFootball ? "configured" : "not configured"}</span>
                     <span className={gemini ? "rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200 px-2.5 py-1 text-xs font-medium" : "rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 px-2.5 py-1 text-xs font-medium"}>Gemini key {gemini ? "present" : "not set"}</span>
                     <span className={plan?.hasIntel ? "rounded-full bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-200 px-2.5 py-1 text-xs font-medium" : "rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 px-2.5 py-1 text-xs font-medium"}>Plan {plan?.plan === "intel" ? "Intel" : "Base"}</span>
                   </div>
                   {integrationsHint && <p className="text-xs text-slate-500">{integrationsHint}</p>}
-                  <Button type="button" variant="outline" disabled={statusPending} onClick={testApiFootball}>{statusPending ? "Testing…" : "Test API-Football connection"}</Button>
+                  <Button type="button" variant="outline" disabled={statusPending} onClick={testApiFootball}>{statusPending ? "Testing…" : "Test live-feed connection"}</Button>
                   {statusMsg && <p className="text-xs text-slate-600 dark:text-slate-300 whitespace-pre-wrap">{statusMsg}</p>}
                 </CardBody>
               </Card>
@@ -237,14 +237,14 @@ export default function SettingsPage() {
                     <p className="text-sm opacity-90 mt-1">
                       {plan?.hasIntel
                         ? "Gemini brief, Auto Gen packs, note-draft, optional re-rank unlocked."
-                        : "BYO Notebook + RSS + AF sync. Gemini features gated until Intel."}
+                        : "BYO Notebook + RSS + live-feed sync. Gemini features gated until Intel."}
                     </p>
                   </div>
                   <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 space-y-3">
                     <div className="font-medium">Enable Intel features</div>
                     <p className="text-xs text-slate-500">
                       Testing toggle for Chris — stored in <code className="font-mono">data/plan-override.json</code>.
-                      Env default: <code className="font-mono">PITCHLINE_PLAN={plan?.envPlan || "base"}</code>.
+                      Env default: plan env = <code className="font-mono">{plan?.envPlan || "base"}</code>.
                       Stripe billing comes later ({plan?.stripe || "scaffold only"}).
                     </p>
                     <div className="flex flex-wrap gap-2">
@@ -258,7 +258,7 @@ export default function SettingsPage() {
                     <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
                       <div className="text-xs font-semibold text-teal-700 dark:text-teal-300">{`Base · ${plan?.copy?.base.price || "£19.99"}/mo`}</div>
                       <ul className="mt-2 space-y-1 text-xs text-slate-600 dark:text-slate-300">
-                        {(plan?.copy?.base.includes || ["BYO Notebook", "RSS news", "AF sync", "Heuristics", "OBS / dossiers / Stats"]).map((f) => (
+                        {(plan?.copy?.base.includes || ["BYO Notebook", "RSS news", "Live-feed sync", "Heuristics", "OBS / dossiers / Stats"]).map((f) => (
                           <li key={f}>· {f}</li>
                         ))}
                       </ul>

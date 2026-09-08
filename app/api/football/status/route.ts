@@ -17,7 +17,7 @@ export async function GET() {
         ok: false,
         configured: false,
         message:
-          "API_FOOTBALL_KEY is not set. Add it to .env / .env.local and restart the Next.js server.",
+          "Live-feed key is not set. Add it to .env / .env.local and restart the Next.js server.",
       },
       { status: 200 }
     );
@@ -32,7 +32,7 @@ export async function GET() {
     const planLower = String(plan).toLowerCase();
     const isFree = planLower.includes("free") || planLower === "unknown";
     const seasonHint = isFree
-      ? " Free plans usually cannot query league+season for 2025+ (often capped ~2022–2024). Use date-only search (Pitchline filters by league client/server-side) or upgrade to Pro."
+      ? " Free plans usually cannot query league+season for 2025+ (often capped ~2022–2024). Use date-only search (CoComms filters by league client/server-side) or upgrade the live-feed plan."
       : "";
     return NextResponse.json({
       ok: true,

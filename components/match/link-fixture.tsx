@@ -50,11 +50,11 @@ export function LinkFixtureCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>API-Football fixture</CardTitle>
+        <CardTitle>Link fixture</CardTitle>
       </CardHeader>
       <CardBody className="space-y-2">
         <p className="text-xs text-slate-500">
-          Paste a fixture ID from API-Football (or import when creating a desk).
+          Paste a fixture ID from the live feed (or import when creating a desk).
           Sync pulls lineups, goals, and subs onto the board.
         </p>
         <input

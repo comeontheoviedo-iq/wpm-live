@@ -32,7 +32,7 @@ export default async function KeepersPage({
         <CardBody className="overflow-x-auto">
           {keepers.length === 0 ? (
             <p className="text-sm text-slate-500 py-6 text-center">
-              Sync to load keeper stats from API-Football.
+              Sync to load keeper stats from the live feed.
             </p>
           ) : (
             <table className="w-full text-sm">

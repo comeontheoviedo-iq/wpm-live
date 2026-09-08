@@ -8,8 +8,8 @@ import { Mic2 } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("demo@pitchline.app");
-  const [password, setPassword] = useState("demo1234");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
 
@@ -56,7 +56,7 @@ export default function LoginPage() {
           </p>
         </div>
         <p className="relative z-10 text-xs text-teal-100/70">
-          Northern Premier Demo League · fictional data only
+          Matchday workspace for broadcast commentary
         </p>
       </div>
 
@@ -69,7 +69,7 @@ export default function LoginPage() {
             Sign in
           </h2>
           <p className="text-sm text-slate-500 mb-6">
-            Demo: demo@pitchline.app / demo1234
+            Enter your CoComms credentials
           </p>
           <form onSubmit={onSubmit} className="space-y-4">
             <label className="block text-sm">

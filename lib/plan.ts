@@ -108,7 +108,7 @@ export function clearPlanOverride(): void {
       {
         plan: null,
         clearedAt: new Date().toISOString(),
-        note: "Override cleared — using PITCHLINE_PLAN env / default base.",
+        note: "Override cleared — using plan env / default base.",
       },
       null,
       2
@@ -156,7 +156,7 @@ export function canGeminiRelevantRerank(): boolean {
 }
 
 export const INTEL_REQUIRED_MESSAGE =
-  "Intel add-on required. Base includes BYO Notebook / RSS only — enable Intel in Settings (testing) or set PITCHLINE_PLAN=intel. Stripe billing comes later.";
+  "Intel add-on required. Base includes BYO Notebook / RSS only — enable Intel in Settings (testing) or set plan env to intel. Stripe billing comes later.";
 
 export const PLAN_COPY = {
   base: {
@@ -167,7 +167,7 @@ export const PLAN_COPY = {
     includes: [
       "BYO Notebook / Research paste (local organise — no Gemini)",
       "News RSS only",
-      "Diet AF live sync",
+      "Live-feed sync",
       "Notes buckets + relevance heuristics (no Gemini re-rank)",
       "OBS overlay, dossiers, Stats, Speaks, Print",
     ],
@@ -187,7 +187,7 @@ export const PLAN_COPY = {
     softCaps:
       "Soft caps (metering later): ~20 web briefs / mo · ~10 pack gens / mo.",
   },
-  rivalCompare: "Compare to ~£35/mo rival desks — Pitchline Base is the affordable matchday core.",
+  rivalCompare: "Compare to ~£35/mo rival desks — CoComms Base is the affordable matchday core.",
 } as const;
 
 export function planStatus() {

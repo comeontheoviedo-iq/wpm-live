@@ -65,7 +65,7 @@ export function FeedBanner({
 
   async function sync(silent = false) {
     if (!apiFootballFixtureId) {
-      setMsg("Link an API-Football fixture first.");
+      setMsg("Link a live-feed fixture first.");
       return;
     }
     setBusy(true);
@@ -106,9 +106,9 @@ export function FeedBanner({
       <div className="rounded-xl border border-amber-300/70 bg-amber-50 dark:bg-amber-950/40 px-3 py-2.5 text-sm text-amber-900 dark:text-amber-100 flex gap-2 items-start">
         <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
         <div>
-          <div className="font-semibold">API-Football key missing</div>
+          <div className="font-semibold">Live-feed key missing</div>
           <p className="text-xs opacity-90 mt-0.5">
-            Set <code className="font-mono">API_FOOTBALL_KEY</code> in{" "}
+            Set the live-feed key in{" "}
             <code className="font-mono">.env</code> to sync squads, Expected /
             Official lineups, injuries and predictions.
           </p>

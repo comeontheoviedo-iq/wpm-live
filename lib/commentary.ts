@@ -46,7 +46,7 @@ const templates: Record<EventType, string[]> = {
     "Substitution: {player} involved as {team} reshuffle.",
   ],
   kickoff: [
-    "We're underway! {home} vs {away} — Northern Premier Demo League.",
+    "We're underway! {home} vs {away}.",
     "Kick-off! The referee's whistle starts proceedings under these skies.",
   ],
   halftime: [

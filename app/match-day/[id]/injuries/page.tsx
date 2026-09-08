@@ -59,7 +59,7 @@ export default async function InjuriesPage({
       <div>
         <h2 className="text-xl font-bold">Injuries & availability</h2>
         <p className="text-sm text-slate-500">
-          Matchday medical board · out-since / return when API-Football provides
+          Matchday medical board · out-since / return when the live feed provides
           them · Sync to refresh
         </p>
       </div>

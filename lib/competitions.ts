@@ -93,9 +93,9 @@ export const PRIORITY_COMPETITIONS: CompetitionOption[] = [
   },
   {
     id: "demo-npl",
-    name: "Northern Premier Demo League",
+    name: "CoComms Demo League",
     country: "England",
-    broadcastName: "Northern Premier Demo League",
+    broadcastName: "CoComms Demo League",
     priority: 99,
   },
 ];

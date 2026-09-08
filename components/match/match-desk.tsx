@@ -1259,7 +1259,7 @@ export function MatchDesk({
   const sync = useCallback(
     async (silent = false) => {
       if (!apiFootballFixtureId) {
-        if (!silent) setMsg("Link an API-Football fixture first (Prep).");
+        if (!silent) setMsg("Link a live-feed fixture first (Prep).");
         return;
       }
       setBusy(true);

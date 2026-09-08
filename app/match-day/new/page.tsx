@@ -337,7 +337,7 @@ export default function NewMatchDayPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Import from API-Football</CardTitle>
+            <CardTitle>Import from live feed</CardTitle>
           </CardHeader>
           <CardBody className="space-y-3">
             <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -348,7 +348,7 @@ export default function NewMatchDayPage() {
                     : "rounded-full bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-100 px-2 py-0.5 font-medium"
                 }
               >
-                {afConfigured ? "API-Football configured" : "API-Football not configured"}
+                {afConfigured ? "Live feed configured" : "Live feed not configured"}
               </span>
               <Button
                 type="button"
@@ -367,9 +367,8 @@ export default function NewMatchDayPage() {
             )}
             {!afConfigured && (
               <div className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-sm text-amber-900 dark:text-amber-100">
-                Set <code className="font-mono">API_FOOTBALL_KEY</code> in .env /
-                .env.local and restart the Next.js server. You can still create a
-                desk manually below.
+                Set the live-feed key in .env / .env.local and restart the Next.js
+                server. You can still create a desk manually below.
               </div>
             )}
             <div className="grid sm:grid-cols-3 gap-2">

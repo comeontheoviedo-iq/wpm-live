@@ -34,7 +34,7 @@ export default async function ScorersPage({
         <CardBody className="overflow-x-auto">
           {scorers.length === 0 ? (
             <p className="text-sm text-slate-500 py-6 text-center">
-              Sync to load season scorers from API-Football.
+              Sync to load season scorers from the live feed.
             </p>
           ) : (
             <table className="w-full text-sm">

@@ -99,7 +99,7 @@ export async function GET(
       live: [],
       todayFixtures: [],
       message:
-        "API_FOOTBALL_KEY is not set — League tab needs API-Football for standings & fixtures.",
+        "Live-feed key is not set — League tab needs the live feed for standings & fixtures.",
     });
   }
 
@@ -114,7 +114,7 @@ export async function GET(
       upcoming: [],
       live: [],
       todayFixtures: [],
-      message: `No API-Football league id mapped for “${competition}”. Pick a priority competition on create, or link a fixture.`,
+      message: `No live-feed league id mapped for “${competition}”. Pick a priority competition on create, or link a fixture.`,
     });
   }
 
@@ -142,7 +142,7 @@ export async function GET(
       const err = e as ApiFootballError;
       if (err.code === "plan_season") {
         warnings.push(
-          "Standings for this season need Pro on API-Football Free — table empty for now."
+          "Standings for this season need a higher live-feed plan — table empty for now."
         );
       } else {
         warnings.push(`Standings unavailable: ${err.message}`);

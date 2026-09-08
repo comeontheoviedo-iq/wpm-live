@@ -562,7 +562,7 @@ export function PacksClient({ matchId }: { matchId: string }) {
               ) : (
                 <>
                   Base plan keeps BYO Notebook / draft distribute. Enable Intel in
-                  Settings (or <code className="font-mono">PITCHLINE_PLAN=intel</code>)
+                  Settings (or set plan env to intel)
                   for Auto Gen. Stripe later.
                 </>
               )}
@@ -583,7 +583,7 @@ export function PacksClient({ matchId }: { matchId: string }) {
               <span className="font-normal text-[var(--muted)]">(optional)</span>
             </div>
             <div className="text-[11px] text-[var(--muted)]">
-              Deep research already uses match context, API-Football
+              Deep research already uses match context, live-feed
               squads/injuries/predictions/H2H, and Gemini Google Search. Paste
               URLs or notes only to steer.
               {hasSources ? " · Sources attached for next generate." : ""}

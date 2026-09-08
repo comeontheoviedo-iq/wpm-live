@@ -1580,7 +1580,7 @@ async function runSyncMatchFromApiFootball(
   }
 
   const fixture = await getFixture(match.apiFootballFixtureId);
-  if (!fixture) throw new Error("Fixture not found on API-Football");
+  if (!fixture) throw new Error("Fixture not found on live feed");
 
   const deskHomeAf = match.homeClub.apiFootballTeamId ?? null;
   const deskAwayAf = match.awayClub.apiFootballTeamId ?? null;
@@ -2171,7 +2171,7 @@ export async function linkFixtureToMatch(
   if (!match) throw new Error("Match not found");
 
   const fixture = await getFixture(apiFootballFixtureId);
-  if (!fixture) throw new Error(`Fixture #${apiFootballFixtureId} not found on API-Football`);
+  if (!fixture) throw new Error(`Fixture #${apiFootballFixtureId} not found on live feed`);
 
   const expectedLeagueId = match.matchDay?.competition
     ? leagueIdForCompetition(match.matchDay.competition)

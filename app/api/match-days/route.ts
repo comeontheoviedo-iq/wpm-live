@@ -88,13 +88,13 @@ export async function POST(req: Request) {
 
     if (!homeClubId && homeAf === null && !homeName) {
       return NextResponse.json(
-        { error: "homeClubId or home API-Football team required" },
+        { error: "homeClubId or home live-feed team required" },
         { status: 400 }
       );
     }
     if (!awayClubId && awayAf === null && !awayName) {
       return NextResponse.json(
-        { error: "awayClubId or away API-Football team required" },
+        { error: "awayClubId or away live-feed team required" },
         { status: 400 }
       );
     }
@@ -131,7 +131,7 @@ export async function POST(req: Request) {
         const fx = await getFixture(apiFootballFixtureId);
         if (!fx) {
           return NextResponse.json(
-            { error: `API-Football fixture #${apiFootballFixtureId} not found` },
+            { error: `Live-feed fixture #${apiFootballFixtureId} not found` },
             { status: 400 }
           );
         }

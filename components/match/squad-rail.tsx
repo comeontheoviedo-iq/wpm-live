@@ -101,7 +101,7 @@ export function SquadRail({
       <div className="flex-1 min-h-0 overflow-y-auto p-1.5 space-y-0.5">
         {filtered.length === 0 && (
           <p className="text-[11px] text-slate-500 px-2 py-3">
-            No squad players yet. Hit Sync to pull squads from API-Football.
+            No squad players yet. Hit Sync to pull squads from the live feed.
           </p>
         )}
         {filtered.map((p) => {

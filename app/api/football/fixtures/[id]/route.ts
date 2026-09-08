@@ -16,7 +16,7 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!isApiFootballConfigured())
     return NextResponse.json(
-      { error: "API-Football not configured" },
+      { error: "Live feed not configured" },
       { status: 400 }
     );
 

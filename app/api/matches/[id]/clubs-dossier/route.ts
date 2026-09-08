@@ -145,7 +145,7 @@ async function buildClubPayload(opts: {
   };
 
   if (!afId || !isApiFootballConfigured()) {
-    base.messages.push("API-Football not configured or club has no AF id — showing desk data only");
+    base.messages.push("Live feed not configured or club has no feed id — showing desk data only");
     return base;
   }
 

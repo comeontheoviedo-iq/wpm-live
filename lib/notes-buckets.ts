@@ -135,17 +135,51 @@ export function isTonightNote(n: NotesBucketNote): boolean {
 }
 
 export function isPrematchNote(n: NotesBucketNote): boolean {
-  // Broad prep: hooks, match research, team news, tactical, referee, bios
+  // Thin curated build-up only — NOT a dump of every organised note.
+  // League / H2H / History / Managers / Venue / Tonight / squad bios have
+  // their own buckets; Prematch keeps short prep cards (team news, tactical,
+  // referee, preview).
   if (isLiveEventNote(n)) return false;
-  if (n.category === "Hook" || n.category === "Funfact") return true;
-  if (n.category === "Bio" || n.category === "Injury") return true;
-  if (n.category === "Match" || n.category === "Custom" || n.category === "Club") {
+  if (isManagersNote(n) || isVenueNote(n) || isH2hNote(n) || isLeagueNote(n)) {
+    return false;
+  }
+  if (isHistoryNote(n)) return false;
+  // Hooks / funfacts → TONIGHT (and home/away when player-tagged), not Prematch
+  if (n.category === "Hook" || n.category === "Funfact" || isTonightNote(n)) {
+    return false;
+  }
+  // Player / coach / club dossiers roll into HOME/AWAY / MANAGERS
+  if (
+    n.entityType === "player" ||
+    n.entityType === "coach" ||
+    n.entityType === "club" ||
+    n.entityType === "league"
+  ) {
+    return false;
+  }
+  if (n.category === "Bio" || n.category === "Career") return false;
+  if (n.category === "Injury") return true;
+
+  const t = titleHay(n);
+  if (/full research|archive/i.test(t)) return false;
+  if (
+    /team news|tactical|battle lines|lineup|referee|preview|pre-?match|key battle|watch for|absente/i.test(
+      t
+    )
+  ) {
     return true;
   }
-  const t = titleHay(n);
-  return /team news|tactical|lineup|referee|form\b|preview|pre-?match|open(ing)?|intro/i.test(
-    t
-  );
+  // Short untitled match prep cards only
+  if (n.category === "Match" || n.category === "Custom") {
+    const bodyLen = (n.body || "").trim().length;
+    if (bodyLen > 0 && bodyLen <= 320) {
+      const h = hay(n);
+      return /team news|tactical|referee|preview|pre-?match|lineup|form\b|absente|key battle/i.test(
+        h
+      );
+    }
+  }
+  return false;
 }
 
 export function isHomeNote(n: NotesBucketNote, ctx: NotesBucketContext): boolean {

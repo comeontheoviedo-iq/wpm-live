@@ -77,6 +77,119 @@ function looksLikePlayerHeading(heading: string): boolean {
   return false;
 }
 
+/** Narrative / Season Metrics (and similar) under a player heading — merge back. */
+const PLAYER_SUBHEAD_RE =
+  /^(narrative|season\s*metrics|season\s*stats|key\s*stats|metrics|bio|profile|form\s*guide|career|this\s*season)$/i;
+
+function isPlayerSubheading(heading: string): boolean {
+  const h = stripHeadingDecor(heading)
+    .replace(/\*\*/g, "")
+    .replace(/:$/, "")
+    .trim();
+  return PLAYER_SUBHEAD_RE.test(h);
+}
+
+/**
+ * PART IV packs often split each player into empty name heading + Narrative +
+ * Season Metrics children. Fold those children into the preceding player body
+ * so profiles reach the desk squad.
+ */
+export function coalescePlayerSubsections(
+  sections: { heading: string; body: string }[]
+): { heading: string; body: string }[] {
+  const out: { heading: string; body: string }[] = [];
+  for (const s of sections) {
+    if (
+      out.length &&
+      isPlayerSubheading(s.heading) &&
+      (looksLikePlayerHeading(out[out.length - 1].heading) ||
+        /[A-Za-zÀ-ÿ].{1,60}/.test(cleanPlayerHeading(out[out.length - 1].heading)))
+    ) {
+      const prev = out[out.length - 1];
+      const label = stripHeadingDecor(s.heading)
+        .replace(/\*\*/g, "")
+        .replace(/:$/, "")
+        .trim();
+      const chunk = `**${label}**\n${(s.body || "").trim()}`.trim();
+      prev.body = prev.body.trim()
+        ? `${prev.body.trim()}\n\n${chunk}`
+        : chunk;
+      continue;
+    }
+    out.push({ heading: s.heading, body: s.body });
+  }
+  return out;
+}
+
+function isPartMajorHeading(heading: string): boolean {
+  const h = heading.trim();
+  return (
+    /^PART\s+[IVXLCDM\d]+\b/i.test(h) ||
+    /^(?:[IVX]+)\.\s+/i.test(h) ||
+    /^#{0,2}\s*[IVX]+\./i.test(h) ||
+    /^section\s*\d+\s*:/i.test(h)
+  );
+}
+
+function stickyFromMajorHeading(heading: string):
+  | "intro"
+  | "lineup"
+  | "hooks"
+  | "referee"
+  | "table"
+  | "tactical"
+  | "team_news"
+  | null {
+  const h = heading.toLowerCase();
+  // PART I / timed intro script → Speaks intro (not Prematch)
+  if (
+    /part\s+i\b/i.test(h) ||
+    /timed\s+matchday\s+intro|introductory\s+script|intro(ductory)?\s+script|cold open|commentary monologue/i.test(
+      h
+    )
+  ) {
+    return "intro";
+  }
+  // PART V / hooks list
+  if (
+    /part\s+v\b/i.test(h) ||
+    /hooks|goldmines|fillers|must[- ]?mention|dead-?air/i.test(h)
+  ) {
+    return "hooks";
+  }
+  // PART III — only sticky lineup when heading itself is lineup-shaped;
+  // managers classify on their own.
+  if (/part\s+iii\b/i.test(h)) {
+    if (/lineup|team sheets|starting xi/i.test(h)) return "lineup";
+    return null;
+  }
+  if (/part\s+iv\b/i.test(h)) return null; // players via headings + coalesce
+  if (/part\s+ii\b/i.test(h)) return null; // children: league/h2h/venue/ref
+
+  const major = classifySection(heading).kind;
+  if (
+    major === "intro" ||
+    major === "lineup" ||
+    major === "hooks" ||
+    major === "referee" ||
+    major === "table" ||
+    major === "tactical" ||
+    major === "team_news"
+  ) {
+    return major;
+  }
+  if (/season-to-date|state of the division|divisional context/i.test(heading)) {
+    return "table";
+  }
+  if (/officials|referee/i.test(heading)) return "referee";
+  if (/hooks|goldmines|fillers/i.test(heading)) return "hooks";
+  if (/monologue|awaits|introductory\s+script|timed\s+matchday\s+intro/i.test(heading)) {
+    return "intro";
+  }
+  if (/team sheets|lineups/i.test(heading)) return "lineup";
+  return null;
+}
+
 function classifySection(heading: string): {
   kind:
     | "intro"
@@ -102,13 +215,17 @@ function classifySection(heading: string): {
     /pre-?match commentary monologue|cold open|air-?ready intro|broadcast intro|i\.\s*pre-?match/i.test(
       h
     ) ||
-    /section\s*1\b|timed\s+matchday\s+intro|introductory\s+script|intro(ductory)?\s+script|matchday\s+introductory/i.test(
+    /part\s+i\b|section\s*1\b|timed\s+matchday\s+intro|introductory\s+script|intro(ductory)?\s+script|matchday\s+introductory/i.test(
       h
     ) ||
     (/monologue|awaits|kad[ıi]k[oö]y|scene setting|institutional friction|player narrative|final warm-?up|unofficial broadcast declaration/i.test(
       h
     ) && /commentator|timed\s+script|timed\s+matchday|pre-?match|introductory/i.test(h + " " + n)) ||
-    (/^i\b/.test(n) && /monologue|awaits|kad|intro/.test(h))
+    (/^i\b/.test(n) && /monologue|awaits|kad|intro/.test(h)) ||
+    // Timed commentator beat lines under PART I
+    (/^\(?\s*commentator\b/i.test(h) &&
+      !/lineup|team sheets/i.test(h) &&
+      /\d+:\d+|timed|intro|script|monologue|cold open/i.test(h))
   ) {
     return { kind: "intro" };
   }
@@ -121,11 +238,18 @@ function classifySection(heading: string): {
     return { kind: "lineup" };
   }
   if (
-    /commentary hooks|dead-?air|goldmines|must[- ]?mention|key facts|air[- ]?ready facts|fillers|section\s*\d+\s*:\s*.*hooks/i.test(
+    /part\s+v\b|matchday commentary hooks|commentary hooks|dead-?air|goldmines|must[- ]?mention|key facts|air[- ]?ready facts|fillers|section\s*\d+\s*:\s*.*hooks/i.test(
       h
     )
   ) {
     return { kind: "hooks" };
+  }
+  // Skip PART IV container / player subheads (payload merged via coalesce)
+  if (/part\s+iv\b|player profiles?/i.test(h) && !looksLikePlayerHeading(heading)) {
+    return { kind: "skip" };
+  }
+  if (isPlayerSubheading(heading)) {
+    return { kind: "skip" };
   }
   if (/match officials|referee|ref:\s*|var:\s*|cards?\s*profile/i.test(h)) {
     return { kind: "referee" };
@@ -233,26 +357,30 @@ export function splitHookBullets(text: string): { title: string; body: string }[
   let cur: { title: string; body: string } | null = null;
 
   const startRe =
-    /^(\d{1,2})[.)]\s+(?:\*\*)?\[?([^\n\]]{0,80}?)\]?(?:\*\*)?\s*[:—–-]?\s*(.*)$/;
+    /^(\d{1,2})[.)]\s+(.*)$/;
+  const tagTitleRe = /^(?:\*\*)?\[([^\]]{1,60})\]\s*(.+)$/;
 
   for (const line of lines) {
     const m = startRe.exec(line.trim());
     if (m) {
       if (cur && cur.body.trim().length >= 12) blocks.push(cur);
-      const tagOrTitle = (m[2] || "").replace(/\*\*/g, "").trim();
-      const rest = (m[3] || "").replace(/^\*\*|\*\*$/g, "").trim();
-      let title = tagOrTitle || rest.slice(0, 60) || `Hook ${m[1]}`;
-      // Prefer short title: "The Centenary Milestones" from "**The Centenary…**: spoken"
-      if (tagOrTitle && rest) {
-        title = tagOrTitle.replace(/:\s*$/, "").slice(0, 80);
-      } else if (!tagOrTitle && rest) {
+      let rest = (m[2] || "").replace(/\*\*/g, "").trim();
+      let title = "";
+      const tagged = tagTitleRe.exec(rest);
+      if (tagged) {
+        // "[Venue] Fortress Swabia" → "Fortress Swabia" (keep tag light)
+        const tag = tagged[1].trim();
+        const name = tagged[2].replace(/^[:—–-]\s*/, "").trim();
+        title = (name || tag).slice(0, 80);
+        rest = name || rest;
+      } else {
         const colon = rest.split(/:\s*/);
-        title = (colon[0] || rest).replace(/\*\*/g, "").slice(0, 80);
+        title = (colon[0] || rest).slice(0, 80);
       }
-      const bodyStart = rest && tagOrTitle ? rest : line.trim().replace(/^\d{1,2}[.)]\s+/, "");
+      title = title || `Hook ${m[1]}`;
       cur = {
         title: `Hook: ${title}`.slice(0, 100),
-        body: bodyStart,
+        body: rest,
       };
       continue;
     }
@@ -353,7 +481,7 @@ export function organiseNotebookPack(args: OrganiseArgs): OrganisedPack {
     (competition && String(competition).trim()) ||
     "league";
 
-  const sections = splitByHeadings(text);
+  const sections = coalescePlayerSubsections(splitByHeadings(text));
 
   let introChunks: string[] = [];
   let lineupChunks: string[] = [];
@@ -385,52 +513,40 @@ export function organiseNotebookPack(args: OrganiseArgs): OrganisedPack {
     const heading = s.heading.trim();
     if (!heading) continue;
 
-    // Major section resets sticky (roman numeral / SECTION N / top-level ## titles)
-    const isMajor =
-      /^(?:[IVX]+)\.\s+/i.test(heading) ||
-      /^#{0,2}\s*[IVX]+\./i.test(heading) ||
-      /^section\s*\d+\s*:/i.test(heading);
-    if (isMajor) {
-      const major = classifySection(heading).kind;
-      if (
-        major === "intro" ||
-        major === "lineup" ||
-        major === "hooks" ||
-        major === "referee" ||
-        major === "table" ||
-        major === "tactical" ||
-        major === "team_news"
-      ) {
-        sticky = major;
-      } else if (/season-to-date|state of the division|divisional context/i.test(heading)) {
-        sticky = "table";
-      } else if (/officials|referee/i.test(heading)) {
-        sticky = "referee";
-      } else if (/hooks|goldmines|fillers/i.test(heading)) {
-        sticky = "hooks";
-      } else if (/monologue|awaits|introductory\s+script|timed\s+matchday\s+intro/i.test(heading)) {
-        sticky = "intro";
-      } else if (/team sheets|lineups/i.test(heading)) {
-        sticky = "lineup";
-      } else {
-        sticky = null;
-      }
+    // Major section resets sticky (PART I–V / roman / SECTION N)
+    if (isPartMajorHeading(heading)) {
+      sticky = stickyFromMajorHeading(heading);
     }
 
-    // Player headings win even inside club sections
-    const player = matchPlayerLoose(heading, players);
-    if (player || looksLikePlayerHeading(heading)) {
-      if (player && !seenPlayer.has(player.id)) {
+    // Player headings win even inside club sections (Narrative+Metrics coalesced).
+    // Under PART V hooks sticky, skip — surnames in hook titles must stay hooks.
+    const player =
+      sticky === "hooks" ? null : matchPlayerLoose(heading, players);
+    if (sticky !== "hooks" && (player || looksLikePlayerHeading(heading))) {
+      if (player) {
         const content = body.length >= 20 ? body : `${heading}\n${body}`.trim();
         if (content.length >= 20) {
-          seenPlayer.add(player.id);
-          notes.push({
-            title: `${player.name} — Bio`,
-            body: content,
-            category: "Bio",
-            entityType: "player",
-            entityId: player.id,
-          });
+          const existing = notes.find(
+            (n) =>
+              n.entityType === "player" &&
+              n.entityId === player.id &&
+              n.title === `${player.name} — Bio`
+          );
+          if (existing) {
+            // Idempotent merge on re-organise / split fragments
+            if (!existing.body.includes(content.slice(0, 80))) {
+              existing.body = `${existing.body}\n\n${content}`.trim();
+            }
+          } else {
+            seenPlayer.add(player.id);
+            notes.push({
+              title: `${player.name} — Bio`,
+              body: content,
+              category: "Bio",
+              entityType: "player",
+              entityId: player.id,
+            });
+          }
         }
       }
       continue;
@@ -459,11 +575,15 @@ export function organiseNotebookPack(args: OrganiseArgs): OrganisedPack {
     ) {
       kind = sticky;
     }
-    // Commentator timed-script children under intro sticky
+    // Sticky PART context wins over opportunistic title keywords
+    // (e.g. "[Venue] Fortress…" under PART V must stay a hook, not VENUE).
+    if (sticky === "hooks" && !isPartMajorHeading(heading)) {
+      kind = "hooks";
+    }
     if (
       sticky === "intro" &&
-      /commentator/i.test(heading) &&
-      !/lineup analysis|team sheets/i.test(heading)
+      !isPartMajorHeading(heading) &&
+      !/lineup analysis|team sheets|expected starting/i.test(heading)
     ) {
       kind = "intro";
     }
@@ -482,9 +602,25 @@ export function organiseNotebookPack(args: OrganiseArgs): OrganisedPack {
       case "lineup":
         if (body.length >= 40) lineupChunks.push(chunk);
         break;
-      case "hooks":
-        hooksRaw += (hooksRaw ? "\n\n" : "") + (body || chunk);
+      case "hooks": {
+        // Numbered hooks often become their own headings via splitByHeadings —
+        // rebuild "N. title\nbody" so splitHookBullets still fires.
+        const hookTitle = stripHeadingDecor(heading);
+        if (
+          hookTitle &&
+          !/part\s+v\b|commentary hooks|goldmines|must[- ]?mention|fillers/i.test(
+            hookTitle
+          ) &&
+          body.length >= 12
+        ) {
+          const n = (hooksRaw.match(/^\d+[.)]/gm) || []).length + 1;
+          hooksRaw +=
+            (hooksRaw ? "\n\n" : "") + `${n}. ${hookTitle}\n${body}`;
+        } else {
+          hooksRaw += (hooksRaw ? "\n\n" : "") + (body || chunk);
+        }
         break;
+      }
       case "referee":
         if (body.length >= 20) refereeChunks.push(chunk);
         break;
@@ -802,16 +938,24 @@ export function looksLikeNotebookPack(text: string): boolean {
   const t = text || "";
   if (t.length < 800) return false;
   const hasRoman = /(?:^|\n)\s*#{0,3}\s*[IVX]+\.\s+\S/m.test(t);
+  const hasParts =
+    (t.match(/(?:^|\n)\s*#{0,3}\s*PART\s+[IVX\d]+\b/gim) || []).length >= 2;
   const hasSections =
     (t.match(/(?:^|\n)\s*#{1,3}\s*SECTION\s*\d+\s*:/gim) || []).length >= 2;
-  const hasPlayerHeads = (t.match(/#{2,4}\s*\d{1,3}\.\s+[A-Za-zÀ-ÿ]/g) || []).length >= 4;
-  const hasHooks = /commentary hooks|goldmines|must[- ]?mention|matchday commentary hooks/i.test(t);
+  const hasPlayerHeads =
+    (t.match(/#{2,4}\s*\d{1,3}\.\s+[A-Za-zÀ-ÿ]/g) || []).length >= 3 ||
+    (t.match(/(?:^|\n)\s*\d{1,3}\.\s+[A-Za-zÀ-ÿ][^\n]{0,40}\((?:GK|DF|MF|FW|Goalkeeper|Back|Midfield|Winger|Forward|Keeper)/gi) || []).length >= 3;
+  const hasNarrativeMetrics =
+    /\bNarrative\b/i.test(t) && /Season\s+Metrics/i.test(t);
+  const hasHooks = /commentary hooks|goldmines|must[- ]?mention|matchday commentary hooks|part\s+v\b/i.test(t);
   const hasManager = /manager profile/i.test(t);
-  const hasIntroScript = /introductory script|timed matchday intro|cold open/i.test(t);
+  const hasIntroScript = /introductory script|timed matchday intro|cold open|part\s+i\b/i.test(t);
   return (
     (hasRoman && hasPlayerHeads) ||
+    (hasParts && (hasIntroScript || hasHooks || hasNarrativeMetrics)) ||
     (hasPlayerHeads && hasHooks) ||
     (hasManager && hasPlayerHeads) ||
+    (hasNarrativeMetrics && hasPlayerHeads) ||
     (hasSections && (hasHooks || hasIntroScript))
   );
 }

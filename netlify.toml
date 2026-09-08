@@ -4,7 +4,7 @@
 # Prisma still uses DATABASE_URL; build exports fallback from NETLIFY_DB_URL.
 
 [build]
-  command = "export DATABASE_URL=\"${DATABASE_URL:-$NETLIFY_DB_URL}\" && npx prisma generate && npx prisma migrate deploy && npm run build"
+  command = "export DATABASE_URL=\"${DATABASE_URL:-$NETLIFY_DB_URL}\" && npx prisma generate && npm run build"
   publish = ".next"
 
 [build.environment]

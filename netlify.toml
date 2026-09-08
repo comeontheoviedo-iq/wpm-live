@@ -1,0 +1,11 @@
+# Pitchline — Netlify (Next.js 15 App Router)
+# Runtime: Netlify auto-detects Next.js / OpenNext adapter — do not pin @netlify/plugin-nextjs.
+# Requires site env: DATABASE_URL (Postgres), AUTH_SECRET, plus optional API keys (see DEPLOY.md).
+
+[build]
+  command = "npx prisma generate && npx prisma migrate deploy && npm run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "20"
+  PRISMA_CLI_BINARY_TARGETS = "native,rhel-openssl-3.0.x"

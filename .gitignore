@@ -53,3 +53,6 @@ prisma/dev.db-journal
 data/plan-override.json
 data/feedback.json
 data/feedback.jsonl
+
+# Local Netlify folder
+.netlify

@@ -1,11 +1,9 @@
 generator client {
-  provider      = "prisma-client-js"
-  // native = local Mac/Linux; rhel-openssl-3.0.x = Netlify serverless (Node 18+)
-  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+  provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 

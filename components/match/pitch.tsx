@@ -1102,9 +1102,13 @@ export function PitchBoard({
     homeScore != null &&
     awayScore != null &&
     (matchStatus === "Live" ||
+      matchStatus === "Half Time" ||
       matchStatus === "Full Time" ||
       homeScore > 0 ||
       awayScore > 0);
+
+  /** Pre-match / lined-up: identity crests on pitch before the live scorebug. */
+  const showPrematchCrests = !showScore;
 
   const statusShortBase =
     matchStatus === "Full Time"
@@ -1113,7 +1117,13 @@ export function PitchBoard({
         ? "LIVE"
         : matchStatus === "Half Time"
           ? "HT"
-          : null;
+          : matchStatus === "Not Started" ||
+              matchStatus === "Scheduled" ||
+              matchStatus === "Assigned" ||
+              matchStatus === "Preparation" ||
+              matchStatus === "Ready"
+            ? "NS"
+            : null;
   const statusShort = formatPitchClockBadge(
     minute,
     minuteExtra,
@@ -1518,11 +1528,169 @@ export function PitchBoard({
             </div>
           )}
 
+          {/* Pre-match identity — home / league / away crests before kickoff */}
+          {showPrematchCrests && (
+            <div
+              className="pitch-prematch-crests pointer-events-auto"
+              role="group"
+              aria-label="Match crests"
+            >
+              {(() => {
+                const leftLogo = homeOnLeft ? homeLogoUrl : awayLogoUrl;
+                const rightLogo = homeOnLeft ? awayLogoUrl : homeLogoUrl;
+                const leftAccentRaw = homeOnLeft ? homeColor : awayColor;
+                const rightAccentRaw = homeOnLeft ? awayColor : homeColor;
+                const accentsCollide =
+                  leftAccentRaw.trim().toLowerCase() ===
+                  rightAccentRaw.trim().toLowerCase();
+                const leftAccent = accentsCollide ? "#f8fafc" : leftAccentRaw;
+                const rightAccent = accentsCollide ? "#e11d48" : rightAccentRaw;
+                const onLeft = homeOnLeft ? onHomeLogoClick : onAwayLogoClick;
+                const onRight = homeOnLeft ? onAwayLogoClick : onHomeLogoClick;
+                const leftTitle = homeOnLeft
+                  ? "Home club dossier"
+                  : "Away club dossier";
+                const rightTitle = homeOnLeft
+                  ? "Away club dossier"
+                  : "Home club dossier";
+                return (
+                  <>
+                    {onLeft ? (
+                      <button
+                        type="button"
+                        onClick={onLeft}
+                        className="pitch-prematch-crest"
+                        title={leftTitle}
+                        aria-label={leftTitle}
+                      >
+                        {leftLogo ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={leftLogo}
+                            alt=""
+                            className="pitch-prematch-crest-img"
+                          />
+                        ) : (
+                          <span className="scorebug-code">{leftCode}</span>
+                        )}
+                        <span
+                          className="scorebug-hairline"
+                          style={{ backgroundColor: leftAccent }}
+                          aria-hidden
+                        />
+                      </button>
+                    ) : (
+                      <div className="pitch-prematch-crest" title={leftTitle}>
+                        {leftLogo ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={leftLogo}
+                            alt=""
+                            className="pitch-prematch-crest-img"
+                          />
+                        ) : (
+                          <span className="scorebug-code">{leftCode}</span>
+                        )}
+                        <span
+                          className="scorebug-hairline"
+                          style={{ backgroundColor: leftAccent }}
+                          aria-hidden
+                        />
+                      </div>
+                    )}
+                    {onLeagueLogoClick ? (
+                      <button
+                        type="button"
+                        onClick={onLeagueLogoClick}
+                        className="pitch-prematch-league"
+                        title="League notes"
+                        aria-label="Open league notes"
+                      >
+                        {leagueLogoUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={leagueLogoUrl}
+                            alt=""
+                            className="pitch-prematch-league-img"
+                          />
+                        ) : (
+                          <span className="pitch-prematch-vs">LG</span>
+                        )}
+                      </button>
+                    ) : leagueLogoUrl ? (
+                      <div className="pitch-prematch-league" title="Competition">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={leagueLogoUrl}
+                          alt=""
+                          className="pitch-prematch-league-img"
+                        />
+                      </div>
+                    ) : (
+                      <span className="pitch-prematch-vs" aria-hidden>
+                        VS
+                      </span>
+                    )}
+                    {onRight ? (
+                      <button
+                        type="button"
+                        onClick={onRight}
+                        className="pitch-prematch-crest"
+                        title={rightTitle}
+                        aria-label={rightTitle}
+                      >
+                        {rightLogo ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={rightLogo}
+                            alt=""
+                            className="pitch-prematch-crest-img"
+                          />
+                        ) : (
+                          <span className="scorebug-code">{rightCode}</span>
+                        )}
+                        <span
+                          className="scorebug-hairline"
+                          style={{ backgroundColor: rightAccent }}
+                          aria-hidden
+                        />
+                      </button>
+                    ) : (
+                      <div className="pitch-prematch-crest" title={rightTitle}>
+                        {rightLogo ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={rightLogo}
+                            alt=""
+                            className="pitch-prematch-crest-img"
+                          />
+                        ) : (
+                          <span className="scorebug-code">{rightCode}</span>
+                        )}
+                        <span
+                          className="scorebug-hairline"
+                          style={{ backgroundColor: rightAccent }}
+                          aria-hidden
+                        />
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+              {statusShort ? (
+                <span className="pitch-prematch-status">{statusShort}</span>
+              ) : badge ? (
+                <span className="pitch-prematch-status" title={badge}>
+                  XI
+                </span>
+              ) : (
+                <span className="pitch-prematch-status">VS</span>
+              )}
+            </div>
+          )}
+
           {/* Compact tools: swap + field (clock lives in scorebug) */}
           <div className="pointer-events-auto flex items-center gap-0.5">
-            {!showScore && statusShort && (
-              <span className="scorebug-clock">{statusShort}</span>
-            )}
             {(onToggleHomeOnLeft || onOpenFieldSettings) && !onAirMode && (
               <div className="pitch-overlay-chip inline-flex items-center gap-px p-0.5">
                 {onToggleHomeOnLeft && (

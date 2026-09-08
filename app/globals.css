@@ -445,6 +445,91 @@
     line-height: 1;
   }
 
+  /* Pre-match pitch crests — dark desk identity before kickoff */
+  .pitch-prematch-crests {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    border-radius: 2px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: #030405;
+    color: var(--bug-fg);
+    box-shadow:
+      0 2px 12px rgba(0, 0, 0, 0.7),
+      0 0 0 1px rgba(0, 0, 0, 0.9);
+    padding: 0.35rem 0.45rem;
+    line-height: 1;
+  }
+  .pitch-prematch-crest {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    min-width: 2rem;
+    min-height: 2rem;
+    padding: 0.15rem 0.4rem;
+    margin: 0;
+    border: none;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+  }
+  button.pitch-prematch-crest:hover .pitch-prematch-crest-img {
+    outline: 1px solid rgba(45, 212, 191, 0.75);
+  }
+  .pitch-prematch-crest-img {
+    height: 1.35rem;
+    width: 1.35rem;
+    object-fit: contain;
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 1px;
+    display: block;
+  }
+  .pitch-prematch-league {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.75rem;
+    min-height: 1.75rem;
+    padding: 0.2rem 0.45rem;
+    margin: 0 0.1rem;
+    border: none;
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    background: transparent;
+    cursor: pointer;
+  }
+  button.pitch-prematch-league:hover {
+    background: rgba(255, 255, 255, 0.05);
+  }
+  .pitch-prematch-league-img {
+    height: 1.1rem;
+    width: 1.1rem;
+    object-fit: contain;
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 1px;
+    display: block;
+  }
+  .pitch-prematch-vs {
+    font-size: 0.625rem;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(232, 238, 247, 0.55);
+    padding: 0 0.35rem;
+  }
+  .pitch-prematch-status {
+    margin-left: 0.15rem;
+    padding: 0.2rem 0.4rem;
+    border-left: 1px solid rgba(255, 255, 255, 0.12);
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #e8eef7;
+  }
+
   /* Pitch broadcast tokens — craft: photo + loud # + surname; stats quiet */
   .pitch-token {
     border-radius: 2px;

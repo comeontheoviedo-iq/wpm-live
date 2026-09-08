@@ -33,6 +33,7 @@ import {
   formatHeightValue,
   formatMarketValue,
 } from "@/lib/field-settings";
+import { SpeakNameButton } from "@/components/match/speak-name-button";
 import {
   CARD_GAP_PX,
   estimateCardSizePx,
@@ -1820,38 +1821,46 @@ export function PitchBoard({
               const namePx = 9 * scaleFactor(rc.nameSizePct ?? 0);
               const Comp = onOpenFieldSettings ? "button" : "div";
               return (
-                <Comp
-                  type={onOpenFieldSettings ? "button" : undefined}
-                  onClick={
-                    onOpenFieldSettings
-                      ? () => onOpenFieldSettings("referee")
-                      : undefined
-                  }
-                  title={
-                    onOpenFieldSettings
-                      ? `Edit referee card · ${referee}`
-                      : referee
-                  }
-                  className={cn(
-                    "pitch-overlay-chip-dark flex max-w-[16rem] items-center gap-1.5 rounded-full px-2 py-1",
-                    onOpenFieldSettings &&
-                      "pointer-events-auto cursor-pointer hover:ring-2 hover:ring-teal-400/50"
-                  )}
-                >
-                  {showFlag ? (
-                    <FlagImg
-                      nationality={refereeNationality}
-                      className="h-3 w-[1.05rem]"
-                    />
-                  ) : null}
-                  <span
-                    className="truncate font-semibold tracking-wide text-white"
-                    style={{ fontSize: `${namePx}px` }}
+                <>
+                  <Comp
+                    type={onOpenFieldSettings ? "button" : undefined}
+                    onClick={
+                      onOpenFieldSettings
+                        ? () => onOpenFieldSettings("referee")
+                        : undefined
+                    }
+                    title={
+                      onOpenFieldSettings
+                        ? `Edit referee card · ${referee}`
+                        : referee
+                    }
+                    className={cn(
+                      "pitch-overlay-chip-dark flex max-w-[16rem] items-center gap-1.5 rounded-full px-2 py-1",
+                      onOpenFieldSettings &&
+                        "pointer-events-auto cursor-pointer hover:ring-2 hover:ring-teal-400/50"
+                    )}
                   >
-                    {showPrefix ? "Ref · " : ""}
-                    {referee}
-                  </span>
-                </Comp>
+                    {showFlag ? (
+                      <FlagImg
+                        nationality={refereeNationality}
+                        className="h-3 w-[1.05rem]"
+                      />
+                    ) : null}
+                    <span
+                      className="truncate font-semibold tracking-wide text-white"
+                      style={{ fontSize: `${namePx}px` }}
+                    >
+                      {showPrefix ? "Ref · " : ""}
+                      {referee}
+                    </span>
+                  </Comp>
+                  <SpeakNameButton
+                    text={referee}
+                    nationality={refereeNationality}
+                    compact
+                    className="pointer-events-auto !text-white/80 hover:!text-white !bg-black/40 !border-white/15 rounded-full"
+                  />
+                </>
               );
             })()}
           </div>

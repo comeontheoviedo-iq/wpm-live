@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { X, Loader2 } from "lucide-react";
+import { SpeakNameButton } from "@/components/match/speak-name-button";
 import { NotesPanel, type NoteRow } from "@/components/notes/notes-panel";
 import { cn } from "@/lib/utils";
 import { VerdictBlock } from "@/components/match/verdict-block";
@@ -227,7 +228,15 @@ export function ClubDossier({
             />
           )}
           <div className="min-w-0 flex-1">
-            <h2 className="player-dossier-name">{c?.name || "Club"}</h2>
+            <div className="flex items-start gap-2 min-w-0">
+              <h2 className="player-dossier-name min-w-0 flex-1">
+                {c?.name || "Club"}
+              </h2>
+              <SpeakNameButton
+                text={c?.name || c?.shortName || "Club"}
+                nationality={c?.country}
+              />
+            </div>
             {c ? (
               <div className="player-dossier-meta">
                 {c.country ? <span>{c.country}</span> : null}

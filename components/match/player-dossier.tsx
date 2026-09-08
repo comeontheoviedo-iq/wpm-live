@@ -15,6 +15,7 @@ import {
   posCode,
 } from "@/lib/flags";
 import { speechLangFromNationality, speakPronunciation } from "@/lib/speech-lang";
+import { SpeakNameButton } from "@/components/match/speak-name-button";
 import type { PlayerOverrideRow } from "@/lib/player-overrides";
 import { VerdictBlock } from "@/components/match/verdict-block";
 import {
@@ -572,7 +573,19 @@ export function PlayerDossier({
             </div>
           )}
           <div className="min-w-0 flex-1">
-            <h2 className="player-dossier-name">{displayName}</h2>
+            <div className="flex items-start gap-2 min-w-0">
+              <h2 className="player-dossier-name min-w-0 flex-1">{displayName}</h2>
+              <SpeakNameButton
+                text={displayName}
+                phonetic={ovPronunciation}
+                nationality={p?.nationality}
+              />
+            </div>
+            {ovPronunciation.trim() ? (
+              <div className="player-dossier-meta-quiet mt-1 text-[11px]">
+                🔊 {ovPronunciation.trim()}
+              </div>
+            ) : null}
             {p && (
               <div className="player-dossier-meta">
                 <span className="player-dossier-hash">#{p.shirtNumber}</span>

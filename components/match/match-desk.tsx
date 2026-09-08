@@ -41,6 +41,7 @@ import {
 } from "@/lib/relevance-engine";
 import { PlayerDossier } from "@/components/match/player-dossier";
 import { ClubDossier } from "@/components/match/club-dossier";
+import { SpeakNameButton } from "@/components/match/speak-name-button";
 import { FieldSettingsModal } from "@/components/match/field-settings-modal";
 import { EventTimeline } from "@/components/match/event-timeline";
 import { EventComposer } from "@/components/live/event-composer";
@@ -3068,9 +3069,21 @@ export function MatchDesk({
               <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
                 Coach profile
               </div>
-              <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-                {(coachSide === "home" ? homeCoach : awayCoach)?.name || "Coach"}
-              </h2>
+              <div className="flex items-center gap-2 min-w-0">
+                <h2 className="text-lg font-bold text-slate-900 dark:text-white truncate">
+                  {(coachSide === "home" ? homeCoach : awayCoach)?.name || "Coach"}
+                </h2>
+                <SpeakNameButton
+                  text={
+                    (coachSide === "home" ? homeCoach : awayCoach)?.name ||
+                    "Coach"
+                  }
+                  nationality={
+                    (coachSide === "home" ? homeCoach : awayCoach)?.nationality
+                  }
+                  className="!text-slate-600 dark:!text-slate-300 !border-slate-200 dark:!border-slate-700 !bg-white dark:!bg-slate-900"
+                />
+              </div>
               <p className="text-xs text-slate-500 mt-0.5">
                 {(coachSide === "home" ? homeFullName : awayFullName) ||
                   (coachSide === "home" ? homeName : awayName)}
@@ -3204,8 +3217,15 @@ export function MatchDesk({
                           .join("")}
                       </span>
                     </div>
-                    <div className="min-w-0">
-                      <div className="font-bold text-base">{c.name}</div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="font-bold text-base truncate">{c.name}</div>
+                        <SpeakNameButton
+                          text={c.name}
+                          nationality={c.nationality}
+                          className="!text-slate-600 dark:!text-slate-300 !border-slate-200 dark:!border-slate-700 !bg-white dark:!bg-slate-900"
+                        />
+                      </div>
                       <div className="text-xs text-slate-500">
                         {c.nationality}
                         {c.age != null ? ` · ${c.age}y` : ""}

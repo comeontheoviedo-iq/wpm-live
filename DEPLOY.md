@@ -6,47 +6,35 @@ URL: https://pitchline-app.netlify.app
 
 ## Why Postgres
 
-Netlify runs Next.js on serverless functions. A SQLite file (file:./dev.db) is not durable or writable there. Prisma provider is postgresql; migrations live under prisma/migrations/.
+Netlify runs Next.js on serverless. SQLite is not durable. Prisma provider is postgresql; migrations under prisma/migrations/.
 
-A backup of the old SQLite schema is kept at prisma/schema.sqlite.prisma for reference only (not used by the app).
+## Database: @netlify/database
 
-## One-time: database
-
-1. Create a Postgres instance (pick one):
-   - Neon free: https://neon.tech — create project — copy connection string
-   - Netlify Database / Prisma Postgres extension from the site Extensions panel
-2. Copy the URL (must start with postgresql:// or postgres://). Prefer the pooled / serverless URL if Neon offers one.
+Depends on @netlify/database. Deploy auto-provisions Postgres and injects NETLIFY_DB_URL.
+Prisma reads DATABASE_URL. Build and lib/prisma.ts fall back: prefer DATABASE_URL else NETLIFY_DB_URL.
+Keep Prisma migrations under prisma/migrations/. Do not switch ORM to Drizzle.
+If first build fails missing NETLIFY_DB_URL, redeploy after provision or set DATABASE_URL manually.
 
 ## One-time: Netlify env vars
 
-In Site settings, Environment variables (Production), set:
-
-- DATABASE_URL — Postgres connection string
-- AUTH_SECRET — long random string
-- API_FOOTBALL_KEY — optional
-- GEMINI_API_KEY — optional
-- PITCHLINE_PLAN — base or intel
-
-Do not commit .env. See .env.example.
+Set AUTH_SECRET (long random). Optional API_FOOTBALL_KEY, GEMINI_API_KEY. PITCHLINE_PLAN=base or intel.
+DATABASE_URL optional if using Netlify Database. Never commit .env. See .env.example.
 
 ## Build
 
-See netlify.toml build.command: prisma generate, migrate deploy, then Next build. Node 20.
+netlify.toml exports DATABASE_URL from NETLIFY_DB_URL fallback, then prisma generate, migrate deploy, Next build. Node 22.
 
 ## Deploy after env is set
 
 Confirm with netlify status that the linked project is pitchline-app.
-Then ship via Git continuous deploy or Netlify UI Trigger deploy.
-Parent agent sets env before first prod deploy.
+Then: npx netlify deploy --build --prod
 
 ## Local Air after the Postgres switch
 
 1. Set DATABASE_URL in .env to a Postgres URL (Neon works for local).
-2. Apply committed migrations against that URL (see Prisma migrate deploy docs).
-3. Optional: seed the database with the project db:seed script.
-4. Start the Next.js dev server as usual.
-
-Until local .env uses Postgres, Prisma CLI and app DB calls reject file:./dev.db.
+2. Apply migrations: npx prisma migrate deploy
+3. Optional: npm run db:seed
+4. Start Next.js as usual.
 
 ## Link check
 

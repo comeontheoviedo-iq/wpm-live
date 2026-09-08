@@ -955,7 +955,7 @@ export function PlayerDossier({
                         row.result === "D" && "is-d",
                         row.result === "L" && "is-l"
                       )}
-                      title={`${(row.date || "").slice(5, 10)} vs ${row.opponent}${row.rating ? ` · ${formatRating(row.rating)}` : ""}`}
+                      title={`${(row.date || "").slice(5, 10)} vs ${row.opponent}${row.league ? ` · ${row.league}` : ""}${row.rating ? ` · ${formatRating(row.rating)}` : ""}`}
                     >
                       {row.result || "·"}
                     </span>
@@ -1193,7 +1193,7 @@ export function PlayerDossier({
                           row.result === "D" && "is-d",
                           row.result === "L" && "is-l"
                         )}
-                        title={`${(row.date || "").slice(5, 10)} vs ${row.opponent}${row.rating ? ` · ${formatRating(row.rating)}` : ""}`}
+                        title={`${(row.date || "").slice(5, 10)} vs ${row.opponent}${row.league ? ` · ${row.league}` : ""}${row.rating ? ` · ${formatRating(row.rating)}` : ""}`}
                       >
                         {row.result || "·"}
                       </span>
@@ -1205,6 +1205,7 @@ export function PlayerDossier({
                         <tr>
                           <th>Date</th>
                           <th>Opp</th>
+                          <th>Comp</th>
                           <th>R</th>
                           <th>H/A</th>
                           <th>Res</th>
@@ -1223,6 +1224,12 @@ export function PlayerDossier({
                             </td>
                             <td className="max-w-[6.5rem] truncate">
                               {row.opponent}
+                            </td>
+                            <td
+                              className="max-w-[7.5rem] truncate text-[#94a3b8]"
+                              title={row.league || undefined}
+                            >
+                              {row.league || "—"}
                             </td>
                             <td
                               className={cn(

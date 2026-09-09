@@ -933,6 +933,51 @@ export async function getTeamRecentFinished(teamId: number, last = 8) {
  * Find the most recent finished fixture that has lineups for this team.
  * Returns that team's AfLineup, or null.
  */
+
+/**
+ * Most recent lineup strip colours for a team (AF often omits colours on
+ * cup / early fixtures). Prefer same venue role when possible.
+ */
+export async function getLastKnownTeamColors(
+  teamId: number,
+  opts?: { preferHome?: boolean; last?: number }
+): Promise<AfTeamColors | null> {
+  const preferHome = opts?.preferHome;
+  const recent = await getTeamRecentFinished(teamId, opts?.last ?? 10);
+  const ordered =
+    preferHome == null
+      ? recent
+      : [
+          ...recent.filter((fx) =>
+            preferHome
+              ? fx.teams.home.id === teamId
+              : fx.teams.away.id === teamId
+          ),
+          ...recent.filter((fx) =>
+            preferHome
+              ? fx.teams.home.id !== teamId
+              : fx.teams.away.id !== teamId
+          ),
+        ];
+  for (const fx of ordered) {
+    try {
+      const lineups = await getLineups(fx.fixture.id);
+      const mine = lineups.find((l) => l.team.id === teamId);
+      const colors = mine?.team?.colors;
+      if (
+        colors &&
+        typeof colors === "object" &&
+        (colors.player?.primary || colors.goalkeeper?.primary)
+      ) {
+        return colors;
+      }
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
 export async function getLastPlayedLineup(teamId: number): Promise<{
   fixtureId: number;
   lineup: AfLineup;

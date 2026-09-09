@@ -12,6 +12,7 @@ import {
   getFixture,
   getInjuriesByFixture,
   getLastPlayedLineup,
+  getLastKnownTeamColors,
   getLineups,
   getPredictions,
   getSquads,
@@ -32,7 +33,14 @@ import {
   type AfLineup,
   type AfSquadPlayer,
 } from "./api-football";
-import { parseAfTeamColors, serializeKit } from "./kit-colors";
+import {
+  parseAfTeamColors,
+  serializeKit,
+  kitNeedsHydration,
+  serializeCheckedEmptyKit,
+  DEFAULT_CLUB_PRIMARY,
+  normalizeHex,
+} from "./kit-colors";
 import { leagueIdForCompetition } from "./competitions";
 import { resolveWeatherForVenue } from "./weather";
 import { nationalityToIso } from "./flags";
@@ -1673,9 +1681,11 @@ async function runSyncMatchFromApiFootball(
     match.lineupStatus !== "confirmed" ||
     isPreOrNs;
 
-  // Kit colours: hydrate once when missing even on live confirmed polls.
+  // Kit colours: hydrate when missing / legacy empty even on live confirmed polls.
+  // AF often omits colours on cup fixtures — fall back to last known strip.
   const needKitColors =
-    match.homeKitJson == null || match.awayKitJson == null;
+    kitNeedsHydration(match.homeKitJson) ||
+    kitNeedsHydration(match.awayKitJson);
 
   const lineups = needLineups || needKitColors
     ? await getLineups(match.apiFootballFixtureId).catch(() => [])
@@ -1686,7 +1696,7 @@ async function runSyncMatchFromApiFootball(
   let expectedFrom: number | null = null;
   let homeKitJson: string | null | undefined = match.homeKitJson;
   let awayKitJson: string | null | undefined = match.awayKitJson;
-  let kitsFromThisFixture = false;
+  let kitsResolvedThisSync = false;
 
   if (lineups.length >= 1 && lineups.some((l) => l.startXI?.length)) {
     lineupStatus = "confirmed";
@@ -1697,17 +1707,6 @@ async function runSyncMatchFromApiFootball(
         awayFormation = await upsertLineupSide(match.awayClubId, lu, "away");
       }
     }
-    // Only THIS fixture's lineups carry the strip being worn today.
-    kitsFromThisFixture = true;
-    for (const lu of lineups) {
-      const kit = parseAfTeamColors(lu.team?.colors);
-      const serialized = serializeKit(kit);
-      if (lu.team.id === homeAfId) homeKitJson = serialized;
-      else if (lu.team.id === awayAfId) awayKitJson = serialized;
-    }
-    // Mark checked-empty so we don't re-fetch forever when feed omits colours.
-    if (homeKitJson == null) homeKitJson = "";
-    if (awayKitJson == null) awayKitJson = "";
   } else if (match.lineupStatus === "predicted") {
     // Preserve personal DnD board; refresh from saved JSON if needed
     if (!isLive) {
@@ -1739,6 +1738,55 @@ async function runSyncMatchFromApiFootball(
   } else {
     // Live poll without Official XI yet — keep prior board; do not hunt last XI.
     lineupStatus = match.lineupStatus || "expected";
+  }
+
+  // Resolve strip colours: this fixture first, else last-known for the side.
+  if (needKitColors) {
+    const homeLu = lineups.find((l) => l.team.id === homeAfId);
+    const awayLu = lineups.find((l) => l.team.id === awayAfId);
+    const resolveSide = async (
+      afId: number,
+      lu: (typeof lineups)[number] | undefined,
+      preferHome: boolean
+    ): Promise<string> => {
+      const fromFixture = parseAfTeamColors(lu?.team?.colors);
+      if (fromFixture) return serializeKit(fromFixture);
+      const last = await getLastKnownTeamColors(afId, {
+        preferHome,
+        last: 10,
+      }).catch(() => null);
+      const parsed = parseAfTeamColors(last);
+      if (parsed) return serializeKit(parsed);
+      return serializeCheckedEmptyKit();
+    };
+    homeKitJson = await resolveSide(homeAfId, homeLu, true);
+    awayKitJson = await resolveSide(awayAfId, awayLu, false);
+    kitsResolvedThisSync = true;
+
+    // Upgrade default teal club primaries from resolved kits (scorebug + fallback).
+    const bumpClubPrimary = async (clubId: string, kitJson: string) => {
+      const kit = parseAfTeamColors(
+        (() => {
+          try {
+            return JSON.parse(kitJson);
+          } catch {
+            return null;
+          }
+        })()
+      );
+      const primary = kit?.player.primary;
+      if (!primary) return;
+      const club = await prisma.club.findUnique({ where: { id: clubId } });
+      if (!club) return;
+      const cur = (normalizeHex(club.primaryColor) || club.primaryColor || "").toLowerCase();
+      if (cur && cur !== DEFAULT_CLUB_PRIMARY.toLowerCase()) return;
+      await prisma.club.update({
+        where: { id: clubId },
+        data: { primaryColor: primary },
+      });
+    };
+    await bumpClubPrimary(match.homeClubId, homeKitJson).catch(() => null);
+    await bumpClubPrimary(match.awayClubId, awayKitJson).catch(() => null);
   }
 
   // Confirmed XI: lineup.coach is authoritative (may have id 0; search surname).
@@ -2094,7 +2142,7 @@ async function runSyncMatchFromApiFootball(
       awayFormation,
       lineupStatus,
       lastFeedSyncAt: new Date(),
-      ...(kitsFromThisFixture
+      ...(kitsResolvedThisSync
         ? {
             homeKitJson: homeKitJson ?? "",
             awayKitJson: awayKitJson ?? "",

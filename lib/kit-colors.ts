@@ -124,7 +124,7 @@ export function cardKitAccent(
       : kit?.player.primary
         ? kit.player
         : null;
-  const strip = swatch?.primary || fallback;
+  let strip = swatch?.primary || fallback;
 
   // Number colour: prefer feed number if visible on dark charcoal card
   const candidates = [
@@ -144,7 +144,53 @@ export function cardKitAccent(
   // If strip itself is very dark, keep a light number
   if (relativeLuminance(number) < 0.12) number = "#f8fafc";
 
+  // Charcoal cards swallow navy/black strips — lift the visible edge cue.
+  if (relativeLuminance(strip) < 0.1) {
+    const edgeAlts = [
+      swatch?.border,
+      swatch?.number,
+      number,
+      "#94a3b8",
+    ].filter(Boolean) as string[];
+    for (const c of edgeAlts) {
+      if (relativeLuminance(c) >= 0.12) {
+        strip = c;
+        break;
+      }
+    }
+  }
+
   return { strip, number };
+}
+
+
+/** Default club teal — treat as unset when upgrading from feed kits. */
+export const DEFAULT_CLUB_PRIMARY = "#0d9488";
+
+/** Legacy "" or explicit checked marker — do not keep re-fetching forever. */
+export function isCheckedEmptyKit(json: string | null | undefined): boolean {
+  if (json == null) return false;
+  const t = json.trim();
+  if (t === "") return false; // legacy empty — still needs last-known fallback pass
+  try {
+    const o = JSON.parse(t) as Record<string, unknown>;
+    return Boolean(o && o.checked === true);
+  } catch {
+    return false;
+  }
+}
+
+/** True when Match kit JSON still needs a hydrate attempt. */
+export function kitNeedsHydration(json: string | null | undefined): boolean {
+  if (json == null) return true;
+  const t = json.trim();
+  if (t === "") return true; // legacy checked-empty without last-known fallback
+  if (isCheckedEmptyKit(t)) return false;
+  return parseStoredKit(t) == null;
+}
+
+export function serializeCheckedEmptyKit(): string {
+  return JSON.stringify({ checked: true });
 }
 
 /** Resolve playing colours + kits for a match row + clubs. */

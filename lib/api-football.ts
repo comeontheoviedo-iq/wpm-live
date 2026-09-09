@@ -44,8 +44,20 @@ export type AfLineupPlayer = {
   };
 };
 
+/** Feed lineup strip colours (hex without #). */
+export type AfKitSwatch = {
+  primary?: string | null;
+  number?: string | null;
+  border?: string | null;
+};
+
+export type AfTeamColors = {
+  player?: AfKitSwatch | null;
+  goalkeeper?: AfKitSwatch | null;
+};
+
 export type AfLineup = {
-  team: { id: number; name: string; logo?: string; colors?: unknown };
+  team: { id: number; name: string; logo?: string; colors?: AfTeamColors | null };
   formation: string | null;
   startXI: AfLineupPlayer[];
   substitutes: AfLineupPlayer[];

@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { getMatchFull } from "@/lib/match-data";
+import { playingColorsForMatch } from "@/lib/kit-colors";
 import { SquadPageClient } from "@/components/match/squad-page-client";
 
 export default async function SquadPage({
@@ -10,6 +11,8 @@ export default async function SquadPage({
   const { id } = await params;
   const match = await getMatchFull(id);
   if (!match) notFound();
+
+  const { homeColor, awayColor } = playingColorsForMatch(match);
 
   const mapPlayers = (
     players: typeof match.homeClub.players,
@@ -34,8 +37,8 @@ export default async function SquadPage({
       matchId={match.id}
       homeName={match.homeClub.shortName}
       awayName={match.awayClub.shortName}
-      homeColor={match.homeClub.primaryColor}
-      awayColor={match.awayClub.primaryColor}
+      homeColor={homeColor}
+      awayColor={awayColor}
       status={match.status}
       homePlayers={mapPlayers(
         match.homeClub.players,

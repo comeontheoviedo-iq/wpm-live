@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { getMatchFull } from "@/lib/match-data";
+import { playingColorsForMatch } from "@/lib/kit-colors";
 import { formatKickoff } from "@/lib/utils";
 import { MatchStatisticsView } from "@/components/match/match-statistics";
 import { AdvancedStatsCard } from "@/components/match/advanced-stats-card";
@@ -12,6 +13,8 @@ export default async function MatchStatsPage({
   const { id } = await params;
   const match = await getMatchFull(id);
   if (!match) notFound();
+
+  const { homeColor, awayColor } = playingColorsForMatch(match);
 
   return (
     <div className="mx-auto max-w-6xl px-3 sm:px-4 py-4 space-y-3">
@@ -26,8 +29,8 @@ export default async function MatchStatsPage({
       <MatchStatisticsView
         homeName={match.homeClub.shortName}
         awayName={match.awayClub.shortName}
-        homeColor={match.homeClub.primaryColor}
-        awayColor={match.awayClub.primaryColor}
+        homeColor={homeColor}
+        awayColor={awayColor}
         homeScore={match.homeScore}
         awayScore={match.awayScore}
         status={match.status}
@@ -56,8 +59,8 @@ export default async function MatchStatsPage({
         matchId={match.id}
         homeName={match.homeClub.shortName}
         awayName={match.awayClub.shortName}
-        homeColor={match.homeClub.primaryColor}
-        awayColor={match.awayClub.primaryColor}
+        homeColor={homeColor}
+        awayColor={awayColor}
         showCoverage
       />
     </div>

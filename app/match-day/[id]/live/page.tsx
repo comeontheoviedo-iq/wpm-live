@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { getMatchFull } from "@/lib/match-data";
+import { playingColorsForMatch } from "@/lib/kit-colors";
 import { EventComposer } from "@/components/live/event-composer";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { FeedBanner } from "@/components/match/feed-banner";
@@ -14,6 +15,9 @@ export default async function LivePage({
   const { id } = await params;
   const match = await getMatchFull(id);
   if (!match) notFound();
+
+  const { homeColor, awayColor, homeKit, awayKit } =
+    playingColorsForMatch(match);
 
   const players = [
     ...match.homeClub.players.map((p) => ({
@@ -86,8 +90,10 @@ export default async function LivePage({
             matchId={match.id}
             homeName={match.homeClub.shortName}
             awayName={match.awayClub.shortName}
-            homeColor={match.homeClub.primaryColor}
-            awayColor={match.awayClub.primaryColor}
+            homeColor={homeColor}
+            awayColor={awayColor}
+            homeKit={homeKit}
+            awayKit={awayKit}
             homeFormation={match.homeFormation}
             awayFormation={match.awayFormation}
             homePlayers={match.homeClub.players}

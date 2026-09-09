@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { getMatchFull } from "@/lib/match-data";
+import { playingColorsForMatch } from "@/lib/kit-colors";
 import { ObsOverlayClient } from "./overlay-client";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +14,8 @@ export default async function ObsOverlayPage({
   const { id } = await params;
   const match = await getMatchFull(id);
   if (!match) notFound();
+
+  const { homeColor, awayColor } = playingColorsForMatch(match);
 
   return (
     <Suspense
@@ -33,8 +36,8 @@ export default async function ObsOverlayPage({
         awayName={match.awayClub.shortName}
         homeAbbr={match.homeClub.abbreviation}
         awayAbbr={match.awayClub.abbreviation}
-        homeColor={match.homeClub.primaryColor}
-        awayColor={match.awayClub.primaryColor}
+        homeColor={homeColor}
+        awayColor={awayColor}
         homeTeamAfId={match.homeClub.apiFootballTeamId}
         awayTeamAfId={match.awayClub.apiFootballTeamId}
         competition={match.matchDay.competition}

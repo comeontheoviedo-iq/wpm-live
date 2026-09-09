@@ -540,6 +540,7 @@
 
   /* Pitch broadcast tokens — craft: photo + loud # + surname; stats quiet */
   .pitch-token {
+    position: relative;
     border-radius: 2px;
     border: 1px solid rgba(255, 255, 255, 0.1);
     background: #12161c;
@@ -548,10 +549,20 @@
       0 0 0 1px rgba(0, 0, 0, 0.45);
     overflow: hidden;
   }
+  .pitch-token-kit-edge {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    z-index: 2;
+    opacity: 0.95;
+    pointer-events: none;
+  }
   .pitch-token-hairline {
     display: block;
     width: 100%;
-    height: 2px;
+    height: 3px;
     flex-shrink: 0;
     opacity: 0.95;
   }

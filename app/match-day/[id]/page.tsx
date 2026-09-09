@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { getMatchFull } from "@/lib/match-data";
+import { playingColorsForMatch } from "@/lib/kit-colors";
 import { MatchDesk } from "@/components/match/match-desk";
 import { formatKickoff } from "@/lib/utils";
 import { prisma } from "@/lib/prisma";
@@ -12,6 +13,9 @@ export default async function MatchOverviewPage({
   const { id } = await params;
   const match = await getMatchFull(id);
   if (!match) notFound();
+
+  const { homeColor, awayColor, homeKit, awayKit } =
+    playingColorsForMatch(match);
 
   const refOfficial = match.officials.find((o) => o.role === "Referee")?.official;
   const referee = refOfficial?.name;
@@ -48,8 +52,10 @@ export default async function MatchOverviewPage({
       awayFullName={match.awayClub.name}
       homeAbbr={match.homeClub.abbreviation}
       awayAbbr={match.awayClub.abbreviation}
-      homeColor={match.homeClub.primaryColor}
-      awayColor={match.awayClub.primaryColor}
+      homeColor={homeColor}
+      awayColor={awayColor}
+      homeKit={homeKit}
+      awayKit={awayKit}
       homeFormation={match.homeFormation}
       awayFormation={match.awayFormation}
       homePlayers={match.homeClub.players}

@@ -41,6 +41,7 @@ import {
   resolveCardOverlaps,
 } from "@/lib/pitch-layout";
 import { liveAdjustedSeasonStat } from "@/lib/season-tally";
+import { cardKitAccent, type MatchKitColors } from "@/lib/kit-colors";
 
 export type PitchPlayer = {
   id: string;
@@ -262,6 +263,7 @@ function PitchCardToken({
   player,
   side,
   teamColor,
+  kit,
   slotLabel,
   selected,
   placing,
@@ -272,6 +274,8 @@ function PitchCardToken({
   player: PitchPlayer;
   side: "home" | "away";
   teamColor: string;
+  /** Per-match strip colours when feed provided them. */
+  kit?: MatchKitColors | null;
   slotLabel: string;
   selected?: boolean;
   placing?: boolean;
@@ -329,8 +333,13 @@ function PitchCardToken({
         ? "OUT"
         : "-";
 
-  // Craft: charcoal body; team colour = hairline + shirt # only
-  const accent = teamColor || (isHome ? "#f8fafc" : "#94a3b8");
+  // Craft: charcoal body; kit strip = edge bar + hairline; shirt # from kit number
+  const fallbackAccent = teamColor || (isHome ? "#f8fafc" : "#94a3b8");
+  const { strip: accent, number: numberAccent } = cardKitAccent(
+    kit,
+    isGk,
+    fallbackAccent
+  );
   const band = "text-[var(--card-fg)]";
 
   const cols = cardSettings.fieldsPerRow;
@@ -462,7 +471,13 @@ function PitchCardToken({
           .filter(Boolean)
           .join(" · ")}
       >
-        {/* Team colour — top hairline only (number colour applied below) */}
+        {/* Kit strip cue — left edge + top hairline (readable at small card size) */}
+        <span
+          className="pitch-token-kit-edge"
+          style={{ backgroundColor: accent }}
+          aria-hidden
+          title="Playing kit colour"
+        />
         <span
           className="pitch-token-hairline"
           style={{ backgroundColor: accent }}
@@ -472,7 +487,10 @@ function PitchCardToken({
         {/* Primary triad: photo + loud #; surname full-width below (no 4-char clamp) */}
         <div className="pitch-token-identity">
           <div className="pitch-token-identity-top">
-            <span className="pitch-token-photo">
+            <span
+              className="pitch-token-photo"
+              style={{ boxShadow: `inset 0 0 0 1px ${accent}55` }}
+            >
               {photo ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -500,7 +518,7 @@ function PitchCardToken({
 
             <div className="pitch-token-copy min-w-0 flex-1">
               <div className="flex items-start justify-between gap-0.5">
-                <span className="pitch-token-id" style={{ color: accent }}>
+                <span className="pitch-token-id" style={{ color: numberAccent }}>
                   {shirt}
                 </span>
                 <div
@@ -700,6 +718,8 @@ export function PitchBoard({
   awayName,
   homeColor,
   awayColor,
+  homeKit = null,
+  awayKit = null,
   homeFormation,
   awayFormation,
   homePlayers,
@@ -754,6 +774,8 @@ export function PitchBoard({
   awayName: string;
   homeColor: string;
   awayColor: string;
+  homeKit?: MatchKitColors | null;
+  awayKit?: MatchKitColors | null;
   homeFormation: string;
   awayFormation: string;
   homePlayers: PitchPlayer[];
@@ -1940,6 +1962,7 @@ export function PitchBoard({
                     player={player}
                     side={side}
                     teamColor={color}
+                    kit={side === "home" ? homeKit : awayKit}
                     slotLabel={slot.label}
                     selected={isSelected}
                     placing={isPlacingHere}

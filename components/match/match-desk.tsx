@@ -21,6 +21,7 @@ import {
   History,
 } from "lucide-react";
 import { PitchBoard, type PitchPlayer } from "@/components/match/pitch";
+import type { MatchKitColors } from "@/lib/kit-colors";
 import { SquadRail, type SquadPlayer } from "@/components/match/squad-rail";
 import {
   NotesPanel,
@@ -336,6 +337,8 @@ export function MatchDesk({
   awayAbbr,
   homeColor,
   awayColor,
+  homeKit = null,
+  awayKit = null,
   homeFormation,
   awayFormation,
   homePlayers,
@@ -389,6 +392,8 @@ export function MatchDesk({
   awayAbbr?: string;
   homeColor: string;
   awayColor: string;
+  homeKit?: MatchKitColors | null;
+  awayKit?: MatchKitColors | null;
   homeFormation: string;
   awayFormation: string;
   homePlayers: PitchPlayer[];
@@ -2840,6 +2845,8 @@ export function MatchDesk({
               awayName={awayName}
               homeColor={homeColor}
               awayColor={awayColor}
+              homeKit={homeKit}
+              awayKit={awayKit}
               homeFormation={homeForm}
               awayFormation={awayForm}
               homePlayers={homeEnriched}

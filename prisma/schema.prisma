@@ -165,6 +165,9 @@ model Match {
   lineupStatus         String          @default("expected")
   lastFeedSyncAt       DateTime?
   preKickoffHardSyncAt DateTime?
+  /// Per-match strip colours from feed lineups (JSON); empty string = checked none.
+  homeKitJson          String?
+  awayKitJson          String?
   predictionsAdvice    String?
   predictionsJson      String?
   h2hSummary           String?

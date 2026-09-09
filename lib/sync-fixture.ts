@@ -32,6 +32,7 @@ import {
   type AfLineup,
   type AfSquadPlayer,
 } from "./api-football";
+import { parseAfTeamColors, serializeKit } from "./kit-colors";
 import { leagueIdForCompetition } from "./competitions";
 import { resolveWeatherForVenue } from "./weather";
 import { nationalityToIso } from "./flags";
@@ -1672,13 +1673,20 @@ async function runSyncMatchFromApiFootball(
     match.lineupStatus !== "confirmed" ||
     isPreOrNs;
 
-  const lineups = needLineups
+  // Kit colours: hydrate once when missing even on live confirmed polls.
+  const needKitColors =
+    match.homeKitJson == null || match.awayKitJson == null;
+
+  const lineups = needLineups || needKitColors
     ? await getLineups(match.apiFootballFixtureId).catch(() => [])
     : [];
   let homeFormation = match.homeFormation;
   let awayFormation = match.awayFormation;
   let lineupStatus = match.lineupStatus || "expected";
   let expectedFrom: number | null = null;
+  let homeKitJson: string | null | undefined = match.homeKitJson;
+  let awayKitJson: string | null | undefined = match.awayKitJson;
+  let kitsFromThisFixture = false;
 
   if (lineups.length >= 1 && lineups.some((l) => l.startXI?.length)) {
     lineupStatus = "confirmed";
@@ -1689,6 +1697,17 @@ async function runSyncMatchFromApiFootball(
         awayFormation = await upsertLineupSide(match.awayClubId, lu, "away");
       }
     }
+    // Only THIS fixture's lineups carry the strip being worn today.
+    kitsFromThisFixture = true;
+    for (const lu of lineups) {
+      const kit = parseAfTeamColors(lu.team?.colors);
+      const serialized = serializeKit(kit);
+      if (lu.team.id === homeAfId) homeKitJson = serialized;
+      else if (lu.team.id === awayAfId) awayKitJson = serialized;
+    }
+    // Mark checked-empty so we don't re-fetch forever when feed omits colours.
+    if (homeKitJson == null) homeKitJson = "";
+    if (awayKitJson == null) awayKitJson = "";
   } else if (match.lineupStatus === "predicted") {
     // Preserve personal DnD board; refresh from saved JSON if needed
     if (!isLive) {
@@ -2075,6 +2094,12 @@ async function runSyncMatchFromApiFootball(
       awayFormation,
       lineupStatus,
       lastFeedSyncAt: new Date(),
+      ...(kitsFromThisFixture
+        ? {
+            homeKitJson: homeKitJson ?? "",
+            awayKitJson: awayKitJson ?? "",
+          }
+        : {}),
       period:
         fixture.fixture.status.short === "HT"
           ? "HT"

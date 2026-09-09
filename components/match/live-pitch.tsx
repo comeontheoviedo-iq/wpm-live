@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PitchBoard, type PitchPlayer } from "@/components/match/pitch";
+import type { MatchKitColors } from "@/lib/kit-colors";
 import { NotesPanel, type NoteRow } from "@/components/notes/notes-panel";
 import { PlayerDossier } from "@/components/match/player-dossier";
 
@@ -19,6 +20,8 @@ export function LivePitch({
   awayName,
   homeColor,
   awayColor,
+  homeKit = null,
+  awayKit = null,
   homeFormation,
   awayFormation,
   homePlayers,
@@ -34,6 +37,8 @@ export function LivePitch({
   awayName: string;
   homeColor: string;
   awayColor: string;
+  homeKit?: MatchKitColors | null;
+  awayKit?: MatchKitColors | null;
   homeFormation: string;
   awayFormation: string;
   homePlayers: PitchPlayer[];
@@ -129,6 +134,8 @@ export function LivePitch({
         awayName={awayName}
         homeColor={homeColor}
         awayColor={awayColor}
+        homeKit={homeKit}
+        awayKit={awayKit}
         homeFormation={homeFormation}
         awayFormation={awayFormation}
         homePlayers={homePlayers}

@@ -940,9 +940,10 @@ export async function getTeamRecentFinished(teamId: number, last = 8) {
  */
 export async function getLastKnownTeamColors(
   teamId: number,
-  opts?: { preferHome?: boolean; last?: number }
+  opts?: { preferHome?: boolean; last?: number; avoidPrimary?: string | null }
 ): Promise<AfTeamColors | null> {
   const preferHome = opts?.preferHome;
+  const avoid = (opts?.avoidPrimary || "").replace(/^#/, "").toLowerCase();
   const recent = await getTeamRecentFinished(teamId, opts?.last ?? 10);
   const ordered =
     preferHome == null
@@ -959,6 +960,7 @@ export async function getLastKnownTeamColors(
               : fx.teams.away.id !== teamId
           ),
         ];
+  let fallback: AfTeamColors | null = null;
   for (const fx of ordered) {
     try {
       const lineups = await getLineups(fx.fixture.id);
@@ -969,13 +971,20 @@ export async function getLastKnownTeamColors(
         typeof colors === "object" &&
         (colors.player?.primary || colors.goalkeeper?.primary)
       ) {
+        const primary = String(colors.player?.primary || "")
+          .replace(/^#/, "")
+          .toLowerCase();
+        if (avoid && primary === avoid) {
+          if (!fallback) fallback = colors;
+          continue;
+        }
         return colors;
       }
     } catch {
       continue;
     }
   }
-  return null;
+  return fallback;
 }
 
 export async function getLastPlayedLineup(teamId: number): Promise<{

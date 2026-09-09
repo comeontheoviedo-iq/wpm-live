@@ -38,6 +38,9 @@ import {
   serializeKit,
   kitNeedsHydration,
   serializeCheckedEmptyKit,
+  kitsSharePrimary,
+  kitDistinctTried,
+  markKitDistinctTried,
   DEFAULT_CLUB_PRIMARY,
   normalizeHex,
 } from "./kit-colors";
@@ -1685,7 +1688,9 @@ async function runSyncMatchFromApiFootball(
   // AF often omits colours on cup fixtures — fall back to last known strip.
   const needKitColors =
     kitNeedsHydration(match.homeKitJson) ||
-    kitNeedsHydration(match.awayKitJson);
+    kitNeedsHydration(match.awayKitJson) ||
+    (kitsSharePrimary(match.homeKitJson, match.awayKitJson) &&
+      !kitDistinctTried(match.awayKitJson));
 
   const lineups = needLineups || needKitColors
     ? await getLineups(match.apiFootballFixtureId).catch(() => [])
@@ -1747,20 +1752,34 @@ async function runSyncMatchFromApiFootball(
     const resolveSide = async (
       afId: number,
       lu: (typeof lineups)[number] | undefined,
-      preferHome: boolean
+      preferHome: boolean,
+      avoidPrimary?: string | null
     ): Promise<string> => {
       const fromFixture = parseAfTeamColors(lu?.team?.colors);
       if (fromFixture) return serializeKit(fromFixture);
       const last = await getLastKnownTeamColors(afId, {
         preferHome,
         last: 10,
+        avoidPrimary: avoidPrimary || null,
       }).catch(() => null);
       const parsed = parseAfTeamColors(last);
       if (parsed) return serializeKit(parsed);
       return serializeCheckedEmptyKit();
     };
     homeKitJson = await resolveSide(homeAfId, homeLu, true);
-    awayKitJson = await resolveSide(awayAfId, awayLu, false);
+    const homePrimary = parseAfTeamColors(
+      (() => {
+        try {
+          return JSON.parse(homeKitJson || "");
+        } catch {
+          return null;
+        }
+      })()
+    )?.player.primary;
+    awayKitJson = await resolveSide(awayAfId, awayLu, false, homePrimary);
+    if (kitsSharePrimary(homeKitJson, awayKitJson)) {
+      awayKitJson = markKitDistinctTried(awayKitJson);
+    }
     kitsResolvedThisSync = true;
 
     // Upgrade default teal club primaries from resolved kits (scorebug + fallback).

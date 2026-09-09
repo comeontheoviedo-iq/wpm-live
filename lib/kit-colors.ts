@@ -193,6 +193,40 @@ export function serializeCheckedEmptyKit(): string {
   return JSON.stringify({ checked: true });
 }
 
+/** True when both sides share the same outfield primary (cards look identical). */
+export function kitsSharePrimary(
+  homeJson: string | null | undefined,
+  awayJson: string | null | undefined
+): boolean {
+  const h = parseStoredKit(homeJson);
+  const a = parseStoredKit(awayJson);
+  const hp = h?.player.primary?.toLowerCase();
+  const ap = a?.player.primary?.toLowerCase();
+  return Boolean(hp && ap && hp === ap);
+}
+
+export function kitDistinctTried(json: string | null | undefined): boolean {
+  if (!json) return false;
+  try {
+    const o = JSON.parse(json.trim()) as Record<string, unknown>;
+    return Boolean(o && o.distinctTried === true);
+  } catch {
+    return false;
+  }
+}
+
+export function markKitDistinctTried(json: string): string {
+  try {
+    const o = JSON.parse(json) as Record<string, unknown>;
+    if (!o || typeof o !== "object") return json;
+    return JSON.stringify({ ...o, distinctTried: true });
+  } catch {
+    return json;
+  }
+}
+
+
+
 /** Resolve playing colours + kits for a match row + clubs. */
 export function playingColorsForMatch(match: {
   homeKitJson?: string | null;

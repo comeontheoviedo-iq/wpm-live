@@ -175,6 +175,11 @@ export function isPrematchNote(n: NotesBucketNote): boolean {
     return false;
   }
   if (isHistoryNote(n)) return false;
+  // Freeform Research pastes + profiles pack — claim for Prematch (default rail)
+  // before Bio/Career hard-exclude; do not widen to every Match note.
+  const freeformTitle = (n.title || "").trim();
+  if (/^Research notes(\s*·|\s*$)/i.test(freeformTitle)) return true;
+  if (/^Player profiles pack$/i.test(freeformTitle)) return true;
   // Hooks / funfacts → TONIGHT (and home/away when player-tagged), not Prematch
   if (n.category === "Hook" || n.category === "Funfact" || isTonightNote(n)) {
     return false;

@@ -333,13 +333,12 @@ function PitchCardToken({
         ? "OUT"
         : "-";
 
-  // Craft: charcoal body; kit strip = edge bar + hairline; shirt # from kit number
+  // Craft: charcoal body; thin kit edge + hairline; single shirt # (no jersey chip)
   const fallbackAccent = teamColor || (isHome ? "#f8fafc" : "#94a3b8");
   const {
     strip: accent,
     number: numberAccent,
     chip: chipFill,
-    chipTrim,
   } = cardKitAccent(kit, isGk, fallbackAccent);
   const band = "text-[var(--card-fg)]";
 
@@ -472,7 +471,7 @@ function PitchCardToken({
           .filter(Boolean)
           .join(" · ")}
       >
-        {/* Kit strip cue — thick edge + hairline + jersey chip (match-night truth) */}
+        {/* Kit strip cue — thin left edge + top hairline (match-night colours) */}
         <span
           className="pitch-token-kit-edge"
           style={{ backgroundColor: accent }}
@@ -485,21 +484,9 @@ function PitchCardToken({
           aria-hidden
         />
 
-        {/* Primary triad: photo + loud #; surname full-width below (no 4-char clamp) */}
+        {/* Primary: photo + single loud #; surname full-width below (no 4-char clamp) */}
         <div className="pitch-token-identity">
           <div className="pitch-token-identity-top">
-            <span
-              className="pitch-token-jersey-chip"
-              style={{
-                backgroundColor: chipFill,
-                borderColor: chipTrim,
-                color: numberAccent,
-              }}
-              title="Match kit"
-              aria-hidden
-            >
-              <span className="pitch-token-jersey-chip-num">{shirt}</span>
-            </span>
             <span
               className="pitch-token-photo"
               style={{ boxShadow: `inset 0 0 0 1px ${accent}55` }}

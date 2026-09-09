@@ -11,8 +11,10 @@ import {
 import {
   looksLikeNotebookPack,
   organiseNotebookPack,
+  organiseFreeformResearch,
   splitHookBullets,
   type CoachMember,
+  type OrganisedPack,
 } from "./notebook-organise";
 import {
   armTriggersFromNotes,
@@ -198,10 +200,11 @@ function tallyFromNotes(
 
 async function applyOrganised(
   args: DistributeArgs,
-  coaches: CoachMember[]
+  coaches: CoachMember[],
+  organiser: (a: Parameters<typeof organiseNotebookPack>[0]) => OrganisedPack = organiseNotebookPack
 ): Promise<DistributedCounts> {
   const distributed = emptyDistributed();
-  const organised = organiseNotebookPack({
+  const organised = organiser({
     text: args.content,
     matchId: args.matchId,
     homeClub: args.homeClub,
@@ -412,11 +415,17 @@ export async function applyPackDistribution(
   const coaches: CoachMember[] = args.coaches || [];
 
   try {
-    // Research pack OR any mega Notebook paste → smart organise (split-first)
+    // Research pack OR any mega Notebook paste → smart organise (split-first).
+    // Freeform / non-Notebook research still lands usable Notes (+ optional Intro).
+    if (templateKey === "research") {
+      const organiser = looksLikeNotebookPack(text)
+        ? organiseNotebookPack
+        : organiseFreeformResearch;
+      return await applyOrganised(args, coaches, organiser);
+    }
     if (
-      templateKey === "research" ||
-      (looksLikeNotebookPack(text) &&
-        !["intro", "lineup", "referee"].includes(templateKey))
+      looksLikeNotebookPack(text) &&
+      !["intro", "lineup", "referee"].includes(templateKey)
     ) {
       return await applyOrganised(args, coaches);
     }

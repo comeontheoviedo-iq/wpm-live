@@ -66,11 +66,20 @@ function surname(name: string) {
   return parts[parts.length - 1] || name;
 }
 
-/** Split markdown/plain text into heading → body sections. */
+/** Split markdown/plain text into heading → body sections.
+ *  Leading prose before the first heading is kept as "Overview"
+ *  (freeform pastes often have no headings at all). */
 export function splitByHeadings(text: string): { heading: string; body: string }[] {
   const lines = text.replace(/\r\n/g, "\n").split("\n");
   const sections: { heading: string; body: string }[] = [];
   let current: { heading: string; body: string } | null = null;
+  let preamble = "";
+
+  const pushPreamble = () => {
+    const body = preamble.trim();
+    if (body) sections.push({ heading: "Overview", body });
+    preamble = "";
+  };
 
   for (const raw of lines) {
     const line = raw.trimEnd();
@@ -94,12 +103,16 @@ export function splitByHeadings(text: string): { heading: string; body: string }
 
     if (heading) {
       if (current) sections.push(current);
+      else pushPreamble();
       current = { heading, body: "" };
     } else if (current) {
       current.body += (current.body ? "\n" : "") + line;
+    } else {
+      preamble += (preamble ? "\n" : "") + line;
     }
   }
   if (current) sections.push(current);
+  else pushPreamble();
   return sections;
 }
 

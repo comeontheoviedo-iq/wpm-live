@@ -5,10 +5,11 @@
  */
 
 import { namesLooselyMatch, normalizePlayerKey, lastToken } from "./player-name";
-import { splitByHeadings, type SquadMember } from "./pack-distribute";
+import { splitByHeadings, extractPlayerSections, type SquadMember } from "./pack-distribute";
 import {
   chunkPackBody,
   packBodyToCards,
+  bodyWithoutLeadingHeading,
   LEAGUE_NOTE_MAX_CHARS,
 } from "./pack-chunker";
 
@@ -1037,6 +1038,166 @@ export function organiseNotebookPack(args: OrganiseArgs): OrganisedPack {
       entityId: matchId,
       pinned: false,
     });
+  }
+
+  const playerNotes = notes.filter(
+    (n) => n.entityType === "player" && n.category === "Bio"
+  ).length;
+  const coachNotes = notes.filter((n) => n.entityType === "coach").length;
+  const hookNotes = notes.filter((n) => n.category === "Hook").length;
+  const clubNotes = notes.filter((n) => n.entityType === "club").length;
+  const leagueNotes = notes.filter((n) => n.entityType === "league").length;
+  const matchNotes = notes.filter(
+    (n) => n.entityType === "match" && n.category !== "Hook"
+  ).length;
+
+  return {
+    notes,
+    speaks,
+    summary: {
+      playerNotes,
+      coachNotes,
+      hookNotes,
+      clubNotes,
+      leagueNotes,
+      matchNotes,
+      intro: speaks.some((s) => /intro/i.test(s.title)),
+      lineup: speaks.some((s) => /lineup/i.test(s.title)),
+    },
+  };
+}
+
+/** Opening block that reads like an on-air intro / cold open. */
+function extractFreeformIntro(text: string): string | null {
+  const raw = (text || "").replace(/\r\n/g, "\n").trim();
+  if (raw.length < 80) return null;
+  const paras = raw
+    .split(/\n{2,}/)
+    .map((p) => p.trim())
+    .filter((p) => p.length >= 60 && !/^#{1,4}\s/.test(p));
+  const candidates = paras.slice(0, 3);
+  for (const p of candidates) {
+    if (
+      /good evening|welcome to|cold open|live from|ladies and gentlemen|we(?:'re|’re) under way|broadcast intro|kick-?off awaits|scene is set/i.test(
+        p
+      ) ||
+      (/tonight/i.test(p) &&
+        /welcome|floodlight|under way|kick-?off|commentary|parc des|stadium|goodison|anfield/i.test(
+          p
+        ))
+    ) {
+      // Keep Intro Speak scannable — freeform pastes often lack paragraph breaks
+      if (p.length <= 900) return p;
+      let cut = p.lastIndexOf(". ", 900);
+      if (cut < 400) cut = 900;
+      return p.slice(0, cut + (cut < 900 && p[cut] === "." ? 1 : 0)).trim();
+    }
+  }
+  // Labeled intro / script block
+  const labeled = raw.match(
+    /(?:^|\n)#{1,4}\s+(?:intro(?:ductory)?(?:\s+script)?|cold open|monologue)[^\n]*\n([\s\S]{80,2500}?)(?=\n#{1,4}\s+|$)/i
+  );
+  if (labeled?.[1]?.trim()) return labeled[1].trim();
+  return null;
+}
+
+/**
+ * Freeform / non-Notebook Research paste → usable desk Notes (+ optional Intro).
+ * Still runs the Notebook organiser first so keyword headings (Referee, Team news…)
+ * keep working; then fills gaps so a wall of prose never maps to nothing.
+ */
+export function organiseFreeformResearch(args: OrganiseArgs): OrganisedPack {
+  const base = organiseNotebookPack(args);
+  const text = (args.text || "").trim();
+  const notes: OrganisedNote[] = [...base.notes];
+  const speaks: OrganisedSpeak[] = [...base.speaks];
+  const { matchId, players } = args;
+
+  // Player bios from name-led paragraphs / headings
+  if (base.summary.playerNotes < 3) {
+    for (const ps of extractPlayerSections(text, players)) {
+      const exists = notes.some(
+        (n) =>
+          n.entityType === "player" &&
+          n.entityId === ps.player.id &&
+          n.category === "Bio"
+      );
+      if (exists) continue;
+      notes.push({
+        title: ps.title,
+        body: ps.body,
+        category: "Bio",
+        entityType: "player",
+        entityId: ps.player.id,
+      });
+    }
+  }
+
+  // Bite-sized hooks when the paste has numbered / bullet fillers
+  if (base.summary.hookNotes < 3) {
+    const seen = new Set(
+      notes.filter((n) => n.category === "Hook").map((n) => n.title)
+    );
+    for (const h of splitHookBullets(text).slice(0, 24)) {
+      if (seen.has(h.title)) continue;
+      seen.add(h.title);
+      notes.push({
+        title: h.title,
+        body: h.body,
+        category: "Hook",
+        entityType: "match",
+        entityId: matchId,
+        pinned: true,
+      });
+    }
+  }
+
+  // Always land scannable Research cards when match-level content is thin
+  const matchNonHook = notes.filter(
+    (n) => n.entityType === "match" && n.category !== "Hook"
+  );
+  const coveredChars = notes.reduce((n, x) => n + (x.body?.length || 0), 0);
+  const needsResearchCards =
+    matchNonHook.length === 0 ||
+    (text.length >= 200 && coveredChars < Math.min(400, text.length * 0.25));
+
+  if (needsResearchCards && text.length >= 40) {
+    // Freeform web/brief pastes often have Title Case citation lines
+    // ("Sports Mole", "WhoScored") that fake headings — always chunk the
+    // whole paste into stable "Research notes · N/M" desk cards.
+    const FREEFORM_CARD_CHARS = 400;
+    const parts = chunkPackBody(text, FREEFORM_CARD_CHARS);
+    const total = parts.length || 1;
+    for (let i = 0; i < parts.length; i++) {
+      let body = bodyWithoutLeadingHeading(parts[i]);
+      if (body.length > FREEFORM_CARD_CHARS) {
+        let cut = body.lastIndexOf(" ", FREEFORM_CARD_CHARS);
+        if (cut < FREEFORM_CARD_CHARS * 0.5) cut = FREEFORM_CARD_CHARS;
+        body = body.slice(0, cut).trim();
+      }
+      const title =
+        total > 1 ? `Research notes · ${i + 1}/${total}` : "Research notes";
+      if (notes.some((n) => n.title === title && n.body === body)) continue;
+      notes.push({
+        title,
+        body,
+        category: "Match",
+        entityType: "match",
+        entityId: matchId,
+      });
+    }
+  }
+
+  if (!speaks.some((s) => /intro/i.test(s.title))) {
+    const intro = extractFreeformIntro(text);
+    if (intro) {
+      speaks.push({
+        title: "Intro script",
+        body: intro,
+        timing: "pre-match",
+        order: 1,
+      });
+    }
   }
 
   const playerNotes = notes.filter(

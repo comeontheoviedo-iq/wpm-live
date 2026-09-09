@@ -44,6 +44,7 @@ export type NotesFilterScope =
   | "managers"
   | "venue"
   | "tonight"
+  | "viz"
   | string;
 
 const RAIL_BUCKETS = NOTES_BUCKET_ORDER;

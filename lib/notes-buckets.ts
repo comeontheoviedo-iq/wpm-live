@@ -6,6 +6,7 @@ import { lastToken, normalizePlayerKey } from "./player-name";
 
 export type NotesBucket =
   | "relevant"
+  | "viz"
   | "prematch"
   | "home"
   | "away"
@@ -38,6 +39,7 @@ export type NotesBucketContext = {
 
 const BUCKET_ORDER: NotesBucket[] = [
   "relevant",
+  "viz",
   "prematch",
   "home",
   "away",
@@ -154,6 +156,13 @@ export function isHistoryNote(n: NotesBucketNote): boolean {
   );
 }
 
+
+export function isVizNote(n: NotesBucketNote): boolean {
+  if (n.entityType === "viz") return true;
+  if (n.category === "Viz") return true;
+  return /^VIZ\b/i.test((n.title || "").trim());
+}
+
 export function isTonightNote(n: NotesBucketNote): boolean {
   if (isLiveEventNote(n)) return true;
   const h = hay(n);
@@ -170,6 +179,7 @@ export function isPrematchNote(n: NotesBucketNote): boolean {
   // League / H2H / History / Managers / Venue / Tonight / squad bios have
   // their own buckets; Prematch keeps short prep cards (team news, tactical,
   // referee, preview).
+  if (isVizNote(n)) return false;
   if (isLiveEventNote(n)) return false;
   if (isManagersNote(n) || isVenueNote(n) || isH2hNote(n) || isLeagueNote(n)) {
     return false;
@@ -287,6 +297,8 @@ export function noteMatchesBucket(
       return isAwayNote(n, ctx);
     case "tonight":
       return isTonightNote(n);
+    case "viz":
+      return isVizNote(n);
     case "prematch":
       return isPrematchNote(n);
     default:
@@ -364,6 +376,8 @@ export function notesBucketLabel(
       return "VENUE";
     case "tonight":
       return "TONIGHT";
+    case "viz":
+      return "VIZ";
     default:
       return String(bucket).toUpperCase();
   }

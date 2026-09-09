@@ -78,6 +78,7 @@ import {
   type MomentumSample,
   type VizPayload,
 } from "@/lib/viz-build";
+import { upsertVizNote } from "@/lib/viz-notes";
 import { DeskLiveExtras } from "@/components/match/world-class/desk-live-extras";
 import { StatsStoryStrip } from "@/components/match/world-class/stats-story-strip";
 import {
@@ -985,8 +986,29 @@ export function MatchDesk({
       setLivePopups((prev) =>
         prev.map((p) => (p.id === popupId ? { ...p, viz } : p))
       );
+      // Immediately archive into Notes -> VIZ (deduped) for later reference.
+      const host = livePopupsRef.current?.find((p) => p.id === popupId);
+      void upsertVizNote({
+        matchId,
+        viz,
+        homeName,
+        awayName,
+        scoreline:
+          host?.scoreline ||
+          `${homeName} ${scoreSampleRef.current.home}-${scoreSampleRef.current.away} ${awayName}`,
+        contextTitle: host?.title || null,
+      }).then((saved) => {
+        if (saved?.id) {
+          // Soft refresh notes rail without blocking the flash.
+          try {
+            router.refresh();
+          } catch {
+            /* ignore */
+          }
+        }
+      });
     },
-    [fetchAdvancedViz]
+    [fetchAdvancedViz, matchId, homeName, awayName, router]
   );
 
   const pushIntelHistory = useCallback((popup: LivePopup) => {

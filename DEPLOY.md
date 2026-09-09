@@ -47,3 +47,8 @@ If status is wrong, link site id 3e40a3db-dedb-46d2-b8aa-00db29153dad.
 
 Netlify Database applies SQL under netlify/database/migrations/ with privileges that allow CREATE on public (Prisma migrate deploy against NETLIFY_DB_URL hits permission denied on PG15+).
 Initial schema is mirrored from prisma/migrations into that folder. Keep editing Prisma schema/migrations as source of truth, then copy new SQL into netlify/database/migrations for deploys. Build runs prisma generate only.
+
+## Pre-kickoff hard sync (T-30)
+
+Netlify scheduled function `pre-kickoff-hard-sync` runs every 2 minutes and POSTs `/api/cron/pre-kickoff-hard-sync` (Bearer CRON_SECRET or AUTH_SECRET).
+Marks `Match.preKickoffHardSyncAt` after one successful full sync when kickoff is ≤31 minutes away.

@@ -9,3 +9,7 @@
 
 [build.environment]
   NODE_VERSION = "22"
+
+# T-30 pre-kickoff hard sync (also set inline via export const config in the function).
+[functions."pre-kickoff-hard-sync"]
+  schedule = "*/2 * * * *"

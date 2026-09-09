@@ -164,6 +164,7 @@ model Match {
   apiFootballFixtureId Int?
   lineupStatus         String          @default("expected")
   lastFeedSyncAt       DateTime?
+  preKickoffHardSyncAt DateTime?
   predictionsAdvice    String?
   predictionsJson      String?
   h2hSummary           String?

@@ -116,7 +116,7 @@ export function cardKitAccent(
   kit: MatchKitColors | null | undefined,
   isGk: boolean,
   clubPrimary: string
-): { strip: string; number: string } {
+): { strip: string; number: string; chip: string; chipTrim: string } {
   const fallback = normalizeHex(clubPrimary) || clubPrimary || "#94a3b8";
   const swatch =
     isGk && kit?.goalkeeper.primary
@@ -124,7 +124,8 @@ export function cardKitAccent(
       : kit?.player.primary
         ? kit.player
         : null;
-  let strip = swatch?.primary || fallback;
+  const truePrimary = swatch?.primary || fallback;
+  let strip = truePrimary;
 
   // Number colour: prefer feed number if visible on dark charcoal card
   const candidates = [
@@ -144,7 +145,18 @@ export function cardKitAccent(
   // If strip itself is very dark, keep a light number
   if (relativeLuminance(number) < 0.12) number = "#f8fafc";
 
-  // Charcoal cards swallow navy/black strips — lift the visible edge cue.
+  // Jersey chip keeps match-night truth (even navy) — edge may lift for charcoal.
+  const chip = truePrimary;
+  const chipTrim =
+    (swatch?.border && relativeLuminance(swatch.border) >= 0.12
+      ? swatch.border
+      : null) ||
+    (swatch?.number && relativeLuminance(swatch.number) >= 0.12
+      ? swatch.number
+      : null) ||
+    number;
+
+  // Charcoal cards swallow navy/black thin edges — lift edge/hairline only.
   if (relativeLuminance(strip) < 0.1) {
     const edgeAlts = [
       swatch?.border,
@@ -160,7 +172,7 @@ export function cardKitAccent(
     }
   }
 
-  return { strip, number };
+  return { strip, number, chip, chipTrim };
 }
 
 
@@ -247,4 +259,51 @@ export function playingColorsForMatch(match: {
     homeColor: sidePlayingColor(homeKit, match.homeClub.primaryColor),
     awayColor: sidePlayingColor(awayKit, match.awayClub.primaryColor),
   };
+}
+
+
+/**
+ * Match-night kit overrides when AF returns colors:null.
+ * Prefer tonight's truth over wrong last-known domestic strips.
+ * Keyed by apiFootballFixtureId.
+ */
+export const MATCH_KIT_OVERRIDES: Record<
+  number,
+  { home: MatchKitColors; away: MatchKitColors; note: string }
+> = {
+  // Stuttgart vs Viking — UCL 9 Sep 2026
+  // Stuttgart: CL home white + red Brustring. Viking: CL European home navy + pink
+  // (not domestic navy/white — clash + match-night photos).
+  1635741: {
+    note: "Stuttgart CL white/red home; Viking CL navy/pink European home",
+    home: {
+      player: { primary: "#ffffff", number: "#e11d48", border: "#e11d48" },
+      goalkeeper: { primary: "#111827", number: "#f8fafc", border: "#f8fafc" },
+    },
+    away: {
+      player: { primary: "#0b1b33", number: "#ff4fa3", border: "#ff4fa3" },
+      goalkeeper: { primary: "#f9a8d4", number: "#0b1b33", border: "#0b1b33" },
+    },
+  },
+};
+
+export function kitOverrideForFixture(
+  fixtureId: number | null | undefined
+): { home: MatchKitColors; away: MatchKitColors; note: string } | null {
+  if (fixtureId == null || !Number.isFinite(fixtureId)) return null;
+  return MATCH_KIT_OVERRIDES[fixtureId] || null;
+}
+
+/** True when stored kit already matches a fixture override (skip rewrite noise). */
+export function kitMatchesOverride(
+  json: string | null | undefined,
+  override: MatchKitColors
+): boolean {
+  const cur = parseStoredKit(json);
+  if (!cur?.player.primary || !override.player.primary) return false;
+  return (
+    cur.player.primary.toLowerCase() === override.player.primary.toLowerCase() &&
+    (cur.player.number || "").toLowerCase() ===
+      (override.player.number || "").toLowerCase()
+  );
 }

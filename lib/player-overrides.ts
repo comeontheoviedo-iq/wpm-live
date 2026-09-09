@@ -24,5 +24,6 @@ export function clampPitchCoord(n: unknown): number | null {
   if (n === null || n === undefined || n === "") return null;
   const v = Number(n);
   if (!Number.isFinite(v)) return null;
-  return Math.max(0, Math.min(100, Math.round(v * 10) / 10));
+  // 0.01% precision — tiny commentary nudges must stick first try (was 0.1).
+  return Math.max(0, Math.min(100, Math.round(v * 100) / 100));
 }

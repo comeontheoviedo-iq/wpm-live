@@ -15,6 +15,12 @@ import {
 import { Pin, Plus, Trash2, Search, X } from "lucide-react";
 import { cn, normalizeApostrophes } from "@/lib/utils";
 
+import {
+  extractVizPayload,
+  stripVizPayload,
+} from "@/lib/viz-notes";
+import type { VizPayload } from "@/lib/viz-build";
+
 export type NoteRow = {
   id: string;
   title: string;
@@ -85,6 +91,7 @@ export function NotesPanel({
   hideComposer,
   playerNameById,
   onNotePlayerClick,
+  onVizNoteClick,
   relevantNoteIds,
   relevantLoading,
 }: {
@@ -116,6 +123,8 @@ export function NotesPanel({
   playerNameById?: Record<string, string>;
   /** Click player-linked note → highlight on pitch / open dossier */
   onNotePlayerClick?: (playerId: string) => void;
+  /** Re-open the data-viz flash stored on a VIZ note. */
+  onVizNoteClick?: (viz: VizPayload, note: NoteRow) => void;
   /** LIVE: note ids ranked relevant to current match events */
   relevantNoteIds?: string[];
   /** Show loading pulse on Relevant chip */
@@ -303,7 +312,7 @@ export function NotesPanel({
     const filtered = notes.filter((n) => {
       if (!matchesScope(n, activeFilter)) return false;
       if (needle) {
-        const hay = `${normalizeApostrophes(n.title)} ${normalizeApostrophes(n.body)} ${n.category} ${
+        const hay = `${normalizeApostrophes(n.title)} ${normalizeApostrophes(stripVizPayload(n.body))} ${n.category} ${
           (n.entityId && playerNameById?.[n.entityId]) || ""
         }`.toLowerCase();
         if (!hay.includes(needle)) return false;
@@ -462,6 +471,14 @@ export function NotesPanel({
           playerLinked && "hover:border-white/20"
         )}
         onClick={() => {
+          // VIZ notes: reopen the stored data-viz popup/renderer.
+          if (onVizNoteClick && (n.entityType === "viz" || n.category === "Viz")) {
+            const viz = extractVizPayload(n.body);
+            if (viz) {
+              onVizNoteClick(viz, n);
+              return;
+            }
+          }
           if (railDense) {
             setPopupNoteId(n.id);
             return;
@@ -538,7 +555,7 @@ export function NotesPanel({
                   !expanded && "line-clamp-2"
                 )}
               >
-                {normalizeApostrophes(n.body)}
+                {normalizeApostrophes(stripVizPayload(n.body))}
               </p>
             )}
             {expanded && (playerName || n.pinned || relevantSet.has(n.id)) && (
@@ -831,7 +848,7 @@ export function NotesPanel({
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
               <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-slate-200">
-                {normalizeApostrophes(popupNote.body) || "No body."}
+                {normalizeApostrophes(stripVizPayload(popupNote.body)) || "No body."}
               </p>
               {popupNote.entityType === "player" &&
                 popupNote.entityId &&

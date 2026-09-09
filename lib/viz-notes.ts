@@ -5,6 +5,35 @@
 
 import type { VizPayload, VizFlashKind } from "@/lib/viz-build";
 
+/** Body fence so Notes can reopen the exact viz that was flashed. */
+export const VIZ_PAYLOAD_MARKER = "[[viz-payload]]";
+
+export function stripVizPayload(body: string): string {
+  const idx = body.indexOf(VIZ_PAYLOAD_MARKER);
+  if (idx < 0) return body;
+  return body.slice(0, idx).replace(/\s+$/, "");
+}
+
+export function embedVizPayload(body: string, viz: VizPayload): string {
+  const clean = stripVizPayload(body);
+  return `${clean}\n\n${VIZ_PAYLOAD_MARKER}\n${JSON.stringify(viz)}`;
+}
+
+export function extractVizPayload(body: string | null | undefined): VizPayload | null {
+  if (!body) return null;
+  const idx = body.indexOf(VIZ_PAYLOAD_MARKER);
+  if (idx < 0) return null;
+  const raw = body.slice(idx + VIZ_PAYLOAD_MARKER.length).trim();
+  try {
+    const parsed = JSON.parse(raw) as VizPayload;
+    if (!parsed || typeof parsed !== "object" || !parsed.kind) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+
 const KIND_TITLE: Record<VizFlashKind, string> = {
   shot_map: "Shot map",
   xg_race: "xG race",
@@ -224,12 +253,16 @@ export async function upsertVizNote(opts: {
   contextTitle?: string | null;
 }): Promise<{ id: string } | null> {
   try {
-    const { title, body, dedupeKey } = summarizeVizForNote(opts.viz, {
+    const summarized = summarizeVizForNote(opts.viz, {
       homeName: opts.homeName,
       awayName: opts.awayName,
       scoreline: opts.scoreline,
       contextTitle: opts.contextTitle,
     });
+    const title = summarized.title;
+    const dedupeKey = summarized.dedupeKey;
+    // Persist full viz payload so clicking the VIZ note reopens the same renderer.
+    const body = embedVizPayload(summarized.body, opts.viz);
     const q = new URLSearchParams({
       matchId: opts.matchId,
       entityType: "viz",

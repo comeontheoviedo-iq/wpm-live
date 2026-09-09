@@ -10,6 +10,17 @@ export type PlacedSlot<TSlot = { id: string; label: string }> = {
   side: "home" | "away";
 };
 
+/** Free-move / custom pitch coords — never shove these in collision resolve. */
+export function hasPinnedPitchCoords(player: unknown): boolean {
+  if (!player || typeof player !== "object") return false;
+  const p = player as { pitchX?: number | null; pitchY?: number | null };
+  return (
+    (p.pitchX != null && Number.isFinite(p.pitchX)) ||
+    (p.pitchY != null && Number.isFinite(p.pitchY))
+  );
+}
+
+
 /** Default gap between card AABBs (screen px). Prefer space over overlap. */
 export const CARD_GAP_PX = 8;
 
@@ -238,6 +249,10 @@ export function resolveCardOverlaps<T extends PlacedSlot>(
   };
 
   const separatePair = (a: Item, b: Item, depthBoost: number) => {
+    const aPinned = hasPinnedPitchCoords(a.player);
+    const bPinned = hasPinnedPitchCoords(b.player);
+    // Never shove commentator free-moves; skip if both pinned.
+    if (aPinned && bPinned) return false;
     const dx = b.px - a.px;
     const dy = b.py - a.py;
     const absDx = Math.abs(dx);
@@ -285,6 +300,14 @@ export function resolveCardOverlaps<T extends PlacedSlot>(
         b.px += push * sign;
       }
     }
+    if (aPinned) {
+      a.px = a.ox;
+      a.py = a.oy;
+    }
+    if (bPinned) {
+      b.px = b.ox;
+      b.py = b.oy;
+    }
     return true;
   };
 
@@ -296,6 +319,7 @@ export function resolveCardOverlaps<T extends PlacedSlot>(
         const a = items[i];
         const b = items[j];
         if (a.side !== b.side) continue;
+        if (hasPinnedPitchCoords(a.player) || hasPinnedPitchCoords(b.player)) continue;
         if (Math.abs(a.ox - b.ox) < Math.max(cardW * 0.35, containerW * 0.04)) continue; // same formation line
         const orderOk = a.ox <= b.ox ? a.px <= b.px : a.px >= b.px;
         if (orderOk) continue;
@@ -380,6 +404,14 @@ export function resolveCardOverlaps<T extends PlacedSlot>(
 
   return items.map((it) => {
     const { px, py, ox: _ox, oy: _oy, ...rest } = it;
+    // Custom free-move positions must stick — restore exact drop coords.
+    if (hasPinnedPitchCoords(it.player)) {
+      return {
+        ...(rest as unknown as T),
+        x: it.x,
+        y: it.y,
+      };
+    }
     return {
       ...(rest as unknown as T),
       x: (px / containerW) * 100,

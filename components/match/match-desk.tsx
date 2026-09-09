@@ -1131,6 +1131,28 @@ export function MatchDesk({
     []
   );
 
+  const reopenVizFromNote = useCallback(
+    (viz: VizPayload, note: { id: string; title: string; body: string }) => {
+      const id = `viz-note|${note.id}|reopen|${Date.now()}`;
+      const popup: LivePopup = {
+        id,
+        createdAt: Date.now(),
+        pinned: true,
+        kind: "fact",
+        title: note.title || "VIZ",
+        subtitle: "From Notes",
+        lines: [],
+        scoreline: `${homeName} ${scoreSampleRef.current.home}-${scoreSampleRef.current.away} ${awayName}`,
+        viz,
+      };
+      setLivePopups((prev) =>
+        [...prev.filter((p) => !p.id.startsWith(`viz-note|${note.id}`)), popup].slice(-5)
+      );
+      setMsg(`Reopened viz: ${note.title}`);
+    },
+    [homeName, awayName]
+  );
+
     const loadSuggestions = useCallback(
     async (
       news?: {
@@ -2847,6 +2869,7 @@ export function MatchDesk({
             liveMode={isLive || status === "Full Time"}
             hideComposer
             playerNameById={Object.fromEntries(squad.map((p) => [p.id, p.name]))}
+            onVizNoteClick={reopenVizFromNote}
             onNotePlayerClick={(playerId) => {
               const p = squad.find((s) => s.id === playerId);
               if (p) openPlayer(p);

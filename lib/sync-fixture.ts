@@ -43,6 +43,8 @@ import {
   markKitDistinctTried,
   DEFAULT_CLUB_PRIMARY,
   normalizeHex,
+  kitOverrideForFixture,
+  kitMatchesOverride
 } from "./kit-colors";
 import { leagueIdForCompetition } from "./competitions";
 import { resolveWeatherForVenue } from "./weather";
@@ -1745,8 +1747,41 @@ async function runSyncMatchFromApiFootball(
     lineupStatus = match.lineupStatus || "expected";
   }
 
-  // Resolve strip colours: this fixture first, else last-known for the side.
-  if (needKitColors) {
+  // Resolve strip colours: match-night override > this fixture > last-known.
+  const kitOverride = kitOverrideForFixture(match.apiFootballFixtureId);
+  const bumpClubPrimary = async (clubId: string, kitJson: string) => {
+    const kit = parseAfTeamColors(
+      (() => {
+        try {
+          return JSON.parse(kitJson);
+        } catch {
+          return null;
+        }
+      })()
+    );
+    const primary = kit?.player.primary;
+    if (!primary) return;
+    const club = await prisma.club.findUnique({ where: { id: clubId } });
+    if (!club) return;
+    const cur = (normalizeHex(club.primaryColor) || club.primaryColor || "").toLowerCase();
+    if (cur && cur !== DEFAULT_CLUB_PRIMARY.toLowerCase()) return;
+    await prisma.club.update({
+      where: { id: clubId },
+      data: { primaryColor: primary },
+    });
+  };
+
+  if (kitOverride) {
+    const homeDone = kitMatchesOverride(homeKitJson, kitOverride.home);
+    const awayDone = kitMatchesOverride(awayKitJson, kitOverride.away);
+    if (!homeDone || !awayDone) {
+      homeKitJson = serializeKit(kitOverride.home);
+      awayKitJson = serializeKit(kitOverride.away);
+      kitsResolvedThisSync = true;
+      await bumpClubPrimary(match.homeClubId, homeKitJson).catch(() => null);
+      await bumpClubPrimary(match.awayClubId, awayKitJson).catch(() => null);
+    }
+  } else if (needKitColors) {
     const homeLu = lineups.find((l) => l.team.id === homeAfId);
     const awayLu = lineups.find((l) => l.team.id === awayAfId);
     const resolveSide = async (
@@ -1783,27 +1818,6 @@ async function runSyncMatchFromApiFootball(
     kitsResolvedThisSync = true;
 
     // Upgrade default teal club primaries from resolved kits (scorebug + fallback).
-    const bumpClubPrimary = async (clubId: string, kitJson: string) => {
-      const kit = parseAfTeamColors(
-        (() => {
-          try {
-            return JSON.parse(kitJson);
-          } catch {
-            return null;
-          }
-        })()
-      );
-      const primary = kit?.player.primary;
-      if (!primary) return;
-      const club = await prisma.club.findUnique({ where: { id: clubId } });
-      if (!club) return;
-      const cur = (normalizeHex(club.primaryColor) || club.primaryColor || "").toLowerCase();
-      if (cur && cur !== DEFAULT_CLUB_PRIMARY.toLowerCase()) return;
-      await prisma.club.update({
-        where: { id: clubId },
-        data: { primaryColor: primary },
-      });
-    };
     await bumpClubPrimary(match.homeClubId, homeKitJson).catch(() => null);
     await bumpClubPrimary(match.awayClubId, awayKitJson).catch(() => null);
   }

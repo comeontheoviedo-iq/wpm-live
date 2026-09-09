@@ -335,11 +335,12 @@ function PitchCardToken({
 
   // Craft: charcoal body; kit strip = edge bar + hairline; shirt # from kit number
   const fallbackAccent = teamColor || (isHome ? "#f8fafc" : "#94a3b8");
-  const { strip: accent, number: numberAccent } = cardKitAccent(
-    kit,
-    isGk,
-    fallbackAccent
-  );
+  const {
+    strip: accent,
+    number: numberAccent,
+    chip: chipFill,
+    chipTrim,
+  } = cardKitAccent(kit, isGk, fallbackAccent);
   const band = "text-[var(--card-fg)]";
 
   const cols = cardSettings.fieldsPerRow;
@@ -471,7 +472,7 @@ function PitchCardToken({
           .filter(Boolean)
           .join(" · ")}
       >
-        {/* Kit strip cue — left edge + top hairline (readable at small card size) */}
+        {/* Kit strip cue — thick edge + hairline + jersey chip (match-night truth) */}
         <span
           className="pitch-token-kit-edge"
           style={{ backgroundColor: accent }}
@@ -480,13 +481,25 @@ function PitchCardToken({
         />
         <span
           className="pitch-token-hairline"
-          style={{ backgroundColor: accent }}
+          style={{ backgroundColor: chipFill }}
           aria-hidden
         />
 
         {/* Primary triad: photo + loud #; surname full-width below (no 4-char clamp) */}
         <div className="pitch-token-identity">
           <div className="pitch-token-identity-top">
+            <span
+              className="pitch-token-jersey-chip"
+              style={{
+                backgroundColor: chipFill,
+                borderColor: chipTrim,
+                color: numberAccent,
+              }}
+              title="Match kit"
+              aria-hidden
+            >
+              <span className="pitch-token-jersey-chip-num">{shirt}</span>
+            </span>
             <span
               className="pitch-token-photo"
               style={{ boxShadow: `inset 0 0 0 1px ${accent}55` }}
@@ -1184,8 +1197,20 @@ export function PitchBoard({
       payload.playerId || e.dataTransfer.getData("text/plain");
     if (!playerId) return;
     if (payload.side && payload.side !== side) return;
-    // Alt/Option = free-move at drop point instead of slot snap
-    if (e.altKey && onFreePlace && pitchRef.current) {
+
+    const dropSide = (payload.side as "home" | "away") || side;
+    const occupant = all.find(
+      (row) => row.side === side && row.slot.id === slotId
+    )?.player;
+    // Commentary-friendly: nudge / same-card drop = free-move at exact coords.
+    // Slot snap only when dropping onto a *different* player's slot (swap),
+    // or when free-place is unavailable. Alt still forces free-move.
+    // Nudge = same card (or Alt). Empty slot / other player → keep slot snap/swap.
+    const isNudge =
+      Boolean(onFreePlace) &&
+      (e.altKey || Boolean(occupant && occupant.id === playerId));
+
+    if (isNudge && onFreePlace && pitchRef.current) {
       const rect = pitchRef.current.getBoundingClientRect();
       if (rect.width > 0 && rect.height > 0) {
         const pitchX = Math.max(
@@ -1197,7 +1222,7 @@ export function PitchBoard({
           Math.min(100, ((e.clientY - rect.top) / rect.height) * 100)
         );
         onFreePlace({
-          side: (payload.side as "home" | "away") || side,
+          side: dropSide,
           playerId,
           pitchX,
           pitchY,
@@ -1295,7 +1320,7 @@ export function PitchBoard({
           background:
             "linear-gradient(180deg, rgba(0,0,0,0.12), transparent 18%, transparent 82%, rgba(0,0,0,0.14)), linear-gradient(90deg, rgba(0,0,0,0.08), transparent 10%, transparent 90%, rgba(0,0,0,0.08)), repeating-linear-gradient(90deg, #176f38 0 7.5%, #1c8240 7.5% 15%)",
         }}
-       onDragOver={(e) => { if (!locked && onFreePlace) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; } }} onDrop={handlePitchFreeDrop} title={onFreePlace ? "Drop on grass for free place · Alt+drop on slot also free-moves" : undefined}>
+       onDragOver={(e) => { if (!locked && onFreePlace) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; } }} onDrop={handlePitchFreeDrop} title={onFreePlace ? "Drag to nudge — drop sticks immediately · drop on another card to swap" : undefined}>
         {/* S / M legend — season vs match card stats */}
         {!onAirMode && (
           <div className="pointer-events-none absolute bottom-1.5 right-1.5 z-20 rounded bg-black/45 px-1.5 py-0.5 text-[7px] font-semibold tracking-wide text-white/80 whitespace-nowrap">

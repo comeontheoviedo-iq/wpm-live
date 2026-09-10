@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { NOTE_CATEGORIES } from "@/lib/defaults";
@@ -776,12 +777,14 @@ export function NotesPanel({
         </div>
       </CardBody>
 
-      {popupNote && (
+      {popupNote &&
+        createPortal(
         <div
-          className="fixed inset-0 z-[90] flex items-center justify-center p-4 animate-fade-in"
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-fade-in"
           role="dialog"
           aria-modal="true"
           aria-labelledby="note-popup-title"
+          data-pitchline-note-popup="1"
         >
           <button
             type="button"
@@ -869,7 +872,8 @@ export function NotesPanel({
               Esc or × to close
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </Card>
   );

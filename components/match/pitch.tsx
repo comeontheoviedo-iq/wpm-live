@@ -1327,7 +1327,7 @@ export function PitchBoard({
         </div>
 
         {/* Top chrome: slim formation+SUB+coach | scoreboard | mirror */}
-        <div className="pointer-events-none absolute left-2 right-2 top-2 z-20 flex items-start justify-between gap-3">
+        <div className="pointer-events-none absolute left-1.5 right-1.5 top-1 z-20 flex items-start justify-between gap-2">
           {([leftChrome, rightChrome] as const).map((chrome, idx) => {
             const alignEnd = idx === 1;
             const sw =
@@ -1336,7 +1336,7 @@ export function PitchBoard({
               <div
                 key={chrome.side + (alignEnd ? "-R" : "-L")}
                 className={cn(
-                  "pointer-events-auto flex max-w-[42%] flex-col gap-0.5",
+                  "pointer-events-auto flex max-w-[34%] flex-col gap-0.5",
                   alignEnd ? "items-end" : "items-start"
                 )}
               >
@@ -1434,7 +1434,7 @@ export function PitchBoard({
         </div>
 
         {/* Center scorebug — craft TV eyebar (crest | score | clock | crest) */}
-        <div className="pointer-events-none absolute left-1/2 top-1.5 z-20 flex w-[min(58%,26rem)] -translate-x-1/2 flex-col items-center gap-1">
+        <div className="pointer-events-none absolute left-1/2 top-1 z-20 flex w-[min(52%,22rem)] -translate-x-1/2 flex-col items-center gap-0.5">
           {showScore && (
             <div className="scorebug pointer-events-auto">
               {leagueLogoUrl ? (

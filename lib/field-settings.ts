@@ -127,7 +127,7 @@ export const DEFAULT_REFEREE_CARD: RefereeCardSettings = {
 };
 
 export const DEFAULT_FIELD_SETTINGS: FieldSettings = {
-  markerSizePct: -25,
+  markerSizePct: -18,
   nameSizePct: 0,
   dataRows: 2,
   fieldsPerRow: 4,

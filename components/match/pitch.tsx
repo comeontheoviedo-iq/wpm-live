@@ -633,7 +633,7 @@ function CoachChip({
   ]
     .filter(Boolean)
     .join(" · ");
-  const namePx = (compact ? 10 : 11) * scaleFactor(namePct);
+  const namePx = (compact ? 9 : 11) * scaleFactor(namePct);
   return (
     <Comp
       type={onClick ? "button" : undefined}
@@ -642,7 +642,7 @@ function CoachChip({
       className={cn(
         "pitch-overlay-chip flex items-center text-left",
         compact
-          ? "max-w-[11rem] gap-1 px-1 py-0.5"
+          ? "max-w-[9rem] gap-0.5 px-0.5 py-px"
           : "max-w-[13.5rem] gap-1.5 px-1.5 py-1",
         isHome ? "border-slate-800/70" : "",
         onClick && "pointer-events-auto cursor-pointer hover:ring-2 hover:ring-teal-400/50"
@@ -653,7 +653,7 @@ function CoachChip({
         <span
           className={cn(
             "relative flex shrink-0 items-center justify-center overflow-hidden rounded",
-            compact ? "h-5 w-5 rounded-sm" : "h-9 w-9 rounded-md",
+            compact ? "h-4 w-4 rounded-sm" : "h-9 w-9 rounded-md",
             "bg-black/40 ring-1 ring-white/15"
           )}
         >
@@ -678,7 +678,7 @@ function CoachChip({
               photo ? "hidden" : "flex"
             )}
           >
-            <User className={compact ? "h-3 w-3" : "h-5 w-5"} strokeWidth={1.5} />
+            <User className={compact ? "h-2.5 w-2.5" : "h-5 w-5"} strokeWidth={1.5} />
           </span>
         </span>
       ) : null}
@@ -686,7 +686,7 @@ function CoachChip({
         {showFlag ? (
           <FlagImg
             nationality={coach.nationality}
-            className={compact ? "h-2.5 w-3.5" : "h-3 w-[1.05rem]"}
+            className={compact ? "h-2 w-3" : "h-3 w-[1.05rem]"}
           />
         ) : null}
         <div
@@ -989,7 +989,7 @@ export function PitchBoard({
   // Settings. Never clamp userAdjusted markerSizePct (slider −40…+40 must show).
   const liveDesiredPct =
     liveCompact && !resolvedSettings.userAdjusted
-      ? Math.min(resolvedMarkerPct, -35)
+      ? Math.min(resolvedMarkerPct, -28)
       : resolvedMarkerPct;
   // Keep dataRows from Field Settings (default 2) so M GOL / M AST stay visible
   // on LIVE — only shrink marker size for quieter cards when unset by user.
@@ -1327,7 +1327,7 @@ export function PitchBoard({
         </div>
 
         {/* Top chrome: slim formation+SUB+coach | scoreboard | mirror */}
-        <div className="pointer-events-none absolute left-1.5 right-1.5 top-1 z-20 flex items-start justify-between gap-2">
+        <div className="pointer-events-none absolute left-1 right-1 top-0.5 z-20 flex items-start justify-between gap-1.5">
           {([leftChrome, rightChrome] as const).map((chrome, idx) => {
             const alignEnd = idx === 1;
             const sw =
@@ -1336,7 +1336,7 @@ export function PitchBoard({
               <div
                 key={chrome.side + (alignEnd ? "-R" : "-L")}
                 className={cn(
-                  "pointer-events-auto flex max-w-[34%] flex-col gap-0.5",
+                  "pointer-events-auto flex max-w-[28%] flex-col gap-px",
                   alignEnd ? "items-end" : "items-start"
                 )}
               >
@@ -1348,7 +1348,7 @@ export function PitchBoard({
                 >
                   <div
                     className={cn(
-                      "pitch-overlay-chip flex items-center gap-0.5 px-1 py-px text-[9px] leading-none",
+                      "pitch-overlay-chip flex items-center gap-0.5 px-0.5 py-px text-[8px] leading-none",
                       chrome.light
                         ? "bg-[var(--bug-bg-elevated)] border-white/20 text-[var(--bug-fg)]"
                         : "text-white"
@@ -1365,7 +1365,7 @@ export function PitchBoard({
                     {formationOptions && onFormationChange ? (
                       <select
                         className={cn(
-                          "bg-transparent font-semibold max-w-[6.25rem] outline-none",
+                          "bg-transparent font-semibold max-w-[5.5rem] outline-none",
                           !chrome.light && "text-white"
                         )}
                         value={chrome.formation}
@@ -1387,7 +1387,7 @@ export function PitchBoard({
                   </div>
                   {sw && sw.max > 0 ? (
                     <div
-                      className="pitch-overlay-chip-dark flex items-center gap-0.5 px-1 py-px text-[7.5px] font-semibold tracking-wide text-white leading-none"
+                      className="pitch-overlay-chip-dark flex items-center gap-0.5 px-0.5 py-px text-[7px] font-semibold tracking-wide text-white leading-none"
                       title={
                         sw.windowsHeuristic
                           ? "Sub windows estimated from event minutes"
@@ -1434,7 +1434,7 @@ export function PitchBoard({
         </div>
 
         {/* Center scorebug — craft TV eyebar (crest | score | clock | crest) */}
-        <div className="pointer-events-none absolute left-1/2 top-1 z-20 flex w-[min(52%,22rem)] -translate-x-1/2 flex-col items-center gap-0.5">
+        <div className="pointer-events-none absolute left-1/2 top-0.5 z-20 flex w-[min(44%,18.5rem)] -translate-x-1/2 flex-col items-center gap-px">
           {showScore && (
             <div className="scorebug pointer-events-auto">
               {leagueLogoUrl ? (
@@ -2038,7 +2038,7 @@ export function PitchBoard({
                         : referee
                     }
                     className={cn(
-                      "pitch-overlay-chip-dark flex max-w-[16rem] items-center gap-1.5 rounded-full px-2 py-1",
+                      "pitch-overlay-chip-dark flex max-w-[14rem] items-center gap-1 rounded-full px-1.5 py-0.5",
                       onOpenFieldSettings &&
                         "pointer-events-auto cursor-pointer hover:ring-2 hover:ring-teal-400/50"
                     )}

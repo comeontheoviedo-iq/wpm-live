@@ -2838,8 +2838,8 @@ export function MatchDesk({
           onAirMode
             ? "lg:grid-cols-[minmax(0,1fr)]"
             : hideSquadRail
-              ? "lg:grid-cols-[minmax(220px,280px)_minmax(0,1fr)]"
-              : "lg:grid-cols-[minmax(220px,260px)_minmax(0,1fr)_minmax(180px,200px)]"
+              ? "lg:grid-cols-[minmax(180px,210px)_minmax(0,1.45fr)] xl:grid-cols-[minmax(170px,195px)_minmax(0,1.55fr)]"
+              : "lg:grid-cols-[minmax(180px,205px)_minmax(0,1.45fr)_minmax(145px,160px)] xl:grid-cols-[minmax(165px,185px)_minmax(0,1.6fr)_minmax(135px,150px)]"
         )}
       >
         {!onAirMode && (

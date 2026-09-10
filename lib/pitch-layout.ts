@@ -61,7 +61,7 @@ export function geometricMaxMarkerPct(
   const gap = CARD_GAP_PX;
   // Expanded half bands are ~46% of pitch width (home 2→48, away 52→98).
   const halfW = Math.max(100, containerW * 0.46);
-  const usableH = Math.max(120, containerH - 56);
+  const usableH = Math.max(120, containerH - 42);
   // Depth axis (X): 6 formation lines with gaps
   const maxScaleDepth = halfW / (6 * baseW + 5 * gap);
   // Lateral axis (Y): typical back-four / midfield line (4), not worst-case 5
@@ -138,7 +138,25 @@ export function fitMarkerPctForContainer(
     );
   };
 
-  if (fits(ceiling)) return ceiling;
+  if (fits(ceiling)) {
+    // Grow into spare pitch room (wider desk / tighter chrome) so tokens
+    // do not sit as tiny islands — never above geoMax or 0% without user slider.
+    const growCap = clampPct(Math.min(Math.max(ceiling, geoMax), 0));
+    if (growCap <= ceiling) return ceiling;
+    let lo = ceiling;
+    let hi = growCap;
+    let best = ceiling;
+    while (lo <= hi) {
+      const mid = Math.floor((lo + hi) / 2);
+      if (fits(mid)) {
+        best = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    return clampPct(best);
+  }
 
   let lo = -40;
   let hi = ceiling;

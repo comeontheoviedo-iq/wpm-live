@@ -32,6 +32,7 @@ import {
   getCoachByTeam,
   searchCoaches,
   mapAfStatus,
+  AF_LIVE_TTL_MS,
   parsePercent,
   summarizeH2h,
   type AfEvent,
@@ -1697,20 +1698,107 @@ async function syncRefereeFromFixture(matchId: string, refereeName?: string | nu
 
 export type SyncMode = "live" | "full";
 
-/** One in-flight sync writer per matchId so desk+overlay+tabs coalesce. */
+/**
+ * In-flight sync writers.
+ * Live mode keys by AF fixture id (`af:{id}`) so desks/overlays watching the
+ * same live fixture share one upstream pull — see docs/AF_FIXTURE_FANIN.md.
+ * Full enrich stays per matchId.
+ */
 const syncInflight = new Map<string, Promise<unknown>>();
+
+function liveFanInKey(apiFootballFixtureId: number) {
+  return `af:${apiFootballFixtureId}`;
+}
+
+function matchSyncKey(matchId: string) {
+  return `match:${matchId}`;
+}
+
+export type SyncMatchOpts = {
+  resetPlacements?: boolean;
+  mode?: SyncMode;
+  /** Internal: sibling apply after fixture fan-in leader — no further fan-out. */
+  fromFanIn?: boolean;
+};
+
+async function freshLiveSkipPayload(matchId: string) {
+  const match = await prisma.match.findUnique({ where: { id: matchId } });
+  if (!match) throw new Error("Match not found");
+  return {
+    match,
+    mode: "live" as const,
+    skipped: true as const,
+    skipReason: "fixture-fan-in-fresh" as const,
+    fanIn: true as const,
+    lineupCount: 0,
+    eventCount: 0,
+    newEvents: [] as {
+      type: string;
+      minute: number;
+      description: string;
+      playerId?: string | null;
+      seasonLines?: string[];
+      assistSeasonLines?: string[];
+    }[],
+    lineupStatus: match.lineupStatus || "expected",
+    previousLineupStatus: match.lineupStatus || "expected",
+    lineupPack: null as null,
+    notesReconcile: null as null,
+    squadHome: 0,
+    squadAway: 0,
+    injuryCount: 0,
+    predictionsAdvice: match.predictionsAdvice,
+    h2hSummary: match.h2hSummary,
+    expectedFrom: null as null,
+    venueName: null as null,
+    weatherSummary: match.weatherSummary,
+    statsCount: 0,
+    livePlayerStats: [] as unknown[],
+    scorersSynced: 0,
+    keepersSynced: 0,
+  };
+}
 
 export async function syncMatchFromApiFootball(
   matchId: string,
-  opts?: { resetPlacements?: boolean; mode?: SyncMode }
+  opts?: SyncMatchOpts
 ) {
   const mode: SyncMode = opts?.mode === "live" ? "live" : "full";
+  const fromFanIn = Boolean(opts?.fromFanIn);
 
-  const existing = syncInflight.get(matchId);
+  const meta = await prisma.match.findUnique({
+    where: { id: matchId },
+    select: { apiFootballFixtureId: true, lastFeedSyncAt: true },
+  });
+  if (!meta) throw new Error("Match not found");
+
+  // Multi-tab / fan-in waiter: desk already fresh within AF live TTL.
+  if (
+    mode === "live" &&
+    meta.lastFeedSyncAt &&
+    Date.now() - meta.lastFeedSyncAt.getTime() < AF_LIVE_TTL_MS
+  ) {
+    return freshLiveSkipPayload(matchId);
+  }
+
+  const afId = meta.apiFootballFixtureId;
+  // Leader live polls coalesce on fixture id; sibling applies use match key.
+  const fanKey =
+    mode === "live" && afId != null && !fromFanIn
+      ? liveFanInKey(afId)
+      : matchSyncKey(matchId);
+
+  const existing = syncInflight.get(fanKey);
   if (existing) {
     if (mode === "live") {
-      // Live polls share whatever is already running (live or full).
-      return existing as ReturnType<typeof runSyncMatchFromApiFootball>;
+      await existing.catch(() => null);
+      // Leader finished — we may already be fresh via sibling fan-out, or need
+      // a cache-warm apply for this desk only.
+      return syncMatchFromApiFootball(matchId, {
+        resetPlacements: opts?.resetPlacements,
+        mode: "live",
+        fromFanIn: true,
+      });
     }
     // Full Sync waits for the in-flight pass, then runs full enrich.
     await existing.catch(() => null);
@@ -1720,10 +1808,34 @@ export async function syncMatchFromApiFootball(
     resetPlacements: opts?.resetPlacements,
     mode,
   }).finally(() => {
-    if (syncInflight.get(matchId) === run) syncInflight.delete(matchId);
+    if (syncInflight.get(fanKey) === run) syncInflight.delete(fanKey);
   });
-  syncInflight.set(matchId, run);
-  return run;
+  syncInflight.set(fanKey, run);
+
+  const result = await run;
+
+  // After the fixture leader finishes, apply to other desks on the same AF id
+  // (AF HTTP cache is warm — no duplicate upstream quota burn).
+  if (mode === "live" && !fromFanIn && afId != null) {
+    const siblings = await prisma.match.findMany({
+      where: { apiFootballFixtureId: afId, id: { not: matchId } },
+      select: { id: true, lastFeedSyncAt: true },
+    });
+    for (const sib of siblings) {
+      const age = sib.lastFeedSyncAt
+        ? Date.now() - sib.lastFeedSyncAt.getTime()
+        : Number.POSITIVE_INFINITY;
+      if (age < AF_LIVE_TTL_MS) continue;
+      void syncMatchFromApiFootball(sib.id, {
+        mode: "live",
+        fromFanIn: true,
+      }).catch((err) =>
+        console.warn("[sync] AF fixture fan-in sibling failed", sib.id, err)
+      );
+    }
+  }
+
+  return { ...result, fanIn: mode === "live" && afId != null };
 }
 
 async function runSyncMatchFromApiFootball(

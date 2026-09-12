@@ -84,3 +84,7 @@ See `lib/live-stat-triggers.ts` + `lib/game-state-notes.ts`.
 
 Expanded catalogue (15 kinds), sources, rotation, and gaps: see
 [`DATA_VIZ_FLASH.md`](./DATA_VIZ_FLASH.md).
+
+## Fixture fan-in
+
+Live desks sharing the same AF fixture id coalesce sync — see [`AF_FIXTURE_FANIN.md`](./AF_FIXTURE_FANIN.md).

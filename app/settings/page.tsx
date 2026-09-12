@@ -30,6 +30,9 @@ type Tab =
 
 type PlanStatus = {
   plan: "base" | "intel";
+  commercialPlan?: "unlimited";
+  commercialName?: string;
+  commercialPrice?: string;
   envPlan: "base" | "intel";
   override: "base" | "intel" | null;
   hasIntel: boolean;
@@ -37,7 +40,9 @@ type PlanStatus = {
   canUseGeminiBrief: boolean;
   canAutoGenPack: boolean;
   stripe?: string;
+  stripeConfigured?: boolean;
   copy?: {
+    unlimited?: { name: string; price: string; includes: string[]; aka?: string };
     base: { name: string; price: string; includes: string[] };
     intel: { name: string; price: string; includes: string[]; softCaps?: string };
     rivalCompare?: string;
@@ -125,6 +130,44 @@ export default function SettingsPage() {
     }
   }
 
+  async function startUnlimitedCheckout() {
+    setPlanBusy(true);
+    setPlanMsg(null);
+    try {
+      const res = await fetch("/api/billing/checkout", { method: "POST" });
+      const json = await res.json();
+      if (res.status === 503) {
+        setPlanMsg(String(json.todo || "Stripe keys not configured yet."));
+        return;
+      }
+      if (!res.ok || !json.url) throw new Error(String(json.error || "Checkout failed"));
+      window.location.href = String(json.url);
+    } catch (e) {
+      setPlanMsg(e instanceof Error ? e.message : "Checkout failed");
+    } finally {
+      setPlanBusy(false);
+    }
+  }
+
+  async function openBillingPortal() {
+    setPlanBusy(true);
+    setPlanMsg(null);
+    try {
+      const res = await fetch("/api/billing/portal", { method: "POST" });
+      const json = await res.json();
+      if (res.status === 503) {
+        setPlanMsg(String(json.todo || "Stripe keys not configured yet."));
+        return;
+      }
+      if (!res.ok || !json.url) throw new Error(String(json.error || json.hint || "Portal failed"));
+      window.location.href = String(json.url);
+    } catch (e) {
+      setPlanMsg(e instanceof Error ? e.message : "Portal failed");
+    } finally {
+      setPlanBusy(false);
+    }
+  }
+
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center text-sm text-slate-500">
@@ -152,7 +195,7 @@ export default function SettingsPage() {
           <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Hub · Settings</p>
           <h1 className="mt-1 text-base font-bold tracking-tight sm:text-lg">Settings</h1>
           <p className="mt-0.5 text-[11px] text-[var(--muted)]">
-            BYO research is the default on Base. Gemini features require the Intel add-on.
+            Unlimited (Basic) £22/mo — BYO Notebook is core. AI lab features are testing-only, not a separate paid tier.
           </p>
         </div>
         <div className="grid md:grid-cols-4 gap-4">
@@ -213,7 +256,7 @@ export default function SettingsPage() {
               <Card>
                 <CardHeader><CardTitle className="flex items-center gap-2"><Plug className="h-4 w-4" /> Integrations</CardTitle></CardHeader>
                 <CardBody className="space-y-4 text-sm">
-                  <p className="text-slate-500">Optional keys in <code className="font-mono">.env</code>: live-feed key, <code className="font-mono">GEMINI_API_KEY</code>, plan env. A Gemini key alone does <strong>not</strong> unlock Auto Gen / briefs on Base — Intel plan required.</p>
+                  <p className="text-slate-500">Optional keys: live-feed, <code className="font-mono">GEMINI_API_KEY</code>, <code className="font-mono">PITCHLINE_PLAN</code>. Commercial plan is Unlimited £22. A Gemini key alone does <strong>not</strong> unlock Auto Gen — AI lab gate required.</p>
                   <div className="flex flex-wrap gap-2">
                     <span className={apiFootball ? "rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200 px-2.5 py-1 text-xs font-medium" : "rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 px-2.5 py-1 text-xs font-medium"}>Live feed {apiFootball ? "configured" : "not configured"}</span>
                     <span className={gemini ? "rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200 px-2.5 py-1 text-xs font-medium" : "rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 px-2.5 py-1 text-xs font-medium"}>Gemini key {gemini ? "present" : "not set"}</span>
@@ -231,49 +274,55 @@ export default function SettingsPage() {
                   <CardTitle className="flex items-center gap-2"><Sparkles className="h-4 w-4" /> Plan</CardTitle>
                 </CardHeader>
                 <CardBody className="text-sm space-y-4">
-                  <div className={cn("rounded-xl p-4 text-white", plan?.hasIntel ? "bg-gradient-to-r from-violet-600 to-teal-600" : "bg-gradient-to-r from-teal-600 to-emerald-600")}>
-                    <div className="text-xs uppercase tracking-wide opacity-80">Current plan</div>
-                    <div className="text-xl font-bold mt-1">{plan?.hasIntel ? "Intel" : "Base (Matchday)"}</div>
+                  <div className="rounded-xl p-4 text-white bg-gradient-to-r from-teal-600 to-emerald-600">
+                    <div className="text-xs uppercase tracking-wide opacity-80">Commercial plan</div>
+                    <div className="text-xl font-bold mt-1">
+                      {plan?.commercialName || plan?.copy?.unlimited?.name || "Unlimited"} · {plan?.commercialPrice || plan?.copy?.unlimited?.price || "£22"}/mo
+                    </div>
                     <p className="text-sm opacity-90 mt-1">
-                      {plan?.hasIntel
-                        ? "Gemini brief, Auto Gen packs, note-draft, optional re-rank unlocked."
-                        : "BYO Notebook + RSS + live-feed sync. Gemini features gated until Intel."}
+                      BYO Notebook is core. Full matchday desk — no separate Intel paid tier at launch.
                     </p>
+                  </div>
+                  <div className="rounded-xl border border-teal-200 dark:border-teal-900 p-4 space-y-3">
+                    <div className="font-medium">Billing</div>
+                    <p className="text-xs text-slate-500">{plan?.stripe || "Stripe path scaffolds Checkout when keys exist."}</p>
+                    <div className="flex flex-wrap gap-2">
+                      <Button type="button" disabled={planBusy} onClick={startUnlimitedCheckout}>
+                        Subscribe Unlimited £22
+                      </Button>
+                      <Button type="button" variant="outline" disabled={planBusy} onClick={openBillingPortal}>
+                        Manage billing
+                      </Button>
+                    </div>
+                    {planMsg && <p className="text-xs text-slate-600 dark:text-slate-300 whitespace-pre-wrap">{planMsg}</p>}
+                  </div>
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+                    <div className="text-xs font-semibold text-teal-700 dark:text-teal-300">
+                      {`Unlimited · ${plan?.copy?.unlimited?.price || plan?.copy?.base.price || "£22"}/mo`}
+                    </div>
+                    <ul className="mt-2 space-y-1 text-xs text-slate-600 dark:text-slate-300">
+                      {(plan?.copy?.unlimited?.includes || plan?.copy?.base.includes || ["BYO Notebook", "RSS", "Live sync", "OBS / dossiers / Stats"]).map((f) => (
+                        <li key={f}>· {f}</li>
+                      ))}
+                    </ul>
                   </div>
                   <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 space-y-3">
-                    <div className="font-medium">Enable Intel features</div>
+                    <div className="font-medium">AI lab gate (testing — not a paid tier)</div>
                     <p className="text-xs text-slate-500">
-                      Testing toggle for Chris — stored in <code className="font-mono">data/plan-override.json</code>.
-                      Env default: plan env = <code className="font-mono">{plan?.envPlan || "base"}</code>.
-                      Stripe billing comes later ({plan?.stripe || "scaffold only"}).
+                      Chris-only toggle in <code className="font-mono">data/plan-override.json</code>.
+                      Env: <code className="font-mono">PITCHLINE_PLAN={plan?.envPlan || "base"}</code>.
+                      Does not change commercial Pricing.
                     </p>
                     <div className="flex flex-wrap gap-2">
-                      <Button type="button" disabled={planBusy || plan?.plan === "intel"} onClick={() => setIntelEnabled(true)}>Turn on Intel</Button>
-                      <Button type="button" variant="outline" disabled={planBusy || plan?.plan === "base"} onClick={() => setIntelEnabled(false)}>Back to Base</Button>
+                      <Button type="button" disabled={planBusy || plan?.plan === "intel"} onClick={() => setIntelEnabled(true)}>Enable AI lab</Button>
+                      <Button type="button" variant="outline" disabled={planBusy || plan?.plan === "base"} onClick={() => setIntelEnabled(false)}>Disable AI lab</Button>
                     </div>
-                    {planMsg && <p className="text-xs text-slate-600 dark:text-slate-300">{planMsg}</p>}
-                    {plan?.override && <p className="text-[11px] text-slate-400">Override active: {plan.override} (wins over env)</p>}
+                    {plan?.override && <p className="text-[11px] text-slate-400">Override active: {plan.override}</p>}
+                    <p className="text-[11px] text-slate-400">
+                      Lab status: {plan?.hasIntel ? "AI features unlocked (if GEMINI_API_KEY set)" : "BYO / RSS only"}
+                    </p>
                   </div>
-                  <div className="grid sm:grid-cols-2 gap-3">
-                    <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
-                      <div className="text-xs font-semibold text-teal-700 dark:text-teal-300">{`Base · ${plan?.copy?.base.price || "£19.99"}/mo`}</div>
-                      <ul className="mt-2 space-y-1 text-xs text-slate-600 dark:text-slate-300">
-                        {(plan?.copy?.base.includes || ["BYO Notebook", "RSS news", "Live-feed sync", "Heuristics", "OBS / dossiers / Stats"]).map((f) => (
-                          <li key={f}>· {f}</li>
-                        ))}
-                      </ul>
-                    </div>
-                    <div className="rounded-xl border border-violet-200 dark:border-violet-900 p-3">
-                      <div className="text-xs font-semibold text-violet-700 dark:text-violet-300">Intel · +£7/mo</div>
-                      <ul className="mt-2 space-y-1 text-xs text-slate-600 dark:text-slate-300">
-                        {(plan?.copy?.intel.includes || ["Web brief", "Auto Gen", "Note-draft", "Re-rank"]).map((f) => (
-                          <li key={f}>· {f}</li>
-                        ))}
-                      </ul>
-                      <p className="mt-2 text-[11px] text-slate-400">{plan?.copy?.intel.softCaps || "Soft caps later: ~20 briefs / 10 pack gens."}</p>
-                    </div>
-                  </div>
-                  <p className="text-xs text-slate-500">{plan?.copy?.rivalCompare || "Compare to ~£35/mo rival desks."}</p>
+                  <p className="text-xs text-slate-500">{plan?.copy?.rivalCompare || "Unlimited £22/mo — no Intel upsell."}</p>
                   <a href="/pricing" className="inline-block text-teal-600 font-medium hover:underline">View pricing →</a>
                 </CardBody>
               </Card>

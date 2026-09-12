@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth";
 import { NOTE_CATEGORIES } from "@/lib/defaults";
 import { normalizeApostrophes } from "@/lib/utils";
 import { rechunkOverlongLeagueNotes } from "@/lib/rechunk-league-notes";
+import { assertMatchOwned } from "@/lib/tenancy";
 
 export async function GET(req: Request) {
   const session = await getSession();
@@ -14,8 +15,11 @@ export async function GET(req: Request) {
   const entityId = searchParams.get("entityId") || undefined;
   const category = searchParams.get("category") || undefined;
 
-  // Soft-fail rechunk: League-bucket novels → ≤280 cards before return
   if (matchId) {
+    const access = await assertMatchOwned(matchId, session);
+    if (!access.ok) {
+      return NextResponse.json({ error: access.error }, { status: access.status });
+    }
     try {
       await rechunkOverlongLeagueNotes(matchId);
     } catch {
@@ -23,12 +27,22 @@ export async function GET(req: Request) {
     }
   }
 
+  // Tenancy: own notes, or notes on a match desk the user owns
   const notes = await prisma.note.findMany({
     where: {
-      ...(matchId ? { matchId } : {}),
-      ...(entityType ? { entityType } : {}),
-      ...(entityId ? { entityId } : {}),
-      ...(category ? { category } : {}),
+      AND: [
+        matchId
+          ? { matchId }
+          : {
+              OR: [
+                { userId: session.id },
+                { match: { matchDay: { userId: session.id } } },
+              ],
+            },
+        ...(entityType ? [{ entityType }] : []),
+        ...(entityId ? [{ entityId }] : []),
+        ...(category ? [{ category }] : []),
+      ],
     },
     orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
   });
@@ -45,13 +59,20 @@ export async function POST(req: Request) {
   if (!title) {
     return NextResponse.json({ error: "title required" }, { status: 400 });
   }
+  const matchId = body.matchId ? String(body.matchId) : null;
+  if (matchId) {
+    const access = await assertMatchOwned(matchId, session);
+    if (!access.ok) {
+      return NextResponse.json({ error: access.error }, { status: access.status });
+    }
+  }
   const category = String(body.category || "Custom");
   const note = await prisma.note.create({
     data: {
       title,
       body: noteBody,
       category,
-      matchId: body.matchId || null,
+      matchId,
       userId: session.id,
       entityType: body.entityType || null,
       entityId: body.entityId || null,

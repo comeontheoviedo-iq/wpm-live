@@ -43,6 +43,7 @@ export default async function DashboardPage() {
   if (!user) redirect("/login");
 
   const matchDays = await prisma.matchDay.findMany({
+    where: { userId: user.id },
     orderBy: { date: "asc" },
     include: {
       matches: {

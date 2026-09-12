@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { SPEAK_TIMINGS } from "@/lib/defaults";
 import { normalizeApostrophes } from "@/lib/utils";
+import { findOwnedSpeak } from "@/lib/tenancy";
 
 export async function PATCH(
   req: Request,
@@ -12,6 +13,12 @@ export async function PATCH(
     const session = await getSession();
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const { id } = await params;
+    const existing = await findOwnedSpeak(id, session.id);
+    if (!existing) {
+      const any = await prisma.speak.findUnique({ where: { id }, select: { id: true } });
+      if (!any) return NextResponse.json({ error: "Not found" }, { status: 404 });
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     const body = await req.json().catch(() => ({}));
     const data: Record<string, unknown> = {};
     for (const key of ["title", "body", "timing", "order", "status"] as const) {
@@ -60,6 +67,12 @@ export async function DELETE(
     const session = await getSession();
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const { id } = await params;
+    const existing = await findOwnedSpeak(id, session.id);
+    if (!existing) {
+      const any = await prisma.speak.findUnique({ where: { id }, select: { id: true } });
+      if (!any) return NextResponse.json({ error: "Not found" }, { status: 404 });
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     await prisma.speak.delete({ where: { id } });
     return NextResponse.json({ ok: true });
   } catch (e) {

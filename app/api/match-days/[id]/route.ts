@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { findOwnedMatchDay } from "@/lib/tenancy";
 
 export async function DELETE(
   _req: Request,
@@ -16,17 +17,14 @@ export async function DELETE(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const matchDay = await prisma.matchDay.findUnique({
-    where: { id },
-    select: { id: true, userId: true, title: true },
-  });
-
+  const matchDay = await findOwnedMatchDay(id, session.id);
   if (!matchDay) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
-
-  // Owner-only when a user is attached; unowned legacy desks: any signed-in user
-  if (matchDay.userId && matchDay.userId !== session.id) {
+    // Hide existence of other users' desks
+    const exists = await prisma.matchDay.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (!exists) return NextResponse.json({ error: "Not found" }, { status: 404 });
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

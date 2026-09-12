@@ -1,13 +1,17 @@
 /**
- * Pitchline plan entitlements.
- * Base (Matchday): BYO research, RSS news, AF sync, heuristics, OBS, dossiers, Stats.
- * Intel add-on: Gemini web brief, Auto Gen packs, player note-draft, optional re-rank.
+ * CoComms / Pitchline plan entitlements.
  *
- * Resolution: Settings/API override file → PITCHLINE_PLAN env → default "base".
- * Stripe billing comes later; override is for Chris testing only.
+ * Commercial (launch): one paid plan — Unlimited (Basic) at £22/mo.
+ * BYO Notebook is core. Intel is NOT a separate paid tier at launch.
+ *
+ * Internal Gemini gate (unchanged env): PITCHLINE_PLAN=base|intel + Settings
+ * override — for Chris testing / soft AI features, not sold as Intel+.
+ *
+ * Stripe: Checkout/portal when STRIPE_* keys exist; otherwise app-side model only.
  */
 
 import { isGeminiConfigured } from "./gemini";
+import { isStripeConfigured, stripePublicStatus } from "./stripe";
 
 type FsApi = {
   existsSync: (p: string) => boolean;
@@ -35,7 +39,11 @@ function loadPath(): PathApi {
 }
 
 
+/** Internal feature gate for Gemini AI (not a commercial SKU). */
 export type PitchlinePlan = "base" | "intel";
+
+/** Commercial SKU shown on Pricing / Checkout. */
+export type CommercialPlan = "unlimited";
 
 const OVERRIDE_REL_PARTS = ["data", "plan-override.json"] as const;
 
@@ -91,7 +99,7 @@ export function writePlanOverride(plan: PitchlinePlan, note?: string): PlanOverr
     updatedAt: new Date().toISOString(),
     note:
       note ||
-      "Local Settings toggle for testing. Stripe billing not wired yet.",
+      "Local Settings toggle for AI lab features. Commercial plan is Unlimited £22 — Intel is not a paid tier.",
   };
   f.writeFileSync(path, JSON.stringify(payload, null, 2) + "\n", "utf8");
   return payload;
@@ -117,7 +125,7 @@ export function clearPlanOverride(): void {
   );
 }
 
-/** Effective plan: Settings override wins over env. */
+/** Effective Gemini gate: Settings override wins over env. */
 export function getEffectivePlan(): PitchlinePlan {
   const override = readPlanOverride();
   if (override?.plan === "intel" || override?.plan === "base") {
@@ -134,7 +142,7 @@ export function isBasePlan(): boolean {
   return getEffectivePlan() === "base";
 }
 
-/** Gemini key present AND Intel plan — required for paid AI features. */
+/** Gemini key present AND Intel lab gate — required for paid AI features. */
 export function canUseGeminiFeatures(): boolean {
   return hasIntel() && isGeminiConfigured();
 }
@@ -156,29 +164,47 @@ export function canGeminiRelevantRerank(): boolean {
 }
 
 export const INTEL_REQUIRED_MESSAGE =
-  "Intel add-on required. Base includes BYO Notebook / RSS only — enable Intel in Settings (testing) or set plan env to intel. Stripe billing comes later.";
+  "AI lab features require the Intel lab gate (Settings testing toggle or PITCHLINE_PLAN=intel) plus GEMINI_API_KEY. Commercial plan is Unlimited £22/mo — Intel is not sold separately.";
 
+/** Launch commercial copy — single Unlimited / Basic at £22. */
 export const PLAN_COPY = {
+  unlimited: {
+    name: "Unlimited",
+    aka: "Basic",
+    price: "£22",
+    pricePence: 2200,
+    interval: "month" as const,
+    blurb: "Full matchday desk with BYO Notebook at the core. One simple plan.",
+    includes: [
+      "BYO Notebook / Research paste (core — no Gemini required)",
+      "News RSS",
+      "Live-feed sync",
+      "Notes buckets + relevance heuristics",
+      "OBS overlay, dossiers, Stats, Speaks, Print",
+      "Unlimited match desks on your account",
+    ],
+  },
+  /** @deprecated Not a paid tier at launch — kept for Settings lab copy only. */
   base: {
-    name: "Base (Matchday)",
-    price: "£19.99",
-    introPrice: "£15",
-    blurb: "Matchday desk with your own research. No Gemini.",
+    name: "Unlimited",
+    price: "£22",
+    introPrice: "£22",
+    blurb: "Matchday desk with your own research. BYO Notebook is core.",
     includes: [
       "BYO Notebook / Research paste (local organise — no Gemini)",
-      "News RSS only",
+      "News RSS",
       "Live-feed sync",
-      "Notes buckets + relevance heuristics (no Gemini re-rank)",
+      "Notes buckets + relevance heuristics",
       "OBS overlay, dossiers, Stats, Speaks, Print",
     ],
   },
+  /** Lab-only — not shown as a Pricing tier. */
   intel: {
-    name: "Intel",
-    price: "+£7",
-    absolutePrice: "£26.99",
-    blurb: "Gemini-powered briefs, Auto Gen packs, and note drafts.",
+    name: "AI lab (not a paid tier)",
+    price: "included later",
+    absolutePrice: "£22",
+    blurb: "Gemini brief / Auto Gen — gated for testing, not sold separately at launch.",
     includes: [
-      "Everything in Base",
       "News Gemini web brief",
       "Auto Gen pack (pack-generate)",
       "Player note-draft",
@@ -187,7 +213,8 @@ export const PLAN_COPY = {
     softCaps:
       "Soft caps (metering later): ~20 web briefs / mo · ~10 pack gens / mo.",
   },
-  rivalCompare: "Compare to ~£35/mo rival desks — CoComms Base is the affordable matchday core.",
+  rivalCompare:
+    "One plan: Unlimited (Basic) £22/mo. Compare to ~£35/mo rival desks — BYO Notebook is core; no separate Intel upsell at launch.",
 } as const;
 
 export function planStatus() {
@@ -195,8 +222,12 @@ export function planStatus() {
   const override = readPlanOverride();
   const plan = getEffectivePlan();
   const geminiKey = isGeminiConfigured();
+  const stripe = stripePublicStatus();
   return {
     plan,
+    commercialPlan: "unlimited" as CommercialPlan,
+    commercialName: PLAN_COPY.unlimited.name,
+    commercialPrice: PLAN_COPY.unlimited.price,
     envPlan,
     override: override?.plan ?? null,
     overrideUpdatedAt: override?.updatedAt ?? null,
@@ -207,6 +238,12 @@ export function planStatus() {
     canPlayerNoteDraft: canPlayerNoteDraft(),
     canGeminiRelevantRerank: canGeminiRelevantRerank(),
     copy: PLAN_COPY,
-    stripe: "Scaffold only — Stripe not live yet.",
+    stripe: stripe.configured
+      ? `Stripe ${stripe.mode} — Checkout ready for Unlimited £22.`
+      : "Stripe keys missing — app-side Unlimited £22 model live; TODO: add STRIPE_SECRET_KEY + price id in Netlify env.",
+    stripeConfigured: stripe.configured,
+    stripeMode: stripe.mode,
   };
 }
+
+export { isStripeConfigured };

@@ -1,25 +1,54 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
 import { Logo } from "@/components/layout/logo";
 import { Button } from "@/components/ui/button";
 import { Check } from "lucide-react";
 
-const baseFeatures = [
-  "BYO Notebook / Research paste (local organise — no Gemini)",
-  "News RSS only",
-  "Diet AF live sync",
-  "Notes buckets + relevance heuristics (no Gemini re-rank)",
+const unlimitedFeatures = [
+  "BYO Notebook / Research paste (core — no Gemini required)",
+  "News RSS",
+  "Live-feed sync",
+  "Notes buckets + relevance heuristics",
   "OBS overlay, dossiers, Stats, Speaks, Print",
-];
-
-const intelFeatures = [
-  "Everything in Base",
-  "News Gemini web brief",
-  "Auto Gen pack (pack-generate)",
-  "Player note-draft",
-  "Optional Gemini relevant re-rank",
+  "Unlimited match desks on your account",
 ];
 
 export default function PricingPage() {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  async function startCheckout() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/billing/checkout", { method: "POST" });
+      const json = await res.json().catch(() => ({}));
+      if (res.status === 401) {
+        window.location.href = "/login?next=/pricing";
+        return;
+      }
+      if (res.status === 503) {
+        setMsg(
+          String(
+            json.todo ||
+              "Stripe keys not set yet — sign in to use the desk. Chris: add STRIPE_SECRET_KEY + STRIPE_PRICE_UNLIMITED in Netlify."
+          )
+        );
+        return;
+      }
+      if (!res.ok || !json.url) {
+        throw new Error(String(json.error || "Checkout unavailable"));
+      }
+      window.location.href = String(json.url);
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "Checkout failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="min-h-screen">
       <header className="border-b border-slate-200 dark:border-slate-800">
@@ -38,72 +67,52 @@ export default function PricingPage() {
       <main className="mx-auto max-w-5xl px-4 py-12">
         <div className="text-center max-w-2xl mx-auto mb-10">
           <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
-            Matchday desk first. Intel when you need it.
+            One plan. Unlimited matchday desk.
           </h1>
           <p className="mt-3 text-slate-500">
-            Base keeps commentary prep affordable. Gemini features sit behind the
-            Intel add-on — BYO research is the default. Compare to ~£35/mo rivals.
-          </p>
-          <p className="mt-2 text-xs text-slate-400">
-            Stripe checkout not live yet — demo unlocks the desk; enable Intel in
-            Settings for testing.
+            Unlimited (Basic) at £22/mo — BYO Notebook is the core. No separate
+            Intel tier at launch. Compare to ~£35/mo rivals.
           </p>
         </div>
-        <div className="grid md:grid-cols-2 gap-4 max-w-3xl mx-auto">
+        <div className="max-w-md mx-auto">
           <div className="rounded-2xl border border-teal-500 shadow-lg shadow-teal-900/10 bg-gradient-to-b from-teal-50 to-white dark:from-teal-950 dark:to-slate-900 p-6 flex flex-col">
             <div className="text-sm font-semibold text-teal-700 dark:text-teal-300">
-              Base (Matchday)
+              Unlimited
+              <span className="ml-2 text-xs font-normal text-slate-500">also called Basic</span>
             </div>
             <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-3xl font-bold">£19.99</span>
+              <span className="text-3xl font-bold">£22</span>
               <span className="text-sm text-slate-500">/mo</span>
-              <span className="text-xs text-slate-400 line-through">£15 intro</span>
             </div>
             <p className="mt-2 text-sm text-slate-500">
-              Solo / freelance matchday core — your Notebook, RSS, AF sync.
+              Full commentary prep desk — your Notebook, RSS, live sync, OBS.
             </p>
             <ul className="mt-4 space-y-2 flex-1">
-              {baseFeatures.map((f) => (
+              {unlimitedFeatures.map((f) => (
                 <li key={f} className="flex items-start gap-2 text-sm">
                   <Check className="h-4 w-4 text-teal-600 mt-0.5 shrink-0" />
                   {f}
                 </li>
               ))}
             </ul>
-            <Link href="/login" className="mt-6">
-              <Button className="w-full" variant="primary">
-                Start on Base
+            <div className="mt-6 space-y-2">
+              <Button
+                className="w-full"
+                variant="primary"
+                disabled={busy}
+                onClick={startCheckout}
+              >
+                {busy ? "Starting checkout…" : "Get Unlimited — £22/mo"}
               </Button>
-            </Link>
-          </div>
-          <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 flex flex-col">
-            <div className="text-sm font-semibold text-violet-700 dark:text-violet-300">
-              Intel add-on
+              <Link href="/login" className="block">
+                <Button className="w-full" variant="outline">
+                  Sign in to the desk
+                </Button>
+              </Link>
             </div>
-            <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-3xl font-bold">+£7</span>
-              <span className="text-sm text-slate-500">/mo</span>
-              <span className="text-xs text-slate-400">(~£26.99 total)</span>
-            </div>
-            <p className="mt-2 text-sm text-slate-500">
-              Gemini web brief, Auto Gen packs, note-draft, optional re-rank.
-            </p>
-            <ul className="mt-4 space-y-2 flex-1">
-              {intelFeatures.map((f) => (
-                <li key={f} className="flex items-start gap-2 text-sm">
-                  <Check className="h-4 w-4 text-violet-600 mt-0.5 shrink-0" />
-                  {f}
-                </li>
-              ))}
-            </ul>
-            <p className="mt-3 text-xs text-slate-400">
-              Soft caps (metering later): ~20 web briefs / mo · ~10 pack gens / mo.
-            </p>
-            <Link href="/settings" className="mt-6">
-              <Button className="w-full" variant="outline">
-                Enable Intel in Settings (test)
-              </Button>
-            </Link>
+            {msg && (
+              <p className="mt-3 text-xs text-slate-500 whitespace-pre-wrap">{msg}</p>
+            )}
           </div>
         </div>
       </main>

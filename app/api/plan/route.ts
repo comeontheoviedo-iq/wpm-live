@@ -52,8 +52,8 @@ export async function POST(req: Request) {
     ...planStatus(),
     message:
       plan === "intel"
-        ? `Intel enabled for testing (was env=${planStatus().envPlan}). Stripe later.`
-        : `Back on Base (Matchday). Gemini features gated.`,
+        ? `AI lab enabled for testing (was env=${planStatus().envPlan}). Commercial plan remains Unlimited £22 — not a paid Intel tier.`
+        : `AI lab off. Commercial plan remains Unlimited £22; Gemini features gated.`,
   });
 }
 

@@ -8,6 +8,7 @@ import { StatusControl } from "@/components/match/status-control";
 import { DeleteMatchDesk } from "@/components/match/delete-match-desk";
 import { StatusBadge } from "@/components/ui/badge";
 import { formatKickoff } from "@/lib/utils";
+import { ownsMatchDay } from "@/lib/tenancy";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +35,8 @@ export default async function MatchDayLayout({
 
   const match = await getMatchFull(id);
   if (!match) notFound();
+  // Tenancy: cannot open another user's desk via URL
+  if (!ownsMatchDay(match.matchDay, user.id)) notFound();
 
   return (
     <div className="min-h-dvh bg-[var(--background)] pb-0 text-[var(--foreground)]">

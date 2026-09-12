@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { SPEAK_TIMINGS } from "@/lib/defaults";
 import { normalizeApostrophes } from "@/lib/utils";
+import { assertMatchOwned } from "@/lib/tenancy";
 
 export async function POST(req: Request) {
   try {
@@ -17,6 +18,10 @@ export async function POST(req: Request) {
     const matchId = body.matchId ? String(body.matchId) : null;
     if (!matchId) {
       return NextResponse.json({ error: "matchId required" }, { status: 400 });
+    }
+    const access = await assertMatchOwned(matchId, session);
+    if (!access.ok) {
+      return NextResponse.json({ error: access.error }, { status: access.status });
     }
     const timingRaw = String(body.timing || "pre-match");
     const timing = (SPEAK_TIMINGS as readonly string[]).includes(timingRaw)

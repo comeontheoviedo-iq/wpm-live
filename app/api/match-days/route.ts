@@ -38,7 +38,9 @@ function sanitizeCreateError(e: unknown): { status: number; error: string } {
 export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // Tenancy: personal accounts only see desks they own (demo = demo@pitchline.app userId).
   const matchDays = await prisma.matchDay.findMany({
+    where: { userId: session.id },
     orderBy: { date: "desc" },
     include: {
       matches: {
@@ -113,15 +115,22 @@ export async function POST(req: Request) {
     if (apiFootballFixtureId !== null && !Number.isNaN(apiFootballFixtureId)) {
       const existing = await prisma.match.findFirst({
         where: { apiFootballFixtureId },
-        select: { id: true, matchDayId: true },
+        select: {
+          id: true,
+          matchDayId: true,
+          matchDay: { select: { userId: true } },
+        },
       });
       if (existing) {
+        const mine = existing.matchDay.userId === session.id;
         return NextResponse.json(
-          {
-            error: "Fixture already linked",
-            matchId: existing.id,
-            matchDayId: existing.matchDayId,
-          },
+          mine
+            ? {
+                error: "Fixture already linked",
+                matchId: existing.id,
+                matchDayId: existing.matchDayId,
+              }
+            : { error: "Fixture already linked to another account" },
           { status: 409 }
         );
       }

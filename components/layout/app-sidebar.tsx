@@ -8,12 +8,14 @@ import {
   Settings,
   CreditCard,
   Radio,
+  Clapperboard,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const items = [
   { href: "/dashboard", label: "Desks", icon: LayoutGrid, match: (p: string) => p === "/dashboard" || p.startsWith("/dashboard/") },
   { href: "/match-day/new", label: "New desk", icon: Plus, match: (p: string) => p.startsWith("/match-day/new") },
+  { href: "/dashboard#ur", label: "U&R", icon: Clapperboard, match: (p: string) => p.startsWith("/show") },
   { href: "/settings", label: "Settings", icon: Settings, match: (p: string) => p.startsWith("/settings") },
   { href: "/pricing", label: "Pricing", icon: CreditCard, match: (p: string) => p.startsWith("/pricing") },
 ];

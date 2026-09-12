@@ -15,6 +15,7 @@ import {
   Mic2,
 } from "lucide-react";
 import { DeleteMatchDesk } from "@/components/match/delete-match-desk";
+import { ClaimUrButton } from "@/components/show/claim-ur-button";
 
 function teamCrestUrl(apiFootballTeamId: number | null | undefined) {
   return apiFootballTeamId
@@ -53,6 +54,7 @@ export default async function DashboardPage() {
         },
         orderBy: { kickoff: "asc" },
       },
+      urShow: { select: { id: true, status: true } },
     },
   });
 
@@ -88,7 +90,7 @@ export default async function DashboardPage() {
         <main className="min-w-0 flex-1 px-2 py-2 sm:px-3 sm:py-3">
           <div className="mx-auto flex max-w-[1400px] flex-col gap-2.5">
             {/* Compact page chrome — broadcast desk, not SaaS hub */}
-            <section className="desk-header flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-3.5">
+            <section id="ur" className="desk-header flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-3.5">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <Mic2 className="h-3.5 w-3.5 text-[var(--brand)]" />
@@ -226,6 +228,12 @@ export default async function DashboardPage() {
                     >
                       Add note
                     </Link>
+                    {featuredMatchDay ? (
+                      <ClaimUrButton
+                        matchDayId={featuredMatchDay.id}
+                        claimed={Boolean(featuredMatchDay.urShow)}
+                      />
+                    ) : null}
                   </div>
                 </div>
               </section>
@@ -407,6 +415,11 @@ export default async function DashboardPage() {
                           <ArrowRight className="h-3 w-3" />
                         </Link>
                       ) : null}
+                      <ClaimUrButton
+                        matchDayId={md.id}
+                        claimed={Boolean(md.urShow)}
+                        compact
+                      />
                       <DeleteMatchDesk
                         matchDayId={md.id}
                         matchLabel={matchLabel}

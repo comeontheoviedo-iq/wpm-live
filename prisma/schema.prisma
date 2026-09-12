@@ -144,6 +144,8 @@ model MatchDay {
   user        User?    @relation(fields: [userId], references: [id])
   status      String   @default("upcoming")
   matches     Match[]
+  /// U&R Show board (1:1) — claim creates this; Remote football comms desk consumes handoff
+  urShow      UrShow?
   createdAt   DateTime @default(now())
 }
 
@@ -371,4 +373,90 @@ model MatchPlayerOverride {
   @@unique([matchId, playerId])
   @@index([matchId])
   @@index([playerId])
+}
+
+/// U&R (Up & Running) Show board — one per claimed MatchDay on the personal account.
+/// Remote football comms desk owns Restream/creatives/OBS after handoff.
+model UrShow {
+  id                    String   @id @default(cuid())
+  matchDayId            String   @unique
+  matchDay              MatchDay @relation(fields: [matchDayId], references: [id], onDelete: Cascade)
+  /// Same as MatchDay.userId at claim time (tenancy = session.userId)
+  claimedByUserId       String
+  /// Planned → Creatives → Bound → Soundcheck → Live → Done
+  status                String   @default("Planned")
+  youtubeWatchUrl       String?
+  restreamExternalUrl   String?
+  /// Board JSON: ytTitle / ytDescription (Remote desk promo copy)
+  ytTitle               String?
+  ytDescription         String?
+  /// IG We're Live still — Canva DAHU_M_olhE
+  igStillUrl            String?
+  /// Placeholder encoder event id — real Restream API TODO when keys exist
+  restreamEventStubId   String?
+  /// Placeholder upcoming YT (unlisted until promo approved) — real YT API TODO
+  youtubeUpcomingStubId String?
+  handoffReadyAt        DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  creatives             UrCreative[]
+  socialSlots           UrSocialSlot[]
+  handoffLogs           UrHandoffLog[]
+
+  @@index([claimedByUserId])
+}
+
+model UrCreative {
+  id         String   @id @default(cuid())
+  urShowId   String
+  urShow     UrShow   @relation(fields: [urShowId], references: [id], onDelete: Cascade)
+  /// thumb | cover | open | ht | ft
+  kind       String
+  label      String
+  canvaId    String?
+  /// Short Canva share / design link from Remote desk
+  canvaUrl   String?
+  /// Hook for Remote desk Canva / CDN asset URL (preview or final)
+  assetUrl   String?
+  /// pending | approved | rejected
+  status     String   @default("pending")
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([urShowId])
+}
+
+model UrSocialSlot {
+  id          String    @id @default(cuid())
+  urShowId    String
+  urShow      UrShow    @relation(fields: [urShowId], references: [id], onDelete: Cascade)
+  /// t_day | t_1h | were_live | ft
+  slotKey     String
+  label       String
+  /// youtube | facebook | instagram | x
+  platform    String    @default("youtube")
+  copy        String    @default("")
+  assetUrl    String?
+  approved    Boolean   @default(false)
+  scheduledAt DateTime?
+  /// draft | scheduled | posted
+  status      String    @default("draft")
+  creativeKind String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([urShowId, slotKey])
+  @@index([urShowId])
+}
+
+model UrHandoffLog {
+  id          String   @id @default(cuid())
+  urShowId    String
+  urShow      UrShow   @relation(fields: [urShowId], references: [id], onDelete: Cascade)
+  message     String
+  payloadJson String?
+  createdAt   DateTime @default(now())
+
+  @@index([urShowId])
 }

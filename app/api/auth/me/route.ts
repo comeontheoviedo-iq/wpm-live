@@ -12,7 +12,14 @@ export async function GET() {
 
   const row = await prisma.user.findUnique({
     where: { id: user.id },
-    select: { preferredLocale: true, name: true, email: true, avatarInitials: true, theme: true },
+    select: {
+      preferredLocale: true,
+      sharedIntelOptIn: true,
+      name: true,
+      email: true,
+      avatarInitials: true,
+      theme: true,
+    },
   });
 
   const enabled = canUseUrShow(user);
@@ -44,21 +51,26 @@ export async function GET() {
       avatarInitials: row?.avatarInitials ?? user.avatarInitials,
       theme: row?.theme ?? user.theme,
       preferredLocale: normalizeLocale(row?.preferredLocale),
+      sharedIntelOptIn: Boolean(row?.sharedIntelOptIn),
     },
     urNav: { enabled, matchDayId },
   });
 }
 
-/** PATCH — update preferredLocale (i18n foundation). */
+/** PATCH — preferredLocale (i18n) and/or sharedIntelOptIn (shared intel pool). */
 export async function PATCH(req: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json().catch(() => ({}));
-  const data: { preferredLocale?: string } = {};
+  const data: { preferredLocale?: string; sharedIntelOptIn?: boolean } = {};
 
   if (typeof body.preferredLocale === "string") {
     data.preferredLocale = normalizeLocale(body.preferredLocale);
+  }
+
+  if (typeof body.sharedIntelOptIn === "boolean") {
+    data.sharedIntelOptIn = body.sharedIntelOptIn;
   }
 
   if (!Object.keys(data).length) {
@@ -75,6 +87,7 @@ export async function PATCH(req: Request) {
       avatarInitials: true,
       theme: true,
       preferredLocale: true,
+      sharedIntelOptIn: true,
     },
   });
 
@@ -82,6 +95,7 @@ export async function PATCH(req: Request) {
     user: {
       ...updated,
       preferredLocale: normalizeLocale(updated.preferredLocale),
+      sharedIntelOptIn: Boolean(updated.sharedIntelOptIn),
     },
   });
 }

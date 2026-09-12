@@ -20,6 +20,7 @@ import {
   Sparkles,
   HelpCircle,
   GraduationCap,
+  Shield,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLocale } from "@/components/i18n/locale-provider";
@@ -81,6 +82,7 @@ export default function SettingsPage() {
     name: string;
     email: string;
     avatarInitials: string;
+    sharedIntelOptIn?: boolean;
   } | null>(null);
   const [apiFootball, setApiFootball] = useState(false);
   const [gemini, setGemini] = useState(false);
@@ -91,10 +93,41 @@ export default function SettingsPage() {
   const { locale, setLocale, t } = useLocale();
   const [localeBusy, setLocaleBusy] = useState(false);
   const [localeMsg, setLocaleMsg] = useState<string | null>(null);
+  const [sharedIntelBusy, setSharedIntelBusy] = useState(false);
+  const [sharedIntelMsg, setSharedIntelMsg] = useState<string | null>(null);
   const [plan, setPlan] = useState<PlanStatus | null>(null);
   const [planBusy, setPlanBusy] = useState(false);
   const [planMsg, setPlanMsg] = useState<string | null>(null);
   const [trial, setTrial] = useState<TrialSnapshot | null>(null);
+
+
+  async function setSharedIntelOptIn(enabled: boolean) {
+    setSharedIntelBusy(true);
+    setSharedIntelMsg(null);
+    try {
+      const res = await fetch("/api/auth/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sharedIntelOptIn: enabled }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(String(json.error || "Could not save preference"));
+      setUser((prev) =>
+        prev
+          ? { ...prev, sharedIntelOptIn: Boolean(json.user?.sharedIntelOptIn) }
+          : prev
+      );
+      setSharedIntelMsg(
+        enabled
+          ? "Opted in — anonymised signals only when the shared pool ships. Raw notes stay on your desk."
+          : "Opt-in off. Your notes stay personal to your account."
+      );
+    } catch (e) {
+      setSharedIntelMsg(e instanceof Error ? e.message : "Could not save preference");
+    } finally {
+      setSharedIntelBusy(false);
+    }
+  }
 
   function loadPlan() {
     return fetch("/api/plan")
@@ -392,6 +425,39 @@ export default function SettingsPage() {
                   <div><div className="text-xs text-slate-500">Name</div><div className="font-medium">{user.name}</div></div>
                   <div><div className="text-xs text-slate-500">Email</div><div className="font-medium">{user.email}</div></div>
                   <div><div className="text-xs text-slate-500">Role</div><div className="font-medium">Commentator</div></div>
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 space-y-3 mt-2">
+                    <div className="flex items-center gap-2 font-medium">
+                      <Shield className="h-4 w-4 text-teal-600 dark:text-teal-400" />
+                      Shared CoComms intel
+                    </div>
+                    <p className="text-xs text-slate-500 leading-relaxed">
+                      Match desks and notes stay personal to your account. Opt in so anonymised note
+                      signals can help grow a shared CoComms intel pool — optional, never forced.
+                      Off by default. Raw notes never leave your desk unless you opt in, and even
+                      then only anonymised aggregates are planned (pipeline not live yet).
+                    </p>
+                    <label className="flex items-start gap-3 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5 h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                        checked={Boolean(user.sharedIntelOptIn)}
+                        disabled={sharedIntelBusy}
+                        onChange={(e) => setSharedIntelOptIn(e.target.checked)}
+                      />
+                      <span className="text-sm">
+                        Share anonymised note signals with the CoComms intel pool
+                        <span className="block text-[11px] text-slate-400 mt-0.5">
+                          {user.sharedIntelOptIn ? "On — you can turn this off anytime" : "Off — your prep stays on your desk"}
+                        </span>
+                      </span>
+                    </label>
+                    {sharedIntelMsg && (
+                      <p className="text-xs text-slate-600 dark:text-slate-300">{sharedIntelMsg}</p>
+                    )}
+                    <p className="text-[11px] text-slate-400">
+                      Details: Settings mirrors the Privacy FAQ. See also the FAQ page.
+                    </p>
+                  </div>
                 </CardBody>
               </Card>
             )}

@@ -39,7 +39,7 @@ One credit = one match desk. Credits remain after the 14d / 3-desk trial. Top up
 
 ## Data / privacy (light)
 
-Match desks and notes stay personal to the signed-in account (`session.userId`). Commentators can **opt in** so anonymised notes help grow a shared CoComms intel pool — optional, never forced. See `docs/TENANCY.md`.
+Match desks and notes stay personal to the signed-in account (`session.userId`). Commentators can **opt in** (Settings → Profile · `User.sharedIntelOptIn`, default OFF) so anonymised note signals help grow a shared CoComms intel pool — optional, never forced. Preference + UI only until the anonymisation pipeline ships — see `docs/SHARED_INTEL_OPTIN.md` and `docs/TENANCY.md`.
 
 ## Related routes
 

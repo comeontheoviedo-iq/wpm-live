@@ -33,7 +33,7 @@ const faqs: { q: string; a: string }[] = [
   },
   {
     q: "What about my data and privacy?",
-    a: "Match desks and notes stay personal to your account. You can opt in so anonymised notes help grow a shared CoComms intel pool — optional, never forced. Use Settings to manage billing; cancel anytime.",
+    a: "Match desks and notes stay personal to your account. You can opt in (Settings → Profile) so anonymised note signals help grow a shared CoComms intel pool — optional, off by default, never forced. Use Settings to manage billing; cancel anytime.",
   },
 ];
 

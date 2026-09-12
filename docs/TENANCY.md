@@ -35,3 +35,8 @@ UPDATE "MatchDay" SET "userId" = '<user-cuid>' WHERE id = '<match-day-id>';
 ## Helpers
 
 See `lib/tenancy.ts` (`assertMatchOwned`, `findOwnedNote`, `matchDayOwnerWhere`, …).
+
+## Shared intel opt-in
+
+Account preference `sharedIntelOptIn` (default **false**) does **not** change tenancy. Desks and notes remain owner-scoped. Opt-in only gates a future anonymised aggregate pool — see `docs/SHARED_INTEL_OPTIN.md`. Never treat opt-in as permission to read another user's notes.
+

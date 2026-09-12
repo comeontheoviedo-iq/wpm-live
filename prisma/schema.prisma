@@ -19,6 +19,8 @@ model User {
   theme                String     @default("system")
   /// BCP-47 UI locale preference (i18n foundation). See lib/i18n.ts.
   preferredLocale      String     @default("en-GB")
+  /// Opt-in: anonymised note signals → CoComms shared intel pool. Default OFF. See docs/SHARED_INTEL_OPTIN.md.
+  sharedIntelOptIn     Boolean    @default(false)
   /// none | trial | active | cancelled | expired
   billingStatus        String     @default("none")
   trialStartedAt       DateTime?
@@ -398,6 +400,8 @@ model UrShow {
   restreamEventStubId   String?
   /// Placeholder upcoming YT (unlisted until promo approved) — real YT API TODO
   youtubeUpcomingStubId String?
+  /// idle | provisioning | ready — Enable U&R kicks Provisioning… stubs for U+R
+  provisioningStatus    String   @default("idle")
   handoffReadyAt        DateTime?
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt

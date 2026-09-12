@@ -14,98 +14,169 @@ U&R chrome (Enable U&R, `/show/*`, `/api/show/*`) is visible **only** to emails 
 
 ## How Chris enables a match
 
-1. Sign in as `chris@ronniedogmedia.com` (his real CoComms U&R account).
-2. Dashboard → **Enable U&R** on a desk (or open `/show/<matchDayId>` → Enable).
+1. Sign in as `chris@ronniedogmedia.com`.
+2. Dashboard → **Enable U&R** (or `/show/<matchDayId>` → Enable).
 3. One Show board per claimed MatchDay: `/show/[matchDayId]`.
 
-On Enable (and on board open / `PATCH action=refresh-from-match`): **full autofill from MatchDay**:
+On Enable (and board open / `PATCH action=refresh-from-match`): **full autofill from MatchDay**:
 
-- home/away names + crest URLs (AF team logos)
-- competition, venue
-- KO time labelled **Europe/London**
-- YT title + description derived from match
-- overlay URL: `{APP}/match-day/{matchId}/overlay?scorebug=0&flashes=lower`
-- socialDrafts `t_day` / `t_1h` / `were_live` / `ft` with match-specific copy
+- home/away names + crest URLs
+- competition, venue, KO **Europe/London**
+- SEO YT title + description (never “CoComms U&R” in public titles)
+- Default **thumbnail brief** / pack notes (not a fake Canva render)
+- overlay: `{APP}/match-day/{matchId}/overlay?scorebug=0&flashes=lower`
+- social cadence drafts `t_day` / `t_1h` / `were_live` / `ft`
+- Board **Provisioning…** + stub tasks; webhook action `enable_provision` if `UR_HANDOFF_WEBHOOK_URL` set
 
-Tenancy: `session.userId` only (`docs/TENANCY.md`). Claim sets `UrShow.claimedByUserId` to the signed-in user; MatchDay must already be owned. Allowlist is checked **before** tenancy for all U&R routes.
+Tenancy: `session.userId` only. Allowlist checked **before** tenancy.
+
+## SEO autofill templates
+
+### YT title (≤100 chars)
+
+`{Home} vs {Away} Live Watchalong | Unofficial & Remote | {Competition}`
+
+Front-load teams + Live Watchalong. **NEVER** “CoComms U&R” in public titles.
+
+### YT description (2–3 short paras)
+
+Voice + graphics watchalong (no match footage); KO London + venue; live score/events + reaction; CTA subscribe + `#TeamA #TeamB #Competition #Watchalong #UnofficialAndRemote`.
+
+### Thumbnail brief (Enable pack notes — not a Canva render)
+
+ONE idea only: **big home crest + big away crest + 3–4 words max** (`LIVE WATCHALONG` / `WE'RE LIVE`). No full title on thumb (title carries SEO). High contrast, mobile-first, safe zone. Optional later: Chris face cutout looking toward crests.
+
+Exposed as `board.thumbnailBrief` / `creatives[].brief` / `enable_provision.thumbnailBrief`.
+
+### Social cadence (platform-fit)
+
+| Slot | Intent | Platform fit |
+|------|--------|--------------|
+| `t_day` | Anticipation + teams + KO + `{WATCH_LINK}` | YT community longer |
+| `t_1h` | Reminder + `{WATCH_LINK}` | FB longer |
+| `were_live` | **GO LIVE** fires — clear join CTA + link (gate must PASS) | IG shorter + visual |
+| `ft` | Thanks + subscribe + next tease | YT longer |
+
+## Enable → auto-provision stubs
+
+Even days ahead of KO:
+
+1. `provisioningStatus = "provisioning"` → **Provisioning…**
+2. Stub tasks: Restream encoder + scheduled YT/FB create; creatives generate (use thumbnail brief); social drafts ready
+3. Webhook / log action: **`enable_provision`**
+
+U+R PATCHes both destination URLs → `provisioningStatus = "ready"`.
+
+### Write-back fields
+
+| Field | How |
+|-------|-----|
+| `youtubeWatchUrl` / `restreamExternalUrl` | `PATCH /api/show/{matchDayId}` (must match) |
+| `restreamEventStubId` / `youtubeUpcomingStubId` | Optional real ids |
+| `ytThumbUrl` / Canva / `fbCoverUrl` / `igStillUrl` / moments | `set-assets` or root shortcuts |
 
 ## Status spine
 
 `Planned → Creatives → Bound → Soundcheck → Live → Done`
 
-- Manual advance / back / jump still work.
-- **Auto-forward from completeness** (never invents APIs):
-  - → **Creatives** when any match-specific creative asset/Canva id is present
-  - → **Bound** when destinations URL gate PASSes
-- Soundcheck / Live / Done stay manual.
+Auto-forward: Creatives (any match-specific asset) → Bound (URL gate PASS). **GO LIVE** → Live. Soundcheck/Done otherwise manual.
 
 ## Destinations / URL gate
 
-Scheduled **YouTube watch URL** must equal **Restream destination externalUrl**. Board shows **PASS / FAIL**.
+YT watch URL must equal Restream externalUrl. FAIL until both present and equal.
 
-URLs stay stub/empty until U+R wires Restream+YT on handoff — **FAIL until both present and equal**. Do not fake create APIs here.
+## GO LIVE (separate from Enable / Ready for desk)
+
+- Enabled when URL gate **PASS**; soft-warn if creatives/social incomplete.
+- Action **`go_live`**: start Restream destinations path + We're live cadence; status → Live.
+- **CoComms does NOT start streaming** — U+R/OBS owns encoder.
 
 ## Creatives + social (per-show only)
 
-**Never** seed another fixture’s Canva ids or preview art (no Everton / United / Nice / Lille / shared `/ur-creatives/thumb.jpg` defaults).
+Never seed another fixture’s art. Empty slots show thumbnail brief / pack notes.
 
-Placeholder copy when empty: **“Awaiting match-specific creatives pack”**.
+## Ready for desk
 
-| Slot | Hook fields (PATCH) |
-|------|---------------------|
-| YT thumb | `ytThumbUrl`, `ytThumbCanvaId`, `ytThumbCanvaUrl` |
-| FB cover | `fbCoverUrl`, `fbCoverCanvaId`, `fbCoverCanvaUrl` |
-| IG We're Live | `igStillUrl`, `igStillCanvaId`, `igStillCanvaUrl` |
-| Open / HT / FT | `openUrl`/`openCanvaId`/`openCanvaUrl`, `ht*`, `ft*` |
+`action: ready_for_desk` packages AF fixture, overlay, approved creatives/social. Optional `UR_HANDOFF_WEBHOOK_URL`.
 
-Also: `PATCH { action: "set-assets", ... }` or `action: "creative"` with `assetUrl`/`canvaId`/`canvaUrl`.
+## Graphics (do not change)
 
-Known pack (code): `UR_MATCH_CREATIVE_PACKS` in `lib/ur-show.ts` — applied only when home/away match.
+- RFC Studio localhost:3001 — pitch OFF
+- Overlay on cocomms.online with `scorebug=0&flashes=lower`
 
-### Strasbourg vs Monaco (current pack)
+## Layout
 
-| Asset | Canva | Preview |
-|-------|-------|---------|
-| YT thumb | `DAHU_c69KLc` · https://www.canva.com/d/Jl4_OpWSo6paZs0 | `/ur-creatives/strasbourg-monaco/yt1.jpg` |
-| FB cover | `DAHU_QxBX5U` · https://www.canva.com/d/8g_Ybqm87ydLA0s | `/ur-creatives/strasbourg-monaco/fb1.jpg` |
-| IG We're Live | `DAHU_X1BZwI` · https://www.canva.com/d/PGb7QLCk9z7WaH- | `/ur-creatives/strasbourg-monaco/ig1.jpg` |
-| Open / HT / FT | empty TBD — U+R pushes later | — |
-
-Approve creative → matching social slots schedule (`t_day`, `t_1h`, `were_live`, `ft`). Postiz posting is U+R after approve — stub only here.
-
-Board JSON: `ytThumbUrl`, `ytTitle`, `ytDescription`, `fbCoverUrl`, `igStillUrl`, `socialDrafts[{ slot, platform, copy, assetUrl, approved }]`, `matchDay{ home, away, crests, venue, kickoffLondon, … }`.
-
-## Restream / YouTube
-
-On claim: placeholder `restreamEventStubId` + `youtubeUpcomingStubId`. **No real Restream/YT API** — U+R creates on handoff. Social/Postiz wiring is Remote desk’s after handoff.
-
-## Ready for desk handoff
-
-Button packages complete JSON for Remote football comms desk:
-
-- AF fixture id, matchDayId, matchId
-- overlay URL + params (`scorebug=0&flashes=lower`)
-- destinations + gate
-- approved creatives + approved social drafts
-- YT title/desc, thumb/cover/IG urls, canva metadata
-- match autofill block
-
-Writes in-app `UrHandoffLog`. Optional `UR_HANDOFF_WEBHOOK_URL` POSTs the same payload when set.
-
-## Graphics checklist
-
-- RFC Studio — Chris Pro local `:3001`; pitch OFF for U&R talent-cam stack.
-- Overlay with `scorebug=0&flashes=lower`.
+One vertical spine: status → match → provision → sticky destinations → GO LIVE → graphics → creatives (crests) → social one-column → Ready for desk.
 
 ## API
 
 | Method | Path | Notes |
 |--------|------|--------|
-| GET/PATCH | `/api/show/[matchDayId]` | GET refreshes autofill; PATCH destinations / creatives / `set-assets` / `refresh-from-match` |
-| POST | `/api/show/[matchDayId]/claim` | Enable U&R + autofill (+ known pack if any) |
+| GET/PATCH | `/api/show/[matchDayId]` | Autofill; destinations clear provisioning |
+| POST | `/api/show/[matchDayId]/claim` | Enable + Provisioning… + `enable_provision` |
 | POST | `/api/show/[matchDayId]/status` | Advance / back / jump |
-| POST | `/api/show/[matchDayId]/handoff` | Package JSON + optional webhook |
+| POST | `/api/show/[matchDayId]/handoff` | `ready_for_desk` \| `go_live` |
+
+## U+R consumer payload shapes
+
+### `enable_provision`
+
+```json
+{
+  "action": "enable_provision",
+  "consumer": "Remote football comms desk",
+  "matchDayId": "…",
+  "matchId": "…",
+  "afFixtureId": 123,
+  "tasks": [
+    { "key": "restream_yt_fb", "label": "Restream encoder + scheduled YT/FB create", "status": "pending" },
+    { "key": "creatives_generate", "label": "Creatives generate request", "status": "pending" },
+    { "key": "social_drafts", "label": "Social drafts ready", "status": "pending" }
+  ],
+  "ytTitle": "Home vs Away Live Watchalong | Unofficial & Remote | Comp",
+  "ytDescription": "…",
+  "thumbnailBrief": "ONE idea only: big home crest + big away crest + 3–4 words max (LIVE WATCHALONG / WE'RE LIVE). …",
+  "creativeBriefs": { "thumb": "…", "cover": "…", "ig_live": "…" },
+  "socialDrafts": [],
+  "socialCadence": {
+    "t_day": "anticipation + teams + KO + link (YT/FB longer)",
+    "t_1h": "reminder + link (FB longer)",
+    "were_live": "GO LIVE fires — clear join CTA + link; IG shorter + visual; gate must PASS",
+    "ft": "thanks + subscribe + next tease (YT longer)"
+  },
+  "match": {},
+  "overlayUrl": "https://www.cocomms.online/match-day/…/overlay?scorebug=0&flashes=lower",
+  "writeBack": { "youtubeWatchUrl": "…", "restreamExternalUrl": "…", "note": "…" },
+  "note": "Enable U&R auto-provision — … PATCH destination URLs back to clear Provisioning…"
+}
+```
+
+### `go_live`
+
+```json
+{
+  "action": "go_live",
+  "consumer": "Remote football comms desk",
+  "matchDayId": "…",
+  "matchId": "…",
+  "afFixtureId": 123,
+  "signal": "start_restream_destinations",
+  "cadence": "were_live",
+  "wereLiveSlot": {},
+  "youtubeWatchUrl": "https://…",
+  "restreamExternalUrl": "https://…",
+  "overlayUrl": "…",
+  "ytTitle": "…",
+  "status": "Live",
+  "softWarn": null,
+  "note": "GO LIVE is a signal only — CoComms does NOT start the encoder. U+R/OBS owns Restream destinations path + We're live cadence."
+}
+```
+
+### `ready_for_desk`
+
+`action: "ready_for_desk"` + approved creatives/social, destinations gate, overlay, match, `writeBack`, `thumbnailBrief`.
 
 ## Schema
 
-`UrShow`, `UrCreative`, `UrSocialSlot`, `UrHandoffLog` (1:1 MatchDay). Migration `20260912160000_ur_show_board` (+ Netlify SQL mirror).
+`UrShow.provisioningStatus` (`idle` \| `provisioning` \| `ready`). Migration `20260912190000_ur_provision_golive` (+ Netlify SQL mirror).

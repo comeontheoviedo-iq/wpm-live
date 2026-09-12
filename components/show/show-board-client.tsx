@@ -16,6 +16,7 @@ import {
   ListChecks,
   AlertTriangle,
   Sparkles,
+  CircleDot,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { UR_PALETTE, UR_SHOW_STATUSES } from "@/lib/ur-show";
@@ -30,6 +31,7 @@ type Creative = {
   status: string;
   sortOrder: number;
   placeholder?: string | null;
+  brief?: string | null;
 };
 
 type SocialDraft = {
@@ -52,11 +54,26 @@ type HandoffLog = {
   createdAt: string;
 };
 
+type ProvisionTask = {
+  key: string;
+  label: string;
+  status: "pending" | "done" | string;
+};
+
 export type Board = {
   showId: string;
   matchDayId: string;
   status: string;
   statuses: readonly string[] | string[];
+  provisioningStatus?: string;
+  provisioning?: boolean;
+  provisionTasks?: ProvisionTask[];
+  goLive?: {
+    enabled: boolean;
+    softWarn: string | null;
+    note: string;
+  };
+  writeBackFields?: Record<string, string>;
   ytThumbUrl: string | null;
   ytTitle: string;
   ytDescription: string;
@@ -64,6 +81,8 @@ export type Board = {
   igStillUrl: string | null;
   igStillNote?: string | null;
   creativesPlaceholder?: string;
+  thumbnailBrief?: string;
+  creativeBriefs?: Record<string, string>;
   youtubeWatchUrl: string | null;
   restreamExternalUrl: string | null;
   destinationsGate: { pass: boolean; reason: string };
@@ -131,6 +150,14 @@ export function ShowBoardClient({
     board.status as (typeof UR_SHOW_STATUSES)[number]
   );
 
+  const applyBoard = (next: Board) => {
+    setBoard(next);
+    setYtUrl(next.youtubeWatchUrl || "");
+    setRsUrl(next.restreamExternalUrl || "");
+    setYtTitle(next.ytTitle);
+    setYtDescription(next.ytDescription);
+  };
+
   const patch = useCallback(
     async (body: Record<string, unknown>) => {
       setBusy(true);
@@ -143,11 +170,7 @@ export function ShowBoardClient({
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Update failed");
-        setBoard(data.board);
-        setYtUrl(data.board.youtubeWatchUrl || "");
-        setRsUrl(data.board.restreamExternalUrl || "");
-        setYtTitle(data.board.ytTitle);
-        setYtDescription(data.board.ytDescription);
+        applyBoard(data.board);
         return data.board as Board;
       } catch (e) {
         setError(e instanceof Error ? e.message : "Update failed");
@@ -170,7 +193,7 @@ export function ShowBoardClient({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Status failed");
-      setBoard(data.board);
+      applyBoard(data.board);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Status failed");
     } finally {
@@ -189,7 +212,7 @@ export function ShowBoardClient({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Status failed");
-      setBoard(data.board);
+      applyBoard(data.board);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Status failed");
     } finally {
@@ -203,10 +226,12 @@ export function ShowBoardClient({
     try {
       const res = await fetch(`/api/show/${matchDayId}/handoff`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "ready_for_desk" }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Handoff failed");
-      setBoard(data.board);
+      applyBoard(data.board);
       setToast(
         data.webhook?.ok
           ? "Handoff packaged + webhook fired → Remote desk"
@@ -220,6 +245,41 @@ export function ShowBoardClient({
     }
   };
 
+  const goLive = async () => {
+    if (!board.goLive?.enabled) {
+      setError(board.destinationsGate.reason || "URL gate must PASS before GO LIVE");
+      return;
+    }
+    if (board.goLive.softWarn) {
+      const ok = window.confirm(
+        `${board.goLive.softWarn}\n\nGO LIVE anyway? (Signal only — does not start encoder)`
+      );
+      if (!ok) return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/show/${matchDayId}/handoff`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "go_live" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "GO LIVE failed");
+      applyBoard(data.board);
+      setToast(
+        data.webhook?.ok
+          ? "GO LIVE signal fired → U+R (Restream destinations + We're live)"
+          : "GO LIVE logged in-app. U+R owns encoder — CoComms did not start streaming."
+      );
+      setTimeout(() => setToast(null), 6000);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "GO LIVE failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const fixture = useMemo(() => {
     if (!board.matchDay) return board.matchDayId;
     if (board.matchDay.home && board.matchDay.away) {
@@ -227,6 +287,10 @@ export function ShowBoardClient({
     }
     return board.matchDay.title;
   }, [board]);
+
+  const sectionClass =
+    "rounded-lg border border-white/10 p-3 sm:p-4";
+  const sectionStyle = { background: UR_PALETTE.steel };
 
   return (
     <div
@@ -242,12 +306,11 @@ export function ShowBoardClient({
         } as React.CSSProperties
       }
     >
-      {/* Top bar */}
       <header
         className="sticky top-0 z-30 border-b border-white/10 backdrop-blur-md"
         style={{ background: "rgba(11,15,20,0.92)" }}
       >
-        <div className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-3 px-3 py-3 sm:px-5">
+        <div className="mx-auto flex max-w-[820px] flex-wrap items-center gap-3 px-3 py-3 sm:px-5">
           <Link
             href="/dashboard"
             className="inline-flex items-center gap-1.5 rounded text-[11px] font-semibold uppercase tracking-[0.1em] text-white/55 hover:text-[var(--ur-accent)]"
@@ -271,6 +334,11 @@ export function ShowBoardClient({
               <span className="rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white/40 ring-1 ring-white/15">
                 CoComms
               </span>
+              {board.provisioning ? (
+                <span className="animate-pulse rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-amber-200 ring-1 ring-amber-400/50 bg-amber-500/15">
+                  Provisioning…
+                </span>
+              ) : null}
             </div>
             <h1 className="truncate text-sm font-bold tracking-tight sm:text-base">
               {fixture}
@@ -282,7 +350,8 @@ export function ShowBoardClient({
         </div>
       </header>
 
-      <main className="mx-auto flex max-w-[1400px] flex-col gap-4 px-3 py-4 sm:px-5 sm:py-5">
+      {/* One vertical spine */}
+      <main className="mx-auto flex max-w-[820px] flex-col gap-3 px-3 py-4 sm:px-5 sm:py-5">
         {error ? (
           <div className="flex items-center gap-2 rounded border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-[12px] text-rose-200">
             <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
@@ -303,12 +372,8 @@ export function ShowBoardClient({
           </div>
         ) : null}
 
-        {/* Status spine */}
-        <section
-          className="rounded-lg border border-white/10 p-3 sm:p-4"
-          style={{ background: UR_PALETTE.steel }}
-          aria-label="Show status spine"
-        >
+        {/* Status spine — vertical */}
+        <section className={sectionClass} style={sectionStyle} aria-label="Show status spine">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">
               Status spine
@@ -318,7 +383,7 @@ export function ShowBoardClient({
                 type="button"
                 disabled={busy || statusIdx <= 0}
                 onClick={() => setStatus("back")}
-                className="inline-flex items-center gap-1 rounded border border-white/15 bg-black/30 px-2.5 py-1.5 text-[11px] font-semibold text-white/70 hover:border-[var(--ur-accent)]/50 hover:text-[var(--ur-ice)] disabled:opacity-40"
+                className="inline-flex items-center gap-1 rounded border border-white/15 bg-black/30 px-2.5 py-1.5 text-[11px] font-semibold text-white/70 hover:border-[var(--ur-accent)]/50 disabled:opacity-40"
               >
                 <ArrowLeft className="h-3 w-3" />
                 Back
@@ -335,21 +400,33 @@ export function ShowBoardClient({
               </button>
             </div>
           </div>
-          <ol className="flex flex-wrap gap-1.5 sm:gap-2">
+          <ol className="flex flex-col gap-1.5">
             {UR_SHOW_STATUSES.map((s, i) => {
               const active = s === board.status;
               const done = i < statusIdx;
               return (
-                <li key={s} className="flex items-center gap-1.5">
+                <li key={s} className="flex items-center gap-2">
+                  <span
+                    className={cn(
+                      "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-black",
+                      active && "text-[#0B0F14]",
+                      !active && done && "bg-white/15 text-white/70",
+                      !active && !done && "bg-black/30 text-white/30 ring-1 ring-white/10"
+                    )}
+                    style={active ? { background: UR_PALETTE.accent } : undefined}
+                  >
+                    {i + 1}
+                  </span>
                   <button
                     type="button"
                     disabled={busy}
                     onClick={() => jumpStatus(s)}
                     className={cn(
-                      "rounded-full px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em] transition",
-                      active && "shadow-[0_0_0_1px_rgba(126,182,255,0.55),0_0_24px_rgba(126,182,255,0.25)]",
-                      !active && done && "bg-white/10 text-white/70",
-                      !active && !done && "bg-black/25 text-white/35 ring-1 ring-white/10"
+                      "flex-1 rounded-md px-3 py-2 text-left text-[11px] font-bold uppercase tracking-[0.1em] transition",
+                      active &&
+                        "shadow-[0_0_0_1px_rgba(126,182,255,0.55),0_0_18px_rgba(126,182,255,0.2)]",
+                      !active && done && "bg-white/8 text-white/65",
+                      !active && !done && "bg-black/20 text-white/35 ring-1 ring-white/8"
                     )}
                     style={
                       active
@@ -359,21 +436,15 @@ export function ShowBoardClient({
                   >
                     {s}
                   </button>
-                  {i < UR_SHOW_STATUSES.length - 1 ? (
-                    <span className="hidden text-white/20 sm:inline">→</span>
-                  ) : null}
                 </li>
               );
             })}
           </ol>
         </section>
 
-        {/* Match autofill summary */}
+        {/* Match autofill */}
         {board.matchDay ? (
-          <section
-            className="rounded-lg border border-white/10 p-3 sm:p-4"
-            style={{ background: UR_PALETTE.steel }}
-          >
+          <section className={sectionClass} style={sectionStyle}>
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">
                 Match autofill
@@ -430,180 +501,275 @@ export function ShowBoardClient({
           </section>
         ) : null}
 
-        <div className="grid gap-4 lg:grid-cols-2">
-          {/* Destinations gate */}
+        {/* Provisioning stubs — sticky with destinations */}
+        {board.provisioning || board.provisionTasks?.length ? (
           <section
-            className="rounded-lg border border-white/10 p-3 sm:p-4"
-            style={{ background: UR_PALETTE.steel }}
+            className={cn(sectionClass, "border-amber-400/30")}
+            style={{ background: "rgba(245,158,11,0.08)" }}
           >
-            <div className="mb-3 flex items-center gap-2">
-              <Link2 className="h-3.5 w-3.5" style={{ color: UR_PALETTE.accent }} />
-              <h2 className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/55">
-                Destinations / URL gate
-              </h2>
-              <span
-                className={cn(
-                  "ml-auto rounded px-2 py-0.5 text-[9px] font-black uppercase tracking-wider",
-                  board.destinationsGate.pass
-                    ? "bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-400/40"
-                    : "bg-rose-500/20 text-rose-200 ring-1 ring-rose-400/40"
-                )}
-              >
-                {board.destinationsGate.pass ? "PASS" : "FAIL"}
-              </span>
-            </div>
-            <p className="mb-3 text-[11px] text-white/45">
-              Critical U&R runbook gate — YouTube watch URL must equal Restream
-              destination externalUrl. Stay empty/stub until U+R wires APIs on
-              handoff — board shows FAIL until both present and equal.
-            </p>
-            <label className="mb-2 block text-[10px] font-semibold uppercase tracking-wider text-white/40">
-              YouTube watch URL
-              <input
-                value={ytUrl}
-                onChange={(e) => setYtUrl(e.target.value)}
-                placeholder="https://www.youtube.com/watch?v=…"
-                className="mt-1 w-full rounded border border-white/12 bg-black/35 px-3 py-2 text-[12px] text-[var(--ur-ice)] outline-none focus:border-[var(--ur-accent)]/60"
-              />
-            </label>
-            <label className="mb-2 block text-[10px] font-semibold uppercase tracking-wider text-white/40">
-              Restream externalUrl
-              <input
-                value={rsUrl}
-                onChange={(e) => setRsUrl(e.target.value)}
-                placeholder="Must match YouTube watch URL"
-                className="mt-1 w-full rounded border border-white/12 bg-black/35 px-3 py-2 text-[12px] text-[var(--ur-ice)] outline-none focus:border-[var(--ur-accent)]/60"
-              />
-            </label>
-            <label className="mb-2 block text-[10px] font-semibold uppercase tracking-wider text-white/40">
-              YT title
-              <input
-                value={ytTitle}
-                onChange={(e) => setYtTitle(e.target.value)}
-                className="mt-1 w-full rounded border border-white/12 bg-black/35 px-3 py-2 text-[12px] outline-none focus:border-[var(--ur-accent)]/60"
-              />
-            </label>
-            <label className="mb-3 block text-[10px] font-semibold uppercase tracking-wider text-white/40">
-              YT description
-              <textarea
-                value={ytDescription}
-                onChange={(e) => setYtDescription(e.target.value)}
-                rows={2}
-                className="mt-1 w-full rounded border border-white/12 bg-black/35 px-3 py-2 text-[12px] outline-none focus:border-[var(--ur-accent)]/60"
-              />
-            </label>
-            <p className="mb-3 text-[11px] text-white/40">{board.destinationsGate.reason}</p>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() =>
-                patch({
-                  youtubeWatchUrl: ytUrl,
-                  restreamExternalUrl: rsUrl,
-                  ytTitle,
-                  ytDescription,
-                })
-              }
-              className="rounded px-3 py-2 text-[11px] font-bold text-[#0B0F14] disabled:opacity-40"
-              style={{ background: UR_PALETTE.accent }}
-            >
-              Save destinations
-            </button>
-            <div className="mt-3 space-y-1 border-t border-white/10 pt-3 text-[10px] text-white/35">
-              <div>
-                Restream stub:{" "}
-                <code className="text-white/55">{board.restreamEventStubId}</code>{" "}
-                ({board.restreamApi})
-              </div>
-              <div>
-                YT upcoming stub:{" "}
-                <code className="text-white/55">{board.youtubeUpcomingStubId}</code>{" "}
-                ({board.youtubeApi})
-              </div>
-              <div className="text-white/30">
-                TODO: real Restream / YouTube APIs when keys exist — not wired here.
-              </div>
-            </div>
-          </section>
-
-          {/* Graphics checklist */}
-          <section
-            className="rounded-lg border border-white/10 p-3 sm:p-4"
-            style={{ background: UR_PALETTE.steel }}
-          >
-            <div className="mb-3 flex items-center gap-2">
-              <ListChecks className="h-3.5 w-3.5" style={{ color: UR_PALETTE.accent }} />
-              <h2 className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/55">
-                Graphics checklist
+            <div className="mb-2 flex items-center gap-2">
+              <CircleDot className="h-3.5 w-3.5 text-amber-300" />
+              <h2 className="text-[11px] font-bold uppercase tracking-[0.12em] text-amber-200/90">
+                {board.provisioning ? "Provisioning… — U+R desk stubs" : "Provision tasks"}
               </h2>
             </div>
-            <ul className="space-y-2 text-[12px]">
-              <li className="rounded border border-white/10 bg-black/25 px-3 py-2">
-                <div className="text-[10px] font-bold uppercase tracking-wider text-white/40">
-                  RFC Studio
-                </div>
-                <div className="mt-0.5 text-white/75">{board.graphics.rfcStudio.note}</div>
-                <a
-                  href={board.graphics.rfcStudio.localPro}
-                  className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold"
-                  style={{ color: UR_PALETTE.accent }}
+            <ul className="space-y-1.5">
+              {(board.provisionTasks || []).map((t) => (
+                <li
+                  key={t.key}
+                  className="flex items-center gap-2 rounded border border-white/10 bg-black/25 px-2.5 py-1.5 text-[11px]"
                 >
-                  {board.graphics.rfcStudio.localPro}
-                  <ExternalLink className="h-3 w-3" />
-                </a>
-              </li>
-              <li className="rounded border border-white/10 bg-black/25 px-3 py-2">
-                <div className="text-[10px] font-bold uppercase tracking-wider text-white/40">
-                  Overlay (pitch OFF)
-                </div>
-                <div className="mt-0.5 break-all text-[11px] text-white/70">
-                  {board.graphics.overlayUrl}
-                </div>
-                <div className="mt-1 text-[10px] text-white/40">
-                  Params: {board.graphics.overlayParams} · scorebug off · lower flashes
-                </div>
-                <a
-                  href={board.graphics.overlayUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold"
-                  style={{ color: UR_PALETTE.accent }}
-                >
-                  Open overlay
-                  <ExternalLink className="h-3 w-3" />
-                </a>
-              </li>
-              {board.matchDay?.matchId ? (
-                <li className="rounded border border-white/10 bg-black/25 px-3 py-2">
-                  <Link
-                    href={`/match-day/${board.matchDay.matchId}`}
-                    className="inline-flex items-center gap-1 text-[11px] font-semibold"
-                    style={{ color: UR_PALETTE.accent }}
+                  <span
+                    className={cn(
+                      "rounded px-1.5 py-0.5 text-[9px] font-black uppercase",
+                      t.status === "done"
+                        ? "bg-emerald-500/25 text-emerald-300"
+                        : "bg-amber-500/20 text-amber-200"
+                    )}
                   >
-                    Open match desk
-                    <ArrowRight className="h-3 w-3" />
-                  </Link>
+                    {t.status}
+                  </span>
+                  <span className="text-white/70">{t.label}</span>
                 </li>
-              ) : null}
+              ))}
             </ul>
+            <p className="mt-2 text-[10px] text-white/40">
+              U+R PATCHes destination URLs back to clear provisioning. Write-back:{" "}
+              <code className="text-white/55">youtubeWatchUrl</code>,{" "}
+              <code className="text-white/55">restreamExternalUrl</code>, creatives via{" "}
+              <code className="text-white/55">set-assets</code>.
+            </p>
           </section>
-        </div>
+        ) : null}
 
-        {/* Creatives approve queue */}
+        {/* Destinations + gate — sticky near top of spine */}
         <section
-          className="rounded-lg border border-white/10 p-3 sm:p-4"
-          style={{ background: UR_PALETTE.steel }}
+          className={cn(sectionClass, "sticky top-[3.25rem] z-20 shadow-[0_8px_32px_rgba(0,0,0,0.45)]")}
+          style={sectionStyle}
         >
           <div className="mb-3 flex items-center gap-2">
+            <Link2 className="h-3.5 w-3.5" style={{ color: UR_PALETTE.accent }} />
+            <h2 className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/55">
+              Destinations / URL gate
+            </h2>
+            <span
+              className={cn(
+                "ml-auto rounded px-2 py-0.5 text-[9px] font-black uppercase tracking-wider",
+                board.destinationsGate.pass
+                  ? "bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-400/40"
+                  : "bg-rose-500/20 text-rose-200 ring-1 ring-rose-400/40"
+              )}
+            >
+              {board.destinationsGate.pass ? "PASS" : "FAIL"}
+            </span>
+          </div>
+          <p className="mb-3 text-[11px] text-white/45">
+            YouTube watch URL must equal Restream destination externalUrl. Empty until U+R
+            wires on enable_provision — FAIL until both present and equal.
+          </p>
+          <label className="mb-2 block text-[10px] font-semibold uppercase tracking-wider text-white/40">
+            YouTube watch URL
+            <input
+              value={ytUrl}
+              onChange={(e) => setYtUrl(e.target.value)}
+              placeholder="https://www.youtube.com/watch?v=…"
+              className="mt-1 w-full rounded border border-white/12 bg-black/35 px-3 py-2 text-[12px] text-[var(--ur-ice)] outline-none focus:border-[var(--ur-accent)]/60"
+            />
+          </label>
+          <label className="mb-2 block text-[10px] font-semibold uppercase tracking-wider text-white/40">
+            Restream externalUrl
+            <input
+              value={rsUrl}
+              onChange={(e) => setRsUrl(e.target.value)}
+              placeholder="Must match YouTube watch URL"
+              className="mt-1 w-full rounded border border-white/12 bg-black/35 px-3 py-2 text-[12px] text-[var(--ur-ice)] outline-none focus:border-[var(--ur-accent)]/60"
+            />
+          </label>
+          <label className="mb-2 block text-[10px] font-semibold uppercase tracking-wider text-white/40">
+            YT title{" "}
+            <span className="normal-case tracking-normal text-white/30">
+              ({ytTitle.length}/100)
+            </span>
+            <input
+              value={ytTitle}
+              onChange={(e) => setYtTitle(e.target.value)}
+              maxLength={100}
+              className="mt-1 w-full rounded border border-white/12 bg-black/35 px-3 py-2 text-[12px] outline-none focus:border-[var(--ur-accent)]/60"
+            />
+          </label>
+          <label className="mb-3 block text-[10px] font-semibold uppercase tracking-wider text-white/40">
+            YT description
+            <textarea
+              value={ytDescription}
+              onChange={(e) => setYtDescription(e.target.value)}
+              rows={5}
+              className="mt-1 w-full rounded border border-white/12 bg-black/35 px-3 py-2 text-[12px] outline-none focus:border-[var(--ur-accent)]/60"
+            />
+          </label>
+          <p className="mb-3 text-[11px] text-white/40">{board.destinationsGate.reason}</p>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() =>
+              patch({
+                youtubeWatchUrl: ytUrl,
+                restreamExternalUrl: rsUrl,
+                ytTitle,
+                ytDescription,
+              })
+            }
+            className="rounded px-3 py-2 text-[11px] font-bold text-[#0B0F14] disabled:opacity-40"
+            style={{ background: UR_PALETTE.accent }}
+          >
+            Save destinations
+          </button>
+          <div className="mt-3 space-y-1 border-t border-white/10 pt-3 text-[10px] text-white/35">
+            <div>
+              Restream stub:{" "}
+              <code className="text-white/55">{board.restreamEventStubId}</code> ({board.restreamApi})
+            </div>
+            <div>
+              YT upcoming stub:{" "}
+              <code className="text-white/55">{board.youtubeUpcomingStubId}</code> ({board.youtubeApi})
+            </div>
+          </div>
+        </section>
+
+        {/* GO LIVE — separate from Ready for desk / Enable */}
+        <section
+          className="rounded-lg border p-3 sm:p-4"
+          style={{
+            background: "linear-gradient(135deg, #1A2332 0%, #0B0F14 100%)",
+            borderColor: board.goLive?.enabled
+              ? "rgba(52,211,153,0.45)"
+              : "rgba(255,255,255,0.12)",
+          }}
+        >
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <Radio className="h-4 w-4 text-emerald-300" />
+                <h2 className="text-[12px] font-bold uppercase tracking-[0.12em]">
+                  GO LIVE
+                </h2>
+              </div>
+              <p className="mt-1 max-w-xl text-[11px] text-white/50">
+                Signal only — starts Restream destinations path + We&apos;re live cadence on
+                U+R. CoComms does <strong className="text-white/75">not</strong> start the
+                encoder (OBS/U+R owns streaming). Separate from Enable / Ready for desk.
+              </p>
+              {board.goLive?.softWarn ? (
+                <p className="mt-1 text-[10px] font-semibold text-amber-200/90">
+                  Soft-warn: {board.goLive.softWarn}
+                </p>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              disabled={busy || !board.goLive?.enabled}
+              onClick={goLive}
+              title={
+                board.goLive?.enabled
+                  ? "Send go_live signal to U+R"
+                  : board.destinationsGate.reason
+              }
+              className="inline-flex items-center justify-center gap-2 rounded px-5 py-3 text-[12px] font-black uppercase tracking-[0.08em] text-[#0B0F14] shadow-[0_0_28px_rgba(52,211,153,0.35)] disabled:opacity-35 disabled:shadow-none"
+              style={{ background: "#34d399" }}
+            >
+              <Radio className="h-4 w-4" />
+              GO LIVE
+            </button>
+          </div>
+        </section>
+
+        {/* Graphics checklist */}
+        <section className={sectionClass} style={sectionStyle}>
+          <div className="mb-3 flex items-center gap-2">
+            <ListChecks className="h-3.5 w-3.5" style={{ color: UR_PALETTE.accent }} />
+            <h2 className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/55">
+              Graphics checklist
+            </h2>
+          </div>
+          <ul className="space-y-2 text-[12px]">
+            <li className="rounded border border-white/10 bg-black/25 px-3 py-2">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-white/40">
+                RFC Studio
+              </div>
+              <div className="mt-0.5 text-white/75">{board.graphics.rfcStudio.note}</div>
+              <a
+                href={board.graphics.rfcStudio.localPro}
+                className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold"
+                style={{ color: UR_PALETTE.accent }}
+              >
+                {board.graphics.rfcStudio.localPro}
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            </li>
+            <li className="rounded border border-white/10 bg-black/25 px-3 py-2">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-white/40">
+                Overlay (pitch OFF)
+              </div>
+              <div className="mt-0.5 break-all text-[11px] text-white/70">
+                {board.graphics.overlayUrl}
+              </div>
+              <div className="mt-1 text-[10px] text-white/40">
+                Params: {board.graphics.overlayParams} · scorebug off · lower flashes
+              </div>
+              <a
+                href={board.graphics.overlayUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold"
+                style={{ color: UR_PALETTE.accent }}
+              >
+                Open overlay
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            </li>
+            {board.matchDay?.matchId ? (
+              <li className="rounded border border-white/10 bg-black/25 px-3 py-2">
+                <Link
+                  href={`/match-day/${board.matchDay.matchId}`}
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold"
+                  style={{ color: UR_PALETTE.accent }}
+                >
+                  Open match desk
+                  <ArrowRight className="h-3 w-3" />
+                </Link>
+              </li>
+            ) : null}
+          </ul>
+        </section>
+
+        {/* Creatives — consistent grid + crests */}
+        <section className={sectionClass} style={sectionStyle}>
+          <div className="mb-3 flex flex-wrap items-center gap-2">
             <Megaphone className="h-3.5 w-3.5" style={{ color: UR_PALETTE.accent }} />
             <h2 className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/55">
               Creatives approve queue
             </h2>
-            <span className="ml-auto text-[10px] text-white/35">
-              Remote desk Canva assets · approve → social schedule
-            </span>
+            {(board.matchDay?.homeCrestUrl || board.matchDay?.awayCrestUrl) && (
+              <div className="ml-auto flex items-center gap-1.5">
+                {board.matchDay.homeCrestUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={board.matchDay.homeCrestUrl}
+                    alt=""
+                    className="h-5 w-5 object-contain opacity-80"
+                  />
+                ) : null}
+                {board.matchDay.awayCrestUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={board.matchDay.awayCrestUrl}
+                    alt=""
+                    className="h-5 w-5 object-contain opacity-80"
+                  />
+                ) : null}
+              </div>
+            )}
           </div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {board.creatives.map((c) => (
               <article
                 key={c.id}
@@ -618,13 +784,48 @@ export function ShowBoardClient({
                   }}
                 >
                   {!c.assetUrl ? (
-                    <div className="flex h-full flex-col items-center justify-center gap-1 px-3 text-center text-[10px] uppercase tracking-wider text-white/30">
+                    <div className="flex h-full flex-col items-center justify-center gap-2 px-3 text-center text-[10px] uppercase tracking-wider text-white/30">
+                      <div className="flex items-center gap-2 opacity-70">
+                        {board.matchDay?.homeCrestUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={board.matchDay.homeCrestUrl}
+                            alt=""
+                            className="h-8 w-8 object-contain"
+                          />
+                        ) : null}
+                        <span className="text-white/20">vs</span>
+                        {board.matchDay?.awayCrestUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={board.matchDay.awayCrestUrl}
+                            alt=""
+                            className="h-8 w-8 object-contain"
+                          />
+                        ) : null}
+                      </div>
                       <span>Awaiting match-specific creatives pack</span>
-                      <span className="normal-case tracking-normal text-white/20">
-                        Never shows another fixture&apos;s art
-                      </span>
                     </div>
-                  ) : null}
+                  ) : (
+                    <div className="absolute bottom-2 right-2 flex items-center gap-1 rounded bg-black/60 px-1.5 py-0.5">
+                      {board.matchDay?.homeCrestUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={board.matchDay.homeCrestUrl}
+                          alt=""
+                          className="h-4 w-4 object-contain"
+                        />
+                      ) : null}
+                      {board.matchDay?.awayCrestUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={board.matchDay.awayCrestUrl}
+                          alt=""
+                          className="h-4 w-4 object-contain"
+                        />
+                      ) : null}
+                    </div>
+                  )}
                   <span
                     className={cn(
                       "absolute left-2 top-2 rounded px-1.5 py-0.5 text-[9px] font-black uppercase",
@@ -651,9 +852,15 @@ export function ShowBoardClient({
                       Canva {c.canvaId}
                       <ExternalLink className="h-2.5 w-2.5" />
                     </a>
-                  ) : (
-                    <div className="text-[10px] text-amber-200/70">
-                      {c.placeholder ||
+                  ) : null}
+                  {(c.brief || c.placeholder || (!c.assetUrl && !c.canvaId)) && (
+                    <div className="rounded border border-white/8 bg-black/35 px-2 py-1.5 text-[10px] leading-snug text-amber-100/75">
+                      <span className="mb-0.5 block text-[8px] font-black uppercase tracking-wider text-white/35">
+                        {c.kind === "thumb" ? "Thumbnail brief" : "Pack note"}
+                      </span>
+                      {c.brief ||
+                        c.placeholder ||
+                        board.thumbnailBrief ||
                         board.creativesPlaceholder ||
                         "Awaiting match-specific creatives pack"}
                     </div>
@@ -688,62 +895,62 @@ export function ShowBoardClient({
           </div>
         </section>
 
-        {/* Social calendar */}
-        <section
-          className="rounded-lg border border-white/10 p-3 sm:p-4"
-          style={{ background: UR_PALETTE.steel }}
-        >
+        {/* Social calendar — one column */}
+        <section className={sectionClass} style={sectionStyle}>
           <div className="mb-3 flex items-center gap-2">
             <Radio className="h-3.5 w-3.5" style={{ color: UR_PALETTE.accent }} />
             <h2 className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/55">
               Social calendar
             </h2>
             <span className="ml-auto text-[10px] text-white/35">
-              T−day · T−1h · We&apos;re live · FT — API stub until handoff
+              T−day · T−1h · We&apos;re live · FT
             </span>
           </div>
-          <div className="grid gap-2">
+          <div className="flex flex-col gap-2">
             {board.socialDrafts.map((s) => (
               <div
                 key={s.id}
-                className="flex flex-col gap-2 rounded border border-white/10 bg-black/25 p-3 sm:flex-row sm:items-center"
+                className="flex flex-col gap-2 rounded border border-white/10 bg-black/25 p-3"
               >
-                {s.assetUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={s.assetUrl}
-                    alt=""
-                    className="h-14 w-24 shrink-0 rounded object-cover ring-1 ring-white/10"
-                  />
-                ) : (
-                  <div className="flex h-14 w-24 shrink-0 flex-col items-center justify-center rounded bg-black/40 px-1 text-center text-[8px] uppercase leading-tight text-white/35 ring-1 ring-white/10">
-                    Awaiting pack
-                  </div>
-                )}
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-[12px] font-bold">{s.label}</span>
-                    <span className="rounded bg-white/10 px-1.5 py-0.5 text-[9px] font-bold uppercase text-white/50">
-                      {s.platform}
-                    </span>
-                    <span className="rounded px-1.5 py-0.5 text-[9px] font-bold uppercase text-white/40 ring-1 ring-white/15">
-                      {s.slot}
-                    </span>
-                    {s.approved ? (
-                      <span className="text-[9px] font-bold uppercase text-emerald-300">
-                        Scheduled
+                <div className="flex items-start gap-3">
+                  {s.assetUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={s.assetUrl}
+                      alt=""
+                      className="h-14 w-24 shrink-0 rounded object-cover ring-1 ring-white/10"
+                    />
+                  ) : (
+                    <div className="flex h-14 w-24 shrink-0 flex-col items-center justify-center rounded bg-black/40 px-1 text-center text-[8px] uppercase leading-tight text-white/35 ring-1 ring-white/10">
+                      Awaiting pack
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-[12px] font-bold">{s.label}</span>
+                      <span className="rounded bg-white/10 px-1.5 py-0.5 text-[9px] font-bold uppercase text-white/50">
+                        {s.platform}
                       </span>
+                      <span className="rounded px-1.5 py-0.5 text-[9px] font-bold uppercase text-white/40 ring-1 ring-white/15">
+                        {s.slot}
+                      </span>
+                      {s.approved ? (
+                        <span className="text-[9px] font-bold uppercase text-emerald-300">
+                          Scheduled
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="mt-1 text-[11px] leading-snug text-white/55">{s.copy}</p>
+                    {s.scheduledAt ? (
+                      <div className="mt-0.5 text-[10px] text-white/35">
+                        Slot:{" "}
+                        {new Date(s.scheduledAt).toLocaleString("en-GB", {
+                          timeZone: "Europe/London",
+                        })}{" "}
+                        PT
+                      </div>
                     ) : null}
                   </div>
-                  <p className="mt-0.5 truncate text-[11px] text-white/55">{s.copy}</p>
-                  {s.scheduledAt ? (
-                    <div className="mt-0.5 text-[10px] text-white/35">
-                      Slot: {new Date(s.scheduledAt).toLocaleString("en-GB", {
-                        timeZone: "Europe/London",
-                      })}{" "}
-                      PT
-                    </div>
-                  ) : null}
                 </div>
                 <button
                   type="button"
@@ -756,10 +963,8 @@ export function ShowBoardClient({
                     })
                   }
                   className={cn(
-                    "shrink-0 rounded px-3 py-1.5 text-[10px] font-bold uppercase disabled:opacity-40",
-                    s.approved
-                      ? "bg-white/10 text-white/60"
-                      : "text-[#0B0F14]"
+                    "w-full rounded px-3 py-1.5 text-[10px] font-bold uppercase disabled:opacity-40",
+                    s.approved ? "bg-white/10 text-white/60" : "text-[#0B0F14]"
                   )}
                   style={!s.approved ? { background: UR_PALETTE.accent } : undefined}
                 >
@@ -770,7 +975,7 @@ export function ShowBoardClient({
           </div>
         </section>
 
-        {/* Handoff */}
+        {/* Ready for desk — separate from GO LIVE */}
         <section
           className="rounded-lg border p-3 sm:p-4"
           style={{
@@ -787,14 +992,15 @@ export function ShowBoardClient({
                 </h2>
               </div>
               <p className="mt-1 max-w-xl text-[11px] text-white/50">
-                Packages AF fixture id, match-day id, overlay URL, approved
-                creatives/social. Consumer:{" "}
-                <strong className="text-white/75">Remote football comms desk</strong>{" "}
-                (Restream / creatives / OBS). Optional webhook via{" "}
+                Packages AF fixture, overlay, approved creatives/social. Not the same as GO
+                LIVE. Optional webhook via{" "}
                 <code className="text-white/45">UR_HANDOFF_WEBHOOK_URL</code>.
               </p>
               {board.handoffReadyAt ? (
-                <p className="mt-1 text-[10px] font-semibold" style={{ color: UR_PALETTE.accent }}>
+                <p
+                  className="mt-1 text-[10px] font-semibold"
+                  style={{ color: UR_PALETTE.accent }}
+                >
                   Last handoff:{" "}
                   {new Date(board.handoffReadyAt).toLocaleString("en-GB", {
                     timeZone: "Europe/London",

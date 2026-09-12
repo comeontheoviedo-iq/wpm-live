@@ -45,6 +45,25 @@ export const UR_LEGACY_STUB_ASSETS = new Set([
 export const UR_CREATIVES_PLACEHOLDER =
   "Awaiting match-specific creatives pack";
 
+/**
+ * Default YT thumbnail brief (Chris replicate winners) — encoded on Enable autofill
+ * as pack notes / board.thumbnailBrief. NOT a fake Canva render.
+ * One idea only; title carries SEO — thumb stays visual + 3–4 words.
+ */
+export const UR_THUMBNAIL_BRIEF =
+  "ONE idea only: big home crest + big away crest + 3–4 words max (LIVE WATCHALONG / WE'RE LIVE). No full title on thumb (title carries SEO). High contrast, mobile-first, safe zone. Optional later: Chris face cutout looking toward crests.";
+
+export const UR_CREATIVE_BRIEFS = {
+  thumb: UR_THUMBNAIL_BRIEF,
+  cover:
+    "FB cover: same crest pair language as thumb; room for KO + competition line; mobile crop safe.",
+  ig_live:
+    "IG We're Live still: crests + WE'RE LIVE (3–4 words). Visual-first — copy stays short on post.",
+  open: "Open moment graphic — match-specific only.",
+  ht: "HT moment graphic — match-specific only.",
+  ft: "FT moment graphic — match-specific only.",
+} as const;
+
 export type UrCreativeAsset = {
   canvaId: string | null;
   canvaUrl: string | null;
@@ -256,37 +275,93 @@ export type MatchAutofill = {
   pack: UrMatchCreativePack | null;
 };
 
+/** Public hashtag token — letters/digits only, no "CoComms U&R" */
+export function hashtagToken(name: string) {
+  const cleaned = name.replace(/[^a-zA-Z0-9]+/g, "");
+  return cleaned || "Football";
+}
+
+export function buildYtTitle(af: {
+  homeShort: string;
+  awayShort: string;
+  competition: string;
+}) {
+  const core = `${af.homeShort} vs ${af.awayShort} Live Watchalong | Unofficial & Remote`;
+  const withComp = af.competition
+    ? `${core} | ${af.competition}`
+    : core;
+  if (withComp.length <= 100) return withComp;
+  if (core.length <= 100) return core;
+  return core.slice(0, 100);
+}
+
+export function buildYtDescription(af: {
+  fixtureLabelFull: string;
+  competition: string;
+  kickoffLondon: string;
+  venue: string | null;
+  homeShort: string;
+  awayShort: string;
+}) {
+  const venueBit = af.venue ? ` at ${af.venue}` : "";
+  const tagHome = hashtagToken(af.homeShort);
+  const tagAway = hashtagToken(af.awayShort);
+  const tagComp = hashtagToken(af.competition || "Football");
+  return [
+    `Live watchalong — voice commentary + graphics only (no match footage). ${af.fixtureLabelFull}${af.competition ? ` · ${af.competition}` : ""}.`,
+    `KO ${af.kickoffLondon}${venueBit}. On stream: live score & events, real-time reaction, and the Unofficial & Remote desk.`,
+    `Subscribe for more watchalongs. #${tagHome} #${tagAway} #${tagComp} #Watchalong #UnofficialAndRemote`,
+  ].join("\n\n");
+}
+
+/**
+ * Social cadence (Chris replicate winners) — platform-fit:
+ * YT community / FB = longer; IG = shorter + visual.
+ * {WATCH_LINK} filled by U+R when destinations exist.
+ * We're live copy is the GO LIVE cadence (clear join CTA + link; gate must PASS).
+ */
 export function buildSocialDraftsFromMatch(af: MatchAutofill) {
   const { homeShort, awayShort, fixtureLabelFull, kickoffLondon, competition, venue } =
     af;
   const venueBit = venue ? ` · ${venue}` : "";
+  const link = "{WATCH_LINK}";
+  const tagHome = hashtagToken(homeShort);
+  const tagAway = hashtagToken(awayShort);
+  const tagComp = hashtagToken(competition || "Football");
+  const nextTease = competition
+    ? `Next up: more ${competition} watchalongs — hit subscribe.`
+    : "Next up: more Live Watchalongs — hit subscribe.";
   return [
     {
       slotKey: "t_day",
       label: "T−day",
       platform: "youtube",
-      copy: `Match day — ${fixtureLabelFull}. KO ${kickoffLondon}.${venueBit} Full CoComms U&R show coming up.`,
+      // YT community / longer: anticipation + teams + KO + link
+      copy: `Match day energy 🔥\n\n${homeShort} vs ${awayShort} — Live Watchalong today.\nKO ${kickoffLondon}${venueBit}.\n\nVoice + graphics only (no match footage). Join us later:\n${link}\n\n#${tagHome} #${tagAway} #${tagComp} #Watchalong #UnofficialAndRemote`,
       creativeKind: "thumb",
     },
     {
       slotKey: "t_1h",
       label: "T−1h",
       platform: "facebook",
-      copy: `One hour out — ${homeShort} vs ${awayShort}. KO ${kickoffLondon}. Cover live, stream locking.${venueBit}`,
+      // FB longer: reminder + link
+      copy: `One hour reminder ⏱\n\n${homeShort} vs ${awayShort} kicks off at ${kickoffLondon}.\nLive Watchalong locking in — voice, graphics, live score & reaction.\n\nSet a reminder / jump in here:\n${link}\n\n#${tagHome} #${tagAway} #Watchalong`,
       creativeKind: "cover",
     },
     {
       slotKey: "were_live",
       label: "We're live",
       platform: "instagram",
-      copy: `We're live — ${fixtureLabelFull}. Join the stream now.`,
+      // IG shorter + visual; GO LIVE fires this cadence — clear join CTA + link
+      copy: `🔴 WE'RE LIVE\n${homeShort} vs ${awayShort}\nJoin now → ${link}\n#Watchalong #UnofficialAndRemote`,
       creativeKind: "ig_live",
     },
     {
       slotKey: "ft",
       label: "FT (optional)",
       platform: "youtube",
-      copy: `Full time — ${homeShort} vs ${awayShort} (${competition}). Thanks for watching with CoComms U&R.`,
+      // thanks + subscribe + next tease
+      copy: `Full time — thanks for watching ${homeShort} vs ${awayShort}${competition ? ` (${competition})` : ""} with us.\n\nIf you enjoyed the Live Watchalong, subscribe for the next one.\n${nextTease}\n\nReplay / channel: ${link}\n\n#${tagHome} #${tagAway} #Watchalong #UnofficialAndRemote`,
       creativeKind: "ft",
     },
   ] as const;
@@ -323,6 +398,105 @@ export const UR_SOCIAL_STUBS = [
     creativeKind: "ft",
   },
 ] as const;
+
+/** U+R desk stub tasks created on Enable U&R (even days ahead) */
+export const UR_PROVISION_TASK_DEFS = [
+  {
+    key: "restream_yt_fb",
+    label: "Restream encoder + scheduled YT/FB create",
+  },
+  {
+    key: "creatives_generate",
+    label: "Creatives generate request",
+  },
+  {
+    key: "social_drafts",
+    label: "Social drafts ready",
+  },
+] as const;
+
+export type UrProvisioningStatus = "idle" | "provisioning" | "ready";
+
+/** Documented write-back fields U+R PATCHes to clear provisioning / fill board */
+export const UR_WRITEBACK_FIELDS = {
+  youtubeWatchUrl:
+    "PATCH /api/show/{matchDayId} { youtubeWatchUrl } — scheduled YT watch URL",
+  restreamExternalUrl:
+    "PATCH /api/show/{matchDayId} { restreamExternalUrl } — must equal youtubeWatchUrl",
+  restreamEventStubId:
+    "PATCH /api/show/{matchDayId} { restreamEventStubId } — real Restream event id (optional)",
+  youtubeUpcomingStubId:
+    "PATCH /api/show/{matchDayId} { youtubeUpcomingStubId } — real YT upcoming id (optional)",
+  ytThumbUrl:
+    "PATCH action=set-assets | root { ytThumbUrl, ytThumbCanvaId, ytThumbCanvaUrl }",
+  fbCoverUrl:
+    "PATCH action=set-assets | root { fbCoverUrl, fbCoverCanvaId, fbCoverCanvaUrl }",
+  igStillUrl:
+    "PATCH action=set-assets | root { igStillUrl, igStillCanvaId, igStillCanvaUrl }",
+  moments:
+    "PATCH { openUrl/openCanvaId/openCanvaUrl, ht*, ft* }",
+  note:
+    "When both destination URLs are present, CoComms clears provisioningStatus → ready",
+} as const;
+
+export function buildProvisionTasks(show: {
+  youtubeWatchUrl: string | null;
+  restreamExternalUrl: string | null;
+  creatives: Array<{ assetUrl: string | null; canvaId: string | null }>;
+  socialSlots: Array<{ copy: string; approved: boolean }>;
+}) {
+  const gate = destinationsGate(show.youtubeWatchUrl, show.restreamExternalUrl);
+  const hasCreative = show.creatives.some(
+    (c) =>
+      (c.assetUrl && !UR_LEGACY_STUB_ASSETS.has(c.assetUrl)) ||
+      (c.canvaId && !UR_LEGACY_STUB_CANVA_IDS.has(c.canvaId))
+  );
+  const socialReady = show.socialSlots.some((s) => (s.copy || "").trim().length > 0);
+  return UR_PROVISION_TASK_DEFS.map((t) => {
+    let done = false;
+    if (t.key === "restream_yt_fb") done = gate.pass;
+    else if (t.key === "creatives_generate") done = hasCreative;
+    else if (t.key === "social_drafts") done = socialReady;
+    return {
+      key: t.key,
+      label: t.label,
+      status: done ? ("done" as const) : ("pending" as const),
+    };
+  });
+}
+
+export async function postUrHandoffWebhook(
+  action: string,
+  payload: Record<string, unknown>
+) {
+  const webhook = process.env.UR_HANDOFF_WEBHOOK_URL?.trim();
+  const body = { action, ...payload };
+  if (!webhook) {
+    return {
+      ok: false as const,
+      detail: "No UR_HANDOFF_WEBHOOK_URL — in-app log only",
+      body,
+    };
+  }
+  try {
+    const res = await fetch(webhook, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    return {
+      ok: res.ok,
+      detail: `Webhook ${res.status} ${res.statusText}`,
+      body,
+    };
+  } catch (e) {
+    return {
+      ok: false as const,
+      detail: e instanceof Error ? e.message : "Webhook failed",
+      body,
+    };
+  }
+}
 
 function stubId(prefix: string) {
   return `${prefix}_${randomBytes(6).toString("hex")}`;
@@ -447,8 +621,7 @@ export function buildMatchAutofill(matchDay: MatchDayForBoard): MatchAutofill {
     : matchDay.title;
   const kickoffLondon = formatKoLondon(kickoff);
   const competition = matchDay.competition || "";
-  const venueLine = venue ? `Venue: ${venue}.` : "";
-  return {
+  const base: Omit<MatchAutofill, "ytTitle" | "ytDescription"> = {
     homeName,
     awayName: awayName || "TBD",
     homeShort,
@@ -461,13 +634,15 @@ export function buildMatchAutofill(matchDay: MatchDayForBoard): MatchAutofill {
     kickoffLondon,
     fixtureLabel,
     fixtureLabelFull,
-    ytTitle: `${fixtureLabel} | CoComms U&R`,
-    ytDescription:
-      `Live CoComms U&R commentary — ${fixtureLabelFull}. ${competition}. KO ${kickoffLondon}. ${venueLine}`.trim(),
     overlayUrl: overlayUrlForMatchDay(matchDay.id, match?.id),
     matchId: match?.id ?? null,
     afFixtureId: match?.apiFootballFixtureId ?? null,
     pack: resolveMatchCreativePack(homeName, awayName),
+  };
+  return {
+    ...base,
+    ytTitle: buildYtTitle(base),
+    ytDescription: buildYtDescription(base),
   };
 }
 
@@ -493,6 +668,7 @@ export function toBoardJson(show: {
   restreamEventStubId: string | null;
   youtubeUpcomingStubId: string | null;
   handoffReadyAt: Date | null;
+  provisioningStatus?: string | null;
   creatives: CreativeRow[];
   socialSlots: SocialRow[];
   handoffLogs?: HandoffRow[];
@@ -505,6 +681,16 @@ export function toBoardJson(show: {
     show.youtubeWatchUrl,
     show.restreamExternalUrl
   );
+  const provisioningStatus = (show.provisioningStatus ||
+    "idle") as UrProvisioningStatus;
+  const provisionTasks = buildProvisionTasks(show);
+  const creativesApproved = show.creatives.some((c) => c.status === "approved");
+  const socialApproved = show.socialSlots.some((s) => s.approved);
+  const goLiveReady = gate.pass;
+  const goLiveSoftWarn =
+    gate.pass && (!creativesApproved || !socialApproved)
+      ? "URL gate PASS — creatives/social not fully approved (soft-warn; GO LIVE still allowed)"
+      : null;
   const af = show.matchDay ? buildMatchAutofill(show.matchDay) : null;
   const fixtureLabel = af?.fixtureLabel || show.matchDay?.title || "Match";
 
@@ -519,7 +705,8 @@ export function toBoardJson(show: {
       previewAsset: ytThumbUrl,
       kind: "thumb" as const,
       label: "YT thumbnail",
-      note: ytThumbUrl ? undefined : UR_CREATIVES_PLACEHOLDER,
+      note: ytThumbUrl ? undefined : UR_THUMBNAIL_BRIEF,
+      brief: UR_THUMBNAIL_BRIEF,
     },
     fbCover: {
       canvaId: cover?.canvaId ?? null,
@@ -527,7 +714,8 @@ export function toBoardJson(show: {
       previewAsset: fbCoverUrl,
       kind: "cover" as const,
       label: "FB cover",
-      note: fbCoverUrl ? undefined : UR_CREATIVES_PLACEHOLDER,
+      note: fbCoverUrl ? undefined : UR_CREATIVE_BRIEFS.cover,
+      brief: UR_CREATIVE_BRIEFS.cover,
     },
     igLive: {
       canvaId: ig?.canvaId ?? null,
@@ -535,7 +723,8 @@ export function toBoardJson(show: {
       previewAsset: igStillUrl,
       kind: "ig_live" as const,
       label: "IG We're Live",
-      note: igStillUrl ? undefined : UR_CREATIVES_PLACEHOLDER,
+      note: igStillUrl ? undefined : UR_CREATIVE_BRIEFS.ig_live,
+      brief: UR_CREATIVE_BRIEFS.ig_live,
     },
   };
 
@@ -545,14 +734,30 @@ export function toBoardJson(show: {
     claimedByUserId: show.claimedByUserId,
     status: show.status,
     statuses: [...UR_SHOW_STATUSES],
+    provisioningStatus,
+    provisioning: provisioningStatus === "provisioning",
+    provisionTasks,
+    goLive: {
+      enabled: goLiveReady,
+      softWarn: goLiveSoftWarn,
+      note: "Signal only — U+R/OBS owns the encoder. CoComms does not start streaming.",
+    },
+    writeBackFields: UR_WRITEBACK_FIELDS,
     palette: UR_PALETTE,
     /** null until match-specific pack / PATCH — never another fixture's art */
     ytThumbUrl,
-    ytTitle: show.ytTitle || af?.ytTitle || `${fixtureLabel} | CoComms U&R`,
+    ytTitle:
+      show.ytTitle ||
+      af?.ytTitle ||
+      buildYtTitle({
+        homeShort: af?.homeShort || fixtureLabel,
+        awayShort: af?.awayShort || "TBD",
+        competition: show.matchDay?.competition || "",
+      }),
     ytDescription:
       show.ytDescription ||
       af?.ytDescription ||
-      `Live commentary show — ${fixtureLabel}. ${show.matchDay?.competition || ""}`.trim(),
+      `Live watchalong — voice + graphics only (no match footage). ${fixtureLabel}. #Watchalong #UnofficialAndRemote`,
     fbCoverUrl,
     igStillUrl,
     igStillNote: igStillUrl ? null : UR_CREATIVES_PLACEHOLDER,
@@ -566,17 +771,28 @@ export function toBoardJson(show: {
     restreamApi: "stub",
     /** TODO: call real YouTube Data API when keys exist — stub only */
     youtubeApi: "stub",
-    creatives: show.creatives.map((c) => ({
-      id: c.id,
-      kind: c.kind,
-      label: c.label,
-      canvaId: c.canvaId,
-      canvaUrl: c.canvaUrl,
-      assetUrl: c.assetUrl,
-      status: c.status,
-      sortOrder: c.sortOrder,
-      placeholder: !c.assetUrl && !c.canvaId ? UR_CREATIVES_PLACEHOLDER : null,
-    })),
+    thumbnailBrief: UR_THUMBNAIL_BRIEF,
+    creativeBriefs: UR_CREATIVE_BRIEFS,
+    creatives: show.creatives.map((c) => {
+      const brief =
+        c.kind in UR_CREATIVE_BRIEFS
+          ? UR_CREATIVE_BRIEFS[c.kind as keyof typeof UR_CREATIVE_BRIEFS]
+          : null;
+      return {
+        id: c.id,
+        kind: c.kind,
+        label: c.label,
+        canvaId: c.canvaId,
+        canvaUrl: c.canvaUrl,
+        assetUrl: c.assetUrl,
+        status: c.status,
+        sortOrder: c.sortOrder,
+        brief,
+        placeholder: !c.assetUrl && !c.canvaId
+          ? brief || UR_CREATIVES_PLACEHOLDER
+          : null,
+      };
+    }),
     socialDrafts: show.socialSlots.map((s) => ({
       id: s.id,
       slot: s.slotKey as "t_day" | "t_1h" | "were_live" | "ft",
@@ -932,7 +1148,18 @@ export async function claimMatchDayForUr(matchDayId: string, userId: string) {
       const existing = await findOwnedUrShow(matchDayId, userId);
       return { ok: true as const, created: false, show: existing! };
     }
-    return { ok: true as const, created: false, show: refreshed.show };
+    // If destinations still empty, keep/restore Provisioning… state
+    const s = refreshed.show;
+    const needsProvision =
+      !(s.youtubeWatchUrl || "").trim() || !(s.restreamExternalUrl || "").trim();
+    if (needsProvision && s.provisioningStatus !== "provisioning") {
+      await prisma.urShow.update({
+        where: { id: s.id },
+        data: { provisioningStatus: "provisioning" },
+      });
+    }
+    const finalShow = await findOwnedUrShow(matchDayId, userId);
+    return { ok: true as const, created: false, show: finalShow! };
   }
 
   const af = buildMatchAutofill(matchDay);
@@ -944,6 +1171,7 @@ export async function claimMatchDayForUr(matchDayId: string, userId: string) {
       matchDayId,
       claimedByUserId: userId,
       status: "Planned",
+      provisioningStatus: "provisioning",
       ytTitle: af.ytTitle,
       ytDescription: af.ytDescription,
       igStillUrl: af.pack?.igLive.assetUrl ?? null,
@@ -991,9 +1219,10 @@ export async function claimMatchDayForUr(matchDayId: string, userId: string) {
       handoffLogs: {
         create: {
           message: af.pack
-            ? `U&R enabled — match autofill + creatives pack "${af.pack.key}". Restream/YT URLs stub until APIs wired.`
-            : `U&R enabled — match autofill (names, KO Europe/London, overlay, social). Creatives: ${UR_CREATIVES_PLACEHOLDER}.`,
+            ? `U&R enabled — Provisioning… autofill + pack "${af.pack.key}". Stub tasks for U+R desk.`
+            : `U&R enabled — Provisioning… match autofill + stub tasks for U+R desk. Creatives: ${UR_CREATIVES_PLACEHOLDER}.`,
           payloadJson: JSON.stringify({
+            action: "enable_provision",
             matchDayId,
             restreamApi: "stub",
             youtubeApi: "stub",
@@ -1015,7 +1244,18 @@ export async function claimMatchDayForUr(matchDayId: string, userId: string) {
     include: showInclude,
   });
 
-  return { ok: true as const, created: true, show };
+  // Fire enable_provision handoff for U+R consumer (even days ahead of KO)
+  const provisionPayload = buildEnableProvisionPayload(show);
+  const webhook = await postUrHandoffWebhook("enable_provision", provisionPayload);
+  await prisma.urHandoffLog.create({
+    data: {
+      urShowId: show.id,
+      message: `enable_provision → U+R desk. ${webhook.detail}`,
+      payloadJson: JSON.stringify(webhook.body),
+    },
+  });
+  const withLog = await findOwnedUrShow(matchDayId, userId);
+  return { ok: true as const, created: true, show: withLog!, webhook };
 }
 
 /**
@@ -1098,11 +1338,87 @@ export async function advanceUrStatus(
   return { ok: true as const, show: await findOwnedUrShow(matchDayId, userId) };
 }
 
+export function buildEnableProvisionPayload(show: {
+  id: string;
+  matchDayId: string;
+  ytTitle: string | null;
+  ytDescription: string | null;
+  restreamEventStubId: string | null;
+  youtubeUpcomingStubId: string | null;
+  youtubeWatchUrl: string | null;
+  restreamExternalUrl: string | null;
+  creatives: CreativeRow[];
+  socialSlots: SocialRow[];
+  matchDay?: MatchDayForBoard;
+}) {
+  const board = toBoardJson(show);
+  return {
+    consumer: "Remote football comms desk",
+    matchDayId: show.matchDayId,
+    matchId: board.matchDay?.matchId ?? null,
+    afFixtureId: board.matchDay?.afFixtureId ?? null,
+    tasks: buildProvisionTasks(show),
+    ytTitle: board.ytTitle,
+    ytDescription: board.ytDescription,
+    thumbnailBrief: UR_THUMBNAIL_BRIEF,
+    creativeBriefs: UR_CREATIVE_BRIEFS,
+    socialDrafts: board.socialDrafts,
+    socialCadence: {
+      t_day: "anticipation + teams + KO + link (YT/FB longer)",
+      t_1h: "reminder + link (FB longer)",
+      were_live:
+        "GO LIVE fires — clear join CTA + link; IG shorter + visual; gate must PASS",
+      ft: "thanks + subscribe + next tease (YT longer)",
+    },
+    match: board.matchDay,
+    overlayUrl: board.graphics.overlayUrl,
+    overlayParams: board.graphics.overlayParams,
+    restreamEventStubId: show.restreamEventStubId,
+    youtubeUpcomingStubId: show.youtubeUpcomingStubId,
+    writeBack: UR_WRITEBACK_FIELDS,
+    note:
+      "Enable U&R auto-provision — create Restream encoder + scheduled YT/FB, generate creatives, lock social drafts. PATCH destination URLs back to clear Provisioning… on CoComms.",
+    apis: { restream: "stub", youtube: "stub", social: "stub" },
+    at: new Date().toISOString(),
+  };
+}
+
+/** Clear provisioning when U+R writes both destination URLs back */
+export async function maybeClearProvisioning(
+  matchDayId: string,
+  userId: string
+) {
+  const show = await findOwnedUrShow(matchDayId, userId);
+  if (!show) return null;
+  const yt = (show.youtubeWatchUrl || "").trim();
+  const rs = (show.restreamExternalUrl || "").trim();
+  if (yt && rs && show.provisioningStatus === "provisioning") {
+    await prisma.urShow.update({
+      where: { id: show.id },
+      data: { provisioningStatus: "ready" },
+    });
+    await prisma.urHandoffLog.create({
+      data: {
+        urShowId: show.id,
+        message:
+          "Provisioning cleared — destination URLs written back by U+R desk.",
+        payloadJson: JSON.stringify({
+          action: "provision_cleared",
+          youtubeWatchUrl: yt,
+          restreamExternalUrl: rs,
+        }),
+      },
+    });
+    return findOwnedUrShow(matchDayId, userId);
+  }
+  return show;
+}
+
 export async function packageHandoff(matchDayId: string, userId: string) {
   const show = await findOwnedUrShow(matchDayId, userId);
   if (!show) return { ok: false as const, status: 404 as const, error: "Show not found" };
 
-  const match = show.matchDay.matches[0];
+  const match = show.matchDay?.matches?.[0];
   const board = toBoardJson(show);
   const payload = {
     consumer: "Remote football comms desk",
@@ -1129,34 +1445,13 @@ export async function packageHandoff(matchDayId: string, userId: string) {
     match: board.matchDay,
     canva: board.canva,
     creativePackKey: board.creativePackKey,
+    writeBack: UR_WRITEBACK_FIELDS,
     /** Restream/social API wiring is NOT ours */
     apis: { restream: "stub", youtube: "stub", social: "stub" },
     handedOffAt: new Date().toISOString(),
   };
 
-  const webhook = process.env.UR_HANDOFF_WEBHOOK_URL?.trim();
-  let webhookResult: { ok: boolean; detail: string } = {
-    ok: false,
-    detail: "No UR_HANDOFF_WEBHOOK_URL — in-app log only",
-  };
-  if (webhook) {
-    try {
-      const res = await fetch(webhook, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      webhookResult = {
-        ok: res.ok,
-        detail: `Webhook ${res.status} ${res.statusText}`,
-      };
-    } catch (e) {
-      webhookResult = {
-        ok: false,
-        detail: e instanceof Error ? e.message : "Webhook failed",
-      };
-    }
-  }
+  const webhookResult = await postUrHandoffWebhook("ready_for_desk", payload);
 
   await prisma.$transaction([
     prisma.urShow.update({
@@ -1167,7 +1462,7 @@ export async function packageHandoff(matchDayId: string, userId: string) {
       data: {
         urShowId: show.id,
         message: `Ready for desk handoff → Remote football comms desk. ${webhookResult.detail}`,
-        payloadJson: JSON.stringify(payload),
+        payloadJson: JSON.stringify(webhookResult.body),
       },
     }),
   ]);
@@ -1175,8 +1470,96 @@ export async function packageHandoff(matchDayId: string, userId: string) {
   const refreshed = await findOwnedUrShow(matchDayId, userId);
   return {
     ok: true as const,
-    payload,
-    webhook: webhookResult,
+    payload: webhookResult.body,
+    webhook: { ok: webhookResult.ok, detail: webhookResult.detail },
     show: refreshed!,
   };
 }
+
+/**
+ * GO LIVE signal — separate from Ready for desk / Enable.
+ * Does NOT start streaming from CoComms; U+R/OBS owns the encoder.
+ * Requires URL gate PASS; soft-warns if creatives/social incomplete.
+ */
+export async function goLiveUrShow(
+  matchDayId: string,
+  userId: string,
+  opts?: { force?: boolean }
+) {
+  const show = await findOwnedUrShow(matchDayId, userId);
+  if (!show) return { ok: false as const, status: 404 as const, error: "Show not found" };
+
+  const board = toBoardJson(show);
+  if (!board.goLive.enabled && !opts?.force) {
+    return {
+      ok: false as const,
+      status: 400 as const,
+      error: board.destinationsGate.reason || "URL gate must PASS before GO LIVE",
+    };
+  }
+
+  const match = show.matchDay?.matches?.[0];
+  const wereLive = board.socialDrafts.find((s) => s.slot === "were_live");
+  const payload = {
+    consumer: "Remote football comms desk",
+    matchDayId: show.matchDayId,
+    matchId: match?.id ?? null,
+    afFixtureId: match?.apiFootballFixtureId ?? null,
+    signal: "start_restream_destinations",
+    cadence: "were_live",
+    wereLiveSlot: wereLive || null,
+    youtubeWatchUrl: show.youtubeWatchUrl,
+    restreamExternalUrl: show.restreamExternalUrl,
+    restreamEventStubId: show.restreamEventStubId,
+    youtubeUpcomingStubId: show.youtubeUpcomingStubId,
+    overlayUrl: board.graphics.overlayUrl,
+    overlayParams: board.graphics.overlayParams,
+    ytTitle: board.ytTitle,
+    match: board.matchDay,
+    softWarn: board.goLive.softWarn,
+    status: "Live",
+    note:
+      "GO LIVE is a signal only — CoComms does NOT start the encoder. U+R/OBS owns Restream destinations path + We're live cadence.",
+    at: new Date().toISOString(),
+  };
+
+  const webhookResult = await postUrHandoffWebhook("go_live", payload);
+
+  // Approve/schedule were_live cadence + advance status to Live
+  if (wereLive) {
+    await prisma.urSocialSlot.updateMany({
+      where: { urShowId: show.id, slotKey: "were_live" },
+      data: { approved: true, status: "scheduled" },
+    });
+  }
+
+  await prisma.$transaction([
+    prisma.urShow.update({
+      where: { id: show.id },
+      data: {
+        status: "Live",
+        provisioningStatus:
+          show.provisioningStatus === "provisioning" ? "ready" : show.provisioningStatus,
+      },
+    }),
+    prisma.urHandoffLog.create({
+      data: {
+        urShowId: show.id,
+        message: `GO LIVE signal → U+R desk (Restream destinations + We're live). ${webhookResult.detail}${
+          board.goLive.softWarn ? ` · ${board.goLive.softWarn}` : ""
+        }`,
+        payloadJson: JSON.stringify(webhookResult.body),
+      },
+    }),
+  ]);
+
+  const refreshed = await findOwnedUrShow(matchDayId, userId);
+  return {
+    ok: true as const,
+    payload: webhookResult.body,
+    webhook: { ok: webhookResult.ok, detail: webhookResult.detail },
+    softWarn: board.goLive.softWarn,
+    show: refreshed!,
+  };
+}
+

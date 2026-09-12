@@ -8,6 +8,7 @@ import {
   destinationsGate,
   refreshUrShowFromMatch,
   maybeAdvanceUrStatusFromCompleteness,
+  maybeClearProvisioning,
 } from "@/lib/ur-show";
 
 export const dynamic = "force-dynamic";
@@ -228,6 +229,16 @@ export async function PATCH(
     if ("igStillUrl" in body) {
       data.igStillUrl = body.igStillUrl ? String(body.igStillUrl).trim() : null;
     }
+    if ("restreamEventStubId" in body) {
+      data.restreamEventStubId = body.restreamEventStubId
+        ? String(body.restreamEventStubId).trim()
+        : null;
+    }
+    if ("youtubeUpcomingStubId" in body) {
+      data.youtubeUpcomingStubId = body.youtubeUpcomingStubId
+        ? String(body.youtubeUpcomingStubId).trim()
+        : null;
+    }
     if (Object.keys(data).length) {
       await prisma.urShow.update({ where: { id: show.id }, data });
     }
@@ -300,6 +311,7 @@ export async function PATCH(
     }
   }
 
+  await maybeClearProvisioning(matchDayId, session.id);
   await maybeAdvanceUrStatusFromCompleteness(matchDayId, session.id);
   const refreshed = await findOwnedUrShow(matchDayId, session.id);
   const board = toBoardJson(refreshed!);

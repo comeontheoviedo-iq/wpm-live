@@ -2492,9 +2492,19 @@ async function runSyncMatchFromApiFootball(
       period:
         fixture.fixture.status.short === "HT"
           ? "HT"
-          : fixture.fixture.status.short === "FT"
+          : fixture.fixture.status.short === "FT" ||
+              fixture.fixture.status.short === "AET" ||
+              fixture.fixture.status.short === "PEN"
             ? "FT"
-            : match.period,
+            : fixture.fixture.status.short === "2H" ||
+                fixture.fixture.status.short === "ET" ||
+                fixture.fixture.status.short === "BT" ||
+                fixture.fixture.status.short === "P"
+              ? "2H"
+              : fixture.fixture.status.short === "1H" ||
+                  fixture.fixture.status.short === "LIVE"
+                ? "1H"
+                : match.period,
     },
   });
 

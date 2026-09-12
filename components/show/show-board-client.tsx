@@ -17,6 +17,7 @@ import {
   AlertTriangle,
   Sparkles,
   CircleDot,
+  ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { UR_PALETTE, UR_SHOW_STATUSES } from "@/lib/ur-show";
@@ -144,6 +145,7 @@ export function ShowBoardClient({
   const [ytDescription, setYtDescription] = useState(board.ytDescription);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [seoOpen, setSeoOpen] = useState(false);
 
   const matchDayId = board.matchDayId;
   const statusIdx = UR_SHOW_STATUSES.indexOf(
@@ -307,10 +309,10 @@ export function ShowBoardClient({
       }
     >
       <header
-        className="sticky top-0 z-30 border-b border-white/10 backdrop-blur-md"
-        style={{ background: "rgba(11,15,20,0.92)" }}
+        className="sticky top-0 z-40 border-b border-white/10 backdrop-blur-md"
+        style={{ background: "rgba(11,15,20,0.94)" }}
       >
-        <div className="mx-auto flex max-w-[820px] flex-wrap items-center gap-3 px-3 py-3 sm:px-5">
+        <div className="mx-auto flex max-w-[960px] flex-wrap items-center gap-2 px-3 py-2.5 sm:gap-3 sm:px-5">
           <Link
             href="/dashboard"
             className="inline-flex items-center gap-1.5 rounded text-[11px] font-semibold uppercase tracking-[0.1em] text-white/55 hover:text-[var(--ur-accent)]"
@@ -318,9 +320,9 @@ export function ShowBoardClient({
             <ArrowLeft className="h-3.5 w-3.5" />
             Desks
           </Link>
-          <div className="h-4 w-px bg-white/15" />
+          <div className="hidden h-4 w-px bg-white/15 sm:block" />
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Clapperboard
                 className="h-3.5 w-3.5 shrink-0"
                 style={{ color: UR_PALETTE.accent }}
@@ -334,6 +336,16 @@ export function ShowBoardClient({
               <span className="rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white/40 ring-1 ring-white/15">
                 CoComms
               </span>
+              <span
+                className={cn(
+                  "rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider",
+                  board.destinationsGate.pass
+                    ? "bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-400/40"
+                    : "bg-rose-500/20 text-rose-200 ring-1 ring-rose-400/40"
+                )}
+              >
+                Dest {board.destinationsGate.pass ? "PASS" : "FAIL"}
+              </span>
               {board.provisioning ? (
                 <span className="animate-pulse rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-amber-200 ring-1 ring-amber-400/50 bg-amber-500/15">
                   Provisioning…
@@ -344,14 +356,29 @@ export function ShowBoardClient({
               {fixture}
             </h1>
           </div>
-          <div className="text-[10px] text-white/40">
-            {user.name} · personal account
+          <button
+            type="button"
+            disabled={busy || !board.goLive?.enabled}
+            onClick={goLive}
+            title={
+              board.goLive?.enabled
+                ? "Send go_live signal to U+R"
+                : board.destinationsGate.reason
+            }
+            className="inline-flex items-center gap-1.5 rounded px-3 py-2 text-[10px] font-black uppercase tracking-[0.06em] text-[#0B0F14] shadow-[0_0_18px_rgba(52,211,153,0.3)] disabled:opacity-35 disabled:shadow-none"
+            style={{ background: "#34d399" }}
+          >
+            <Radio className="h-3.5 w-3.5" />
+            GO LIVE
+          </button>
+          <div className="hidden text-[10px] text-white/40 sm:block">
+            {user.name}
           </div>
         </div>
       </header>
 
-      {/* One vertical spine */}
-      <main className="mx-auto flex max-w-[820px] flex-col gap-3 px-3 py-4 sm:px-5 sm:py-5">
+      {/* One vertical spine — creatives pinned high */}
+      <main className="mx-auto flex max-w-[960px] flex-col gap-3 px-3 py-4 sm:px-5 sm:py-5">
         {error ? (
           <div className="flex items-center gap-2 rounded border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-[12px] text-rose-200">
             <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
@@ -400,12 +427,12 @@ export function ShowBoardClient({
               </button>
             </div>
           </div>
-          <ol className="flex flex-col gap-1.5">
+          <ol className="flex flex-wrap gap-1.5">
             {UR_SHOW_STATUSES.map((s, i) => {
               const active = s === board.status;
               const done = i < statusIdx;
               return (
-                <li key={s} className="flex items-center gap-2">
+                <li key={s} className="flex min-w-0 flex-1 basis-[calc(33.33%-0.375rem)] items-center gap-1.5 sm:basis-0">
                   <span
                     className={cn(
                       "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-black",
@@ -422,7 +449,7 @@ export function ShowBoardClient({
                     disabled={busy}
                     onClick={() => jumpStatus(s)}
                     className={cn(
-                      "flex-1 rounded-md px-3 py-2 text-left text-[11px] font-bold uppercase tracking-[0.1em] transition",
+                      "w-full truncate rounded-md px-2 py-1.5 text-left text-[10px] font-bold uppercase tracking-[0.08em] transition sm:text-[11px]",
                       active &&
                         "shadow-[0_0_0_1px_rgba(126,182,255,0.55),0_0_18px_rgba(126,182,255,0.2)]",
                       !active && done && "bg-white/8 text-white/65",
@@ -442,10 +469,10 @@ export function ShowBoardClient({
           </ol>
         </section>
 
-        {/* Match autofill */}
+        {/* Match autofill — compact */}
         {board.matchDay ? (
           <section className={sectionClass} style={sectionStyle}>
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">
                 Match autofill
               </div>
@@ -464,7 +491,7 @@ export function ShowBoardClient({
                 <img
                   src={board.matchDay.homeCrestUrl}
                   alt=""
-                  className="h-10 w-10 object-contain"
+                  className="h-9 w-9 object-contain"
                 />
               ) : null}
               <div className="min-w-0 flex-1">
@@ -494,14 +521,345 @@ export function ShowBoardClient({
                 <img
                   src={board.matchDay.awayCrestUrl}
                   alt=""
-                  className="h-10 w-10 object-contain"
+                  className="h-9 w-9 object-contain"
                 />
               ) : null}
             </div>
           </section>
         ) : null}
 
-        {/* Provisioning stubs — sticky with destinations */}
+        {/* Creatives — high on spine, large preview grid (above SEO/copy) */}
+        <section
+          className={cn(
+            sectionClass,
+            "ring-1 ring-[rgba(126,182,255,0.28)] shadow-[0_12px_40px_rgba(0,0,0,0.35)]"
+          )}
+          style={sectionStyle}
+          aria-label="Creatives approve queue"
+        >
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <Megaphone className="h-4 w-4" style={{ color: UR_PALETTE.accent }} />
+            <h2 className="text-[12px] font-bold uppercase tracking-[0.12em] text-white/80">
+              Creatives approve queue
+            </h2>
+            <span className="rounded bg-[rgba(126,182,255,0.15)] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[var(--ur-accent)]">
+              YT · FB · IG · Story
+            </span>
+            {(board.matchDay?.homeCrestUrl || board.matchDay?.awayCrestUrl) && (
+              <div className="ml-auto flex items-center gap-1.5">
+                {board.matchDay.homeCrestUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={board.matchDay.homeCrestUrl}
+                    alt=""
+                    className="h-6 w-6 object-contain opacity-80"
+                  />
+                ) : null}
+                {board.matchDay.awayCrestUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={board.matchDay.awayCrestUrl}
+                    alt=""
+                    className="h-6 w-6 object-contain opacity-80"
+                  />
+                ) : null}
+              </div>
+            )}
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {board.creatives.map((c) => (
+              <article
+                key={c.id}
+                className="overflow-hidden rounded-lg border border-white/12 bg-black/35 shadow-[0_4px_20px_rgba(0,0,0,0.35)]"
+              >
+                <div
+                  className="relative min-h-[160px] bg-[#0B0F14] sm:min-h-[200px] sm:aspect-[16/10]"
+                  style={{
+                    backgroundImage: c.assetUrl ? `url(${c.assetUrl})` : undefined,
+                    backgroundSize: "cover",
+                    backgroundPosition: "center",
+                  }}
+                >
+                  {!c.assetUrl ? (
+                    <div className="flex h-full min-h-[160px] flex-col items-center justify-center gap-2 px-3 text-center text-[10px] uppercase tracking-wider text-white/30 sm:min-h-[200px]">
+                      <div className="flex items-center gap-2 opacity-70">
+                        {board.matchDay?.homeCrestUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={board.matchDay.homeCrestUrl}
+                            alt=""
+                            className="h-10 w-10 object-contain"
+                          />
+                        ) : null}
+                        <span className="text-white/20">vs</span>
+                        {board.matchDay?.awayCrestUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={board.matchDay.awayCrestUrl}
+                            alt=""
+                            className="h-10 w-10 object-contain"
+                          />
+                        ) : null}
+                      </div>
+                      <span>Awaiting match-specific creatives pack</span>
+                    </div>
+                  ) : (
+                    <div className="absolute bottom-2 right-2 flex items-center gap-1 rounded bg-black/60 px-1.5 py-0.5">
+                      {board.matchDay?.homeCrestUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={board.matchDay.homeCrestUrl}
+                          alt=""
+                          className="h-4 w-4 object-contain"
+                        />
+                      ) : null}
+                      {board.matchDay?.awayCrestUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={board.matchDay.awayCrestUrl}
+                          alt=""
+                          className="h-4 w-4 object-contain"
+                        />
+                      ) : null}
+                    </div>
+                  )}
+                  <span
+                    className={cn(
+                      "absolute left-2 top-2 rounded px-1.5 py-0.5 text-[9px] font-black uppercase",
+                      c.status === "approved" && "bg-emerald-500/90 text-[#0B0F14]",
+                      c.status === "rejected" && "bg-rose-500/90 text-white",
+                      c.status === "pending" && "bg-black/70 text-white/80"
+                    )}
+                  >
+                    {c.status}
+                  </span>
+                </div>
+                <div className="space-y-2 p-3">
+                  <div className="text-[13px] font-semibold text-[var(--ur-ice)]">
+                    {c.label}
+                  </div>
+                  {c.canvaId ? (
+                    <a
+                      href={c.canvaUrl || "#"}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-[10px] font-semibold"
+                      style={{ color: UR_PALETTE.accent }}
+                    >
+                      Canva {c.canvaId}
+                      <ExternalLink className="h-2.5 w-2.5" />
+                    </a>
+                  ) : null}
+                  {(c.brief || c.placeholder || (!c.assetUrl && !c.canvaId)) && (
+                    <div className="rounded border border-white/8 bg-black/35 px-2 py-1.5 text-[10px] leading-snug text-amber-100/75">
+                      <span className="mb-0.5 block text-[8px] font-black uppercase tracking-wider text-white/35">
+                        {c.kind === "thumb" ? "Thumbnail brief" : "Pack note"}
+                      </span>
+                      {c.brief ||
+                        c.placeholder ||
+                        board.thumbnailBrief ||
+                        board.creativesPlaceholder ||
+                        "Awaiting match-specific creatives pack"}
+                    </div>
+                  )}
+                  <div className="flex gap-1.5">
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() =>
+                        patch({ action: "creative", creativeId: c.id, status: "approved" })
+                      }
+                      className="inline-flex flex-1 items-center justify-center gap-1 rounded bg-emerald-500/20 py-2 text-[11px] font-bold uppercase text-emerald-200 ring-1 ring-emerald-400/30 hover:bg-emerald-500/30 disabled:opacity-40"
+                    >
+                      <Check className="h-3.5 w-3.5" />
+                      Approve
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() =>
+                        patch({ action: "creative", creativeId: c.id, status: "rejected" })
+                      }
+                      className="inline-flex flex-1 items-center justify-center gap-1 rounded bg-rose-500/15 py-2 text-[11px] font-bold uppercase text-rose-200 ring-1 ring-rose-400/25 hover:bg-rose-500/25 disabled:opacity-40"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        {/* Destinations + GO LIVE — sticky action strip (URLs only; SEO below) */}
+        <section
+          className={cn(
+            sectionClass,
+            "sticky top-[3.25rem] z-30 shadow-[0_8px_32px_rgba(0,0,0,0.45)]"
+          )}
+          style={sectionStyle}
+        >
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <Link2 className="h-3.5 w-3.5" style={{ color: UR_PALETTE.accent }} />
+            <h2 className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/55">
+              Destinations / URL gate
+            </h2>
+            <span
+              className={cn(
+                "rounded px-2 py-0.5 text-[9px] font-black uppercase tracking-wider",
+                board.destinationsGate.pass
+                  ? "bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-400/40"
+                  : "bg-rose-500/20 text-rose-200 ring-1 ring-rose-400/40"
+              )}
+            >
+              {board.destinationsGate.pass ? "PASS" : "FAIL"}
+            </span>
+            <button
+              type="button"
+              disabled={busy || !board.goLive?.enabled}
+              onClick={goLive}
+              title={
+                board.goLive?.enabled
+                  ? "Send go_live signal to U+R"
+                  : board.destinationsGate.reason
+              }
+              className="ml-auto inline-flex items-center gap-1.5 rounded px-4 py-2 text-[11px] font-black uppercase tracking-[0.06em] text-[#0B0F14] shadow-[0_0_22px_rgba(52,211,153,0.35)] disabled:opacity-35 disabled:shadow-none"
+              style={{ background: "#34d399" }}
+            >
+              <Radio className="h-3.5 w-3.5" />
+              GO LIVE
+            </button>
+          </div>
+          <p className="mb-2 text-[11px] text-white/45">
+            YouTube watch URL must equal Restream destination externalUrl. Empty until U+R
+            wires on enable_provision — FAIL until both present and equal.
+          </p>
+          {board.goLive?.softWarn ? (
+            <p className="mb-2 text-[10px] font-semibold text-amber-200/90">
+              Soft-warn: {board.goLive.softWarn}
+            </p>
+          ) : null}
+          <label className="mb-2 block text-[10px] font-semibold uppercase tracking-wider text-white/40">
+            YouTube watch URL
+            <input
+              value={ytUrl}
+              onChange={(e) => setYtUrl(e.target.value)}
+              placeholder="https://www.youtube.com/watch?v=…"
+              className="mt-1 w-full rounded border border-white/12 bg-black/35 px-3 py-2 text-[12px] text-[var(--ur-ice)] outline-none focus:border-[var(--ur-accent)]/60"
+            />
+          </label>
+          <label className="mb-2 block text-[10px] font-semibold uppercase tracking-wider text-white/40">
+            Restream externalUrl
+            <input
+              value={rsUrl}
+              onChange={(e) => setRsUrl(e.target.value)}
+              placeholder="Must match YouTube watch URL"
+              className="mt-1 w-full rounded border border-white/12 bg-black/35 px-3 py-2 text-[12px] text-[var(--ur-ice)] outline-none focus:border-[var(--ur-accent)]/60"
+            />
+          </label>
+          <p className="mb-3 text-[11px] text-white/40">{board.destinationsGate.reason}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() =>
+                patch({
+                  youtubeWatchUrl: ytUrl,
+                  restreamExternalUrl: rsUrl,
+                  ytTitle,
+                  ytDescription,
+                })
+              }
+              className="rounded px-3 py-2 text-[11px] font-bold text-[#0B0F14] disabled:opacity-40"
+              style={{ background: UR_PALETTE.accent }}
+            >
+              Save destinations
+            </button>
+            <p className="text-[10px] text-white/35">
+              Signal only — does not start encoder. Separate from Ready for desk.
+            </p>
+          </div>
+          <div className="mt-3 space-y-1 border-t border-white/10 pt-3 text-[10px] text-white/35">
+            <div>
+              Restream stub:{" "}
+              <code className="text-white/55">{board.restreamEventStubId}</code> ({board.restreamApi})
+            </div>
+            <div>
+              YT upcoming stub:{" "}
+              <code className="text-white/55">{board.youtubeUpcomingStubId}</code> ({board.youtubeApi})
+            </div>
+          </div>
+        </section>
+
+        {/* SEO / YT title+desc — collapsed below creatives so thumbs stay obvious */}
+        <section className={sectionClass} style={sectionStyle}>
+          <button
+            type="button"
+            onClick={() => setSeoOpen((v) => !v)}
+            className="flex w-full items-center gap-2 text-left"
+            aria-expanded={seoOpen}
+          >
+            <Clapperboard className="h-3.5 w-3.5" style={{ color: UR_PALETTE.accent }} />
+            <h2 className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/55">
+              SEO / YT title &amp; description
+            </h2>
+            <span className="rounded bg-white/8 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-white/40">
+              {ytTitle.length}/100
+            </span>
+            <ChevronDown
+              className={cn(
+                "ml-auto h-4 w-4 text-white/45 transition-transform",
+                seoOpen && "rotate-180"
+              )}
+            />
+          </button>
+          {!seoOpen ? (
+            <p className="mt-2 truncate text-[11px] text-white/45">{ytTitle || "No title yet"}</p>
+          ) : (
+            <div className="mt-3 space-y-2">
+              <label className="block text-[10px] font-semibold uppercase tracking-wider text-white/40">
+                YT title{" "}
+                <span className="normal-case tracking-normal text-white/30">
+                  ({ytTitle.length}/100)
+                </span>
+                <input
+                  value={ytTitle}
+                  onChange={(e) => setYtTitle(e.target.value)}
+                  maxLength={100}
+                  className="mt-1 w-full rounded border border-white/12 bg-black/35 px-3 py-2 text-[12px] outline-none focus:border-[var(--ur-accent)]/60"
+                />
+              </label>
+              <label className="block text-[10px] font-semibold uppercase tracking-wider text-white/40">
+                YT description
+                <textarea
+                  value={ytDescription}
+                  onChange={(e) => setYtDescription(e.target.value)}
+                  rows={6}
+                  className="mt-1 w-full rounded border border-white/12 bg-black/35 px-3 py-2 text-[12px] outline-none focus:border-[var(--ur-accent)]/60"
+                />
+              </label>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() =>
+                  patch({
+                    youtubeWatchUrl: ytUrl,
+                    restreamExternalUrl: rsUrl,
+                    ytTitle,
+                    ytDescription,
+                  })
+                }
+                className="rounded px-3 py-2 text-[11px] font-bold text-[#0B0F14] disabled:opacity-40"
+                style={{ background: UR_PALETTE.accent }}
+              >
+                Save SEO
+              </button>
+            </div>
+          )}
+        </section>
+
+        {/* Provisioning stubs */}
         {board.provisioning || board.provisionTasks?.length ? (
           <section
             className={cn(sectionClass, "border-amber-400/30")}
@@ -541,146 +899,6 @@ export function ShowBoardClient({
             </p>
           </section>
         ) : null}
-
-        {/* Destinations + gate — sticky near top of spine */}
-        <section
-          className={cn(sectionClass, "sticky top-[3.25rem] z-20 shadow-[0_8px_32px_rgba(0,0,0,0.45)]")}
-          style={sectionStyle}
-        >
-          <div className="mb-3 flex items-center gap-2">
-            <Link2 className="h-3.5 w-3.5" style={{ color: UR_PALETTE.accent }} />
-            <h2 className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/55">
-              Destinations / URL gate
-            </h2>
-            <span
-              className={cn(
-                "ml-auto rounded px-2 py-0.5 text-[9px] font-black uppercase tracking-wider",
-                board.destinationsGate.pass
-                  ? "bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-400/40"
-                  : "bg-rose-500/20 text-rose-200 ring-1 ring-rose-400/40"
-              )}
-            >
-              {board.destinationsGate.pass ? "PASS" : "FAIL"}
-            </span>
-          </div>
-          <p className="mb-3 text-[11px] text-white/45">
-            YouTube watch URL must equal Restream destination externalUrl. Empty until U+R
-            wires on enable_provision — FAIL until both present and equal.
-          </p>
-          <label className="mb-2 block text-[10px] font-semibold uppercase tracking-wider text-white/40">
-            YouTube watch URL
-            <input
-              value={ytUrl}
-              onChange={(e) => setYtUrl(e.target.value)}
-              placeholder="https://www.youtube.com/watch?v=…"
-              className="mt-1 w-full rounded border border-white/12 bg-black/35 px-3 py-2 text-[12px] text-[var(--ur-ice)] outline-none focus:border-[var(--ur-accent)]/60"
-            />
-          </label>
-          <label className="mb-2 block text-[10px] font-semibold uppercase tracking-wider text-white/40">
-            Restream externalUrl
-            <input
-              value={rsUrl}
-              onChange={(e) => setRsUrl(e.target.value)}
-              placeholder="Must match YouTube watch URL"
-              className="mt-1 w-full rounded border border-white/12 bg-black/35 px-3 py-2 text-[12px] text-[var(--ur-ice)] outline-none focus:border-[var(--ur-accent)]/60"
-            />
-          </label>
-          <label className="mb-2 block text-[10px] font-semibold uppercase tracking-wider text-white/40">
-            YT title{" "}
-            <span className="normal-case tracking-normal text-white/30">
-              ({ytTitle.length}/100)
-            </span>
-            <input
-              value={ytTitle}
-              onChange={(e) => setYtTitle(e.target.value)}
-              maxLength={100}
-              className="mt-1 w-full rounded border border-white/12 bg-black/35 px-3 py-2 text-[12px] outline-none focus:border-[var(--ur-accent)]/60"
-            />
-          </label>
-          <label className="mb-3 block text-[10px] font-semibold uppercase tracking-wider text-white/40">
-            YT description
-            <textarea
-              value={ytDescription}
-              onChange={(e) => setYtDescription(e.target.value)}
-              rows={5}
-              className="mt-1 w-full rounded border border-white/12 bg-black/35 px-3 py-2 text-[12px] outline-none focus:border-[var(--ur-accent)]/60"
-            />
-          </label>
-          <p className="mb-3 text-[11px] text-white/40">{board.destinationsGate.reason}</p>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() =>
-              patch({
-                youtubeWatchUrl: ytUrl,
-                restreamExternalUrl: rsUrl,
-                ytTitle,
-                ytDescription,
-              })
-            }
-            className="rounded px-3 py-2 text-[11px] font-bold text-[#0B0F14] disabled:opacity-40"
-            style={{ background: UR_PALETTE.accent }}
-          >
-            Save destinations
-          </button>
-          <div className="mt-3 space-y-1 border-t border-white/10 pt-3 text-[10px] text-white/35">
-            <div>
-              Restream stub:{" "}
-              <code className="text-white/55">{board.restreamEventStubId}</code> ({board.restreamApi})
-            </div>
-            <div>
-              YT upcoming stub:{" "}
-              <code className="text-white/55">{board.youtubeUpcomingStubId}</code> ({board.youtubeApi})
-            </div>
-          </div>
-        </section>
-
-        {/* GO LIVE — separate from Ready for desk / Enable */}
-        <section
-          className="rounded-lg border p-3 sm:p-4"
-          style={{
-            background: "linear-gradient(135deg, #1A2332 0%, #0B0F14 100%)",
-            borderColor: board.goLive?.enabled
-              ? "rgba(52,211,153,0.45)"
-              : "rgba(255,255,255,0.12)",
-          }}
-        >
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div className="flex items-center gap-2">
-                <Radio className="h-4 w-4 text-emerald-300" />
-                <h2 className="text-[12px] font-bold uppercase tracking-[0.12em]">
-                  GO LIVE
-                </h2>
-              </div>
-              <p className="mt-1 max-w-xl text-[11px] text-white/50">
-                Signal only — starts Restream destinations path + We&apos;re live cadence on
-                U+R. CoComms does <strong className="text-white/75">not</strong> start the
-                encoder (OBS/U+R owns streaming). Separate from Enable / Ready for desk.
-              </p>
-              {board.goLive?.softWarn ? (
-                <p className="mt-1 text-[10px] font-semibold text-amber-200/90">
-                  Soft-warn: {board.goLive.softWarn}
-                </p>
-              ) : null}
-            </div>
-            <button
-              type="button"
-              disabled={busy || !board.goLive?.enabled}
-              onClick={goLive}
-              title={
-                board.goLive?.enabled
-                  ? "Send go_live signal to U+R"
-                  : board.destinationsGate.reason
-              }
-              className="inline-flex items-center justify-center gap-2 rounded px-5 py-3 text-[12px] font-black uppercase tracking-[0.08em] text-[#0B0F14] shadow-[0_0_28px_rgba(52,211,153,0.35)] disabled:opacity-35 disabled:shadow-none"
-              style={{ background: "#34d399" }}
-            >
-              <Radio className="h-4 w-4" />
-              GO LIVE
-            </button>
-          </div>
-        </section>
 
         {/* Graphics checklist */}
         <section className={sectionClass} style={sectionStyle}>
@@ -739,160 +957,6 @@ export function ShowBoardClient({
               </li>
             ) : null}
           </ul>
-        </section>
-
-        {/* Creatives — consistent grid + crests */}
-        <section className={sectionClass} style={sectionStyle}>
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <Megaphone className="h-3.5 w-3.5" style={{ color: UR_PALETTE.accent }} />
-            <h2 className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/55">
-              Creatives approve queue
-            </h2>
-            {(board.matchDay?.homeCrestUrl || board.matchDay?.awayCrestUrl) && (
-              <div className="ml-auto flex items-center gap-1.5">
-                {board.matchDay.homeCrestUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={board.matchDay.homeCrestUrl}
-                    alt=""
-                    className="h-5 w-5 object-contain opacity-80"
-                  />
-                ) : null}
-                {board.matchDay.awayCrestUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={board.matchDay.awayCrestUrl}
-                    alt=""
-                    className="h-5 w-5 object-contain opacity-80"
-                  />
-                ) : null}
-              </div>
-            )}
-          </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {board.creatives.map((c) => (
-              <article
-                key={c.id}
-                className="overflow-hidden rounded border border-white/10 bg-black/30"
-              >
-                <div
-                  className="relative aspect-video bg-[#0B0F14]"
-                  style={{
-                    backgroundImage: c.assetUrl ? `url(${c.assetUrl})` : undefined,
-                    backgroundSize: "cover",
-                    backgroundPosition: "center",
-                  }}
-                >
-                  {!c.assetUrl ? (
-                    <div className="flex h-full flex-col items-center justify-center gap-2 px-3 text-center text-[10px] uppercase tracking-wider text-white/30">
-                      <div className="flex items-center gap-2 opacity-70">
-                        {board.matchDay?.homeCrestUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={board.matchDay.homeCrestUrl}
-                            alt=""
-                            className="h-8 w-8 object-contain"
-                          />
-                        ) : null}
-                        <span className="text-white/20">vs</span>
-                        {board.matchDay?.awayCrestUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={board.matchDay.awayCrestUrl}
-                            alt=""
-                            className="h-8 w-8 object-contain"
-                          />
-                        ) : null}
-                      </div>
-                      <span>Awaiting match-specific creatives pack</span>
-                    </div>
-                  ) : (
-                    <div className="absolute bottom-2 right-2 flex items-center gap-1 rounded bg-black/60 px-1.5 py-0.5">
-                      {board.matchDay?.homeCrestUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={board.matchDay.homeCrestUrl}
-                          alt=""
-                          className="h-4 w-4 object-contain"
-                        />
-                      ) : null}
-                      {board.matchDay?.awayCrestUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={board.matchDay.awayCrestUrl}
-                          alt=""
-                          className="h-4 w-4 object-contain"
-                        />
-                      ) : null}
-                    </div>
-                  )}
-                  <span
-                    className={cn(
-                      "absolute left-2 top-2 rounded px-1.5 py-0.5 text-[9px] font-black uppercase",
-                      c.status === "approved" && "bg-emerald-500/90 text-[#0B0F14]",
-                      c.status === "rejected" && "bg-rose-500/90 text-white",
-                      c.status === "pending" && "bg-black/70 text-white/80"
-                    )}
-                  >
-                    {c.status}
-                  </span>
-                </div>
-                <div className="space-y-2 p-2.5">
-                  <div className="text-[12px] font-semibold text-[var(--ur-ice)]">
-                    {c.label}
-                  </div>
-                  {c.canvaId ? (
-                    <a
-                      href={c.canvaUrl || "#"}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1 text-[10px] font-semibold"
-                      style={{ color: UR_PALETTE.accent }}
-                    >
-                      Canva {c.canvaId}
-                      <ExternalLink className="h-2.5 w-2.5" />
-                    </a>
-                  ) : null}
-                  {(c.brief || c.placeholder || (!c.assetUrl && !c.canvaId)) && (
-                    <div className="rounded border border-white/8 bg-black/35 px-2 py-1.5 text-[10px] leading-snug text-amber-100/75">
-                      <span className="mb-0.5 block text-[8px] font-black uppercase tracking-wider text-white/35">
-                        {c.kind === "thumb" ? "Thumbnail brief" : "Pack note"}
-                      </span>
-                      {c.brief ||
-                        c.placeholder ||
-                        board.thumbnailBrief ||
-                        board.creativesPlaceholder ||
-                        "Awaiting match-specific creatives pack"}
-                    </div>
-                  )}
-                  <div className="flex gap-1.5">
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() =>
-                        patch({ action: "creative", creativeId: c.id, status: "approved" })
-                      }
-                      className="inline-flex flex-1 items-center justify-center gap-1 rounded bg-emerald-500/20 py-1.5 text-[10px] font-bold uppercase text-emerald-200 ring-1 ring-emerald-400/30 hover:bg-emerald-500/30 disabled:opacity-40"
-                    >
-                      <Check className="h-3 w-3" />
-                      Approve
-                    </button>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() =>
-                        patch({ action: "creative", creativeId: c.id, status: "rejected" })
-                      }
-                      className="inline-flex flex-1 items-center justify-center gap-1 rounded bg-rose-500/15 py-1.5 text-[10px] font-bold uppercase text-rose-200 ring-1 ring-rose-400/25 hover:bg-rose-500/25 disabled:opacity-40"
-                    >
-                      <X className="h-3 w-3" />
-                      Reject
-                    </button>
-                  </div>
-                </div>
-              </article>
-            ))}
-          </div>
         </section>
 
         {/* Social calendar — one column */}

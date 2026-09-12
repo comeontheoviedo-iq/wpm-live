@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { DeleteMatchDesk } from "@/components/match/delete-match-desk";
 import { ClaimUrButton } from "@/components/show/claim-ur-button";
+import { canUseUrShow } from "@/lib/ur-access";
 
 function teamCrestUrl(apiFootballTeamId: number | null | undefined) {
   return apiFootballTeamId
@@ -42,6 +43,7 @@ function isPreMatchStatus(status: string) {
 export default async function DashboardPage() {
   const user = await getSession();
   if (!user) redirect("/login");
+  const showUr = canUseUrShow(user);
 
   const matchDays = await prisma.matchDay.findMany({
     where: { userId: user.id },
@@ -228,7 +230,7 @@ export default async function DashboardPage() {
                     >
                       Add note
                     </Link>
-                    {featuredMatchDay ? (
+                    {showUr && featuredMatchDay ? (
                       <ClaimUrButton
                         matchDayId={featuredMatchDay.id}
                         claimed={Boolean(featuredMatchDay.urShow)}
@@ -415,11 +417,13 @@ export default async function DashboardPage() {
                           <ArrowRight className="h-3 w-3" />
                         </Link>
                       ) : null}
-                      <ClaimUrButton
-                        matchDayId={md.id}
-                        claimed={Boolean(md.urShow)}
-                        compact
-                      />
+                      {showUr ? (
+                        <ClaimUrButton
+                          matchDayId={md.id}
+                          claimed={Boolean(md.urShow)}
+                          compact
+                        />
+                      ) : null}
                       <DeleteMatchDesk
                         matchDayId={md.id}
                         matchLabel={matchLabel}

@@ -8,6 +8,7 @@ import {
 } from "@/lib/ur-show";
 import { ShowBoardClient } from "@/components/show/show-board-client";
 import { ClaimUrButton } from "@/components/show/claim-ur-button";
+import { canUseUrShow } from "@/lib/ur-access";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,7 @@ export default async function ShowBoardPage({
 }) {
   const user = await getSession();
   if (!user) redirect("/login");
+  if (!canUseUrShow(user)) notFound();
 
   const { matchDayId } = await params;
   const sp = await searchParams;

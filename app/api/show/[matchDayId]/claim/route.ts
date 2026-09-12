@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { canUseUrShow } from "@/lib/ur-access";
 import { claimMatchDayForUr, toBoardJson } from "@/lib/ur-show";
 
 export const dynamic = "force-dynamic";
@@ -10,6 +11,9 @@ export async function POST(
 ) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!canUseUrShow(session)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
   const { matchDayId } = await ctx.params;
 
   const result = await claimMatchDayForUr(matchDayId, session.id);

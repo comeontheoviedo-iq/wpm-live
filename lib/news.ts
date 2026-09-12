@@ -7,6 +7,7 @@
 import { generateWithGemini, isGeminiConfigured } from "@/lib/gemini";
 import { canUseGeminiBrief, getEffectivePlan, hasIntel } from "@/lib/plan";
 import { namesLooselyMatch, normalizePlayerKey } from "@/lib/player-name";
+import { decodeHtmlEntities } from "@/lib/utils";
 
 export type NewsScope = "all" | "home" | "away" | "league" | "players";
 
@@ -356,28 +357,17 @@ function feedsForCompetition(competition: string): FeedDef[] {
 }
 
 function stripTags(html: string): string {
-  return html
-    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&apos;/g, "'")
+  return decodeHtmlEntities(
+    html
+      .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
+      .replace(/<[^>]+>/g, " ")
+  )
     .replace(/\s+/g, " ")
     .trim();
 }
 
 function decodeXmlEntities(s: string): string {
-  return s
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&apos;/g, "'");
+  return decodeHtmlEntities(s);
 }
 
 function tagContent(block: string, tag: string): string | null {

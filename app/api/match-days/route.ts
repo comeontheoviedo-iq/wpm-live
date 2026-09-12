@@ -6,6 +6,7 @@ import { ensureClub, parseAfTeamId } from "@/lib/ensure-club";
 import { getFixture, assertFixtureCompatible } from "@/lib/api-football";
 import { leagueIdForCompetition } from "@/lib/competitions";
 import { assertCanCreateDesk, maybeConsumeMatchPassCredit } from "@/lib/trial";
+import { displayText } from "@/lib/utils";
 
 function sanitizeCreateError(e: unknown): { status: number; error: string } {
   if (
@@ -77,7 +78,7 @@ export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
 
-    const competition = String(body.competition || "").trim();
+    const competition = displayText(String(body.competition || "").trim());
     const homeClubId = String(body.homeClubId || "").trim();
     const awayClubId = String(body.awayClubId || "").trim();
     const kickoffRaw = body.kickoff;
@@ -193,9 +194,10 @@ export async function POST(req: Request) {
         throw Object.assign(new Error("TEAMS_SAME"), { code: "TEAMS_SAME" });
       }
 
-      const title =
+      const title = displayText(
         String(body.title || "").trim() ||
-        `${home.shortName} vs ${away.shortName}`;
+          `${home.shortName} vs ${away.shortName}`
+      );
 
       const matchDay = await tx.matchDay.create({
         data: {

@@ -11,6 +11,7 @@ import {
 import { ShowBoardClient } from "@/components/show/show-board-client";
 import { ClaimUrButton } from "@/components/show/claim-ur-button";
 import { canUseUrShow } from "@/lib/ur-access";
+import { displayText } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -87,7 +88,7 @@ function ClaimGate({
         Enable U&R for this match-day?
       </h1>
       <p className="max-w-sm text-center text-[13px] text-white/50">
-        {title} — enables a Show board on your personal account (not a separate
+        {displayText(title)} — enables a Show board on your personal account (not a separate
         portal). Restream / creatives / OBS hand off to Remote football comms
         desk when you&apos;re ready.
       </p>

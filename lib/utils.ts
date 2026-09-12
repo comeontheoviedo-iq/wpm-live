@@ -69,15 +69,68 @@ export function statusColor(status: string) {
 }
 
 
-/** Fix curly quotes / HTML entities / mojibake → proper ASCII apostrophes/quotes. */
-export function normalizeApostrophes(input: string): string {
+const HTML_NAMED_ENTITIES: Record<string, string> = {
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  nbsp: " ",
+  rsquo: "'",
+  lsquo: "'",
+  rdquo: '"',
+  ldquo: '"',
+  ndash: "–",
+  mdash: "—",
+  hellip: "…",
+};
+
+function decodeCodePoint(raw: string): string | null {
+  const n = raw.toLowerCase().startsWith("x")
+    ? parseInt(raw.slice(1), 16)
+    : parseInt(raw, 10);
+  if (!Number.isFinite(n) || n < 0 || n > 0x10ffff) return null;
+  try {
+    return String.fromCodePoint(n);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Decode HTML/XML entities for display or ingest.
+ * Unwraps double-encoding (`&amp;amp;` → `&`) and broken `& amp;` forms.
+ * Safe for React text nodes — does not parse markup.
+ */
+export function decodeHtmlEntities(input: string): string {
+  if (!input || !input.includes("&")) return input;
+  let out = input
+    // Broken entities from copy/paste / RSS ("& amp;", "&amp ;", "&# 38;")
+    .replace(/&\s*amp\s*;/gi, "&amp;")
+    .replace(/&\s*#\s*0*38\s*;/g, "&amp;")
+    .replace(/&\s*#\s*x0*26\s*;/gi, "&amp;");
+  for (let i = 0; i < 3; i++) {
+    const next = out.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, body: string) => {
+      const key = String(body);
+      if (key.startsWith("#")) {
+        const decoded = decodeCodePoint(key.slice(1));
+        return decoded ?? m;
+      }
+      return HTML_NAMED_ENTITIES[key.toLowerCase()] ?? m;
+    });
+    if (next === out) break;
+    out = next;
+  }
+  return out;
+}
+
+/** Display helper: decode entities once, then fix curly quotes / mojibake. */
+export function displayText(input: string): string {
   if (!input) return input;
   return (
-    input
+    decodeHtmlEntities(input)
       .replace(/\u2018|\u2019|\u201A|\uFF07/g, "'")
       .replace(/\u201C|\u201D|\u201E/g, '"')
-      .replace(/&apos;|&#0*39;|&#x0*27;|&#0*8217;|&#0*8216;|&rsquo;|&lsquo;/gi, "'")
-      .replace(/&quot;|&#0*34;|&#0*8220;|&#0*8221;|&rdquo;|&ldquo;/gi, '"')
       // Common UTF-8→Latin-1 mojibake for ’ ‘ “ ”
       .replace(/\u00E2\u20AC\u2122/g, "'") // â€™
       .replace(/\u00E2\u20AC\u02DC/g, "'") // â€˜
@@ -86,4 +139,9 @@ export function normalizeApostrophes(input: string): string {
       .replace(/â€™|â€˜/g, "'")
       .replace(/â€œ|â€/g, '"')
   );
+}
+
+/** Alias of displayText — existing note/script write + display paths now decode entities too. */
+export function normalizeApostrophes(input: string): string {
+  return displayText(input);
 }

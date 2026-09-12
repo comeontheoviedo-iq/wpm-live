@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { AppHeader } from "@/components/layout/app-header";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { StatusBadge } from "@/components/ui/badge";
-import { cn, formatKickoff } from "@/lib/utils";
+import { cn, formatKickoff, displayText } from "@/lib/utils";
 import { leagueIdForCompetition } from "@/lib/competitions";
 import {
   CalendarDays,
@@ -45,7 +45,7 @@ export default async function DashboardPage() {
   if (!user) redirect("/login");
   const showUr = canUseUrShow(user);
 
-  const matchDays = await prisma.matchDay.findMany({
+  const matchDaysRaw = await prisma.matchDay.findMany({
     where: { userId: user.id },
     orderBy: { date: "asc" },
     include: {
@@ -59,6 +59,24 @@ export default async function DashboardPage() {
       urShow: { select: { id: true, status: true } },
     },
   });
+  const matchDays = matchDaysRaw.map((md) => ({
+    ...md,
+    title: displayText(md.title),
+    competition: displayText(md.competition),
+    matches: md.matches.map((m) => ({
+      ...m,
+      homeClub: {
+        ...m.homeClub,
+        name: displayText(m.homeClub.name),
+        shortName: displayText(m.homeClub.shortName),
+      },
+      awayClub: {
+        ...m.awayClub,
+        name: displayText(m.awayClub.name),
+        shortName: displayText(m.awayClub.shortName),
+      },
+    })),
+  }));
 
   const allMatches = matchDays.flatMap((md) =>
     md.matches.map((m) => ({ ...m, matchDay: md }))
@@ -143,11 +161,11 @@ export default async function DashboardPage() {
               >
                 <div className="min-w-0">
                   <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#7EB6FF]">
-                    U&R · Up &amp; Running
+                    U&R · Up & Running
                   </div>
                   <p className="mt-0.5 text-[11px] text-[var(--muted)]">
-                    Enable U&amp;R on a desk below, or open an existing Show board.
-                    Sidebar <strong className="text-[var(--foreground)]">U&amp;R</strong> jumps straight to your board.
+                    Enable U&R on a desk below, or open an existing Show board.
+                    Sidebar <strong className="text-[var(--foreground)]">U&R</strong> jumps straight to your board.
                   </p>
                 </div>
                 {urMatchDayId ? (

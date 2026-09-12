@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SPEAK_TIMINGS } from "@/lib/defaults";
-import { cn, normalizeApostrophes } from "@/lib/utils";
+import { cn, displayText, normalizeApostrophes } from "@/lib/utils";
 import {
   ChevronDown,
   ChevronUp,
@@ -376,7 +376,7 @@ export function ScriptsClient({
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <h4 className="text-sm font-semibold text-[var(--foreground)]">
-                                  {s.title}
+                                  {displayText(s.title)}
                                 </h4>
                                 {edited && (
                                   <span className="text-[10px] uppercase tracking-wide font-bold text-amber-600 dark:text-amber-400 border border-amber-500/30 rounded px-1.5 py-0.5">
@@ -385,7 +385,7 @@ export function ScriptsClient({
                                 )}
                               </div>
                               <p className="mt-1 text-sm text-[var(--muted-foreground)] leading-relaxed whitespace-pre-wrap">
-                                {s.body || (
+                                {displayText(s.body) || (
                                   <span className="italic opacity-60">
                                     Empty — click Edit to write.
                                   </span>

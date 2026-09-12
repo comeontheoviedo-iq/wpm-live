@@ -1,5 +1,67 @@
 import { rechunkOverlongLeagueNotes } from "./rechunk-league-notes";
 import { prisma } from "./prisma";
+import { displayText } from "./utils";
+
+
+/** Decode stored HTML entities on the in-memory desk payload (never persisted). */
+function presentMatchFull(m: object): void {
+  const rec = m as {
+    homeClub?: { name: string; shortName: string; players?: { name: string }[]; coaches?: { name: string }[] };
+    awayClub?: { name: string; shortName: string; players?: { name: string }[]; coaches?: { name: string }[] };
+    venue?: { name: string; city: string } | null;
+    matchDay?: { title: string; competition: string };
+    notes?: { title: string; body: string }[];
+    speaks?: { title: string; body: string }[];
+    events?: { player?: { name: string } | null }[];
+    injuries?: {
+      player?: { name: string } | null;
+      club?: { name: string; shortName: string } | null;
+    }[];
+    officials?: { official?: { name: string } | null }[];
+  };
+  const cleanClub = (c?: { name: string; shortName: string; players?: { name: string }[]; coaches?: { name: string }[] }) => {
+    if (!c) return;
+    c.name = displayText(c.name);
+    c.shortName = displayText(c.shortName);
+    c.players?.forEach((p) => {
+      p.name = displayText(p.name);
+    });
+    c.coaches?.forEach((co) => {
+      co.name = displayText(co.name);
+    });
+  };
+  cleanClub(rec.homeClub);
+  cleanClub(rec.awayClub);
+  if (rec.venue) {
+    rec.venue.name = displayText(rec.venue.name);
+    rec.venue.city = displayText(rec.venue.city);
+  }
+  if (rec.matchDay) {
+    rec.matchDay.title = displayText(rec.matchDay.title);
+    rec.matchDay.competition = displayText(rec.matchDay.competition);
+  }
+  rec.notes?.forEach((n) => {
+    n.title = displayText(n.title);
+    n.body = displayText(n.body);
+  });
+  rec.speaks?.forEach((s) => {
+    s.title = displayText(s.title);
+    s.body = displayText(s.body);
+  });
+  rec.events?.forEach((e) => {
+    if (e.player) e.player.name = displayText(e.player.name);
+  });
+  rec.injuries?.forEach((i) => {
+    if (i.player) i.player.name = displayText(i.player.name);
+    if (i.club) {
+      i.club.name = displayText(i.club.name);
+      i.club.shortName = displayText(i.club.shortName);
+    }
+  });
+  rec.officials?.forEach((o) => {
+    if (o.official) o.official.name = displayText(o.official.name);
+  });
+}
 
 const matchFullInclude = {
   homeClub: {
@@ -54,11 +116,15 @@ export async function getMatchFull(id: string) {
           where: { id: byMatch.id },
           include: matchFullInclude,
         });
-        if (refreshed) return refreshed;
+        if (refreshed) {
+          presentMatchFull(refreshed);
+          return refreshed;
+        }
       }
     } catch {
       /* soft-fail */
     }
+    presentMatchFull(byMatch);
     return byMatch;
   }
 
@@ -75,10 +141,14 @@ export async function getMatchFull(id: string) {
         where: { id: byDay.id },
         include: matchFullInclude,
       });
-      if (refreshed) return refreshed;
+      if (refreshed) {
+        presentMatchFull(refreshed);
+        return refreshed;
+      }
     }
   } catch {
     /* soft-fail */
   }
+  presentMatchFull(byDay);
   return byDay;
 }

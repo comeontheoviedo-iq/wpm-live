@@ -1,6 +1,7 @@
 /** Apply pack section content into Scripts / Notes (shared by generate + distribute). */
 
 import { prisma } from "./prisma";
+import { displayText } from "./utils";
 import {
   emptyDistributed,
   extractPlayerHooks,
@@ -31,6 +32,11 @@ async function upsertEntityNote(args: {
   entityId: string;
   pinned?: boolean;
 }) {
+  args = {
+    ...args,
+    title: displayText(args.title),
+    body: displayText(args.body),
+  };
   // Key on title + entity — Research / Referee / Must-mention share match entity.
   const existing = await prisma.note.findFirst({
     where: {
@@ -74,6 +80,11 @@ async function upsertSpeak(args: {
   timing: string;
   order: number;
 }) {
+  args = {
+    ...args,
+    title: displayText(args.title),
+    body: displayText(args.body),
+  };
   // Prefer exact title; also reclaim common Gemini/placeholder intro titles
   // so Notebook SoT wins over leftover generated Speaks.
   let existing = await prisma.speak.findFirst({

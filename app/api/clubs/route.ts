@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { ensureClub, parseAfTeamId } from "@/lib/ensure-club";
+import { displayText } from "@/lib/utils";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -19,7 +20,13 @@ export async function GET(req: Request) {
     orderBy: { name: "asc" },
     take: 50,
   });
-  return NextResponse.json({ clubs });
+  return NextResponse.json({
+    clubs: clubs.map((c) => ({
+      ...c,
+      name: displayText(c.name),
+      shortName: displayText(c.shortName),
+    })),
+  });
 }
 
 export async function POST(req: Request) {

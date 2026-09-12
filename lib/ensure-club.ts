@@ -1,4 +1,5 @@
 import type { Club, Prisma, PrismaClient } from "@prisma/client";
+import { displayText } from "./utils";
 
 type Db = PrismaClient | Prisma.TransactionClient;
 
@@ -32,8 +33,8 @@ export async function ensureClub(
 ): Promise<Club | null> {
   const afTeamId = parseAfTeamId(input.apiFootballTeamId);
   const id = String(input.id || "").trim();
-  const name = String(input.name || "").trim();
-  const shortName = String(input.shortName || name || "").trim();
+  const name = displayText(String(input.name || "")).trim();
+  const shortName = displayText(String(input.shortName || name || "")).trim();
 
   if (afTeamId !== null) {
     const byAf = await db.club.findFirst({

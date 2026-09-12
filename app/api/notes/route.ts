@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { NOTE_CATEGORIES } from "@/lib/defaults";
-import { normalizeApostrophes } from "@/lib/utils";
+import { displayText, normalizeApostrophes } from "@/lib/utils";
 import { rechunkOverlongLeagueNotes } from "@/lib/rechunk-league-notes";
 import { assertMatchOwned } from "@/lib/tenancy";
 
@@ -46,7 +46,14 @@ export async function GET(req: Request) {
     },
     orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
   });
-  return NextResponse.json({ notes, categories: NOTE_CATEGORIES });
+  return NextResponse.json({
+    notes: notes.map((n) => ({
+      ...n,
+      title: displayText(n.title),
+      body: displayText(n.body),
+    })),
+    categories: NOTE_CATEGORIES,
+  });
 }
 
 export async function POST(req: Request) {

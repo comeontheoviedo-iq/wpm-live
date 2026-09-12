@@ -9,6 +9,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { randomBytes } from "crypto";
+import { displayText } from "@/lib/utils";
 
 export const UR_SHOW_STATUSES = [
   "Planned",
@@ -678,23 +679,22 @@ type MatchDayForBoard = {
 
 export function buildMatchAutofill(matchDay: MatchDayForBoard): MatchAutofill {
   const match = matchDay.matches?.[0];
-  const homeName = match?.homeClub.name || matchDay.title;
-  const awayName = match?.awayClub.name || "";
-  const homeShort = match?.homeClub.shortName || homeName;
-  const awayShort = match?.awayClub.shortName || awayName || "TBD";
+  const homeName = displayText(match?.homeClub.name || matchDay.title);
+  const awayName = displayText(match?.awayClub.name || "");
+  const homeShort = displayText(match?.homeClub.shortName || homeName);
+  const awayShort = displayText(match?.awayClub.shortName || awayName || "TBD");
   const kickoff = match?.kickoff ?? matchDay.date;
   const venue =
-    match?.venue?.name ||
-    match?.homeClub.stadiumName ||
+    displayText(match?.venue?.name || match?.homeClub.stadiumName || "") ||
     null;
   const fixtureLabel = awayName
     ? `${homeShort} vs ${awayShort}`
-    : matchDay.title;
+    : displayText(matchDay.title);
   const fixtureLabelFull = awayName
     ? `${homeName} vs ${awayName}`
-    : matchDay.title;
+    : displayText(matchDay.title);
   const kickoffLondon = formatKoLondon(kickoff);
-  const competition = matchDay.competition || "";
+  const competition = displayText(matchDay.competition || "");
   const base: Omit<MatchAutofill, "ytTitle" | "ytDescription"> = {
     homeName,
     awayName: awayName || "TBD",
@@ -766,7 +766,7 @@ export function toBoardJson(show: {
       ? "URL gate PASS — creatives/social not fully approved (soft-warn; GO LIVE still allowed)"
       : null;
   const af = show.matchDay ? buildMatchAutofill(show.matchDay) : null;
-  const fixtureLabel = af?.fixtureLabel || show.matchDay?.title || "Match";
+  const fixtureLabel = displayText(af?.fixtureLabel || show.matchDay?.title || "Match");
 
   const ytThumbUrl = thumb?.assetUrl || null;
   const fbCoverUrl = cover?.assetUrl || null;
@@ -820,18 +820,20 @@ export function toBoardJson(show: {
     palette: UR_PALETTE,
     /** null until match-specific pack / PATCH — never another fixture's art */
     ytThumbUrl,
-    ytTitle:
+    ytTitle: displayText(
       show.ytTitle ||
       af?.ytTitle ||
       buildYtTitle({
         homeShort: af?.homeShort || fixtureLabel,
         awayShort: af?.awayShort || "TBD",
         competition: show.matchDay?.competition || "",
-      }),
-    ytDescription:
+      })
+    ),
+    ytDescription: displayText(
       show.ytDescription ||
       af?.ytDescription ||
-      `LIVE Unofficial & Remote watchalong — ${fixtureLabel}.\nVoice + graphics desk, no match footage.\n\n• Live score & events\n• Reaction & banter\n• No TV delay stress\n\nSubscribe for more Unofficial & Remote.\n\n#Watchalong`,
+      `LIVE Unofficial & Remote watchalong — ${fixtureLabel}.\nVoice + graphics desk, no match footage.\n\n• Live score & events\n• Reaction & banter\n• No TV delay stress\n\nSubscribe for more Unofficial & Remote.\n\n#Watchalong`
+    ),
     fbCoverUrl,
     igStillUrl,
     igStillNote: igStillUrl ? null : UR_CREATIVES_PLACEHOLDER,
@@ -874,7 +876,7 @@ export function toBoardJson(show: {
       slot: s.slotKey as "t_day" | "t_1h" | "were_live" | "ft",
       label: s.label,
       platform: s.platform,
-      copy: s.copy,
+      copy: displayText(s.copy),
       assetUrl: s.assetUrl,
       approved: s.approved,
       scheduledAt: s.scheduledAt?.toISOString() ?? null,
@@ -891,8 +893,8 @@ export function toBoardJson(show: {
     matchDay: show.matchDay
       ? {
           id: show.matchDay.id,
-          title: show.matchDay.title,
-          competition: show.matchDay.competition,
+          title: displayText(show.matchDay.title),
+          competition: displayText(show.matchDay.competition),
           date: show.matchDay.date.toISOString(),
           matchId: af?.matchId ?? null,
           afFixtureId: af?.afFixtureId ?? null,
@@ -1283,7 +1285,7 @@ export async function claimMatchDayForUr(matchDayId: string, userId: string) {
             slotKey: s.slotKey,
             label: s.label,
             platform: s.platform,
-            copy: s.copy,
+            copy: displayText(s.copy),
             assetUrl,
             approved: false,
             scheduledAt,

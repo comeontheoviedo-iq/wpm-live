@@ -1,10 +1,12 @@
+import { displayText } from "./utils";
+
 /** Split AF venue strings like "Chobani Stadium Fenerbahce Sukru Saracoglu". */
 export function splitVenueNames(raw: string): {
   sponsored: string | null;
   historic: string | null;
   primary: string;
 } {
-  const name = raw.trim();
+  const name = displayText(raw).trim();
   if (!name) return { sponsored: null, historic: null, primary: name };
 
   // "Sponsored Stadium … Historic"

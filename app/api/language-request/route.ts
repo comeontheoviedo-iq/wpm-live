@@ -95,17 +95,26 @@ export async function POST(req: Request) {
     createdAt: new Date().toISOString(),
   };
 
+  let persisted = false;
   try {
     appendRequest(row);
-    console.info("[language-request]", row.id, row.languageName, row.userEmail);
+    persisted = true;
   } catch (e) {
-    console.error("[language-request]", e);
-    return NextResponse.json({ error: "Could not store language request" }, { status: 500 });
+    // Serverless FS is often read-only — still accept the request via logs.
+    console.error("[language-request] persist failed (log stub only)", e);
   }
+  console.info("[language-request]", {
+    id: row.id,
+    languageName: row.languageName,
+    note: row.note,
+    userEmail: row.userEmail,
+    persisted,
+  });
 
   return NextResponse.json({
     ok: true,
     id: row.id,
+    persisted,
     message: "Thanks — we logged your language request.",
   });
 }

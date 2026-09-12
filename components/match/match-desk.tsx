@@ -84,7 +84,7 @@ import {
 } from "@/lib/viz-build";
 import { extractVizPayload, upsertVizNote } from "@/lib/viz-notes";
 import { DeskLiveExtras } from "@/components/match/world-class/desk-live-extras";
-import { StatsStoryStrip } from "@/components/match/world-class/stats-story-strip";
+import { CompetitionScoresStrip } from "@/components/match/world-class/competition-scores-strip";
 import {
   type FieldSettings,
   type FieldSettingsTab,
@@ -2858,16 +2858,7 @@ export function MatchDesk({
         }}
       />
 
-      {!onAirMode && (scorers.length > 0 || venueCapacity || attendance) ? (
-        <StatsStoryStrip
-          scorers={scorers}
-          attendance={attendance}
-          venueCapacity={venueCapacity}
-          homeName={homeName}
-          awayName={awayName}
-          className="mx-0.5"
-        />
-      ) : null}
+      <CompetitionScoresStrip matchId={matchId} className="mx-0.5" />
 
       {/* Flash toast — overlay, not a permanent band */}
       {flash && (

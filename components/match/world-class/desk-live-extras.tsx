@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LiveBannersBar } from "./live-banners";
 import { FormH2HStrip } from "./form-h2h-strip";
-import { WatchlistBar } from "./watchlist-bar";
 import { OnAirStrip } from "./on-air-strip";
 import { FtPackOffer } from "./ft-pack-offer";
 import { SyncAgeChip } from "./sync-age-chip";
@@ -49,7 +48,7 @@ export function DeskLiveExtras({
   homeScore,
   awayScore,
   h2hSummary,
-  apiFootballFixtureId,
+  apiFootballFixtureId: _apiFootballFixtureId,
   lastFeedSyncAt,
   pollError,
   onAirMode,
@@ -60,7 +59,7 @@ export function DeskLiveExtras({
   onExpandNotes,
   onOpenEvents,
   onPlayerClick,
-  notesDirty,
+  notesDirty: _notesDirty,
 }: {
   matchId: string;
   status: string;
@@ -84,9 +83,6 @@ export function DeskLiveExtras({
   onPlayerClick?: (playerId: string) => void;
   notesDirty?: boolean;
 }) {
-  const isLiveish =
-    status === "Live" || status === "Half Time" || status === "Full Time";
-
   const [dismissedIds, setDismissedIds] = useState<string[]>([]);
   const seenBannerAtRef = useRef<Map<string, number>>(new Map());
 
@@ -203,13 +199,6 @@ export function DeskLiveExtras({
           <kbd className="font-mono">O</kbd> On-air mode
         </span>
       </div>
-
-      <WatchlistBar
-        matchId={matchId}
-        currentFixtureId={apiFootballFixtureId}
-        visible={isLiveish}
-        notesDirty={notesDirty}
-      />
 
       <LiveBannersBar
         banners={banners}

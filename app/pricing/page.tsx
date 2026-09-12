@@ -100,6 +100,12 @@ export default function PricingPage() {
             <Link href="/" className="text-slate-400 hover:text-teal-300 hidden sm:inline">
               Home
             </Link>
+            <Link href="/faq" className="text-slate-400 hover:text-teal-300 hidden sm:inline">
+              FAQ
+            </Link>
+            <Link href="/training" className="text-slate-400 hover:text-teal-300 hidden sm:inline">
+              Training
+            </Link>
             <Link href="/login" className="text-slate-300 hover:text-white">
               Sign in
             </Link>
@@ -216,6 +222,20 @@ export default function PricingPage() {
             {msg}
           </p>
         )}
+        <p className="mt-8 text-center text-xs text-slate-500">
+          Questions?{" "}
+          <Link href="/faq" className="text-teal-400 hover:underline">
+            FAQ
+          </Link>
+          {" · "}
+          <Link href="/training" className="text-teal-400 hover:underline">
+            Training
+          </Link>
+          {" · "}
+          <Link href="/signup" className="text-teal-400 hover:underline">
+            Start trial
+          </Link>
+        </p>
       </main>
     </div>
   );

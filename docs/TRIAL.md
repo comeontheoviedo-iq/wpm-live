@@ -77,9 +77,11 @@ Set on **pitchline-app only** (Netlify env):
 | Route | Role |
 |-------|------|
 | `/` | Sales homepage (choose-at-start copy) |
+| `/faq` | Public FAQ (trial / plans / notebook / cancel) |
+| `/training` | Training hub (video placeholders + quick-start) |
 | `/signup` | Plan picker + trial signup |
 | `/pricing` | Unlimited vs Match Desk Pass packs |
-| `/settings` (Plan) | Trial status · cancel / portal · Pass top-ups |
+| `/settings` (Plan) | Trial status · cancel / portal · Pass top-ups · FAQ/Training links |
 | `/api/billing/checkout` | `{ plan: "unlimited" }` · `{ plan: "match_pass", credits: 1\|5\|10 }` |
 | `/api/billing/portal` | Customer Portal |
 | `/api/billing/status` | Snapshot + start app trial |

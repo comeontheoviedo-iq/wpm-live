@@ -54,6 +54,12 @@ export default function MarketingHome() {
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
           <Logo href="/" />
           <nav className="flex items-center gap-2 sm:gap-3 text-sm">
+            <Link href="/faq" className="hidden sm:inline text-slate-400 hover:text-teal-300">
+              FAQ
+            </Link>
+            <Link href="/training" className="hidden sm:inline text-slate-400 hover:text-teal-300">
+              Training
+            </Link>
             <Link href="/pricing" className="hidden sm:inline text-slate-400 hover:text-teal-300">
               Pricing
             </Link>
@@ -261,7 +267,13 @@ export default function MarketingHome() {
       <footer className="border-t border-white/5 py-8">
         <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 text-xs text-slate-600 sm:flex-row sm:items-center sm:justify-between">
           <Logo href="/" />
-          <div className="flex gap-4">
+          <div className="flex flex-wrap gap-4">
+            <Link href="/faq" className="hover:text-slate-300">
+              FAQ
+            </Link>
+            <Link href="/training" className="hover:text-slate-300">
+              Training
+            </Link>
             <Link href="/pricing" className="hover:text-slate-300">
               Pricing
             </Link>

@@ -7,3 +7,4 @@ Unlimited converts to £22 unless cancelled (portal). Pass keeps purchased credi
 AI lab gate (optional): brief / Auto Gen / note-draft via Settings / PITCHLINE_PLAN.
 Demo: demo@pitchline.app / demo1234
 Sales homepage: `/` · Signup: `/signup` · See `docs/TRIAL.md`.
+FAQ: `/faq` · Training: `/training` · See `docs/FAQ.md`.

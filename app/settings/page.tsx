@@ -8,6 +8,7 @@ import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/components/theme-provider";
 import { FeedbackWidget } from "@/components/feedback/feedback-widget";
+import Link from "next/link";
 import {
   User,
   Palette,
@@ -17,6 +18,8 @@ import {
   Plug,
   MessageSquarePlus,
   Sparkles,
+  HelpCircle,
+  GraduationCap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -330,6 +333,21 @@ export default function SettingsPage() {
           <p className="mt-0.5 text-[11px] text-[var(--muted)]">
             Unlimited (Basic) £22/mo — BYO Notebook is core. AI lab features are testing-only, not a separate paid tier.
           </p>
+          <div className="mt-2 flex flex-wrap gap-3 text-[11px]">
+            <Link href="/faq" className="inline-flex items-center gap-1 text-teal-600 dark:text-teal-400 hover:underline">
+              <HelpCircle className="h-3.5 w-3.5" /> FAQ
+            </Link>
+            <Link href="/training" className="inline-flex items-center gap-1 text-teal-600 dark:text-teal-400 hover:underline">
+              <GraduationCap className="h-3.5 w-3.5" /> Training
+            </Link>
+            <button
+              type="button"
+              onClick={() => { setTab("subscription"); }}
+              className="inline-flex items-center gap-1 text-teal-600 dark:text-teal-400 hover:underline"
+            >
+              <CreditCard className="h-3.5 w-3.5" /> Plan & billing
+            </button>
+          </div>
         </div>
         <div className="grid md:grid-cols-4 gap-4">
           <aside className="space-y-1">
@@ -538,7 +556,30 @@ export default function SettingsPage() {
                     </p>
                   </div>
                   <p className="text-xs text-slate-500">{plan?.copy?.rivalCompare || "Unlimited £22/mo — no Intel upsell."}</p>
-                  <a href="/pricing" className="inline-block text-teal-600 font-medium hover:underline">View pricing →</a>
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 space-y-2">
+                    <div className="font-medium text-sm">Help & billing</div>
+                    <p className="text-xs text-slate-500">
+                      Self-serve answers before the demo video ships. Manage subscription or cancel via the portal when billing is configured.
+                    </p>
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      <Link href="/faq">
+                        <Button type="button" variant="outline" className="gap-1.5">
+                          <HelpCircle className="h-3.5 w-3.5" /> FAQ
+                        </Button>
+                      </Link>
+                      <Link href="/training">
+                        <Button type="button" variant="outline" className="gap-1.5">
+                          <GraduationCap className="h-3.5 w-3.5" /> Training
+                        </Button>
+                      </Link>
+                      <Button type="button" variant="outline" disabled={planBusy} onClick={openBillingPortal}>
+                        Manage billing (portal)
+                      </Button>
+                      <Link href="/pricing" className="inline-flex items-center text-sm text-teal-600 dark:text-teal-400 font-medium hover:underline px-2">
+                        View pricing →
+                      </Link>
+                    </div>
+                  </div>
                 </CardBody>
               </Card>
             )}

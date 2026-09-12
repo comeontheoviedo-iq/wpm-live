@@ -236,6 +236,18 @@ function SignupForm() {
             <Link href="/" className="hover:underline">
               ← Back to CoComms
             </Link>
+            {" · "}
+            <Link href="/faq" className="hover:underline">
+              FAQ
+            </Link>
+            {" · "}
+            <Link href="/training" className="hover:underline">
+              Training
+            </Link>
+            {" · "}
+            <Link href="/pricing" className="hover:underline">
+              Pricing
+            </Link>
           </p>
         </div>
       </div>

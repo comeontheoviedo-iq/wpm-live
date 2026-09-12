@@ -74,10 +74,10 @@ function ClaimGate({
         U&R · CoComms · {user.name}
       </div>
       <h1 className="max-w-md text-center text-xl font-bold tracking-tight">
-        Claim this match-day for U&R?
+        Enable U&R for this match-day?
       </h1>
       <p className="max-w-sm text-center text-[13px] text-white/50">
-        {title} — creates a Show board on your personal account (not a separate
+        {title} — enables a Show board on your personal account (not a separate
         portal). Restream / creatives / OBS hand off to Remote football comms
         desk when you&apos;re ready.
       </p>

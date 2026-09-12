@@ -84,15 +84,26 @@ export default async function DashboardPage() {
     : null;
   const preMatch = featured ? isPreMatchStatus(featured.status) : true;
 
+  // U&R tab target: prefer an already-enabled show, else featured desk, else first desk.
+  const urMatchDayId =
+    matchDays.find((md) => md.urShow)?.id ??
+    featuredMatchDay?.id ??
+    matchDays[0]?.id ??
+    null;
+
   return (
     <div className="min-h-dvh bg-[var(--background)] text-[var(--foreground)]">
       <AppHeader user={user} matchId={featured?.id} />
       <div className="flex min-h-0 w-full items-stretch">
-        <AppSidebar liveCount={liveCount} />
+        <AppSidebar
+          liveCount={liveCount}
+          showUr={showUr}
+          urMatchDayId={urMatchDayId}
+        />
         <main className="min-w-0 flex-1 px-2 py-2 sm:px-3 sm:py-3">
           <div className="mx-auto flex max-w-[1400px] flex-col gap-2.5">
             {/* Compact page chrome — broadcast desk, not SaaS hub */}
-            <section id="ur" className="desk-header flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-3.5">
+            <section className="desk-header flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-3.5">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <Mic2 className="h-3.5 w-3.5 text-[var(--brand)]" />
@@ -123,6 +134,39 @@ export default async function DashboardPage() {
                 </Link>
               </div>
             </section>
+
+            {showUr ? (
+              <section
+                id="ur"
+                className="desk-header flex flex-col gap-2 border border-[#7EB6FF]/25 bg-[#7EB6FF]/08 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-3.5"
+                aria-label="U&R Show"
+              >
+                <div className="min-w-0">
+                  <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#7EB6FF]">
+                    U&R · Up &amp; Running
+                  </div>
+                  <p className="mt-0.5 text-[11px] text-[var(--muted)]">
+                    Enable U&amp;R on a desk below, or open an existing Show board.
+                    Sidebar <strong className="text-[var(--foreground)]">U&amp;R</strong> jumps straight to your board.
+                  </p>
+                </div>
+                {urMatchDayId ? (
+                  <ClaimUrButton
+                    matchDayId={urMatchDayId}
+                    claimed={Boolean(
+                      matchDays.find((md) => md.id === urMatchDayId)?.urShow
+                    )}
+                  />
+                ) : (
+                  <Link
+                    href="/match-day/new"
+                    className="desk-btn focus-ring inline-flex items-center gap-1.5 px-3 py-2 text-[11px] font-semibold text-[#7EB6FF]"
+                  >
+                    Create a desk first
+                  </Link>
+                )}
+              </section>
+            ) : null}
 
             {/* Hero call-sheet board */}
             {featured ? (

@@ -1,10 +1,10 @@
 # U&R Show board — runbook
 
-Personal-account claim for Up & Running match-days. **Not** a separate portal or producer role — Chris claims on his own CoComms account (`chris@ronniedogmedia.com`). Remote football comms desk owns Restream / creatives / OBS after handoff.
+Personal-account enable for Up & Running match-days. **Not** a separate portal or producer role — Chris enables on his own CoComms account (`chris@ronniedogmedia.com`). Remote football comms desk owns Restream / creatives / OBS after handoff.
 
 ## Privacy allowlist (hard lock)
 
-U&R chrome (Claim U&R, `/show/*`, `/api/show/*`) is visible **only** to emails on the allowlist.
+U&R chrome (Enable U&R, `/show/*`, `/api/show/*`) is visible **only** to emails on the allowlist.
 
 - Helper: `lib/ur-access.ts` → `canUseUrShow(email|user)`
 - Env: `UR_SHOW_ALLOWLIST` = comma-separated emails (case-insensitive)
@@ -12,10 +12,10 @@ U&R chrome (Claim U&R, `/show/*`, `/api/show/*`) is visible **only** to emails o
 - Default allowlist: **only** `chris@ronniedogmedia.com`
 - **Never** shown to `demo@pitchline.app`, `tester@cocomms.online`, or any other account
 
-## How Chris claims a match
+## How Chris enables a match
 
 1. Sign in as `chris@ronniedogmedia.com` (his real CoComms U&R account).
-2. Dashboard → **Claim U&R** on a desk (or open `/show/<matchDayId>` → Claim).
+2. Dashboard → **Enable U&R** on a desk (or open `/show/<matchDayId>` → Enable).
 3. One Show board per claimed MatchDay: `/show/[matchDayId]`.
 
 Tenancy: `session.userId` only (`docs/TENANCY.md`). Claim sets `UrShow.claimedByUserId` to the signed-in user; MatchDay must already be owned. Allowlist is checked **before** tenancy for all U&R routes.

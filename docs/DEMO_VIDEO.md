@@ -1,81 +1,90 @@
-# CoComms DEMO video — Matchday Cut
+# CoComms DEMO video — HOMEPAGE TRAILER
 
-**Cut:** short matchday energy (Strasbourg vs Monaco desk) — feature pass, not a tour dump  
-**Length:** ~58s (target 45–90s)  
-**Asset:** `/public/videos/cocomms-matchday-demo.mp4`  
-**Public URL:** `https://www.cocomms.online/videos/cocomms-matchday-demo.mp4`  
-**Desk:** matchDayId `cmtuguaof0004rarmb9711ja5` — https://www.cocomms.online/match-day/cmtuguaof0004rarmb9711ja5  
+**Cut:** TRAILER — salesy wow / co-pilot energy (not a how-to)  
+**Length:** ~42s (target 30–45s)  
+**Asset:** `/public/videos/cocomms-trailer.mp4`  
+**Public URL:** `https://www.cocomms.online/videos/cocomms-trailer.mp4`  
+**Homepage:** hero points at trailer path. **Training** hub keeps Matchday Cut (`cocomms-matchday-demo.mp4`) + how-to separate.  
+**Desk:** Strasbourg vs Monaco — matchDayId `cmtuguaof0004rarmb9711ja5`  
 **Login shown:** `chris@ronniedogmedia.com` (CB) — not demo@ / tester@  
-**Audio:** silent bed (null AAC). **Chris VO TBD — captions = script.** Burned ASS captions match the VO script below so Chris can record over later.
+**Audio:** royalty-free self-generated sports-energy bed (see Music) + burned ASS captions for Chris VO tomorrow. Duck bed under captions.
 
-## Voiceover script (timed captions)
+## Music bed (license)
 
-Matchday.
+| Field | Value |
+|-------|--------|
+| Source | **Self-generated** ambient sports-energy bed (Python + stdlib `wave`) |
+| File | built into trailer AAC; source WAV on assemble box `demo-video-trailer/music/sports-energy-bed.wav` |
+| License | **Original / all rights owned by project** — not a commercial track; safe for site/demo use |
+| Notes | ~118 BPM kick/snare pulse + ducked bass + shimmer. Volume ~0.22 under captions. **Never** replace with copyrighted commercial music. Prefer Mixkit / Pixabay / CC0 if swapping later — credit here. |
 
-You've got the mic.
+## Voiceover script (timed captions) — TRAILER
 
-CoComms is your commentary co-pilot.
+Matchday. You've got the mic.
 
-Open the Strasbourg–Monaco desk.
+CoComms — your commentary co-pilot.
 
-Live feed. Score. Dynamic lineups on the pitch.
+Pitch alive. Score. Scrolling action ticker.
 
-Scripts where your eyes need them.
+On-air chrome. Stay on the call.
 
-Research filed into Notes — ready when the board goes up.
+STATS — when you need them.
 
-LEAGUE poster. HOOKS poster. DATA VIZ when you reopen it — not spam on the call.
+LEAGUE poster. Instant context.
+
+HOOKS. Narrative cards. Fast.
+
+Scripts — where your eyes need them.
+
+Research filed. Ready when the board goes up.
 
 The desk stays out of the way.
 
-Stay on the call.
-
-One matchday desk.
-
-CoComms.
-
-Start your trial — walk into the next kick-off ready.
+One matchday desk. CoComms.  
+Start your trial — walk into kick-off ready.
 
 ## Shot list (sequenced)
 
 | t | Visual | Beat |
 |---|--------|------|
-| 0–4s | Homepage (prod) | Matchday / co-pilot |
-| 4–10.5s | Desk LIVE · Strasbourg–Monaco · pitch + XI · score · action ticker | Open desk · live feed / lineups |
-| 10.5–16s | On-air chrome (clean) | Pitch hero · no intel clutter |
-| 16–21.5s | Scripts | Scripts where eyes need them |
-| 21.5–26.5s | Research | Prep filed · ready when board goes up |
-| 26.5–31.5s | LEAGUE poster (full-screen, Esc) | Reopenable poster — not a flash |
-| 31.5–36.5s | HOOKS poster (full-screen, Esc) | Quick narrative cards |
-| 36.5–41.5s | DATA VIZ reopen (single card from Notes) | Reopenable viz — not spammy popup stack |
-| 41.5–47s | Clean on-air desk | Desk stays out of the way |
-| 47–52.5s | Homepage CTA | Start your trial |
+| 0–3s | Homepage (prod) | Matchday / mic |
+| 3–7s | Desk HT cut (Strasbourg–Monaco · pitch + XI) | Co-pilot · pitch alive |
+| 7–11s | Desk live FT · NEXT ticker | Score · scrolling action ticker |
+| 11–14s | On-air chrome | Stay on the call |
+| 14–18s | STATS overlay | Intentional STATS — not spam flash |
+| 18–21.5s | LEAGUE poster | Instant context |
+| 21.5–25s | HOOKS poster | Narrative cards |
+| 25–28s | Scripts | Eyes-ready |
+| 28–31s | Research | Prep filed |
+| 31–34.5s | Clean on-air desk | Desk stays out of the way |
+| 34.5–42s | Homepage CTA | Trial / kick-off ready |
 
 ## Do / don't
 
-- **Do:** co-pilot language; Strasbourg–Monaco live desk; pitch + XI; live feed/score; Scripts/Research; LEAGUE / HOOKS / DATA VIZ as **posters**; action ticker if visible; on-air chrome  
-- **Don't:** Gemini, OBS, BYO, Speaks, SaaS-shell framing; **no auto data-viz / live-intel flash spam** in frame (Clear / wait out / on-air; DATA VIZ only as intentional reopen)  
-- **Footage:** public homepage + real desk UI as chris@ (scrubbed; no demo@ / tester@ login chrome)
+- **Do:** trailer pacing; co-pilot tagline energy; Strasbourg–Monaco; pitch + XI; action ticker; STATS; LEAGUE / HOOKS posters; Scripts/Research; on-air chrome; burned captions for VO  
+- **Don't:** tutorial tone; Gemini / OBS / BYO / Speaks / SaaS-shell framing; **no spammy data-viz popup flash stack**  
+- **Footage:** public homepage + real desk UI as chris@
 
-## Rebuild (Air + box)
+## Rebuild
 
 ```bash
-# Captures: scripts/capture-demo-stras-monaco.mjs (JWT session as chris@)
-# Assemble on box (ffmpeg) from tmp/demo-video-stras or /workspace/demo-video-stras
-# Silent + burned captions — Chris VO TBD
+# Captures: scripts/capture-trailer-stras-monaco.mjs + scripts/capture-trailer-posters.mjs
+# Assemble on box (ffmpeg) from /workspace/demo-video-trailer
 ffmpeg -y -f concat -safe 0 -i slides.txt -vf "ass=captions.ass" \
   -c:v libx264 -pix_fmt yuv420p -r 30 -movflags +faststart silent_captions.mp4
-ffmpeg -y -i silent_captions.mp4 -f lavfi -i anullsrc=channel_layout=stereo:sample_rate=44100 \
-  -c:v copy -c:a aac -b:a 64k -shortest -movflags +faststart \
-  public/videos/cocomms-matchday-demo.mp4
+ffmpeg -y -i silent_captions.mp4 -i music/sports-energy-bed.wav \
+  -filter_complex "[1:a]volume=0.22,afade=t=in:st=0:d=0.6,afade=t=out:st=40.5:d=1.5[a]" \
+  -map 0:v -map "[a]" -c:v copy -c:a aac -b:a 128k -shortest -movflags +faststart \
+  public/videos/cocomms-trailer.mp4
 ```
 
 ## Swap VO later
 
-Replace audio only (keep burned captions, or re-burn without captions if Chris wants clean plate):
-
 ```bash
-ffmpeg -y -i public/videos/cocomms-matchday-demo.mp4 -i NEW_VO.wav \
-  -c:v copy -map 0:v:0 -map 1:a:0 -shortest -movflags +faststart \
-  public/videos/cocomms-matchday-demo.mp4
+ffmpeg -y -i public/videos/cocomms-trailer.mp4 -i NEW_VO.wav \
+  -filter_complex "[1:a][0:a]amix=inputs=2:duration=first:dropout_transition=2,volume=1[a]" \
+  -map 0:v -map "[a]" -c:v copy -c:a aac -shortest -movflags +faststart \
+  public/videos/cocomms-trailer.mp4
 ```
+
+Or replace audio only and keep burned captions as VO guide.

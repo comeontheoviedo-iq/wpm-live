@@ -155,7 +155,7 @@ export default function MarketingHome() {
               </p>
             </div>
 
-            {/* Trailer frame — scorebug / broadcast plate, keep Matchday Cut embed */}
+            {/* Trailer frame — scorebug / broadcast plate, keep Homepage Trailer embed */}
             <div className="relative">
               <div
                 className="absolute -inset-3 rounded-[3px] opacity-60 blur-2xl"
@@ -174,11 +174,11 @@ export default function MarketingHome() {
                       On air
                     </span>
                     <span className="font-[family-name:var(--font-plex-mono)] text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
-                      Matchday Cut
+                      Homepage Trailer
                     </span>
                   </div>
                   <span className="hidden font-[family-name:var(--font-plex-mono)] text-[9px] uppercase tracking-[0.14em] text-slate-600 sm:inline">
-                    Desk demo · ~45s
+                    Trailer · ~40s
                   </span>
                 </div>
                 <div className="relative aspect-video bg-[#03050a]">
@@ -206,7 +206,7 @@ export default function MarketingHome() {
                     preload="metadata"
                   >
                     <source
-                      src="/videos/cocomms-matchday-demo.mp4"
+                      src="/videos/cocomms-trailer.mp4"
                       type="video/mp4"
                     />
                     Your browser does not support the demo video.
@@ -214,8 +214,7 @@ export default function MarketingHome() {
                 </div>
                 <div className="flex items-center justify-between gap-3 border-t border-white/10 bg-[#0a0d12] px-3 py-2">
                   <p className="text-[11px] leading-relaxed text-slate-500">
-                    ~45s matchday cut — co-pilot desk, live feed, lineups,
-                    Scripts.
+                    ~40s trailer — pitch alive, ticker, STATS, LEAGUE & HOOKS.
                   </p>
                   <span className="shrink-0 font-[family-name:var(--font-plex-mono)] text-[9px] uppercase tracking-[0.12em] text-amber-400/80">
                     Stay on the call

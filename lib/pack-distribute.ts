@@ -87,16 +87,27 @@ export function splitByHeadings(text: string): { heading: string; body: string }
     const numbered = /^(\d+)[.)]\s+(.+)$/.exec(line.trim());
     const roman = /^(?:[IVXLCDM]+)[.)]\s+(.+)$/i.exec(line.trim());
     const bold = /^\*\*(.+?)\*\*\s*:?\s*$/.exec(line.trim());
+    // Manager Profile lines are rarely markdown — catch before plainCaps
+    // so "Manager Profile: Hugo Oliveira (RC Strasbourg Alsace)" becomes a
+    // real section (otherwise it stays buried in Overview and coach notes = 0).
+    const trimmed = line.trim();
+    const managerProfile =
+      /^(Manager(?:ial)?\s+Profiles?\b.*|Manager\s+Profile\s*:\s*.+)$/i.test(
+        trimmed
+      ) && trimmed.length < 140
+        ? trimmed
+        : null;
     const plainCaps =
       /^([A-Z][A-Za-zÀ-ÿ.'\-]+(?:\s+[A-Z][A-Za-zÀ-ÿ.'\-]+){0,4})\s*:?\s*$/.exec(
-        line.trim()
-      ) && line.trim().length < 60
-        ? line.trim().replace(/:$/, "")
+        trimmed
+      ) && trimmed.length < 60
+        ? trimmed.replace(/:$/, "")
         : null;
 
     let heading: string | null = null;
     if (md) heading = md[2].trim();
     else if (bold) heading = bold[1].trim();
+    else if (managerProfile) heading = managerProfile;
     else if (roman && roman[1].length < 100) heading = roman[1].trim();
     else if (numbered && numbered[2].length < 80) heading = numbered[2].trim();
     else if (plainCaps && /[A-Za-z]{2,}/.test(plainCaps)) heading = plainCaps;

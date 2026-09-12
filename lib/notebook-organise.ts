@@ -255,6 +255,13 @@ function classifySection(heading: string): {
   if (/match officials|referee|ref:\s*|var:\s*|cards?\s*profile/i.test(h)) {
     return { kind: "referee" };
   }
+  // Plural "Manager Profiles & …" is a container — children hold the payload
+  if (
+    /^managers?\s+profiles?\b/i.test(h) &&
+    !/manager\s+profile\s*:/i.test(h)
+  ) {
+    return { kind: "skip" };
+  }
   if (
     /\bmanagers?\b|manager\s*profile|touchline|head\s+coaches?|dugout|co-?coaches?|\bmanager\s*[:—–-]/i.test(
       h

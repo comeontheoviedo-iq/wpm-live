@@ -405,13 +405,34 @@ export function noteMatchesCoachCard(
   const hayNorm = normalizePlayerKey(
     `${n.title || ""} ${n.body || ""} ${n.category || ""}`
   );
+  const titleNorm = normalizePlayerKey(n.title || "");
   const nameNorm = normalizePlayerKey(opts.coachName || "");
   const sur = lastToken(opts.coachName || "");
+  const coachTokens = nameNorm.split(" ").filter((t) => t.length >= 2);
+  const titleTokens = titleNorm.split(" ").filter((t) => t.length >= 2);
+  // AF / paste name-order variants: "Filipe Luís" ↔ "Luis Filipe"
+  const tokenSetHit =
+    Boolean(coachTokens.length) &&
+    Boolean(titleTokens.length) &&
+    coachTokens.length <= 4 &&
+    titleTokens.length <= 4 &&
+    coachTokens.every((t) => titleTokens.includes(t)) &&
+    titleTokens.every((t) => coachTokens.includes(t));
   const nameHit =
     Boolean(nameNorm) &&
-    ((nameNorm.length >= 4 && hayNorm.includes(nameNorm)) ||
+    (tokenSetHit ||
+      (nameNorm.length >= 4 &&
+        (hayNorm.includes(nameNorm) || titleNorm.includes(nameNorm))) ||
       (sur.length >= 4 &&
-        (hayNorm.split(" ").includes(sur) || hayNorm.includes(sur))));
+        (titleNorm === sur ||
+          titleNorm.split(" ").includes(sur) ||
+          hayNorm.split(" ").includes(sur) ||
+          hayNorm.includes(sur))) ||
+      // bare surname / short title vs full coach name
+      (titleNorm.length >= 4 &&
+        (nameNorm.includes(titleNorm) ||
+          coachTokens.includes(titleNorm) ||
+          titleTokens.some((t) => t.length >= 4 && coachTokens.includes(t)))));
 
   // Direct coach entity or any managers-shaped note naming this coach
   if (nameHit && (n.entityType === "coach" || isManagersNote(n))) return true;
@@ -434,8 +455,7 @@ export function noteMatchesCoachCard(
       !n.entityType)
   ) {
     if (nameHit) return true;
-    const titleNorm = normalizePlayerKey(n.title || "");
-    const genericManager =
+        const genericManager =
       /^manager(\s|$)/i.test(n.title || "") &&
       !/[a-z]{4,}/.test(
         titleNorm

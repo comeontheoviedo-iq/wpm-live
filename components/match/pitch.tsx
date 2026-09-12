@@ -852,8 +852,8 @@ export function PitchBoard({
   hasCustomPlacements?: boolean;
   onResetPlacements?: () => void;
 }) {
-  const homeSlots = slotsFor(homeFormation);
-  const awaySlots = slotsFor(awayFormation);
+  const homeSlots = slotsFor(homeFormation || "4-3-3");
+  const awaySlots = slotsFor(awayFormation || "4-2-3-1");
   const resolvedSettings = cardSettings || DEFAULT_FIELD_SETTINGS;
   const resolvedMarkerPct = markerPct ?? resolvedSettings.markerSizePct;
   const badge = lineupBadgeLabel(lineupStatus);

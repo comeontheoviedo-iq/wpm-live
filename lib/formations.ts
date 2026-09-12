@@ -97,6 +97,19 @@ export const FORMATIONS: Record<string, Slot[]> = {
     { id: "RST", x: 64, y: 14, label: "ST" },
     { id: "LST", x: 36, y: 14, label: "ST" },
   ],
+  "4-3-1-2": [
+    { id: "GK", x: 50, y: 96, label: "GK" },
+    { id: "RB", x: 90, y: 74, label: "RB" },
+    { id: "RCB", x: 68, y: 82, label: "CB" },
+    { id: "LCB", x: 32, y: 82, label: "CB" },
+    { id: "LB", x: 10, y: 74, label: "LB" },
+    { id: "RCM", x: 74, y: 52, label: "CM" },
+    { id: "CM", x: 50, y: 58, label: "CM" },
+    { id: "LCM", x: 26, y: 52, label: "CM" },
+    { id: "CAM", x: 50, y: 32, label: "CAM" },
+    { id: "RST", x: 64, y: 14, label: "ST" },
+    { id: "LST", x: 36, y: 14, label: "ST" },
+  ],
   "4-3-2-1": [
     { id: "GK", x: 50, y: 96, label: "GK" },
     { id: "RB", x: 90, y: 74, label: "RB" },
@@ -216,8 +229,57 @@ export const FORMATIONS: Record<string, Slot[]> = {
   ],
 };
 
-export function slotsFor(formation: string): Slot[] {
-  return FORMATIONS[formation] || FORMATIONS["4-3-3"];
+/** AF sometimes sends spacing variants / unknown shapes — map onto our keys. */
+const FORMATION_ALIASES: Record<string, string> = {
+  "4-3-1-2": "4-3-1-2",
+  "4-1-3-2": "4-3-1-2",
+  "4-4-2-diamond": "4-4-2 diamond",
+  "4-4-2diamond": "4-4-2 diamond",
+  "442 diamond": "4-4-2 diamond",
+};
+
+export function normalizeFormation(
+  formation?: string | null,
+  fallback = "4-3-3"
+): string {
+  const raw = String(formation || "").trim();
+  if (!raw) return fallback;
+  if (FORMATIONS[raw]) return raw;
+  const compact = raw.replace(/\s+/g, " ");
+  if (FORMATIONS[compact]) return compact;
+  const aliased = FORMATION_ALIASES[raw] || FORMATION_ALIASES[compact.toLowerCase()];
+  if (aliased && FORMATIONS[aliased]) return aliased;
+  // Digits-only shapes like "433" → "4-3-3"
+  const digits = raw.replace(/[^0-9]/g, "");
+  if (digits.length >= 3) {
+    const dashed = digits.split("").join("-");
+    if (FORMATIONS[dashed]) return dashed;
+  }
+  return FORMATIONS[raw] ? raw : fallback;
+}
+
+export function slotsFor(formation?: string | null): Slot[] {
+  const key = normalizeFormation(formation, "4-3-3");
+  return FORMATIONS[key] || FORMATIONS["4-3-3"];
+}
+
+/** Guarantee every assigned id exists on the formation (never S1/S2 fallbacks). */
+export function coerceValidSlotIds(
+  slotIds: string[],
+  formation?: string | null
+): string[] {
+  const valid = slotsFor(formation);
+  const used = new Set<string>();
+  return slotIds.map((raw, i) => {
+    const id = String(raw || "").trim();
+    if (id && valid.some((s) => s.id === id) && !used.has(id)) {
+      used.add(id);
+      return id;
+    }
+    const next = valid.find((s) => !used.has(s.id)) || valid[i % valid.length];
+    used.add(next.id);
+    return next.id;
+  });
 }
 
 export function formationKeys(): string[] {

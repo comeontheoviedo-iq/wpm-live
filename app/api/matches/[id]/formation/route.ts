@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { FORMATIONS, slotsFor } from "@/lib/formations";
+import { FORMATIONS, normalizeFormation, slotsFor } from "@/lib/formations";
 import { remapStartersToFormation } from "@/lib/api-football";
 
 export async function POST(
@@ -15,10 +15,11 @@ export async function POST(
     const { id } = await params;
     const body = await req.json().catch(() => ({}));
     const side = body.side === "away" ? "away" : body.side === "home" ? "home" : null;
-    const formation = String(body.formation || "");
+    const rawFormation = String(body.formation || "");
     if (!side) {
       return NextResponse.json({ error: "side must be home|away" }, { status: 400 });
     }
+    const formation = normalizeFormation(rawFormation, "");
     if (!formation || !FORMATIONS[formation]) {
       return NextResponse.json(
         { error: `Unknown formation. Use one of: ${Object.keys(FORMATIONS).join(", ")}` },
@@ -37,11 +38,7 @@ export async function POST(
 
     const mapped = remapStartersToFormation(starters, formation);
     const valid = new Set(slotsFor(formation).map((s) => s.id));
-
-    await prisma.player.updateMany({
-      where: { clubId },
-      data: { isStarter: false, onPitch: false, formationSlot: null },
-    });
+    const keptIds: string[] = [];
 
     for (const m of mapped) {
       if (!valid.has(m.formationSlot)) continue;
@@ -52,6 +49,18 @@ export async function POST(
           onPitch: true,
           formationSlot: m.formationSlot,
         },
+      });
+      keptIds.push(m.playerId);
+    }
+
+    if (keptIds.length) {
+      await prisma.player.updateMany({
+        where: {
+          clubId,
+          id: { notIn: keptIds },
+          OR: [{ isStarter: true }, { onPitch: true }],
+        },
+        data: { isStarter: false, onPitch: false, formationSlot: null },
       });
     }
 

@@ -9,7 +9,7 @@ import {
   isCancelledGoalText,
   isScoredGoalType,
 } from "./match-goals";
-import { slotsFor } from "./formations";
+import { coerceValidSlotIds, normalizeFormation, slotsFor } from "./formations";
 import {
   assertFixtureCompatible,
   assignSlotsFromStartXI,
@@ -374,18 +374,23 @@ async function upsertLineupSide(
   lineup: AfLineup,
   side: "home" | "away"
 ) {
-  const formation = lineup.formation || (side === "home" ? "4-3-3" : "4-2-3-1");
+  const fallback = side === "home" ? "4-3-3" : "4-2-3-1";
+  const formation = normalizeFormation(lineup.formation, fallback);
+  const startXI = lineup.startXI || [];
+  if (!startXI.length) return formation;
 
-  await prisma.player.updateMany({
-    where: { clubId },
-    data: { isStarter: false, onPitch: false, formationSlot: null },
-  });
+  // Assign first, write starters, THEN clear the rest — never blank the whole
+  // club first (that race left NS desks with expectedFrom but an empty pitch).
+  const slotIds = coerceValidSlotIds(
+    assignSlotsFromStartXI(startXI, formation),
+    formation
+  );
+  const keptIds = new Set<string>();
 
-  const slotIds = assignSlotsFromStartXI(lineup.startXI || [], formation);
-  for (let i = 0; i < lineup.startXI.length; i++) {
-    const row = lineup.startXI[i];
+  for (let i = 0; i < startXI.length; i++) {
+    const row = startXI[i];
     const p = row.player;
-    const slot = slotIds[i] || slotsFor(formation)[i]?.id || `S${i + 1}`;
+    const slot = slotIds[i] || slotsFor(formation)[i]?.id || "GK";
     const existing = await findClubPlayer(clubId, {
       apiId: p.id,
       name: p.name,
@@ -404,8 +409,9 @@ async function upsertLineupSide(
           apiFootballPlayerId: p.id || existing.apiFootballPlayerId,
         },
       });
+      keptIds.add(existing.id);
     } else {
-      await prisma.player.create({
+      const created = await prisma.player.create({
         data: {
           clubId,
           name: p.name,
@@ -418,6 +424,7 @@ async function upsertLineupSide(
           apiFootballPlayerId: p.id || null,
         },
       });
+      keptIds.add(created.id);
     }
   }
 
@@ -440,8 +447,9 @@ async function upsertLineupSide(
           position: posGuess(p.pos) || existing.position,
         },
       });
+      keptIds.add(existing.id);
     } else {
-      await prisma.player.create({
+      const created = await prisma.player.create({
         data: {
           clubId,
           name: p.name,
@@ -454,8 +462,19 @@ async function upsertLineupSide(
           apiFootballPlayerId: p.id || null,
         },
       });
+      keptIds.add(created.id);
     }
   }
+
+  // Drop prior XI flags for anyone not in this startXI / bench list
+  await prisma.player.updateMany({
+    where: {
+      clubId,
+      id: { notIn: [...keptIds] },
+      OR: [{ isStarter: true }, { onPitch: true }, { formationSlot: { not: null } }],
+    },
+    data: { isStarter: false, onPitch: false, formationSlot: null },
+  });
 
   // Coach is synced separately (current /coachs?team= + confirmed lineup.coach)
   return formation;
@@ -940,39 +959,63 @@ function mapEventType(ev: AfEvent): string {
  *   injuries refresh, coach spam, or last-played lineup hunts on the timer.
  */
 
-/** Ensure at most one on-pitch player per formation slot (subs can double-book on name mismatch). */
+/**
+ * Ensure at most one on-pitch player per formation slot.
+ * Invalid / empty / S1-style slots are REASSIGNED to free valid slots
+ * (never wiped) so expected last-XI survives for NS desks.
+ */
 async function dedupeClubSlots(clubId: string, formation?: string | null) {
-  const valid = new Set(slotsFor(formation || "4-3-3").map((s) => s.id));
+  const formationKey = normalizeFormation(formation, "4-3-3");
+  const validSlots = slotsFor(formationKey);
+  const valid = new Set(validSlots.map((s) => s.id));
   const onPitch = await prisma.player.findMany({
     where: { clubId, OR: [{ isStarter: true }, { onPitch: true }] },
   });
   const bySlot = new Map<string, typeof onPitch>();
+  const orphans: typeof onPitch = [];
+
   for (const p of onPitch) {
     const slot = p.formationSlot;
     if (!slot || !valid.has(slot)) {
-      // Invalid slot → clear from XI
-      await prisma.player.update({
-        where: { id: p.id },
-        data: { isStarter: false, onPitch: false, formationSlot: null },
-      });
+      orphans.push(p);
       continue;
     }
     const list = bySlot.get(slot) || [];
     list.push(p);
     bySlot.set(slot, list);
   }
+
+  // Collapse double-booked slots first so free slots open up for orphans
   for (const [, list] of bySlot) {
     if (list.length <= 1) continue;
-    // Prefer FWD/MID who are not the "original" alphabetical first — keep highest shirt as heuristic for late sub,
-    // else keep the last in list.
     const keep = [...list].sort((a, b) => (b.shirtNumber || 0) - (a.shirtNumber || 0))[0];
     for (const p of list) {
       if (p.id === keep.id) continue;
+      orphans.push(p);
+    }
+  }
+
+  const used = new Set(
+    [...bySlot.entries()]
+      .filter(([, list]) => list.length >= 1)
+      .map(([slot]) => slot)
+  );
+
+  for (const p of orphans) {
+    const next = validSlots.find((s) => !used.has(s.id));
+    if (!next) {
+      // Formation already full — park overflow on bench rather than inventing S#
       await prisma.player.update({
         where: { id: p.id },
-        data: { isStarter: false, onPitch: false, formationSlot: null },
+        data: { isStarter: false, onPitch: false, formationSlot: "BENCH" },
       });
+      continue;
     }
+    used.add(next.id);
+    await prisma.player.update({
+      where: { id: p.id },
+      data: { isStarter: true, onPitch: true, formationSlot: next.id },
+    });
   }
 }
 
@@ -2294,7 +2337,9 @@ async function runSyncMatchFromApiFootball(
     console.error("[sync] dedupe events failed", matchId, err)
   );
 
-  if (lineupStatus === "confirmed") {
+  // Confirmed + expected both need slot repair — old wipe-on-invalid cleared
+  // entire last-XI when assignSlots fell back to S1 or unknown formations.
+  if (lineupStatus === "confirmed" || lineupStatus === "expected") {
     await dedupeClubSlots(match.homeClubId, homeFormation);
     await dedupeClubSlots(match.awayClubId, awayFormation);
   }

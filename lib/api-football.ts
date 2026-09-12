@@ -6,7 +6,7 @@
  */
 
 import { getApiFootballKey } from "./env";
-import { slotsFor } from "./formations";
+import { coerceValidSlotIds, normalizeFormation, slotsFor } from "./formations";
 import { europeanSeasonYear, seasonCandidates } from "./season";
 
 const BASE = "https://v3.football.api-sports.io";
@@ -565,7 +565,7 @@ export async function getApiStatus() {
 
 /** Group formation slots into horizontal lines by similar y (GK → attack). */
 function slotLines(formation?: string | null) {
-  const slots = [...slotsFor(formation || "4-3-3")].sort((a, b) => b.y - a.y || a.x - b.x);
+  const slots = [...slotsFor(normalizeFormation(formation))].sort((a, b) => b.y - a.y || a.x - b.x);
   const lines: typeof slots[] = [];
   for (const s of slots) {
     const last = lines[lines.length - 1];
@@ -573,7 +573,7 @@ function slotLines(formation?: string | null) {
     else lines.push([s]);
   }
   for (const line of lines) line.sort((a, b) => a.x - b.x);
-  return { slots: slotsFor(formation || "4-3-3"), lines, ordered: lines.flat() };
+  return { slots: slotsFor(normalizeFormation(formation)), lines, ordered: lines.flat() };
 }
 
 /**
@@ -650,16 +650,17 @@ export function assignSlotsFromStartXI(
     }
   }
 
-  // Fill any holes
+  // Fill any holes — never invent S1/S2 ids (dedupeClubSlots would wipe them)
   const used = new Set(result.filter(Boolean));
   for (let i = 0; i < n; i++) {
     if (result[i]) continue;
-    const next = ordered.find((s) => !used.has(s.id)) || slots[i];
+    const next =
+      ordered.find((s) => !used.has(s.id)) ||
+      slots.find((s) => !used.has(s.id)) ||
+      slots[i % Math.max(slots.length, 1)];
     if (next) {
       result[i] = next.id;
       used.add(next.id);
-    } else {
-      result[i] = `S${i + 1}`;
     }
   }
 
@@ -685,7 +686,7 @@ export function assignSlotsFromStartXI(
     }
   }
 
-  return result;
+  return coerceValidSlotIds(result, formation);
 }
 
 /** Remap existing starters onto a new formation by position band + lateral x. */
@@ -805,7 +806,7 @@ export function gridToSlot(
       taken.add(first.id);
       return first.id;
     }
-    const fallback = slots[slots.length - 1]?.id || `S${index + 1}`;
+    const fallback = slots[slots.length - 1]?.id || slots[0]?.id || "GK";
     taken.add(fallback);
     return fallback;
   };

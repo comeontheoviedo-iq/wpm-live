@@ -10,6 +10,10 @@ export const runtime = "nodejs";
  * Verifies Stripe signature when STRIPE_WEBHOOK_SECRET is set.
  * Events: checkout.session.completed, customer.subscription.updated|deleted
  *
+ * - Unlimited subscription: persist stripe ids; trialing → trial; active → active
+ * - Match Desk Pass payment: increment matchPassCredits; when grantTrial,
+ *   open the same 14d / 3-desk trial window in-app (no Unlimited conversion)
+ *
  * Dashboard setup:
  *   Endpoint → https://www.cocomms.online/api/billing/webhook
  *   Events above · set STRIPE_WEBHOOK_SECRET in Netlify env
@@ -103,28 +107,57 @@ async function handleCheckoutCompleted(stripe: any, session: any) {
 
   const mode = String(session.mode || "");
   const plan = String(meta.plan || "");
-  const switchFromTrial = meta.switchFromTrial === "true";
   const credits = parseMatchPassCredits(meta.credits);
+  const grantTrialMeta = meta.grantTrial === "true";
 
   if (mode === "payment" && (plan === "match_pass" || credits != null)) {
     const add = credits ?? 0;
-    if (add > 0) {
-      await prisma.user.update({
-        where: { id: userId },
-        data: {
-          ...(customerId ? { stripeCustomerId: customerId } : {}),
-          matchPassCredits: { increment: add },
-        },
-      });
-    } else if (customerId) {
-      await prisma.user.update({
-        where: { id: userId },
-        data: { stripeCustomerId: customerId },
-      });
+    const existing = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        billingStatus: true,
+        trialEndsAt: true,
+        trialStartedAt: true,
+        stripeSubscriptionId: true,
+      },
+    });
+
+    const now = Date.now();
+    const inTrialWindow =
+      existing?.trialEndsAt != null && existing.trialEndsAt.getTime() > now;
+    const status = existing?.billingStatus || "none";
+    // Prefer Checkout metadata; also grant trial when user is not already on Unlimited path
+    const shouldGrantTrial =
+      grantTrialMeta ||
+      (!inTrialWindow &&
+        status !== "trial" &&
+        status !== "active" &&
+        !existing?.stripeSubscriptionId);
+
+    const data: {
+      stripeCustomerId?: string;
+      matchPassCredits?: { increment: number };
+      billingStatus?: string;
+      trialStartedAt?: Date;
+      trialEndsAt?: Date;
+      trialCancelledAt?: Date | null;
+      cancelAtPeriodEnd?: boolean;
+    } = {};
+
+    if (customerId) data.stripeCustomerId = customerId;
+    if (add > 0) data.matchPassCredits = { increment: add };
+
+    if (shouldGrantTrial) {
+      const w = computeTrialWindow();
+      data.billingStatus = "trial";
+      data.trialStartedAt = w.trialStartedAt;
+      data.trialEndsAt = w.trialEndsAt;
+      data.trialCancelledAt = null;
+      data.cancelAtPeriodEnd = false;
     }
 
-    if (switchFromTrial) {
-      await cancelUnlimitedAfterPassSwitch(stripe, userId, customerId);
+    if (Object.keys(data).length) {
+      await prisma.user.update({ where: { id: userId }, data });
     }
     return;
   }
@@ -143,24 +176,21 @@ async function handleCheckoutCompleted(stripe: any, session: any) {
   if (customerId) data.stripeCustomerId = customerId;
   if (subscriptionId) data.stripeSubscriptionId = subscriptionId;
 
-  let trialing = false;
   if (subscriptionId) {
     try {
       const sub = await stripe.subscriptions.retrieve(subscriptionId);
-      trialing = sub.status === "trialing";
       if (typeof sub.cancel_at_period_end === "boolean") {
         data.cancelAtPeriodEnd = sub.cancel_at_period_end;
       }
-      if (trialing) {
+      if (sub.status === "trialing") {
         data.billingStatus = "trial";
-        const { trialStartedAt, trialEndsAt } = computeTrialWindow();
-        // Prefer Stripe trial end when present
         if (sub.trial_end) {
           data.trialStartedAt = new Date((sub.trial_start || Date.now() / 1000) * 1000);
           data.trialEndsAt = new Date(sub.trial_end * 1000);
         } else {
-          data.trialStartedAt = trialStartedAt;
-          data.trialEndsAt = trialEndsAt;
+          const w = computeTrialWindow();
+          data.trialStartedAt = w.trialStartedAt;
+          data.trialEndsAt = w.trialEndsAt;
         }
         data.trialCancelledAt = null;
       } else if (sub.status === "active") {
@@ -175,7 +205,6 @@ async function handleCheckoutCompleted(stripe: any, session: any) {
         "[billing/webhook] subscription retrieve failed",
         e instanceof Error ? e.message : e
       );
-      // Fallback: session says subscription → treat as trial start
       data.billingStatus = "trial";
       const w = computeTrialWindow();
       data.trialStartedAt = w.trialStartedAt;
@@ -193,84 +222,6 @@ async function handleCheckoutCompleted(stripe: any, session: any) {
   if (Object.keys(data).length) {
     await prisma.user.update({ where: { id: userId }, data });
   }
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function cancelUnlimitedAfterPassSwitch(
-  stripe: any,
-  userId: string,
-  customerId: string | null
-) {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: {
-      stripeSubscriptionId: true,
-      stripeCustomerId: true,
-      trialEndsAt: true,
-    },
-  });
-
-  let subId = user?.stripeSubscriptionId || null;
-  const cust = customerId || user?.stripeCustomerId || null;
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let sub: any = null;
-  if (subId) {
-    try {
-      sub = await stripe.subscriptions.retrieve(subId);
-    } catch {
-      sub = null;
-      subId = null;
-    }
-  }
-  if (!sub && cust) {
-    try {
-      const list = await stripe.subscriptions.list({
-        customer: cust,
-        status: "all",
-        limit: 5,
-      });
-      sub =
-        list.data.find(
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (s: any) => s.status === "trialing" || s.status === "active"
-        ) || null;
-      if (sub) subId = sub.id;
-    } catch (e) {
-      console.warn(
-        "[billing/webhook] list subscriptions failed",
-        e instanceof Error ? e.message : e
-      );
-    }
-  }
-
-  if (sub && subId) {
-    try {
-      if (sub.status === "trialing") {
-        // Still in trial — cancel immediately so no £22 conversion
-        await stripe.subscriptions.cancel(subId);
-      } else if (sub.status === "active") {
-        await stripe.subscriptions.update(subId, { cancel_at_period_end: true });
-      }
-    } catch (e) {
-      console.error(
-        "[billing/webhook] cancel Unlimited after pass switch failed",
-        e instanceof Error ? e.message : e
-      );
-    }
-  }
-
-  await prisma.user.update({
-    where: { id: userId },
-    data: {
-      cancelAtPeriodEnd: true,
-      trialCancelledAt: new Date(),
-      billingStatus: "cancelled",
-      ...(cust ? { stripeCustomerId: cust } : {}),
-      // Clear sub id if we cancelled immediately
-      ...(sub?.status === "trialing" ? { stripeSubscriptionId: null } : {}),
-    },
-  });
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -299,14 +250,15 @@ async function handleSubscriptionChange(type: string, sub: any) {
   let billingStatus = user.billingStatus;
 
   if (type === "customer.subscription.deleted" || sub.status === "canceled") {
-    billingStatus = cancelAtPeriodEnd || user.trialEndsAt ? "cancelled" : "cancelled";
-    // If trial window already passed → expired on next snapshot refresh
+    billingStatus = "cancelled";
     if (user.trialEndsAt && user.trialEndsAt.getTime() <= Date.now()) {
       billingStatus = "expired";
     }
   } else if (sub.status === "trialing") {
+    // Unlimited trialing → trial; cancelled-at-period-end stays cancelled
     billingStatus = cancelAtPeriodEnd ? "cancelled" : "trial";
   } else if (sub.status === "active") {
+    // Unlimited trialing → active conversion
     billingStatus = cancelAtPeriodEnd ? "cancelled" : "active";
   } else if (
     sub.status === "unpaid" ||

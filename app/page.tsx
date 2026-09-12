@@ -30,10 +30,10 @@ const pillars = [
 ];
 
 const trialPoints = [
-  "14-day trial · up to 3 match desks",
-  "Converts to Unlimited £22/mo unless you cancel",
-  "Cancel in Settings / billing portal anytime before conversion",
-  "Unlimited desks on the paid plan — one simple SKU",
+  "Choose at start: Unlimited OR Match Desk Pass (1 / 5 / 10)",
+  "Both: card-upfront · 14 days · max 3 match desks",
+  "Unlimited → £22/mo unless cancelled in Customer Portal",
+  "Pass → keep purchased credits after trial (not Unlimited)",
 ];
 
 export default function MarketingHome() {
@@ -106,7 +106,7 @@ export default function MarketingHome() {
                 </Link>
               </div>
               <p className="mt-3 text-xs text-slate-500">
-                3 match desks on trial · then Unlimited £22/mo · cancel before conversion
+                Choose Unlimited or a Match Desk Pass at start · 14 days · 3 desks
               </p>
             </div>
 
@@ -192,12 +192,12 @@ export default function MarketingHome() {
                 Trial model
               </div>
               <h2 className="mt-2 text-2xl font-bold sm:text-3xl">
-                Try the desk on 3 matches. Keep it for £22.
+                Pick Unlimited or a Match Desk Pass before you start.
               </h2>
               <p className="mt-3 text-slate-400 text-sm leading-relaxed">
-                Card-upfront when billing is configured — trial converts to Unlimited
-                £22/mo unless you cancel. Clear cancel path in Settings (billing portal
-                when available).
+                Card-upfront when billing is configured. Unlimited converts to £22/mo
+                unless you cancel in the Customer Portal. Pass pays for credits at
+                start and keeps them after the same 14-day / 3-desk trial.
               </p>
               <ul className="mt-5 space-y-2">
                 {trialPoints.map((t) => (
@@ -210,28 +210,30 @@ export default function MarketingHome() {
             </div>
             <div className="rounded-2xl border border-teal-500/40 bg-gradient-to-br from-teal-500/15 via-[#0d1524] to-[#0d1524] p-6 shadow-xl shadow-teal-950/30">
               <div className="text-xs font-bold uppercase tracking-[0.16em] text-teal-300">
-                Unlimited
+                Choose at start
               </div>
-              <div className="mt-2 flex items-baseline gap-2">
-                <span className="text-4xl font-black">£22</span>
-                <span className="text-slate-400 text-sm">/mo after trial</span>
+              <div className="mt-3 space-y-3 text-sm">
+                <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2.5">
+                  <div className="font-semibold text-teal-200">Unlimited · £22/mo</div>
+                  <div className="text-xs text-slate-400 mt-0.5">14-day trial → converts unless cancelled</div>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2.5">
+                  <div className="font-semibold text-slate-100">Match Desk Pass · £8 / £25 / £30</div>
+                  <div className="text-xs text-slate-400 mt-0.5">Same trial · keep credits after (not Unlimited)</div>
+                </div>
               </div>
-              <p className="mt-2 text-sm text-slate-400">
-                One commercial plan. BYO Notebook is core. Full matchday desk —
-                unlimited desks on your account once subscribed.
-              </p>
               <Link
                 href="/signup"
                 className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-teal-400 px-4 py-3 text-sm font-bold text-slate-950 hover:bg-teal-300"
               >
-                Start free trial
+                Choose plan & start trial
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link
                 href="/pricing"
                 className="mt-3 block text-center text-xs text-slate-500 hover:text-teal-300"
               >
-                See full pricing →
+                Compare Unlimited vs Pass →
               </Link>
             </div>
           </div>

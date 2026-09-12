@@ -17,19 +17,18 @@ import { prisma } from "@/lib/prisma";
 /**
  * POST /api/billing/checkout
  *
- * Default (no plan / plan=unlimited): subscription Checkout — 14-day card-upfront
- * trial → Unlimited £22/mo unless cancelled.
- *
- * { plan: "match_pass", credits: 1|5|10 }: one-time Match Desk Pass pack.
- * { plan: "switch_to_pass", credits: 1|5|10 }: mid-trial switch — one-time pack with
- *   metadata switchFromTrial=true so webhook cancels Unlimited trial after pay.
+ * Choose-at-start:
+ *   { plan: "unlimited" } — subscription Checkout, trial_period_days=14,
+ *     payment_method_collection=always → converts to £22/mo unless cancelled.
+ *   { plan: "match_pass", credits: 1|5|10 } — one-time payment for the pack;
+ *     webhook grants the same 14d / 3-desk trial in-app + credits.
  */
 export async function POST(req: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json().catch(() => ({}));
-  const plan = String(body.plan || "unlimited").trim().toLowerCase();
+  const plan = String(body.plan || "").trim().toLowerCase();
   const base = getAppBaseUrl(req);
   const successUrl =
     String(body.successUrl || "").trim() ||
@@ -37,18 +36,27 @@ export async function POST(req: Request) {
   const cancelUrl =
     String(body.cancelUrl || "").trim() || `${base}/pricing?billing=cancel`;
 
-  if (plan === "match_pass" || plan === "switch_to_pass") {
+  if (plan === "match_pass") {
     return createMatchPassCheckout({
       session,
       body,
-      plan: plan as "match_pass" | "switch_to_pass",
       successUrl,
       cancelUrl,
       req,
     });
   }
 
-  // Default: Unlimited trial subscription
+  if (plan && plan !== "unlimited") {
+    return NextResponse.json(
+      {
+        error: 'plan must be "unlimited" or "match_pass"',
+        hint: 'Body: { plan: "unlimited" } or { plan: "match_pass", credits: 1|5|10 }',
+      },
+      { status: 400 }
+    );
+  }
+
+  // Default / unlimited: Unlimited trial subscription
   if (!isStripeConfigured()) {
     return NextResponse.json(
       {
@@ -70,9 +78,13 @@ export async function POST(req: Request) {
   }
 
   try {
-    const checkout = await stripe.checkout.sessions.create({
+    const userRow = await prisma.user.findUnique({
+      where: { id: session.id },
+      select: { stripeCustomerId: true },
+    });
+
+    const checkoutParams: Record<string, unknown> = {
       mode: "subscription",
-      customer_email: session.email,
       client_reference_id: session.id,
       line_items: [{ price: priceId, quantity: 1 }],
       payment_method_collection: "always",
@@ -95,7 +107,15 @@ export async function POST(req: Request) {
         },
       },
       allow_promotion_codes: true,
-    });
+    };
+
+    if (userRow?.stripeCustomerId) {
+      checkoutParams.customer = userRow.stripeCustomerId;
+    } else {
+      checkoutParams.customer_email = session.email;
+    }
+
+    const checkout = await stripe.checkout.sessions.create(checkoutParams);
 
     if (!checkout.url) {
       return NextResponse.json({ error: "Checkout session missing URL" }, { status: 500 });
@@ -119,12 +139,11 @@ export async function POST(req: Request) {
 async function createMatchPassCheckout(opts: {
   session: { id: string; email: string; name?: string };
   body: Record<string, unknown>;
-  plan: "match_pass" | "switch_to_pass";
   successUrl: string;
   cancelUrl: string;
   req: Request;
 }) {
-  const { session, body, plan, successUrl, cancelUrl } = opts;
+  const { session, body, successUrl, cancelUrl } = opts;
   const credits = parseMatchPassCredits(body.credits);
   if (!credits) {
     return NextResponse.json(
@@ -153,30 +172,6 @@ async function createMatchPassCheckout(opts: {
     );
   }
 
-  const switchFromTrial = plan === "switch_to_pass";
-  if (switchFromTrial) {
-    const user = await prisma.user.findUnique({
-      where: { id: session.id },
-      select: {
-        billingStatus: true,
-        trialEndsAt: true,
-        stripeSubscriptionId: true,
-        stripeCustomerId: true,
-      },
-    });
-    const now = Date.now();
-    const inTrialWindow =
-      user?.trialEndsAt != null && user.trialEndsAt.getTime() > now;
-    const status = user?.billingStatus || "none";
-    if (!inTrialWindow && status !== "trial") {
-      // Still allow purchase as plain match_pass if they are mid-cancel window
-      if (!(status === "cancelled" && inTrialWindow)) {
-        // Soft warn but still sell the pack — webhook only cancels sub when switchFromTrial
-      }
-    }
-    void user; // used for future customer reuse
-  }
-
   const settingsSuccess =
     successUrl.includes("/settings")
       ? successUrl
@@ -185,8 +180,22 @@ async function createMatchPassCheckout(opts: {
   try {
     const userRow = await prisma.user.findUnique({
       where: { id: session.id },
-      select: { stripeCustomerId: true },
+      select: {
+        stripeCustomerId: true,
+        billingStatus: true,
+        trialEndsAt: true,
+        stripeSubscriptionId: true,
+      },
     });
+
+    // Grant in-app 14d/3-desk trial on first Pass purchase (choose-at-start).
+    // Top-ups while already trialing / active still add credits only.
+    const now = Date.now();
+    const inTrialWindow =
+      userRow?.trialEndsAt != null && userRow.trialEndsAt.getTime() > now;
+    const status = userRow?.billingStatus || "none";
+    const grantTrial =
+      !inTrialWindow && status !== "trial" && status !== "active";
 
     const checkoutParams: Record<string, unknown> = {
       mode: "payment",
@@ -203,14 +212,15 @@ async function createMatchPassCheckout(opts: {
         plan: "match_pass",
         credits: String(credits),
         product: "cocomms-match-pass",
-        switchFromTrial: switchFromTrial ? "true" : "false",
+        trial: "14d-3desks",
+        grantTrial: grantTrial ? "true" : "false",
       },
       payment_intent_data: {
         metadata: {
           userId: session.id,
           plan: "match_pass",
           credits: String(credits),
-          switchFromTrial: switchFromTrial ? "true" : "false",
+          grantTrial: grantTrial ? "true" : "false",
         },
       },
       allow_promotion_codes: true,
@@ -233,10 +243,10 @@ async function createMatchPassCheckout(opts: {
       ok: true,
       url: checkout.url,
       sessionId: checkout.id,
-      plan: switchFromTrial ? "switch_to_pass" : "match_pass",
+      plan: "match_pass",
       credits,
       price: copy.price,
-      switchFromTrial,
+      grantTrial,
     });
   } catch (e) {
     console.error("[billing/checkout match_pass]", e);
@@ -250,11 +260,11 @@ async function createMatchPassCheckout(opts: {
 export async function GET() {
   return NextResponse.json({
     ...stripePublicStatus(),
-    plan: "unlimited",
-    price: "£22",
+    plan: "choose-at-start",
+    unlimited: { plan: "unlimited", price: "£22" },
     matchPass: MATCH_PASS_COPY,
     message: isStripeConfigured()
-      ? "POST default → Unlimited 14-day trial. POST { plan: match_pass|switch_to_pass, credits: 1|5|10 } → one-time Match Desk Pass."
-      : "Stripe keys missing — Pricing UI still shows £22 Unlimited + Match Desk Pass copy.",
+      ? 'POST { plan: "unlimited" } → 14-day card-upfront trial then £22/mo. POST { plan: "match_pass", credits: 1|5|10 } → pay pack + same 14d/3-desk trial in-app.'
+      : "Stripe keys missing — Pricing UI still shows Unlimited + Match Desk Pass choose-at-start copy.",
   });
 }

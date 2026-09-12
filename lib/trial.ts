@@ -1,13 +1,13 @@
 /**
- * CoComms trial model — card-upfront preference, app-side fallback.
+ * CoComms trial model — choose Unlimited OR Match Desk Pass at trial start.
  *
- * Commercial: Unlimited £22/mo after trial unless cancelled.
- * Trial: 14 days · max 3 match desks (not a 48h-only flash trial).
- * Mid-trial: cancel (portal) OR switch to Match Desk Pass (1/5/10 credits).
- * Match Desk Pass: one-time packs; each credit = one match desk after/without Unlimited.
+ * Both paths: card-upfront · 14 days · max 3 match desks during trial.
+ * Unlimited: Checkout subscription + trial_period_days=14 → £22/mo unless
+ *   cancelled via Customer Portal.
+ * Match Desk Pass: Checkout one-time pack at start; webhook grants the same
+ *   14d/3-desk trial in-app + credits; after trial they keep purchased credits
+ *   (not Unlimited). Cancel mid-trial supported (portal for Unlimited; app-side for Pass).
  *
- * When Stripe keys exist: Checkout uses trial_period_days + card collection;
- * cancel via Customer Portal in Settings; pass packs via checkout plan=match_pass|switch_to_pass.
  * When keys missing: app-side billingStatus / trialEndsAt / cancelAtPeriodEnd
  * with the same UX copy; portal wires when keys appear.
  */
@@ -90,6 +90,7 @@ type UserBillingRow = {
   trialCancelledAt: Date | null;
   cancelAtPeriodEnd: boolean;
   matchPassCredits: number;
+  stripeSubscriptionId: string | null;
 };
 
 export async function getUserBilling(userId: string): Promise<UserBillingRow | null> {
@@ -103,6 +104,7 @@ export async function getUserBilling(userId: string): Promise<UserBillingRow | n
       trialCancelledAt: true,
       cancelAtPeriodEnd: true,
       matchPassCredits: true,
+      stripeSubscriptionId: true,
     },
   });
   return user;
@@ -253,7 +255,14 @@ export async function buildTrialSnapshot(userId: string): Promise<TrialSnapshot 
       matchPassCredits > 0 ? ` Match Desk Pass credits: ${matchPassCredits}.` : ""
     }`;
   } else if (trialActive) {
-    message = `Trial: ${TRIAL_DESK_LIMIT} match desks · ${daysRemaining(ends) ?? "?"} days left. Converts to Unlimited ${PLAN_COPY.unlimited.price}/mo unless cancelled. Mid-trial: cancel, stay on Unlimited, or switch to a Match Desk Pass.`;
+    const onUnlimitedPath = Boolean(user.stripeSubscriptionId);
+    if (onUnlimitedPath) {
+      message = `Unlimited trial: ${TRIAL_DESK_LIMIT} match desks · ${daysRemaining(ends) ?? "?"} days left. Converts to Unlimited ${PLAN_COPY.unlimited.price}/mo unless you cancel in Settings (Customer Portal).`;
+    } else if (matchPassCredits > 0) {
+      message = `Match Desk Pass trial: ${TRIAL_DESK_LIMIT} match desks · ${daysRemaining(ends) ?? "?"} days left. After trial you keep ${matchPassCredits} purchased credit${matchPassCredits === 1 ? "" : "s"} (not Unlimited). Cancel mid-trial in Settings.`;
+    } else {
+      message = `Trial: ${TRIAL_DESK_LIMIT} match desks · ${daysRemaining(ends) ?? "?"} days left. Choose Unlimited or a Match Desk Pass at checkout if you have not completed billing yet.`;
+    }
   } else if (matchPassCredits > 0) {
     message = `Match Desk Pass: ${matchPassCredits} desk credit${matchPassCredits === 1 ? "" : "s"} remaining. Or subscribe Unlimited ${PLAN_COPY.unlimited.price}/mo.`;
   } else if (status === "expired" || (status === "cancelled" && !withinWindow)) {
@@ -283,7 +292,7 @@ export async function buildTrialSnapshot(userId: string): Promise<TrialSnapshot 
     stripeConfigured,
     message,
     cancelPath: stripeConfigured
-      ? "Settings → Plan → Manage billing (opens Customer Portal — cancel before trial ends to avoid £22 charge)"
+      ? "Settings → Plan — Unlimited: Customer Portal; Match Desk Pass: Cancel trial (app-side)"
       : "Settings → Plan → Cancel trial (app-side until billing keys are set)",
   };
 }

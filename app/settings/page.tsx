@@ -163,7 +163,11 @@ export default function SettingsPage() {
     setPlanBusy(true);
     setPlanMsg(null);
     try {
-      const res = await fetch("/api/billing/checkout", { method: "POST" });
+      const res = await fetch("/api/billing/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan: "unlimited" }),
+      });
       const json = await res.json();
       if (res.status === 503) {
         setPlanMsg(String(json.todo || "Stripe keys not configured yet."));
@@ -271,7 +275,7 @@ export default function SettingsPage() {
     }
   }
 
-  async function buyMatchPass(credits: 1 | 5 | 10, switchFromTrial: boolean) {
+  async function buyMatchPass(credits: 1 | 5 | 10) {
     setPlanBusy(true);
     setPlanMsg(null);
     try {
@@ -279,7 +283,7 @@ export default function SettingsPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          plan: switchFromTrial ? "switch_to_pass" : "match_pass",
+          plan: "match_pass",
           credits,
         }),
       });
@@ -452,43 +456,21 @@ export default function SettingsPage() {
 
                   {trial?.trialActive && !trial.cancelAtPeriodEnd && (
                     <div className="rounded-xl border border-violet-200 dark:border-violet-900/50 bg-violet-50/40 dark:bg-violet-950/20 p-4 space-y-3">
-                      <div className="font-medium">Mid-trial choices</div>
+                      <div className="font-medium">During your trial</div>
                       <p className="text-xs text-slate-600 dark:text-slate-300">
-                        Default path converts to Unlimited £22/mo when the trial ends. You can cancel anytime,
-                        stay on Unlimited, or switch to pay-per-match with a Match Desk Pass (avoids the £22 conversion after payment).
+                        Plan was chosen at start (Unlimited or Match Desk Pass). Cancel mid-trial anytime —
+                        Unlimited via Customer Portal (avoids £22 conversion); Pass via Cancel trial (app-side).
+                        After a Pass trial you keep purchased credits.
                       </p>
-                      <ol className="list-decimal list-inside text-xs text-slate-600 dark:text-slate-300 space-y-1">
-                        <li>
-                          <strong>Cancel</strong> — Customer Portal (or Cancel trial). Access until trial end; no Unlimited charge.
-                        </li>
-                        <li>
-                          <strong>Stay on Unlimited</strong> — do nothing; card charged £22/mo after trial.
-                        </li>
-                        <li>
-                          <strong>Switch to Match Desk Pass</strong> — buy 1 / 5 / 10 desk credits; we cancel Unlimited so it does not convert.
-                        </li>
-                      </ol>
                       <div className="flex flex-wrap gap-2">
                         <Button type="button" variant="outline" disabled={planBusy} onClick={cancelTrial}>
-                          Cancel (portal)
+                          Cancel trial
                         </Button>
-                        <Button type="button" disabled={planBusy} onClick={startUnlimitedCheckout}>
-                          Stay on Unlimited path
-                        </Button>
-                      </div>
-                      <div className="text-xs font-medium text-slate-700 dark:text-slate-200 pt-1">
-                        Switch to Match Desk Pass
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <Button type="button" variant="outline" disabled={planBusy} onClick={() => buyMatchPass(1, true)}>
-                          1 pass · £8
-                        </Button>
-                        <Button type="button" variant="outline" disabled={planBusy} onClick={() => buyMatchPass(5, true)}>
-                          5 passes · £25
-                        </Button>
-                        <Button type="button" variant="outline" disabled={planBusy} onClick={() => buyMatchPass(10, true)}>
-                          10 passes · £30
-                        </Button>
+                        {trial?.stripeConfigured && (
+                          <Button type="button" variant="outline" disabled={planBusy} onClick={openBillingPortal}>
+                            Manage billing (portal)
+                          </Button>
+                        )}
                       </div>
                     </div>
                   )}
@@ -500,29 +482,30 @@ export default function SettingsPage() {
                     </p>
                     <div className="flex flex-wrap gap-2">
                       <Button type="button" disabled={planBusy} onClick={startUnlimitedCheckout}>
-                        {trial?.stripeConfigured ? "Start trial with card (→ £22/mo)" : "Subscribe Unlimited £22"}
+                        {trial?.stripeConfigured ? "Checkout Unlimited trial (→ £22/mo)" : "Subscribe Unlimited £22"}
                       </Button>
                       <Button type="button" variant="outline" disabled={planBusy} onClick={openBillingPortal}>
                         Manage billing / cancel
                       </Button>
                     </div>
                     <div className="text-xs font-medium text-slate-700 dark:text-slate-200 pt-1">
-                      Match Desk Pass (pay-per-match)
+                      Match Desk Pass (top-up)
                     </div>
                     <p className="text-[11px] text-slate-500">
-                      One-time packs — 1 desk credit each. Useful after trial or instead of Unlimited.
+                      Buy extra 1 / 5 / 10 desk credits anytime. Choose-at-start Pass packs also grant the
+                      14-day / 3-desk trial on first purchase.
                       {(trial?.matchPassCredits ?? 0) > 0
                         ? ` You have ${trial?.matchPassCredits} credit${(trial?.matchPassCredits ?? 0) === 1 ? "" : "s"} left.`
                         : ""}
                     </p>
                     <div className="flex flex-wrap gap-2">
-                      <Button type="button" variant="outline" disabled={planBusy} onClick={() => buyMatchPass(1, false)}>
+                      <Button type="button" variant="outline" disabled={planBusy} onClick={() => buyMatchPass(1)}>
                         1 · £8
                       </Button>
-                      <Button type="button" variant="outline" disabled={planBusy} onClick={() => buyMatchPass(5, false)}>
+                      <Button type="button" variant="outline" disabled={planBusy} onClick={() => buyMatchPass(5)}>
                         5 · £25
                       </Button>
-                      <Button type="button" variant="outline" disabled={planBusy} onClick={() => buyMatchPass(10, false)}>
+                      <Button type="button" variant="outline" disabled={planBusy} onClick={() => buyMatchPass(10)}>
                         10 · £30
                       </Button>
                     </div>

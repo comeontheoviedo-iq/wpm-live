@@ -12,7 +12,7 @@ const unlimitedFeatures = [
   "Live-feed sync",
   "Notes buckets + relevance heuristics",
   "OBS overlay, dossiers, Stats, Speaks, Print",
-  "Unlimited match desks on your account",
+  "Unlimited match desks on your account after trial",
 ];
 
 const passPacks: { credits: 1 | 5 | 10; price: string; label: string }[] = [
@@ -24,20 +24,25 @@ const passPacks: { credits: 1 | 5 | 10; price: string; label: string }[] = [
 export default function PricingPage() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [selectedPass, setSelectedPass] = useState<1 | 5 | 10>(5);
 
-  async function startCheckout() {
+  async function startUnlimitedCheckout() {
     setBusy(true);
     setMsg(null);
     try {
-      const res = await fetch("/api/billing/checkout", { method: "POST" });
+      const res = await fetch("/api/billing/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan: "unlimited" }),
+      });
       const json = await res.json().catch(() => ({}));
       if (res.status === 401) {
-        window.location.href = "/signup?next=/pricing";
+        window.location.href = "/signup?plan=unlimited";
         return;
       }
       if (res.status === 503) {
         setMsg(
-          "Billing not configured yet — create an account to start the 14-day / 3-desk app-side trial. Chris: add billing keys + Unlimited £22 price in Netlify for card-upfront Checkout."
+          "Billing not configured yet — create an account to start the 14-day / 3-desk app-side trial. Chris: add billing keys on pitchline-app."
         );
         return;
       }
@@ -52,7 +57,7 @@ export default function PricingPage() {
     }
   }
 
-  async function buyPass(credits: 1 | 5 | 10) {
+  async function startPassCheckout(credits: 1 | 5 | 10) {
     setBusy(true);
     setMsg(null);
     try {
@@ -63,7 +68,7 @@ export default function PricingPage() {
       });
       const json = await res.json().catch(() => ({}));
       if (res.status === 401) {
-        window.location.href = "/signup?next=/pricing";
+        window.location.href = `/signup?plan=pass&credits=${credits}`;
         return;
       }
       if (res.status === 503) {
@@ -102,7 +107,7 @@ export default function PricingPage() {
               href="/signup"
               className="rounded-lg bg-teal-500 px-3 py-1.5 text-sm font-semibold text-slate-950 hover:bg-teal-400"
             >
-              Start trial
+              Choose plan
             </Link>
           </div>
         </div>
@@ -110,13 +115,13 @@ export default function PricingPage() {
       <main className="mx-auto max-w-5xl px-4 py-12">
         <div className="text-center max-w-2xl mx-auto mb-10">
           <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
-            One plan. Unlimited matchday desk.
+            Choose at start: Unlimited or Match Desk Pass
           </h1>
           <p className="mt-3 text-slate-400">
-            Start with a 14-day trial (3 match desks). Converts to Unlimited £22/mo
-            unless you cancel in Settings. Prefer pay-per-match? Buy a Match Desk Pass
-            pack — mid-trial you can switch so Unlimited does not convert. BYO Notebook
-            is the core.
+            Both include a 14-day trial with max 3 match desks and card-upfront
+            Checkout. Unlimited converts to £22/mo unless cancelled. Pass pays
+            for 1 / 5 / 10 credits up front — after trial you keep those credits
+            (not Unlimited).
           </p>
         </div>
         <div className="grid gap-6 md:grid-cols-2 max-w-3xl mx-auto">
@@ -130,7 +135,7 @@ export default function PricingPage() {
               <span className="text-sm text-slate-400">/mo after trial</span>
             </div>
             <p className="mt-2 text-sm text-slate-400">
-              Card-upfront trial when billing is live · 14 days · 3 desks · then £22/mo
+              Subscription Checkout · trial_period_days=14 · payment_method_collection=always
             </p>
             <ul className="mt-4 space-y-2 flex-1">
               {unlimitedFeatures.map((f) => (
@@ -141,57 +146,68 @@ export default function PricingPage() {
               ))}
             </ul>
             <div className="mt-6 space-y-2">
-              <Link href="/signup" className="block">
+              <Link href="/signup?plan=unlimited" className="block">
                 <Button className="w-full" variant="primary">
-                  Start 14-day trial
+                  Choose Unlimited trial
                 </Button>
               </Link>
               <Button
                 className="w-full"
                 variant="outline"
                 disabled={busy}
-                onClick={startCheckout}
+                onClick={startUnlimitedCheckout}
               >
-                {busy ? "Starting checkout…" : "Checkout / card-upfront trial"}
+                {busy ? "Starting checkout…" : "Checkout Unlimited (card-upfront)"}
               </Button>
-              <Link href="/login" className="block">
-                <Button className="w-full" variant="outline">
-                  Sign in to the desk
-                </Button>
-              </Link>
             </div>
           </div>
 
           <div className="rounded-2xl border border-white/15 bg-[#0d1524] p-6 flex flex-col">
             <div className="text-sm font-semibold text-slate-200">Match Desk Pass</div>
             <p className="mt-2 text-sm text-slate-400">
-              Pay-per-match packs. One credit = one match desk. Mid-trial: switch from
-              Settings to avoid Unlimited conversion.
+              Pay for a pack at start. Same 14-day / 3-desk trial in-app. After
+              trial you have the purchased credits — one credit = one desk.
             </p>
             <ul className="mt-4 space-y-3 flex-1">
               {passPacks.map((p) => (
-                <li
-                  key={p.credits}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-white/10 px-3 py-2.5"
-                >
-                  <div>
-                    <div className="text-sm font-medium">{p.label}</div>
-                    <div className="text-xs text-slate-500">{p.price} one-time</div>
-                  </div>
-                  <Button
+                <li key={p.credits}>
+                  <button
                     type="button"
-                    variant="outline"
-                    disabled={busy}
-                    onClick={() => buyPass(p.credits)}
+                    onClick={() => setSelectedPass(p.credits)}
+                    className={`w-full flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left transition ${
+                      selectedPass === p.credits
+                        ? "border-teal-500/70 bg-teal-500/10"
+                        : "border-white/10 hover:border-white/25"
+                    }`}
                   >
-                    Buy
-                  </Button>
+                    <div>
+                      <div className="text-sm font-medium">{p.label}</div>
+                      <div className="text-xs text-slate-500">{p.price} one-time · card-upfront</div>
+                    </div>
+                    <span className="text-xs text-teal-300">
+                      {selectedPass === p.credits ? "Selected" : "Select"}
+                    </span>
+                  </button>
                 </li>
               ))}
             </ul>
+            <div className="mt-6 space-y-2">
+              <Link href={`/signup?plan=pass&credits=${selectedPass}`} className="block">
+                <Button className="w-full" variant="primary">
+                  Choose {selectedPass}-pass trial
+                </Button>
+              </Link>
+              <Button
+                className="w-full"
+                variant="outline"
+                disabled={busy}
+                onClick={() => startPassCheckout(selectedPass)}
+              >
+                {busy ? "Starting checkout…" : `Checkout Pass ${selectedPass}`}
+              </Button>
+            </div>
             <p className="mt-4 text-xs text-slate-500">
-              Already on a trial? Open Settings → Plan for Cancel / Stay on Unlimited /
-              Switch to Match Desk Pass.
+              Already on a trial? Settings → Plan for cancel / portal / top-up packs.
             </p>
           </div>
         </div>

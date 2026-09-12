@@ -1,19 +1,50 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState, Suspense } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Logo } from "@/components/layout/logo";
 import { Button } from "@/components/ui/button";
 import { Mic2, Check } from "lucide-react";
 
-export default function SignupPage() {
+type PlanChoice =
+  | { kind: "unlimited" }
+  | { kind: "match_pass"; credits: 1 | 5 | 10 };
+
+const PASS_OPTIONS: { credits: 1 | 5 | 10; price: string; label: string }[] = [
+  { credits: 1, price: "£8", label: "1 Match Desk Pass" },
+  { credits: 5, price: "£25", label: "5 Match Desk Pass" },
+  { credits: 10, price: "£30", label: "10 Match Desk Pass" },
+];
+
+function SignupForm() {
   const router = useRouter();
+  const search = useSearchParams();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [plan, setPlan] = useState<PlanChoice>({ kind: "unlimited" });
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    const raw = (search.get("plan") || "").toLowerCase();
+    const creditsRaw = Number(search.get("credits") || "");
+    if (raw === "pass" || raw === "match_pass") {
+      const credits = creditsRaw === 1 || creditsRaw === 5 || creditsRaw === 10 ? creditsRaw : 5;
+      setPlan({ kind: "match_pass", credits });
+    } else if (raw === "unlimited") {
+      setPlan({ kind: "unlimited" });
+    }
+  }, [search]);
   const [pending, setPending] = useState(false);
+
+  const planSummary = useMemo(() => {
+    if (plan.kind === "unlimited") {
+      return "Unlimited trial → £22/mo unless cancelled";
+    }
+    const opt = PASS_OPTIONS.find((p) => p.credits === plan.credits)!;
+    return `${opt.label} (${opt.price}) · same 14-day / 3-desk trial · credits after`;
+  }, [plan]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -30,10 +61,18 @@ export default function SignupPage() {
         setError(data.error || "Signup failed");
         return;
       }
-      // If billing is configured, nudge toward card-upfront checkout after register
+      // Choose-at-start Checkout when billing is configured
       if (data.trial?.stripeConfigured) {
         try {
-          const checkout = await fetch("/api/billing/checkout", { method: "POST" });
+          const body =
+            plan.kind === "unlimited"
+              ? { plan: "unlimited" }
+              : { plan: "match_pass", credits: plan.credits };
+          const checkout = await fetch("/api/billing/checkout", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
           const cj = await checkout.json().catch(() => ({}));
           if (checkout.ok && cj.url) {
             window.location.href = String(cj.url);
@@ -60,20 +99,21 @@ export default function SignupPage() {
         <div className="relative z-10 max-w-md">
           <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs mb-4 backdrop-blur">
             <Mic2 className="h-3.5 w-3.5" />
-            14-day trial · 3 match desks
+            Choose Unlimited or Match Desk Pass at start
           </div>
           <h1 className="text-3xl font-bold tracking-tight mb-3">
             Open your CoComms desk
           </h1>
           <p className="text-teal-50/80 text-sm leading-relaxed mb-6">
-            Trial converts to Unlimited £22/mo unless you cancel in Settings.
-            Card-upfront when billing is live; app-side trial until then.
+            Both paths: card-upfront · 14 days · max 3 match desks. Unlimited
+            converts to £22/mo unless cancelled. Pass keeps your purchased
+            credits after the trial.
           </p>
           <ul className="space-y-2 text-sm text-teal-50/90">
             {[
               "BYO Notebook + live feed sync",
               "Speaks, pitch board, dossiers, OBS",
-              "Cancel before conversion — no surprise charge path",
+              "Cancel mid-trial supported on both paths",
             ].map((t) => (
               <li key={t} className="flex gap-2">
                 <Check className="h-4 w-4 text-teal-300 shrink-0 mt-0.5" />
@@ -94,8 +134,53 @@ export default function SignupPage() {
           </div>
           <h2 className="text-2xl font-bold mb-1">Start your trial</h2>
           <p className="text-sm text-slate-500 mb-6">
-            14 days · 3 match desks · then £22/mo Unlimited unless cancelled
+            Pick a plan first · 14 days · 3 match desks
           </p>
+
+          <div className="mb-5 space-y-2">
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Plan at start
+            </div>
+            <button
+              type="button"
+              onClick={() => setPlan({ kind: "unlimited" })}
+              className={`w-full rounded-xl border px-3 py-3 text-left text-sm transition ${
+                plan.kind === "unlimited"
+                  ? "border-teal-500 bg-teal-50 dark:bg-teal-950/40 ring-1 ring-teal-500/40"
+                  : "border-slate-200 dark:border-slate-700 hover:border-teal-400/50"
+              }`}
+            >
+              <div className="font-semibold">Unlimited</div>
+              <div className="text-xs text-slate-500 mt-0.5">
+                Card-upfront trial → £22/mo unless cancelled in Customer Portal
+              </div>
+            </button>
+            <div className="grid grid-cols-3 gap-2">
+              {PASS_OPTIONS.map((p) => {
+                const selected =
+                  plan.kind === "match_pass" && plan.credits === p.credits;
+                return (
+                  <button
+                    key={p.credits}
+                    type="button"
+                    onClick={() =>
+                      setPlan({ kind: "match_pass", credits: p.credits })
+                    }
+                    className={`rounded-xl border px-2 py-2.5 text-center text-xs transition ${
+                      selected
+                        ? "border-teal-500 bg-teal-50 dark:bg-teal-950/40 ring-1 ring-teal-500/40"
+                        : "border-slate-200 dark:border-slate-700 hover:border-teal-400/50"
+                    }`}
+                  >
+                    <div className="font-semibold">{p.credits} pass</div>
+                    <div className="text-slate-500 mt-0.5">{p.price}</div>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-[11px] text-slate-500">{planSummary}</p>
+          </div>
+
           <form onSubmit={onSubmit} className="space-y-4">
             <label className="block text-sm">
               <span className="text-slate-600 dark:text-slate-300">Name</span>
@@ -134,7 +219,11 @@ export default function SignupPage() {
               </p>
             )}
             <Button type="submit" className="w-full" size="lg" disabled={pending}>
-              {pending ? "Creating account…" : "Start 14-day trial"}
+              {pending
+                ? "Creating account…"
+                : plan.kind === "unlimited"
+                  ? "Start Unlimited trial"
+                  : `Start Pass trial (${plan.credits})`}
             </Button>
           </form>
           <p className="mt-4 text-sm text-slate-500">
@@ -153,3 +242,12 @@ export default function SignupPage() {
     </div>
   );
 }
+
+export default function SignupPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#070b12]" />}>
+      <SignupForm />
+    </Suspense>
+  );
+}
+

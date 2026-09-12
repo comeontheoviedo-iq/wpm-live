@@ -1,5 +1,6 @@
 /**
  * Stripe helpers for CoComms Unlimited (£22/mo) + Match Desk Pass packs.
+ * Choose-at-start: Unlimited OR Match Desk Pass (1/5/10) before Checkout.
  * If keys are missing, callers should fall back to Pricing copy + TODO messaging.
  *
  * Env (Netlify / .env):
@@ -25,6 +26,11 @@ export const MATCH_PASS_COPY: Record<
   5: { label: "5 Match Desk Pass", price: "£25", blurb: "Five match desk credits." },
   10: { label: "10 Match Desk Pass", price: "£30", blurb: "Ten match desk credits." },
 };
+
+/** Checkout body: choose Unlimited or a Match Desk Pass pack at trial start. */
+export type CheckoutPlanBody =
+  | { plan: "unlimited" }
+  | { plan: "match_pass"; credits: MatchPassCredits };
 
 export type StripePublicStatus = {
   configured: boolean;
@@ -133,4 +139,9 @@ export function isMatchPassConfigured(credits?: MatchPassCredits): boolean {
     Boolean(matchPassPriceId(5)) &&
     Boolean(matchPassPriceId(10))
   );
+}
+
+/** True when secret + Unlimited price + all three pass prices are set. */
+export function isBillingFullyConfigured(): boolean {
+  return isStripeConfigured() && isMatchPassConfigured();
 }

@@ -17,7 +17,7 @@ export async function GET() {
 
 /**
  * POST — start app-side trial when Stripe keys are missing.
- * When Stripe is configured, clients should use /api/billing/checkout (card-upfront trial).
+ * When Stripe is configured, clients should use /api/billing/checkout with choose-at-start plan body.
  */
 export async function POST(req: Request) {
   const session = await getSession();
@@ -32,7 +32,7 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         error: "Use Checkout for card-upfront trial",
-        hint: "POST /api/billing/checkout — 14-day trial then Unlimited £22/mo unless cancelled in the billing portal.",
+        hint: 'POST /api/billing/checkout { plan: "unlimited" } or { plan: "match_pass", credits: 1|5|10 } — choose at start.',
         stripe: stripePublicStatus(),
       },
       { status: 409 }

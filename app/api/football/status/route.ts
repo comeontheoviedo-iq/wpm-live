@@ -5,6 +5,7 @@ import {
   getApiStatus,
   isApiFootballConfigured,
 } from "@/lib/api-football";
+import { checkAfUsageAlert, evaluateAfUsage } from "@/lib/af-usage";
 
 /** Test API-Football connectivity without exposing the key. */
 export async function GET() {
@@ -18,6 +19,7 @@ export async function GET() {
         configured: false,
         message:
           "Live-feed key is not set. Add it to .env / .env.local and restart the Next.js server.",
+        usage: null,
       },
       { status: 200 }
     );
@@ -34,6 +36,10 @@ export async function GET() {
     const seasonHint = isFree
       ? " Free plans usually cannot query league+season for 2025+ (often capped ~2022–2024). Use date-only search (CoComms filters by league client/server-side) or upgrade the live-feed plan."
       : "";
+    const usage = evaluateAfUsage(status);
+    if (usage.level === "warn" || usage.level === "high") {
+      console.warn("[af-usage]", usage.level, usage.message);
+    }
     return NextResponse.json({
       ok: true,
       configured: true,
@@ -44,6 +50,7 @@ export async function GET() {
       active: active ?? null,
       requests: status?.requests ?? null,
       freePlanSeasonLimit: isFree,
+      usage,
     });
   } catch (e) {
     const err = e as ApiFootballError;
@@ -53,6 +60,7 @@ export async function GET() {
         configured: true,
         message: err.message || "Connection failed",
         code: err.code,
+        usage: await checkAfUsageAlert({ log: false }).catch(() => null),
       },
       { status: err.status && err.status < 500 ? err.status : 200 }
     );

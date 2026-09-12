@@ -2983,7 +2983,7 @@ export function MatchDesk({
       {/* Live action ticker — fed by SSR events + sync newEvents */}
       {(status === "Live" || status === "Half Time") && (
         <div className="mx-0.5">
-          <ActionTicker items={tickerItems} />
+          <ActionTicker items={tickerItems} matchId={matchId} />
         </div>
       )}
 

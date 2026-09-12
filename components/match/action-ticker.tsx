@@ -4,9 +4,10 @@
  * Live AF events ticker for the desk.
  * Prefer feeding via sync `newEvents` so items appear before full refresh.
  * Broadcast-style leftward marquee (CSS), seamless loop, pause on hover.
+ * Compact All/Goals/Cards/Subs filters + one pinned event slot.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
 export type ActionTickerItem = {
@@ -17,18 +18,110 @@ export type ActionTickerItem = {
   teamSide?: string | null;
 };
 
+export type ActionTickerFilter = "all" | "goals" | "cards" | "subs";
+
+const FILTERS: { id: ActionTickerFilter; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "goals", label: "Goals" },
+  { id: "cards", label: "Cards" },
+  { id: "subs", label: "Subs" },
+];
+
+const FILTER_STORAGE = "cocomms.actionTicker.filter";
+const PIN_STORAGE_PREFIX = "cocomms.actionTicker.pin.";
+
+function eventStableKey(ev: ActionTickerItem): string {
+  return `${ev.minute}|${ev.type}|${ev.description}`;
+}
+
+function matchesFilter(type: string, filter: ActionTickerFilter): boolean {
+  if (filter === "all") return true;
+  if (filter === "goals") {
+    return /^(goal|penalty_goal|own_goal)$/i.test(type);
+  }
+  if (filter === "cards") {
+    return /^(yellow|red)$/i.test(type);
+  }
+  if (filter === "subs") {
+    return /^sub$/i.test(type);
+  }
+  return true;
+}
+
+function isGoalType(type: string): boolean {
+  return /^(goal|penalty_goal|own_goal)$/i.test(type);
+}
+
+function readFilter(): ActionTickerFilter {
+  try {
+    const raw = sessionStorage.getItem(FILTER_STORAGE);
+    if (raw === "goals" || raw === "cards" || raw === "subs" || raw === "all") {
+      return raw;
+    }
+  } catch {
+    /* soft-fail */
+  }
+  return "all";
+}
+
+function writeFilter(filter: ActionTickerFilter) {
+  try {
+    sessionStorage.setItem(FILTER_STORAGE, filter);
+  } catch {
+    /* soft-fail */
+  }
+}
+
+function readPinKey(matchId?: string): string | null {
+  if (!matchId) return null;
+  try {
+    return sessionStorage.getItem(`${PIN_STORAGE_PREFIX}${matchId}`);
+  } catch {
+    return null;
+  }
+}
+
+function writePinKey(matchId: string | undefined, key: string | null) {
+  if (!matchId) return;
+  try {
+    const k = `${PIN_STORAGE_PREFIX}${matchId}`;
+    if (key) sessionStorage.setItem(k, key);
+    else sessionStorage.removeItem(k);
+  } catch {
+    /* soft-fail */
+  }
+}
+
 function TickerChip({
   ev,
   isFresh,
+  pinned,
+  onPin,
+  interactive,
 }: {
   ev: ActionTickerItem;
   isFresh: boolean;
+  pinned?: boolean;
+  onPin?: () => void;
+  interactive?: boolean;
 }) {
   return (
-    <div
+    <button
+      type="button"
+      onClick={interactive ? onPin : undefined}
+      title={
+        interactive
+          ? pinned
+            ? "Pinned — click to unpin"
+            : "Pin this event"
+          : undefined
+      }
       className={cn(
-        "inline-flex shrink-0 items-baseline gap-1 rounded-md bg-[var(--surface-elevated)] px-2 py-0.5 text-[11px] leading-tight ring-1 ring-[var(--border)] transition-colors",
-        isFresh && "action-ticker-item-fresh ring-rose-400/50"
+        "inline-flex shrink-0 items-baseline gap-1 rounded-md bg-[var(--surface-elevated)] px-2 py-0.5 text-left text-[11px] leading-tight ring-1 ring-[var(--border)] transition-colors",
+        isFresh && "action-ticker-item-fresh ring-rose-400/50",
+        pinned && "action-ticker-item-pinned ring-amber-400/60",
+        interactive && "cursor-pointer hover:ring-[var(--foreground)]/25",
+        !interactive && "cursor-default"
       )}
     >
       <span className="font-semibold tabular-nums text-[var(--foreground)]">
@@ -38,7 +131,7 @@ function TickerChip({
         {ev.type.replace(/_/g, " ")}
       </span>
       <span className="text-[var(--foreground)]/90">{ev.description}</span>
-    </div>
+    </button>
   );
 }
 
@@ -47,11 +140,13 @@ function TickerSegment({
   freshIds,
   padKey,
   minWidth,
+  onPin,
 }: {
   items: ActionTickerItem[];
   freshIds: Set<string>;
   padKey: string;
   minWidth: number;
+  onPin: (ev: ActionTickerItem) => void;
 }) {
   return (
     <div
@@ -63,6 +158,8 @@ function TickerSegment({
           key={`${padKey}-${ev.id}`}
           ev={ev}
           isFresh={freshIds.has(ev.id)}
+          interactive
+          onPin={() => onPin(ev)}
         />
       ))}
       <span
@@ -78,14 +175,38 @@ function TickerSegment({
 export function ActionTicker({
   items,
   emptyLabel = "No live actions yet",
+  matchId,
 }: {
   items: ActionTickerItem[];
   emptyLabel?: string;
+  matchId?: string;
 }) {
   const prevIdsRef = useRef<Set<string>>(new Set());
   const rootRef = useRef<HTMLDivElement>(null);
   const [freshIds, setFreshIds] = useState<Set<string>>(new Set());
   const [segMinWidth, setSegMinWidth] = useState(0);
+  const [filter, setFilter] = useState<ActionTickerFilter>("all");
+  const [pinKey, setPinKey] = useState<string | null>(null);
+  const hydratedRef = useRef(false);
+
+  useEffect(() => {
+    setFilter(readFilter());
+    setPinKey(readPinKey(matchId));
+    hydratedRef.current = true;
+  }, [matchId]);
+
+  const setFilterPersist = useCallback((next: ActionTickerFilter) => {
+    setFilter(next);
+    writeFilter(next);
+  }, []);
+
+  const setPinPersist = useCallback(
+    (key: string | null) => {
+      setPinKey(key);
+      writePinKey(matchId, key);
+    },
+    [matchId]
+  );
 
   useEffect(() => {
     const next = new Set(items.map((i) => i.id));
@@ -100,6 +221,30 @@ export function ActionTicker({
     return () => window.clearTimeout(t);
   }, [items]);
 
+  const pinned = useMemo(() => {
+    if (!pinKey) return null;
+    return items.find((i) => eventStableKey(i) === pinKey) ?? null;
+  }, [items, pinKey]);
+
+  // Drop stale pin if the event left the ticker window
+  useEffect(() => {
+    if (!pinKey || !hydratedRef.current) return;
+    if (items.some((i) => eventStableKey(i) === pinKey)) return;
+    // Keep pin key if items briefly empty during refresh; clear only when we have
+    // items but the pinned event is gone from the window.
+    if (items.length > 0) setPinPersist(null);
+  }, [items, pinKey, setPinPersist]);
+
+  const filtered = useMemo(
+    () => items.filter((i) => matchesFilter(i.type, filter)),
+    [items, filter]
+  );
+
+  const scrollItems = useMemo(() => {
+    if (!pinKey) return filtered;
+    return filtered.filter((i) => eventStableKey(i) !== pinKey);
+  }, [filtered, pinKey]);
+
   // Keep each loop segment at least as wide as the viewport so short lists still scroll full-width
   useEffect(() => {
     const el = rootRef.current;
@@ -109,56 +254,153 @@ export function ActionTicker({
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [items.length]);
+  }, [scrollItems.length, pinned?.id, filter]);
 
   // ~3.5s per chip — readable at desk size; clamp so short lists aren't frantic
   const durationSec = useMemo(() => {
-    const n = Math.max(items.length, 1);
+    const n = Math.max(scrollItems.length, 1);
     return Math.min(72, Math.max(22, n * 3.5));
-  }, [items.length]);
+  }, [scrollItems.length]);
 
   // Remount track when set changes so new AF events enter the loop promptly
   const trackKey = useMemo(
-    () => items.map((i) => i.id).join("|"),
-    [items]
+    () => scrollItems.map((i) => i.id).join("|"),
+    [scrollItems]
+  );
+
+  const handlePinToggle = useCallback(
+    (ev: ActionTickerItem) => {
+      const key = eventStableKey(ev);
+      setPinPersist(pinKey === key ? null : key);
+    },
+    [pinKey, setPinPersist]
+  );
+
+  const filterBar = (
+    <div
+      className="flex shrink-0 items-center gap-0.5 rounded-md bg-[var(--surface)]/60 p-0.5 ring-1 ring-[var(--border)]/80"
+      role="tablist"
+      aria-label="Action filter"
+    >
+      {FILTERS.map((f) => (
+        <button
+          key={f.id}
+          type="button"
+          role="tab"
+          aria-selected={filter === f.id}
+          onClick={() => setFilterPersist(f.id)}
+          className={cn(
+            "rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide transition-colors",
+            filter === f.id
+              ? "bg-[var(--surface-elevated)] text-[var(--foreground)] shadow-sm ring-1 ring-[var(--border)]"
+              : "text-[var(--muted)] hover:text-[var(--foreground)]"
+          )}
+        >
+          {f.label}
+        </button>
+      ))}
+    </div>
   );
 
   if (!items.length) {
     return (
       <div
-        className="rounded-lg border border-dashed border-[var(--border)] px-3 py-2 text-[11px] text-[var(--muted)]"
+        className="flex items-center gap-2 rounded-lg border border-dashed border-[var(--border)] px-2 py-1.5"
         data-cocomms="action-ticker-empty"
       >
-        {emptyLabel}
+        {filterBar}
+        <span className="text-[11px] text-[var(--muted)]">{emptyLabel}</span>
       </div>
     );
   }
 
   return (
     <div
-      ref={rootRef}
-      className="action-ticker-root group relative overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface-muted)]"
+      className="flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-1.5 py-1"
       data-cocomms="action-ticker"
       aria-label="Live action ticker"
-      role="marquee"
     >
+      {filterBar}
+
+      {pinned && (
+        <div
+          className="flex shrink-0 items-center gap-1 border-r border-[var(--border)] pr-1.5"
+          data-cocomms="action-ticker-pin"
+        >
+          <span
+            className="select-none text-[9px] font-bold uppercase tracking-wider text-amber-600/90 dark:text-amber-300/90"
+            aria-hidden
+          >
+            Pin
+          </span>
+          <TickerChip
+            ev={pinned}
+            isFresh={freshIds.has(pinned.id)}
+            pinned
+            interactive
+            onPin={() => setPinPersist(null)}
+          />
+          <button
+            type="button"
+            onClick={() => setPinPersist(null)}
+            className="rounded px-1 py-0.5 text-[10px] font-semibold text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--foreground)]"
+            title="Unpin"
+            aria-label="Unpin event"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
+      {!pinned && items.some((i) => isGoalType(i.type)) && (
+        <button
+          type="button"
+          onClick={() => {
+            const newest = [...items]
+              .filter((i) => isGoalType(i.type))
+              .sort((a, b) => b.minute - a.minute || b.id.localeCompare(a.id))[0];
+            if (newest) setPinPersist(eventStableKey(newest));
+          }}
+          className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold text-[var(--muted)] ring-1 ring-[var(--border)]/70 hover:bg-[var(--surface)] hover:text-[var(--foreground)]"
+          title="Pin latest goal"
+        >
+          Pin goal
+        </button>
+      )}
+
       <div
-        key={trackKey}
-        className="action-ticker-track flex w-max items-center py-1.5"
-        style={{ animationDuration: `${durationSec}s` }}
+        ref={rootRef}
+        className="action-ticker-root group relative min-w-0 flex-1 overflow-hidden"
+        role="marquee"
       >
-        <TickerSegment
-          items={items}
-          freshIds={freshIds}
-          padKey="a"
-          minWidth={segMinWidth}
-        />
-        <TickerSegment
-          items={items}
-          freshIds={freshIds}
-          padKey="b"
-          minWidth={segMinWidth}
-        />
+        {scrollItems.length === 0 ? (
+          <div className="px-2 py-0.5 text-[11px] text-[var(--muted)]">
+            {filter === "all"
+              ? emptyLabel
+              : `No ${filter} in ticker`}
+          </div>
+        ) : (
+          <div
+            key={trackKey}
+            className="action-ticker-track flex w-max items-center py-0.5"
+            style={{ animationDuration: `${durationSec}s` }}
+          >
+            <TickerSegment
+              items={scrollItems}
+              freshIds={freshIds}
+              padKey="a"
+              minWidth={segMinWidth}
+              onPin={handlePinToggle}
+            />
+            <TickerSegment
+              items={scrollItems}
+              freshIds={freshIds}
+              padKey="b"
+              minWidth={segMinWidth}
+              onPin={handlePinToggle}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

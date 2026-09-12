@@ -88,3 +88,14 @@ Expanded catalogue (15 kinds), sources, rotation, and gaps: see
 ## Fixture fan-in
 
 Live desks sharing the same AF fixture id coalesce sync — see [`AF_FIXTURE_FANIN.md`](./AF_FIXTURE_FANIN.md).
+
+## Official XI gate (do not regress)
+
+AF often returns `startXI` **before** Official XI with `formation=null` and `grid=null`.
+Those provisional dumps must **not** confirm Official or overwrite a good board.
+
+Policy lives in `lib/lineup-gate.ts` (`isUsableOfficialLineup` + `planLineupApply`);
+sync applies it in `lib/sync-fixture.ts`. Confirm only when **both** sides have a
+usable Official XI (formation + grids). NS full sync falls back to last finished
+XI that itself passes the gate. Pos-band slot fallback — never array order.
+Regression: `npx tsx --test lib/lineup-gate.test.ts`.

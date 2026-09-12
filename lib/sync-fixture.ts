@@ -40,6 +40,7 @@ import {
   type AfLineup,
   type AfSquadPlayer,
 } from "./api-football";
+import { planLineupApply } from "./lineup-gate";
 import {
   parseAfTeamColors,
   serializeKit,
@@ -1976,23 +1977,27 @@ async function runSyncMatchFromApiFootball(
   const homeOfficial = isUsableOfficialLineup(homeLu);
   const awayOfficial = isUsableOfficialLineup(awayLu);
 
-  // Only stamp confirmed when BOTH sides look like real Official XI
-  // (formation + grids). Pre-match AF often returns startXI squad dumps with
-  // null formation/grid — those used to scramble pitch slots by array order.
-  if (homeOfficial && awayOfficial) {
-    lineupStatus = "confirmed";
+  // Gate: see lib/lineup-gate.ts + docs/AF_LIVE_TRIGGERS.md
+  // Empty-grid provisional dumps must not confirm Official or overwrite a good board.
+  const plan = planLineupApply({
+    homeOfficial,
+    awayOfficial,
+    currentStatus: match.lineupStatus || "expected",
+    isLiveSync: isLive,
+    isPreOrNs,
+  });
+  lineupStatus = plan.lineupStatus;
+
+  if (plan.action === "confirm") {
     homeFormation = await upsertLineupSide(match.homeClubId, homeLu!, "home");
     awayFormation = await upsertLineupSide(match.awayClubId, awayLu!, "away");
-  } else if (match.lineupStatus === "predicted") {
-    // Preserve personal DnD board; refresh from saved JSON if needed
+  } else if (plan.action === "keep_predicted") {
     if (!isLive) {
       await applyPredictedJson(match.homeClubId, match.predictedHomeJson);
       await applyPredictedJson(match.awayClubId, match.predictedAwayJson);
     }
-    lineupStatus = "predicted";
-  } else if (!isLive) {
-    // Expected XI = last finished lineup — also recovers desks that were
-    // wrongly stamped "confirmed" from a provisional AF dump (NS only).
+  } else if (plan.action === "fallback_last_xi") {
+    // NS / unconfirmed full sync only. Last XI itself must pass isUsableOfficialLineup.
     const homeLast = await getLastPlayedLineup(homeAfId).catch(() => null);
     const awayLast = await getLastPlayedLineup(awayAfId).catch(() => null);
     if (homeLast) {
@@ -2012,13 +2017,8 @@ async function runSyncMatchFromApiFootball(
       expectedFrom = expectedFrom || awayLast.fixtureId;
     }
     lineupStatus = homeLast || awayLast ? "expected" : match.lineupStatus || "expected";
-  } else if (match.lineupStatus === "confirmed") {
-    // Live: keep prior Official board if AF briefly omits grids.
-    lineupStatus = "confirmed";
-  } else {
-    // Live poll without Official XI yet — keep prior board; do not hunt last XI.
-    lineupStatus = match.lineupStatus || "expected";
   }
+  // action "keep": leave prior placements + status (live confirmed / no Official yet)
 
   // Resolve strip colours: match-night override > this fixture > last-known.
   const kitOverride = kitOverrideForFixture(match.apiFootballFixtureId);

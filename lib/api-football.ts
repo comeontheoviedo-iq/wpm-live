@@ -7,7 +7,10 @@
 
 import { getApiFootballKey } from "./env";
 import { coerceValidSlotIds, normalizeFormation, slotsFor } from "./formations";
+import { isUsableOfficialLineup } from "./lineup-gate";
 import { europeanSeasonYear, seasonCandidates } from "./season";
+
+export { isUsableOfficialLineup } from "./lineup-gate";
 
 const BASE = "https://v3.football.api-sports.io";
 
@@ -63,26 +66,6 @@ export type AfLineup = {
   substitutes: AfLineupPlayer[];
   coach?: { id: number; name: string; photo?: string };
 };
-
-/**
- * True when AF payload looks like a real Official XI — not a pre-match squad dump.
- * Today\'s Strasbourg–Monaco feed returned startXI with formation=null and grid=null;
- * treating that as confirmed mapped players by array order (mids in defence, etc.).
- */
-export function isUsableOfficialLineup(
-  lineup: AfLineup | null | undefined
-): boolean {
-  const xi = lineup?.startXI || [];
-  if (xi.length < 11) return false;
-  const withGrid = xi.filter((r) =>
-    /^\d+:\d+$/.test(String(r.player?.grid || ""))
-  ).length;
-  const formation = String(lineup?.formation || "").trim();
-  if (formation && withGrid >= 8) return true;
-  // Formation can lag a beat behind grids on some feeds.
-  if (withGrid >= 10) return true;
-  return false;
-}
 
 export type AfEvent = {
   time: { elapsed: number | null; extra: number | null };
@@ -1068,7 +1051,9 @@ export async function getLastPlayedLineup(teamId: number): Promise<{
     try {
       const lineups = await getLineups(fx.fixture.id);
       const mine = lineups.find((l) => l.team.id === teamId);
-      if (mine && mine.startXI?.length) {
+      // Last finished XI must itself be a usable Official (formation + grids).
+      // A gridless FT dump must not become the NS expected board.
+      if (mine && isUsableOfficialLineup(mine)) {
         return { fixtureId: fx.fixture.id, lineup: mine };
       }
     } catch {

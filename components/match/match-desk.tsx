@@ -91,8 +91,10 @@ import {
 } from "@/lib/field-settings";
 import {
   hasManualPlacement,
+  mirrorPitchCoord,
   type PlayerOverrideRow,
 } from "@/lib/player-overrides";
+import { isScoredGoalType, selectScoredGoals } from "@/lib/match-goals";
 
 type Coach = {
   id?: string;
@@ -262,12 +264,12 @@ function enrichPlayers(
   events: MatchEventRow[]
 ): PitchPlayer[] {
   const withMatchStats = players.map((p) => {
-    const goalTypes = new Set(["goal", "penalty_goal", "own_goal"]);
+    const scored = selectScoredGoals(events);
     // Dedupe AF goal rows that reappear when assist text is appended.
     const goalKeys = new Set<string>();
     let matchGoals = 0;
-    for (const e of events) {
-      if (!goalTypes.has(e.type)) continue;
+    for (const e of scored) {
+      if (!isScoredGoalType(e.type)) continue;
       const scorer =
         (e.playerId && e.playerId === p.id) ||
         namesLooselyMatch(p.name, parseGoalScorerName(e.description || ""));
@@ -279,8 +281,8 @@ function enrichPlayers(
     }
     let matchAssists = 0;
     const assistKeys = new Set<string>();
-    for (const e of events) {
-      if (!goalTypes.has(e.type)) continue;
+    for (const e of scored) {
+      if (!isScoredGoalType(e.type)) continue;
       const assistName = parseAssistName(e.description || "");
       if (!assistName || !namesLooselyMatch(p.name, assistName)) continue;
       const key = `${e.minute}|assist|${assistName.toLowerCase()}`;
@@ -673,6 +675,19 @@ export function MatchDesk({
       }
       return next;
     });
+    // Free-place pitchX/Y are absolute — mirror so manual moves flip with the XI
+    setOverrides((prev) =>
+      prev.map((o) => ({
+        ...o,
+        pitchX: mirrorPitchCoord(o.pitchX),
+        pitchY: mirrorPitchCoord(o.pitchY),
+      }))
+    );
+    void fetch(`/api/matches/${matchId}/overrides`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mirrorFreePlace: true }),
+    }).catch(() => null);
   }, [matchId]);
 
 
@@ -796,17 +811,21 @@ export function MatchDesk({
     () =>
       enrichPlayers(homePlayers, events).map((p) => {
         const o = overrideById.get(p.id);
+        // Subbed-off: never re-apply slot/free coords (empty ST/LW wipe)
+        const place = !p.subbedOff;
         return {
           ...p,
           // Slot override wins for display until Reset official
-          formationSlot: o?.formationSlot || p.formationSlot,
+          formationSlot: place
+            ? o?.formationSlot || p.formationSlot
+            : p.formationSlot,
           noteHook: noteHookByPlayer.get(p.id) || null,
           displayName: o?.displayName ?? null,
           pronunciation: o?.pronunciation ?? null,
           pitchFlag: o?.pitchFlag ?? null,
           jerseyNumber: o?.jerseyNumber ?? null,
-          pitchX: o?.pitchX ?? null,
-          pitchY: o?.pitchY ?? null,
+          pitchX: place ? o?.pitchX ?? null : null,
+          pitchY: place ? o?.pitchY ?? null : null,
         };
       }),
     [homePlayers, events, noteHookByPlayer, overrideById]
@@ -815,16 +834,19 @@ export function MatchDesk({
     () =>
       enrichPlayers(awayPlayers, events).map((p) => {
         const o = overrideById.get(p.id);
+        const place = !p.subbedOff;
         return {
           ...p,
-          formationSlot: o?.formationSlot || p.formationSlot,
+          formationSlot: place
+            ? o?.formationSlot || p.formationSlot
+            : p.formationSlot,
           noteHook: noteHookByPlayer.get(p.id) || null,
           displayName: o?.displayName ?? null,
           pronunciation: o?.pronunciation ?? null,
           pitchFlag: o?.pitchFlag ?? null,
           jerseyNumber: o?.jerseyNumber ?? null,
-          pitchX: o?.pitchX ?? null,
-          pitchY: o?.pitchY ?? null,
+          pitchX: place ? o?.pitchX ?? null : null,
+          pitchY: place ? o?.pitchY ?? null : null,
         };
       }),
     [awayPlayers, events, noteHookByPlayer, overrideById]
@@ -2986,6 +3008,7 @@ export function MatchDesk({
               homeOnLeft={homeOnLeft}
               onToggleHomeOnLeft={toggleHomeOnLeft}
               liveCompact={isLive}
+              isFullscreen={isFullscreen}
               onAirMode={onAirMode}
             />
           </div>

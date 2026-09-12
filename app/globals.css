@@ -2640,7 +2640,37 @@ body.obs-overlay-active {
   pointer-events: none;
 }
 
-/* Live action ticker — brief highlight when new AF events land */
+/* Live action ticker — broadcast marquee + brief highlight on new AF events */
+.action-ticker-root {
+  /* Soft edge fade so chips don't hard-clip */
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 12px,
+    #000 calc(100% - 12px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 12px,
+    #000 calc(100% - 12px),
+    transparent 100%
+  );
+}
+.action-ticker-track {
+  animation-name: action-ticker-marquee;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  will-change: transform;
+}
+.action-ticker-root:hover .action-ticker-track {
+  animation-play-state: paused;
+}
+@keyframes action-ticker-marquee {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-50%, 0, 0); }
+}
 .action-ticker-item-fresh {
   animation: action-ticker-in 0.45s var(--ease-out, ease-out) both;
   background: color-mix(in srgb, var(--surface-elevated) 70%, rgb(244 63 94 / 0.25));
@@ -2648,4 +2678,10 @@ body.obs-overlay-active {
 @keyframes action-ticker-in {
   from { opacity: 0; transform: translateY(4px) scale(0.98); }
   to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .action-ticker-track {
+    animation: none;
+    transform: none;
+  }
 }

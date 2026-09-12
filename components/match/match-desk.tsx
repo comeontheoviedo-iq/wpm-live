@@ -20,6 +20,8 @@ import {
   SlidersHorizontal,
   History,
   LayoutTemplate,
+  BarChart3,
+  Trophy,
 } from "lucide-react";
 import { PitchBoard, type PitchPlayer } from "@/components/match/pitch";
 import type { MatchKitColors } from "@/lib/kit-colors";
@@ -80,7 +82,7 @@ import {
   type MomentumSample,
   type VizPayload,
 } from "@/lib/viz-build";
-import { upsertVizNote } from "@/lib/viz-notes";
+import { extractVizPayload, upsertVizNote } from "@/lib/viz-notes";
 import { DeskLiveExtras } from "@/components/match/world-class/desk-live-extras";
 import { StatsStoryStrip } from "@/components/match/world-class/stats-story-strip";
 import {
@@ -619,7 +621,11 @@ export function MatchDesk({
   const [hooksPosterOpen, setHooksPosterOpen] = useState(false);
   const [hooksPosterExists, setHooksPosterExists] = useState(false);
   const [hooksPosterSrc, setHooksPosterSrc] = useState<string | null>(null);
+  const [leaguePosterOpen, setLeaguePosterOpen] = useState(false);
+  const [leaguePosterExists, setLeaguePosterExists] = useState(false);
+  const [leaguePosterSrc, setLeaguePosterSrc] = useState<string | null>(null);
   const hooksWasFullscreenRef = useRef(false);
+  const posterWasFullscreenRef = useRef(false);
   const [fieldSettingsTab, setFieldSettingsTab] =
     useState<FieldSettingsTab>("player");
   const openFieldSettings = useCallback((tab: FieldSettingsTab = "player") => {
@@ -708,12 +714,17 @@ export function MatchDesk({
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    async function loadPoster(
+      kind: "hooks" | "league",
+      setExists: (v: boolean) => void,
+      setSrc: (v: string | null) => void
+    ) {
+      const path =
+        kind === "hooks"
+          ? `/api/matches/${matchId}/hooks-poster`
+          : `/api/matches/${matchId}/league-poster`;
       try {
-        const res = await fetch(
-          `/api/matches/${matchId}/hooks-poster?meta=1`,
-          { cache: "no-store" }
-        );
+        const res = await fetch(`${path}?meta=1`, { cache: "no-store" });
         if (!res.ok || cancelled) return;
         const json = (await res.json()) as {
           exists?: boolean;
@@ -721,24 +732,24 @@ export function MatchDesk({
         };
         if (cancelled) return;
         const exists = Boolean(json.exists);
-        setHooksPosterExists(exists);
+        setExists(exists);
         if (exists) {
           const bust = json.updatedAt
             ? encodeURIComponent(json.updatedAt)
             : String(Date.now());
-          setHooksPosterSrc(
-            `/api/matches/${matchId}/hooks-poster?t=${bust}`
-          );
+          setSrc(`${path}?t=${bust}`);
         } else {
-          setHooksPosterSrc(null);
+          setSrc(null);
         }
       } catch {
         if (!cancelled) {
-          setHooksPosterExists(false);
-          setHooksPosterSrc(null);
+          setExists(false);
+          setSrc(null);
         }
       }
-    })();
+    }
+    void loadPoster("hooks", setHooksPosterExists, setHooksPosterSrc);
+    void loadPoster("league", setLeaguePosterExists, setLeaguePosterSrc);
     return () => {
       cancelled = true;
     };
@@ -750,8 +761,64 @@ export function MatchDesk({
       return;
     }
     hooksWasFullscreenRef.current = isFullscreen;
+    posterWasFullscreenRef.current = isFullscreen;
+    setLeaguePosterOpen(false);
     setHooksPosterOpen(true);
   }, [hooksPosterExists, hooksPosterSrc, isFullscreen]);
+
+  const openLeaguePoster = useCallback(() => {
+    if (!leaguePosterExists || !leaguePosterSrc) {
+      setMsg("Upload a LEAGUE poster in Research first");
+      return;
+    }
+    posterWasFullscreenRef.current = isFullscreen;
+    hooksWasFullscreenRef.current = isFullscreen;
+    setHooksPosterOpen(false);
+    setLeaguePosterOpen(true);
+  }, [leaguePosterExists, leaguePosterSrc, isFullscreen]);
+
+  const closeLeaguePoster = useCallback(() => {
+    setLeaguePosterOpen(false);
+    window.setTimeout(() => {
+      if (!posterWasFullscreenRef.current) return;
+      const root = deskRootRef.current;
+      if (!root || document.fullscreenElement) return;
+      void root.requestFullscreen?.().catch(() => null);
+    }, 50);
+  }, []);
+
+  const openDataVizFromNotes = useCallback(() => {
+    const vizNotes = notes
+      .map((n) => ({ n, viz: extractVizPayload(n.body) }))
+      .filter((x): x is { n: NoteRow; viz: VizPayload } => Boolean(x.viz));
+    if (!vizNotes.length) {
+      setMsg("No data visuals saved for this match yet");
+      return;
+    }
+    // Reopen most recent first (notes are typically newest-first from SSR)
+    for (const { n, viz } of vizNotes.slice(0, 5).reverse()) {
+      const id = `viz-note|${n.id}|reopen|${Date.now()}`;
+      const popup: LivePopup = {
+        id,
+        createdAt: Date.now(),
+        pinned: true,
+        kind: "fact",
+        title: n.title || "VIZ",
+        subtitle: "From Notes",
+        lines: [],
+        scoreline: `${homeName} ${scoreSampleRef.current.home}-${scoreSampleRef.current.away} ${awayName}`,
+        viz,
+      };
+      setLivePopups((prev) =>
+        [...prev.filter((p) => !p.id.startsWith(`viz-note|${n.id}`)), popup].slice(-5)
+      );
+    }
+    setMsg(
+      vizNotes.length === 1
+        ? `Reopened viz: ${vizNotes[0].n.title}`
+        : `Reopened ${Math.min(5, vizNotes.length)} data visuals`
+    );
+  }, [notes, homeName, awayName]);
 
   const closeHooksPoster = useCallback(() => {
     setHooksPosterOpen(false);
@@ -1203,14 +1270,14 @@ export function MatchDesk({
     function onKey(e: KeyboardEvent) {
       if (e.key !== "Escape") return;
       // HOOKS poster owns Esc while open (capture handler on overlay).
-      if (hooksPosterOpen) return;
+      if (hooksPosterOpen || leaguePosterOpen) return;
       setPlacing(null);
       setMsg(null);
       clearAllLivePopups();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [clearAllLivePopups, hooksPosterOpen]);
+  }, [clearAllLivePopups, hooksPosterOpen, leaguePosterOpen]);
 
   const reopenIntelHistory = useCallback(
     (item: LivePopup) => {
@@ -2268,13 +2335,6 @@ export function MatchDesk({
     ? `https://media.api-sports.io/football/leagues/${leagueAfId}.png`
     : null;
 
-    const deskNotes = useMemo(() => {
-    if (dossierId) {
-      return notes.filter((n) => n.entityId === dossierId);
-    }
-    return notes;
-  }, [notes, dossierId]);
-
   // Scan / On-air only — do not enter investigate weighting when a dossier opens
   // (pass-2 investigate mode overrode dossier position:fixed → broken click flow).
   const deskMode = onAirMode ? "onair" : "scan";
@@ -2664,6 +2724,26 @@ export function MatchDesk({
             type="button"
             className={cn(
               "desk-btn font-bold tracking-[0.08em]",
+              leaguePosterExists
+                ? "border-amber-400/40 text-amber-100"
+                : "opacity-45"
+            )}
+            disabled={!leaguePosterExists}
+            onClick={openLeaguePoster}
+            title={
+              leaguePosterExists
+                ? "LEAGUE poster (Esc to close)"
+                : "Upload LEAGUE poster in Research"
+            }
+            aria-label="LEAGUE poster"
+          >
+            <Trophy className="h-3 w-3" />
+            LEAGUE
+          </button>
+          <button
+            type="button"
+            className={cn(
+              "desk-btn font-bold tracking-[0.08em]",
               hooksPosterExists
                 ? "border-teal-400/40 text-teal-100"
                 : "opacity-45"
@@ -2679,6 +2759,16 @@ export function MatchDesk({
           >
             <LayoutTemplate className="h-3 w-3" />
             HOOKS
+          </button>
+          <button
+            type="button"
+            className="desk-btn font-bold tracking-[0.08em]"
+            onClick={openDataVizFromNotes}
+            title="Reopen data visuals saved for this match"
+            aria-label="DATA VIZ"
+          >
+            <BarChart3 className="h-3 w-3" />
+            DATA VIZ
           </button>
           {!apiFootballFixtureId && (
             <Link
@@ -2952,58 +3042,20 @@ export function MatchDesk({
         </div>
       )}
 
-      {/* Main landscape: notes | pitch | squad */}
+      {/* Main landscape: pitch | squad (notes live on player/coach profiles) */}
       <div
         className={cn(
           "relative min-h-0 flex-1 grid grid-cols-1 gap-1.5 overflow-hidden",
           onAirMode
             ? "lg:grid-cols-[minmax(0,1fr)]"
             : hideSquadRail
-              ? "lg:grid-cols-[minmax(180px,210px)_minmax(0,1.45fr)] xl:grid-cols-[minmax(170px,195px)_minmax(0,1.55fr)]"
-              : "lg:grid-cols-[minmax(180px,205px)_minmax(0,1.45fr)_minmax(145px,160px)] xl:grid-cols-[minmax(165px,185px)_minmax(0,1.6fr)_minmax(135px,150px)]"
+              ? "lg:grid-cols-[minmax(0,1fr)]"
+              : "lg:grid-cols-[minmax(0,1.6fr)_minmax(145px,170px)] xl:grid-cols-[minmax(0,1.7fr)_minmax(150px,180px)]"
         )}
       >
-        {!onAirMode && (
-        <aside
-          data-desk-rail="notes"
-          className="min-h-0 overflow-hidden order-2 lg:order-1"
-        >
-          <NotesPanel
-            matchId={matchId}
-            initialNotes={deskNotes}
-            entityType={dossierId ? "player" : undefined}
-            entityId={dossierId || undefined}
-            entityLabel={
-              dossierId ? squad.find((s) => s.id === dossierId)?.name : undefined
-            }
-            homePlayerIds={homePlayers.map((p) => p.id)}
-            awayPlayerIds={awayPlayers.map((p) => p.id)}
-            homeClubId={homeClubId}
-            awayClubId={awayClubId}
-            homeName={homeName}
-            awayName={awayName}
-            matchStatus={status}
-            kickoffAt={kickoffAt}
-            externalFilter={notesFilter}
-            onFilterChange={setNotesFilter}
-            fillHeight
-            liveMode={isLive || status === "Full Time"}
-            hideComposer
-            playerNameById={Object.fromEntries(squad.map((p) => [p.id, p.name]))}
-            onVizNoteClick={reopenVizFromNote}
-            onNotePlayerClick={(playerId) => {
-              const p = squad.find((s) => s.id === playerId);
-              if (p) openPlayer(p);
-            }}
-            relevantNoteIds={relevantNoteIds}
-            relevantLoading={relevantLoading}
-          />
-        </aside>
-        )}
-
         <section
           data-desk-primary="pitch"
-          className="relative min-h-0 flex flex-col overflow-hidden order-1 lg:order-2 onair-primary"
+          className="relative min-h-0 flex flex-col overflow-hidden order-1 onair-primary"
         >
           <div className="min-h-0 flex-1">
             <PitchBoard
@@ -3100,7 +3152,7 @@ export function MatchDesk({
                 if (awayClubId) setClubDossierId(awayClubId);
                 else setNotesFilter("away");
               }}
-              onLeagueLogoClick={() => setNotesFilter("league")}
+              onLeagueLogoClick={() => openLeaguePoster()}
               cardSettings={fieldSettings}
               markerPct={markerPct}
               onOpenFieldSettings={openFieldSettings}
@@ -3494,6 +3546,13 @@ export function MatchDesk({
         open={hooksPosterOpen}
         src={hooksPosterSrc}
         onClose={closeHooksPoster}
+        title="HOOKS"
+      />
+      <HooksPosterOverlay
+        open={leaguePosterOpen}
+        src={leaguePosterSrc}
+        onClose={closeLeaguePoster}
+        title="LEAGUE"
       />
 
       <FieldSettingsModal

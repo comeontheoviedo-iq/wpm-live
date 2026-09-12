@@ -6,7 +6,7 @@ import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Sparkles, AlertTriangle, Wand2, ChevronDown, ChevronUp } from "lucide-react";
 import { ResearchStagesHeader } from "@/components/packs/research-stages";
-import { HooksPosterUpload } from "@/components/packs/hooks-poster-upload";
+import { DeskPosterUpload } from "@/components/packs/desk-poster-upload";
 import { looksLikeNotebookPaste } from "@/lib/research-stages";
 
 type Template = {
@@ -542,7 +542,10 @@ export function PacksClient({ matchId }: { matchId: string }) {
         fillBusy={busy || packBusy}
       />
 
-      <HooksPosterUpload matchId={matchId} />
+      <div className="space-y-2">
+        <DeskPosterUpload matchId={matchId} kind="league" />
+        <DeskPosterUpload matchId={matchId} kind="hooks" />
+      </div>
 
       {!canAutoGen && (
         <div className="rounded-[var(--radius-md)] border border-[var(--warning)]/40 bg-[var(--surface-muted)] px-3 py-2.5 text-sm text-[var(--foreground)] flex gap-2">

@@ -5,7 +5,7 @@ import { DEFAULT_CHECKLIST, DEFAULT_SCRIPT_SLOTS } from "@/lib/defaults";
 import { ensureClub, parseAfTeamId } from "@/lib/ensure-club";
 import { getFixture, assertFixtureCompatible } from "@/lib/api-football";
 import { leagueIdForCompetition } from "@/lib/competitions";
-import { assertCanCreateDesk } from "@/lib/trial";
+import { assertCanCreateDesk, maybeConsumeMatchPassCredit } from "@/lib/trial";
 
 function sanitizeCreateError(e: unknown): { status: number; error: string } {
   if (
@@ -290,6 +290,8 @@ export async function POST(req: Request) {
 
       return { matchDay, match, home, away };
     });
+
+    await maybeConsumeMatchPassCredit(session.id);
 
     return NextResponse.json(result);
   } catch (e) {

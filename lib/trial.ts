@@ -3,9 +3,11 @@
  *
  * Commercial: Unlimited £22/mo after trial unless cancelled.
  * Trial: 14 days · max 3 match desks (not a 48h-only flash trial).
+ * Mid-trial: cancel (portal) OR switch to Match Desk Pass (1/5/10 credits).
+ * Match Desk Pass: one-time packs; each credit = one match desk after/without Unlimited.
  *
  * When Stripe keys exist: Checkout uses trial_period_days + card collection;
- * cancel via Customer Portal in Settings.
+ * cancel via Customer Portal in Settings; pass packs via checkout plan=match_pass|switch_to_pass.
  * When keys missing: app-side billingStatus / trialEndsAt / cancelAtPeriodEnd
  * with the same UX copy; portal wires when keys appear.
  */
@@ -37,6 +39,7 @@ export type TrialSnapshot = {
   trialCancelledAt: string | null;
   cancelAtPeriodEnd: boolean;
   daysRemaining: number | null;
+  matchPassCredits: number;
   convertsTo: string;
   convertPrice: string;
   stripeConfigured: boolean;
@@ -86,6 +89,7 @@ type UserBillingRow = {
   trialEndsAt: Date | null;
   trialCancelledAt: Date | null;
   cancelAtPeriodEnd: boolean;
+  matchPassCredits: number;
 };
 
 export async function getUserBilling(userId: string): Promise<UserBillingRow | null> {
@@ -98,6 +102,7 @@ export async function getUserBilling(userId: string): Promise<UserBillingRow | n
       trialEndsAt: true,
       trialCancelledAt: true,
       cancelAtPeriodEnd: true,
+      matchPassCredits: true,
     },
   });
   return user;
@@ -194,6 +199,8 @@ export async function buildTrialSnapshot(userId: string): Promise<TrialSnapshot 
   const ends = user.trialEndsAt;
   const withinWindow = Boolean(ends && ends.getTime() > now.getTime());
 
+  const matchPassCredits = user.matchPassCredits ?? 0;
+
   // Active paid or demo → unlimited desks
   if (isUnlimitedAccount(user.email) || status === "active") {
     return {
@@ -209,6 +216,7 @@ export async function buildTrialSnapshot(userId: string): Promise<TrialSnapshot 
       trialCancelledAt: user.trialCancelledAt?.toISOString() ?? null,
       cancelAtPeriodEnd: user.cancelAtPeriodEnd,
       daysRemaining: null,
+      matchPassCredits,
       convertsTo: PLAN_COPY.unlimited.name,
       convertPrice: PLAN_COPY.unlimited.price,
       stripeConfigured,
@@ -228,21 +236,28 @@ export async function buildTrialSnapshot(userId: string): Promise<TrialSnapshot 
     ? Math.max(0, TRIAL_DESK_LIMIT - desksUsed)
     : status === "none"
       ? null
-      : 0;
+      : matchPassCredits > 0
+        ? matchPassCredits
+        : 0;
 
   // Legacy accounts (billingStatus none) stay uncapped until they start a trial/signup path.
   // (active / demo already returned above)
+  // Match Desk Pass credits unlock desks after/without Unlimited.
   const canCreateDesk = trialActive
     ? desksUsed < TRIAL_DESK_LIMIT
-    : status === "none";
+    : status === "none" || matchPassCredits > 0;
 
   let message: string;
   if (trialActive && user.cancelAtPeriodEnd) {
-    message = `Trial cancelled — access until ${ends?.toLocaleDateString("en-GB") || "end"}. Will not convert to ${PLAN_COPY.unlimited.price}/mo.`;
+    message = `Trial cancelled — access until ${ends?.toLocaleDateString("en-GB") || "end"}. Will not convert to ${PLAN_COPY.unlimited.price}/mo.${
+      matchPassCredits > 0 ? ` Match Desk Pass credits: ${matchPassCredits}.` : ""
+    }`;
   } else if (trialActive) {
-    message = `Trial: ${TRIAL_DESK_LIMIT} match desks · ${daysRemaining(ends) ?? "?"} days left. Converts to Unlimited ${PLAN_COPY.unlimited.price}/mo unless cancelled.`;
+    message = `Trial: ${TRIAL_DESK_LIMIT} match desks · ${daysRemaining(ends) ?? "?"} days left. Converts to Unlimited ${PLAN_COPY.unlimited.price}/mo unless cancelled. Mid-trial: cancel, stay on Unlimited, or switch to a Match Desk Pass.`;
+  } else if (matchPassCredits > 0) {
+    message = `Match Desk Pass: ${matchPassCredits} desk credit${matchPassCredits === 1 ? "" : "s"} remaining. Or subscribe Unlimited ${PLAN_COPY.unlimited.price}/mo.`;
   } else if (status === "expired" || (status === "cancelled" && !withinWindow)) {
-    message = `Trial ended. Subscribe to Unlimited ${PLAN_COPY.unlimited.price}/mo to keep creating desks.`;
+    message = `Trial ended. Subscribe to Unlimited ${PLAN_COPY.unlimited.price}/mo, or buy a Match Desk Pass (1 / 5 / 10).`;
   } else if (status === "none") {
     message = `No trial on this account yet. New signups get ${TRIAL_DAYS} days / ${TRIAL_DESK_LIMIT} desks. Start a trial from Settings, or subscribe Unlimited ${PLAN_COPY.unlimited.price}/mo.`;
   } else {
@@ -262,6 +277,7 @@ export async function buildTrialSnapshot(userId: string): Promise<TrialSnapshot 
     trialCancelledAt: user.trialCancelledAt?.toISOString() ?? null,
     cancelAtPeriodEnd: user.cancelAtPeriodEnd,
     daysRemaining: daysRemaining(ends),
+    matchPassCredits,
     convertsTo: PLAN_COPY.unlimited.name,
     convertPrice: PLAN_COPY.unlimited.price,
     stripeConfigured,
@@ -285,14 +301,36 @@ export async function assertCanCreateDesk(userId: string): Promise<
     return {
       ok: false,
       status: 403,
-      error: `Trial includes ${TRIAL_DESK_LIMIT} match desks. Upgrade to Unlimited ${PLAN_COPY.unlimited.price}/mo for unlimited desks, or delete an existing desk.`,
+      error: `Trial includes ${TRIAL_DESK_LIMIT} match desks. Upgrade to Unlimited ${PLAN_COPY.unlimited.price}/mo, buy a Match Desk Pass, or delete an existing desk.`,
       snapshot,
     };
   }
   return {
     ok: false,
     status: 402,
-    error: `Trial ended. Subscribe to Unlimited ${PLAN_COPY.unlimited.price}/mo to create match desks.`,
+    error: `Trial ended. Subscribe to Unlimited ${PLAN_COPY.unlimited.price}/mo or buy a Match Desk Pass (1 / 5 / 10) to create match desks.`,
     snapshot,
   };
+}
+
+/**
+ * After a successful desk create: spend one Match Desk Pass credit when the user
+ * is not on Unlimited / demo / active trial window (trial uses the 3-desk cap instead).
+ */
+export async function maybeConsumeMatchPassCredit(userId: string): Promise<void> {
+  const user = await getUserBilling(userId);
+  if (!user) return;
+  if (isUnlimitedAccount(user.email)) return;
+  const status = asBillingStatus(user.billingStatus);
+  if (status === "active") return;
+  const now = Date.now();
+  const trialActive =
+    (status === "trial" || (status === "cancelled" && user.trialEndsAt)) &&
+    Boolean(user.trialEndsAt && user.trialEndsAt.getTime() > now);
+  if (trialActive) return;
+  if ((user.matchPassCredits ?? 0) <= 0) return;
+  await prisma.user.update({
+    where: { id: userId },
+    data: { matchPassCredits: { decrement: 1 } },
+  });
 }

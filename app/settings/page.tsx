@@ -61,6 +61,7 @@ type TrialSnapshot = {
   cancelAtPeriodEnd: boolean;
   daysRemaining: number | null;
   convertPrice: string;
+  matchPassCredits?: number;
   stripeConfigured: boolean;
   message: string;
   cancelPath: string;
@@ -270,6 +271,32 @@ export default function SettingsPage() {
     }
   }
 
+  async function buyMatchPass(credits: 1 | 5 | 10, switchFromTrial: boolean) {
+    setPlanBusy(true);
+    setPlanMsg(null);
+    try {
+      const res = await fetch("/api/billing/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          plan: switchFromTrial ? "switch_to_pass" : "match_pass",
+          credits,
+        }),
+      });
+      const json = await res.json();
+      if (res.status === 503) {
+        setPlanMsg(String(json.todo || "Match Desk Pass prices not configured yet."));
+        return;
+      }
+      if (!res.ok || !json.url) throw new Error(String(json.error || "Checkout failed"));
+      window.location.href = String(json.url);
+    } catch (e) {
+      setPlanMsg(e instanceof Error ? e.message : "Match Desk Pass checkout failed");
+    } finally {
+      setPlanBusy(false);
+    }
+  }
+
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center text-sm text-slate-500">
@@ -395,7 +422,10 @@ export default function SettingsPage() {
                         <span>Status: {trial.billingStatus}</span>
                         {trial.daysRemaining != null && <span>· {trial.daysRemaining}d left</span>}
                         <span>· Desks {trial.desksUsed}/{trial.trialDeskLimit}</span>
-                        {trial.cancelAtPeriodEnd && <span>· Cancel at period end</span>}
+                        {(trial.matchPassCredits ?? 0) > 0 && (
+                          <span>· Pass credits {trial.matchPassCredits}</span>
+                        )}
+                        {trial.cancelAtPeriodEnd && <span>· Will not convert to £22</span>}
                       </div>
                     )}
                     <div className="flex flex-wrap gap-2">
@@ -419,6 +449,50 @@ export default function SettingsPage() {
                       Cancel path: {trial?.cancelPath || "Settings → Plan. Billing portal when keys exist."}
                     </p>
                   </div>
+
+                  {trial?.trialActive && !trial.cancelAtPeriodEnd && (
+                    <div className="rounded-xl border border-violet-200 dark:border-violet-900/50 bg-violet-50/40 dark:bg-violet-950/20 p-4 space-y-3">
+                      <div className="font-medium">Mid-trial choices</div>
+                      <p className="text-xs text-slate-600 dark:text-slate-300">
+                        Default path converts to Unlimited £22/mo when the trial ends. You can cancel anytime,
+                        stay on Unlimited, or switch to pay-per-match with a Match Desk Pass (avoids the £22 conversion after payment).
+                      </p>
+                      <ol className="list-decimal list-inside text-xs text-slate-600 dark:text-slate-300 space-y-1">
+                        <li>
+                          <strong>Cancel</strong> — Customer Portal (or Cancel trial). Access until trial end; no Unlimited charge.
+                        </li>
+                        <li>
+                          <strong>Stay on Unlimited</strong> — do nothing; card charged £22/mo after trial.
+                        </li>
+                        <li>
+                          <strong>Switch to Match Desk Pass</strong> — buy 1 / 5 / 10 desk credits; we cancel Unlimited so it does not convert.
+                        </li>
+                      </ol>
+                      <div className="flex flex-wrap gap-2">
+                        <Button type="button" variant="outline" disabled={planBusy} onClick={cancelTrial}>
+                          Cancel (portal)
+                        </Button>
+                        <Button type="button" disabled={planBusy} onClick={startUnlimitedCheckout}>
+                          Stay on Unlimited path
+                        </Button>
+                      </div>
+                      <div className="text-xs font-medium text-slate-700 dark:text-slate-200 pt-1">
+                        Switch to Match Desk Pass
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button type="button" variant="outline" disabled={planBusy} onClick={() => buyMatchPass(1, true)}>
+                          1 pass · £8
+                        </Button>
+                        <Button type="button" variant="outline" disabled={planBusy} onClick={() => buyMatchPass(5, true)}>
+                          5 passes · £25
+                        </Button>
+                        <Button type="button" variant="outline" disabled={planBusy} onClick={() => buyMatchPass(10, true)}>
+                          10 passes · £30
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="rounded-xl border border-teal-200 dark:border-teal-900 p-4 space-y-3">
                     <div className="font-medium">Billing</div>
                     <p className="text-xs text-slate-500">
@@ -430,6 +504,26 @@ export default function SettingsPage() {
                       </Button>
                       <Button type="button" variant="outline" disabled={planBusy} onClick={openBillingPortal}>
                         Manage billing / cancel
+                      </Button>
+                    </div>
+                    <div className="text-xs font-medium text-slate-700 dark:text-slate-200 pt-1">
+                      Match Desk Pass (pay-per-match)
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      One-time packs — 1 desk credit each. Useful after trial or instead of Unlimited.
+                      {(trial?.matchPassCredits ?? 0) > 0
+                        ? ` You have ${trial?.matchPassCredits} credit${(trial?.matchPassCredits ?? 0) === 1 ? "" : "s"} left.`
+                        : ""}
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <Button type="button" variant="outline" disabled={planBusy} onClick={() => buyMatchPass(1, false)}>
+                        1 · £8
+                      </Button>
+                      <Button type="button" variant="outline" disabled={planBusy} onClick={() => buyMatchPass(5, false)}>
+                        5 · £25
+                      </Button>
+                      <Button type="button" variant="outline" disabled={planBusy} onClick={() => buyMatchPass(10, false)}>
+                        10 · £30
                       </Button>
                     </div>
                     {planMsg && <p className="text-xs text-slate-600 dark:text-slate-300 whitespace-pre-wrap">{planMsg}</p>}

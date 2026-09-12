@@ -6,6 +6,7 @@ import {
   isStripeConfigured,
   stripePublicStatus,
 } from "@/lib/stripe";
+import { prisma } from "@/lib/prisma";
 
 /**
  * POST /api/billing/portal — Stripe Customer Portal when configured.
@@ -36,11 +37,18 @@ export async function POST(req: Request) {
   const returnUrl = String(body.returnUrl || "").trim() || `${base}/settings`;
 
   try {
-    const existing = await stripe.customers.list({
-      email: session.email,
-      limit: 1,
+    const user = await prisma.user.findUnique({
+      where: { id: session.id },
+      select: { stripeCustomerId: true },
     });
-    let customerId = existing.data[0]?.id;
+    let customerId = user?.stripeCustomerId || null;
+    if (!customerId) {
+      const existing = await stripe.customers.list({
+        email: session.email,
+        limit: 1,
+      });
+      customerId = existing.data[0]?.id || null;
+    }
     if (!customerId) {
       const created = await stripe.customers.create({
         email: session.email,
@@ -48,6 +56,12 @@ export async function POST(req: Request) {
         metadata: { userId: session.id },
       });
       customerId = created.id;
+    }
+    if (customerId && user && !user.stripeCustomerId) {
+      await prisma.user.update({
+        where: { id: session.id },
+        data: { stripeCustomerId: customerId },
+      });
     }
 
     const portal = await stripe.billingPortal.sessions.create({

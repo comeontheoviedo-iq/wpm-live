@@ -26,6 +26,8 @@ model User {
   cancelAtPeriodEnd    Boolean    @default(false)
   stripeCustomerId     String?
   stripeSubscriptionId String?
+  /// One-time Match Desk Pass credits (1 desk per credit). Demo accounts ignore caps.
+  matchPassCredits     Int        @default(0)
   createdAt            DateTime   @default(now())
   updatedAt            DateTime   @updatedAt
   matchDays            MatchDay[]

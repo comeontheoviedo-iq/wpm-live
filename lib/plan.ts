@@ -219,6 +219,16 @@ export const PLAN_COPY = {
   },
   rivalCompare:
     "One plan: Unlimited (Basic) £22/mo. Compare to ~£35/mo rival desks — BYO Notebook is core; no separate Intel upsell at launch.",
+  matchPass: {
+    name: "Match Desk Pass",
+    packs: [
+      { credits: 1, price: "£8" },
+      { credits: 5, price: "£25" },
+      { credits: 10, price: "£30" },
+    ],
+    blurb:
+      "Pay-per-match desk credits. Mid-trial: switch from Settings to avoid Unlimited £22 conversion.",
+  },
 } as const;
 
 export function planStatus() {

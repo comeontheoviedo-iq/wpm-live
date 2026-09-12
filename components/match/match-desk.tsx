@@ -2349,8 +2349,8 @@ export function MatchDesk({
         deskMode === "onair" && "onair-desk",
         deskMode === "scan" && "scan-desk",
         isFullscreen
-          ? "h-[calc(100dvh-8.5rem)] max-h-[100dvh] min-h-0 p-1.5"
-          : "h-[calc(100dvh-11rem)] max-h-[100dvh] min-h-[380px]"
+          ? "h-[calc(100dvh-7.75rem)] max-h-[100dvh] min-h-0 p-1.5"
+          : "h-[calc(100dvh-10.25rem)] max-h-[100dvh] min-h-[380px]"
       )}
     >
       {/* Slim top bar — score / meta / stats / actions · broadcast desk chrome */}
@@ -2721,56 +2721,58 @@ export function MatchDesk({
             <Sparkles className="h-3 w-3" />
             Research{packCount ? ` (${packCount})` : ""}
           </Link>
-          <button
-            type="button"
-            className={cn(
-              "desk-btn font-bold tracking-[0.08em]",
-              leaguePosterExists
-                ? "border-amber-400/40 text-amber-100"
-                : "opacity-45"
-            )}
-            disabled={!leaguePosterExists}
-            onClick={openLeaguePoster}
-            title={
-              leaguePosterExists
-                ? "LEAGUE poster (Esc to close)"
-                : "Upload LEAGUE poster in Research"
-            }
-            aria-label="LEAGUE poster"
-          >
-            <Trophy className="h-3 w-3" />
-            LEAGUE
-          </button>
-          <button
-            type="button"
-            className={cn(
-              "desk-btn font-bold tracking-[0.08em]",
-              hooksPosterExists
-                ? "border-teal-400/40 text-teal-100"
-                : "opacity-45"
-            )}
-            disabled={!hooksPosterExists}
-            onClick={openHooksPoster}
-            title={
-              hooksPosterExists
-                ? "HOOKS poster (Esc to close)"
-                : "Upload HOOKS poster in Research"
-            }
-            aria-label="HOOKS poster"
-          >
-            <LayoutTemplate className="h-3 w-3" />
-            HOOKS
-          </button>
-          <button
-            type="button"
-            className="desk-btn font-bold tracking-[0.08em]"
-            onClick={openDataVizFromNotes}
-            title="Reopen data visuals saved for this match"
-            aria-label="DATA VIZ"
-          >
-            <BarChart3 className="h-3 w-3" />
-            DATA VIZ
-          </button>
+          <div className="desk-poster-tools" role="group" aria-label="Desk posters and viz">
+            <button
+              type="button"
+              className={cn(
+                "desk-btn font-bold tracking-[0.1em]",
+                leaguePosterExists
+                  ? "border-amber-400/40 text-amber-100"
+                  : "opacity-45"
+              )}
+              disabled={!leaguePosterExists}
+              onClick={openLeaguePoster}
+              title={
+                leaguePosterExists
+                  ? "LEAGUE poster (Esc to close)"
+                  : "Upload LEAGUE poster in Research"
+              }
+              aria-label="LEAGUE poster"
+            >
+              <Trophy className="h-3 w-3" />
+              LEAGUE
+            </button>
+            <button
+              type="button"
+              className={cn(
+                "desk-btn font-bold tracking-[0.1em]",
+                hooksPosterExists
+                  ? "border-teal-400/40 text-teal-100"
+                  : "opacity-45"
+              )}
+              disabled={!hooksPosterExists}
+              onClick={openHooksPoster}
+              title={
+                hooksPosterExists
+                  ? "HOOKS poster (Esc to close)"
+                  : "Upload HOOKS poster in Research"
+              }
+              aria-label="HOOKS poster"
+            >
+              <LayoutTemplate className="h-3 w-3" />
+              HOOKS
+            </button>
+            <button
+              type="button"
+              className="desk-btn font-bold tracking-[0.1em]"
+              onClick={openDataVizFromNotes}
+              title="Reopen data visuals saved for this match"
+              aria-label="DATA VIZ"
+            >
+              <BarChart3 className="h-3 w-3" />
+              DATA VIZ
+            </button>
+          </div>
           {!apiFootballFixtureId && (
             <Link
               href={`/match-day/${matchId}/prep`}

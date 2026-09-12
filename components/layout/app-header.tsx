@@ -34,25 +34,26 @@ export function AppHeader({
 
   return (
     <>
-      <header className="sticky top-0 z-40 border-b border-[var(--border)] bg-[#0f1319] shadow-none">
-        <div className="mx-auto flex h-14 max-w-[1600px] items-center gap-3 px-3 sm:px-4">
+      <header className="app-topbar sticky top-0 z-40">
+        <div className="mx-auto flex h-11 max-w-[1600px] items-center gap-2.5 px-3 sm:px-4">
           <Logo />
           <div className="hidden min-w-0 items-center gap-2 sm:flex">
-            <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">
+            <span className="h-3 w-px bg-[var(--border-strong)]" aria-hidden />
+            <span className="text-[9px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">
               {t("header.commentaryDesk")}
             </span>
           </div>
           <div className="ml-auto flex items-center gap-0.5">
             <IconBtn ariaLabel="Search">
-              <Search className="h-4 w-4" />
+              <Search className="h-3.5 w-3.5" />
             </IconBtn>
             {matchId && (
               <Link
                 href={`/match-day/${matchId}/print`}
-                className="focus-ring interactive-press rounded-[var(--radius-sm)] p-2 text-[var(--muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--foreground)]"
+                className="focus-ring interactive-press rounded-[2px] p-1.5 text-[var(--muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--foreground)]"
                 aria-label="Print"
               >
-                <Printer className="h-4 w-4" />
+                <Printer className="h-3.5 w-3.5" />
               </Link>
             )}
             <IconBtn
@@ -60,23 +61,23 @@ export function AppHeader({
               onClick={() => setTheme(resolved === "dark" ? "light" : "dark")}
             >
               {resolved === "dark" ? (
-                <Sun className="h-4 w-4" />
+                <Sun className="h-3.5 w-3.5" />
               ) : (
-                <Moon className="h-4 w-4" />
+                <Moon className="h-3.5 w-3.5" />
               )}
             </IconBtn>
             <Link
               href="/settings"
-              className="focus-ring interactive-press rounded-[var(--radius-sm)] p-2 text-[var(--muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--foreground)]"
+              className="focus-ring interactive-press rounded-[2px] p-1.5 text-[var(--muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--foreground)]"
               aria-label="Settings"
             >
-              <Settings className="h-4 w-4" />
+              <Settings className="h-3.5 w-3.5" />
             </Link>
-            <div className="ml-1 flex h-8 w-8 items-center justify-center rounded-[var(--radius-sm)] bg-[var(--surface-elevated)] text-[11px] font-bold text-[var(--foreground)] ring-1 ring-[var(--border)]">
+            <div className="ml-1 flex h-7 w-7 items-center justify-center rounded-[2px] bg-[var(--surface-elevated)] text-[10px] font-bold text-[var(--foreground)] ring-1 ring-[var(--border)]">
               {user.avatarInitials}
             </div>
             <IconBtn ariaLabel="Log out" onClick={logout}>
-              <LogOut className="h-4 w-4" />
+              <LogOut className="h-3.5 w-3.5" />
             </IconBtn>
           </div>
         </div>
@@ -97,7 +98,7 @@ function IconBtn({
 }) {
   return (
     <button
-      className="focus-ring interactive-press rounded-[var(--radius-sm)] p-2 text-[var(--muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--foreground)]"
+      className="focus-ring interactive-press rounded-[2px] p-1.5 text-[var(--muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--foreground)]"
       aria-label={ariaLabel}
       type="button"
       onClick={onClick}

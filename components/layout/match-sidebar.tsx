@@ -24,21 +24,47 @@ import { cn } from "@/lib/utils";
 
 const STORAGE_KEY = "pitchline.matchSidebar.expanded";
 
-const items = [
-  { slug: "", label: "Desk", icon: LayoutGrid },
-  { slug: "packs", label: "Research", icon: Sparkles },
-  { slug: "scripts", label: "Scripts", icon: Mic2 },
-  { slug: "stats", label: "Stats", icon: Target },
-  { slug: "league", label: "League", icon: Trophy },
-  { slug: "news", label: "News", icon: Newspaper },
-  { slug: "notes", label: "Notes", icon: StickyNote },
-  { slug: "squad", label: "Squad", icon: Users },
-  { slug: "injuries", label: "Injuries", icon: HeartPulse },
-  { slug: "scorers", label: "Scorers", icon: Target },
-  { slug: "venue", label: "Venue", icon: MapPin },
-  { slug: "clubs", label: "Clubs", icon: Building2 },
-  { slug: "weather", label: "Weather", icon: CloudSun },
-  { slug: "print", label: "Export", icon: Printer },
+type NavItem = {
+  slug: string;
+  label: string;
+  icon: typeof LayoutGrid;
+};
+
+type NavSection = { id: string; label: string; items: NavItem[] };
+
+const sections: NavSection[] = [
+  {
+    id: "prep",
+    label: "Prep",
+    items: [
+      { slug: "", label: "Desk", icon: LayoutGrid },
+      { slug: "packs", label: "Research", icon: Sparkles },
+      { slug: "scripts", label: "Scripts", icon: Mic2 },
+      { slug: "notes", label: "Notes", icon: StickyNote },
+    ],
+  },
+  {
+    id: "intel",
+    label: "Intel",
+    items: [
+      { slug: "stats", label: "Stats", icon: Target },
+      { slug: "league", label: "League", icon: Trophy },
+      { slug: "news", label: "News", icon: Newspaper },
+      { slug: "scorers", label: "Scorers", icon: Target },
+      { slug: "injuries", label: "Injuries", icon: HeartPulse },
+    ],
+  },
+  {
+    id: "squad",
+    label: "Squad",
+    items: [
+      { slug: "squad", label: "Squad", icon: Users },
+      { slug: "venue", label: "Venue", icon: MapPin },
+      { slug: "clubs", label: "Clubs", icon: Building2 },
+      { slug: "weather", label: "Weather", icon: CloudSun },
+      { slug: "print", label: "Export", icon: Printer },
+    ],
+  },
 ];
 
 function isMobileViewport() {
@@ -105,46 +131,62 @@ export function MatchSidebar({ matchId }: { matchId: string }) {
     showLabels: boolean;
     onNavigate?: () => void;
   }) => (
-    <ul className="flex flex-col gap-0.5 px-1.5">
-      {items.map((item) => {
-        const href = item.slug ? `${base}/${item.slug}` : base;
-        const active =
-          item.slug === ""
-            ? pathname === base
-            : pathname.startsWith(`${base}/${item.slug}`);
-        const Icon = item.icon;
-        return (
-          <li key={item.slug || "overview"}>
-            <Link
-              href={href}
-              onClick={opts.onNavigate}
-              title={item.label}
-              className={cn(
-                "focus-ring group relative flex items-center gap-2.5 rounded-[var(--radius-sm)] px-2 py-2 text-[11px] font-semibold tracking-tight transition-[color,background-color,box-shadow] duration-150",
-                opts.showLabels ? "justify-start" : "justify-center",
-                active
-                  ? "bg-[var(--surface-muted)] text-[var(--foreground)] shadow-[inset_2px_0_0_0_var(--brand)] dark:text-[var(--brand)]"
-                  : "text-[var(--muted)] hover:bg-[var(--surface-muted)]/70 hover:text-[var(--foreground)]"
-              )}
-            >
-              <Icon
-                className={cn(
-                  "h-4 w-4 shrink-0 transition-opacity",
-                  active ? "opacity-100" : "opacity-60 group-hover:opacity-90"
-                )}
-              />
-              {opts.showLabels ? (
-                <span className="truncate uppercase tracking-[0.06em] sm:normal-case sm:tracking-tight">
-                  {item.label}
-                </span>
-              ) : (
-                <span className="sr-only">{item.label}</span>
-              )}
-            </Link>
-          </li>
-        );
-      })}
-    </ul>
+    <div className="flex flex-col gap-0.5 px-1.5 pb-2">
+      {sections.map((section) => (
+        <div key={section.id}>
+          {opts.showLabels ? (
+            <div className="nav-rail-section" aria-hidden>
+              {section.label}
+            </div>
+          ) : (
+            <div
+              className="mx-auto my-1.5 h-px w-5 bg-[var(--border)] first:mt-0.5"
+              aria-hidden
+            />
+          )}
+          <ul className="flex flex-col gap-0.5">
+            {section.items.map((item) => {
+              const href = item.slug ? `${base}/${item.slug}` : base;
+              const active =
+                item.slug === ""
+                  ? pathname === base
+                  : pathname.startsWith(`${base}/${item.slug}`);
+              const Icon = item.icon;
+              return (
+                <li key={item.slug || "overview"}>
+                  <Link
+                    href={href}
+                    onClick={opts.onNavigate}
+                    title={item.label}
+                    className={cn(
+                      "focus-ring nav-rail-link group relative flex items-center gap-2 px-2 py-1.5 text-[10px] font-bold uppercase tracking-[0.08em] transition-[color,background-color,box-shadow] duration-150",
+                      opts.showLabels ? "justify-start" : "justify-center",
+                      active
+                        ? "is-active"
+                        : "text-[var(--muted)] hover:bg-[var(--surface-muted)]/70 hover:text-[var(--foreground)]"
+                    )}
+                  >
+                    <Icon
+                      className={cn(
+                        "h-3.5 w-3.5 shrink-0 transition-opacity",
+                        active
+                          ? "opacity-100"
+                          : "opacity-55 group-hover:opacity-90"
+                      )}
+                    />
+                    {opts.showLabels ? (
+                      <span className="truncate">{item.label}</span>
+                    ) : (
+                      <span className="sr-only">{item.label}</span>
+                    )}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ))}
+    </div>
   );
 
   const chrome = (opts: {
@@ -153,18 +195,16 @@ export function MatchSidebar({ matchId }: { matchId: string }) {
     onNavigate?: () => void;
   }) => (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center justify-between gap-1 border-b border-[var(--border)] px-2 py-2">
+      <div className="flex items-center justify-between gap-1 border-b border-[var(--border)] px-2 py-1.5">
         {opts.showLabels ? (
-          <span className="truncate px-1 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">
-            Match
-          </span>
+          <span className="nav-rail-kicker truncate px-1">Match desk</span>
         ) : (
           <span className="sr-only">Match navigation</span>
         )}
         <button
           type="button"
           onClick={toggle}
-          className="focus-ring interactive-press ml-auto inline-flex h-7 w-7 items-center justify-center rounded-[var(--radius-sm)] text-[var(--muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--foreground)]"
+          className="focus-ring interactive-press ml-auto inline-flex h-6 w-6 items-center justify-center rounded-[2px] text-[var(--muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--foreground)]"
           aria-label={
             opts.collapseLooksExpanded
               ? "Collapse sidebar to icons only"
@@ -173,14 +213,14 @@ export function MatchSidebar({ matchId }: { matchId: string }) {
           title={opts.collapseLooksExpanded ? "Icons only" : "Show labels"}
         >
           {opts.collapseLooksExpanded ? (
-            <ChevronsLeft className="h-4 w-4" />
+            <ChevronsLeft className="h-3.5 w-3.5" />
           ) : (
-            <ChevronsRight className="h-4 w-4" />
+            <ChevronsRight className="h-3.5 w-3.5" />
           )}
         </button>
       </div>
       <nav
-        className="flex-1 overflow-y-auto overflow-x-hidden py-1.5"
+        className="flex-1 overflow-y-auto overflow-x-hidden py-1"
         aria-label="Match sections"
       >
         {renderLinks(opts)}
@@ -194,9 +234,8 @@ export function MatchSidebar({ matchId }: { matchId: string }) {
       <aside
         data-match-sidebar
         className={cn(
-          "desk-chrome match-sidebar relative z-20 hidden shrink-0 flex-col border-r border-[var(--border)] bg-[#0f1319] md:sticky md:top-14 md:flex md:h-[calc(100dvh-3.5rem)]",
-          "dark:bg-[#0f1319]",
-          desktopExpanded ? "md:w-[11.5rem]" : "md:w-[3.25rem]",
+          "desk-chrome match-sidebar nav-rail relative z-20 hidden shrink-0 flex-col border-r border-[var(--border)] md:sticky md:top-11 md:flex md:h-[calc(100dvh-2.75rem)]",
+          desktopExpanded ? "md:w-[11.25rem]" : "md:w-[3rem]",
           "transition-[width] duration-200 ease-out"
         )}
         aria-label="Match navigation sidebar"
@@ -211,8 +250,8 @@ export function MatchSidebar({ matchId }: { matchId: string }) {
       <aside
         data-match-sidebar-mobile
         className={cn(
-          "desk-chrome relative z-20 flex w-[3.25rem] shrink-0 flex-col border-r border-[var(--border)] bg-[#0f1319] md:hidden",
-          "sticky top-14 h-[calc(100dvh-3.5rem)] dark:bg-[#0f1319]"
+          "desk-chrome nav-rail relative z-20 flex w-[3rem] shrink-0 flex-col border-r border-[var(--border)] md:hidden",
+          "sticky top-11 h-[calc(100dvh-2.75rem)]"
         )}
         aria-label="Match navigation"
       >
@@ -236,7 +275,7 @@ export function MatchSidebar({ matchId }: { matchId: string }) {
             }}
           />
           <aside
-            className="absolute inset-y-0 left-0 flex w-[14rem] flex-col border-r border-[var(--border)] bg-[#0f1319] shadow-xl dark:bg-[#0f1319]"
+            className="nav-rail absolute inset-y-0 left-0 flex w-[14rem] flex-col border-r border-[var(--border)] bg-[#0c1016] shadow-xl"
             data-match-sidebar-drawer
           >
             {chrome({

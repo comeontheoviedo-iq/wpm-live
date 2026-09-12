@@ -27,8 +27,8 @@ const steps = [
   },
   {
     n: "4",
-    title: "Paste Notebook in Research",
-    body: "BYO research is core — paste your prep into Research and keep your own voice.",
+    title: "Paste your match prep",
+    body: "Bring your notes. We file them where you need them — CoComms sorts prep into Notes, Scripts, and profiles.",
   },
   {
     n: "5",
@@ -87,7 +87,7 @@ export default function TrainingPage() {
           <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Training hub</h1>
           <p className="mt-3 text-slate-400 text-sm sm:text-base leading-relaxed">
             Videos are coming soon. Until then, follow the written quick-start — Signup → plan → desk →
-            Research paste → organise → matchday.
+            paste prep → organise → matchday.
           </p>
         </div>
 
@@ -117,7 +117,7 @@ export default function TrainingPage() {
                 <NotebookPen className="h-4 w-4 text-teal-300" />
                 How-to video
               </h3>
-              <p className="mt-1 text-sm text-slate-500">Coming soon — Research paste & matchday desk.</p>
+              <p className="mt-1 text-sm text-slate-500">Coming soon — paste your prep & matchday desk.</p>
               <span className="mt-3 inline-block rounded-full border border-white/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                 Placeholder
               </span>
@@ -149,7 +149,7 @@ export default function TrainingPage() {
             {[
               "Trial: 14 days · 3 desks · card-upfront",
               "Cancel anytime from Settings / Customer Portal",
-              "BYO Notebook is the core — paste your own prep and go",
+              "Bring your notes — CoComms files them where you need them",
             ].map((t) => (
               <li key={t} className="flex items-start gap-2">
                 <Check className="mt-0.5 h-4 w-4 shrink-0 text-teal-400" />

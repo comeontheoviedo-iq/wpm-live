@@ -331,7 +331,7 @@ export default function SettingsPage() {
           <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Hub · Settings</p>
           <h1 className="mt-1 text-base font-bold tracking-tight sm:text-lg">Settings</h1>
           <p className="mt-0.5 text-[11px] text-[var(--muted)]">
-            Unlimited (Basic) £22/mo — BYO Notebook is core. AI lab features are testing-only, not a separate paid tier.
+            Unlimited (Basic) £22/mo — bring your notes; we file them where you need them. AI lab features are testing-only, not a separate paid tier.
           </p>
           <div className="mt-2 flex flex-wrap gap-3 text-[11px]">
             <Link href="/faq" className="inline-flex items-center gap-1 text-teal-600 dark:text-teal-400 hover:underline">
@@ -431,7 +431,7 @@ export default function SettingsPage() {
                       {plan?.commercialName || plan?.copy?.unlimited?.name || "Unlimited"} · {plan?.commercialPrice || plan?.copy?.unlimited?.price || "£22"}/mo
                     </div>
                     <p className="text-sm opacity-90 mt-1">
-                      BYO Notebook is core. Full matchday desk — no separate Intel paid tier at launch.
+                      Bring your notes. Full matchday desk — no separate Intel paid tier at launch.
                     </p>
                   </div>
                   <div className="rounded-xl border border-amber-200 dark:border-amber-900/60 bg-amber-50/50 dark:bg-amber-950/20 p-4 space-y-3">
@@ -534,7 +534,7 @@ export default function SettingsPage() {
                       {`Unlimited · ${plan?.copy?.unlimited?.price || plan?.copy?.base.price || "£22"}/mo`}
                     </div>
                     <ul className="mt-2 space-y-1 text-xs text-slate-600 dark:text-slate-300">
-                      {(plan?.copy?.unlimited?.includes || plan?.copy?.base.includes || ["BYO Notebook", "RSS", "Live sync", "OBS / dossiers / Stats"]).map((f) => (
+                      {(plan?.copy?.unlimited?.includes || plan?.copy?.base.includes || ["Paste your match prep", "RSS", "Live sync", "Dossiers / Stats / Scripts"]).map((f) => (
                         <li key={f}>· {f}</li>
                       ))}
                     </ul>
@@ -552,7 +552,7 @@ export default function SettingsPage() {
                     </div>
                     {plan?.override && <p className="text-[11px] text-slate-400">Override active: {plan.override}</p>}
                     <p className="text-[11px] text-slate-400">
-                      Lab status: {plan?.hasIntel ? "AI features unlocked (if AI key set)" : "BYO / RSS only"}
+                      Lab status: {plan?.hasIntel ? "AI features unlocked (if AI key set)" : "Notes paste / RSS only"}
                     </p>
                   </div>
                   <p className="text-xs text-slate-500">{plan?.copy?.rivalCompare || "Unlimited £22/mo — no Intel upsell."}</p>

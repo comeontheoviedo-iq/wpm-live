@@ -2,7 +2,7 @@
  * CoComms / Pitchline plan entitlements.
  *
  * Commercial (launch): one paid plan — Unlimited (Basic) at £22/mo.
- * BYO Notebook is core. Intel is NOT a separate paid tier at launch.
+ * Paste-your-prep is core. Intel is NOT a separate paid tier at launch.
  *
  * Internal Gemini gate (unchanged env): PITCHLINE_PLAN=base|intel + Settings
  * override — for Chris testing / soft AI features, not sold as Intel+.
@@ -174,17 +174,17 @@ export const PLAN_COPY = {
     price: "£22",
     pricePence: 2200,
     interval: "month" as const,
-    blurb: "Full matchday desk with BYO Notebook at the core. One simple plan.",
+    blurb: "Full matchday desk — bring your notes, we file them where you need them. One simple plan.",
     trialDays: 14,
     trialDeskLimit: 3,
     trialBlurb:
       "14-day trial · 3 match desks · converts to £22/mo unless cancelled (card-upfront when billing configured).",
     includes: [
-      "BYO Notebook / Research paste (core)",
+      "Paste your match prep — sorted into Notes, Scripts, profiles",
       "News RSS",
       "Live-feed sync",
       "Notes buckets + relevance heuristics",
-      "OBS overlay, dossiers, Stats, Speaks, Print",
+      "Dossiers, Stats, Scripts, Print",
       "Unlimited match desks on your account",
     ],
   },
@@ -193,13 +193,13 @@ export const PLAN_COPY = {
     name: "Unlimited",
     price: "£22",
     introPrice: "£22",
-    blurb: "Matchday desk with your own research. BYO Notebook is core.",
+    blurb: "Matchday desk with your own research. Bring your notes — we file them where you need them.",
     includes: [
-      "BYO Notebook / Research paste (local organise — no Gemini)",
+      "Paste your match prep — sorted into Notes, Scripts, profiles",
       "News RSS",
       "Live-feed sync",
       "Notes buckets + relevance heuristics",
-      "OBS overlay, dossiers, Stats, Speaks, Print",
+      "Dossiers, Stats, Scripts, Print",
     ],
   },
   /** Lab-only — not shown as a Pricing tier. */
@@ -218,7 +218,7 @@ export const PLAN_COPY = {
       "Soft caps (metering later): ~20 web briefs / mo · ~10 pack gens / mo.",
   },
   rivalCompare:
-    "One plan: Unlimited (Basic) £22/mo. Compare to ~£35/mo rival desks — BYO Notebook is core; no separate Intel upsell at launch.",
+    "One plan: Unlimited (Basic) £22/mo. Compare to ~£35/mo rival desks — bring your notes; no separate Intel upsell at launch.",
   matchPass: {
     name: "Match Desk Pass",
     packs: [

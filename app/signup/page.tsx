@@ -111,7 +111,7 @@ function SignupForm() {
           </p>
           <ul className="space-y-2 text-sm text-teal-50/90">
             {[
-              "BYO Notebook + live feed sync",
+              "Bring your notes + live feed sync",
               "Scripts, pitch board, dossiers",
               "Cancel mid-trial supported on both paths",
             ].map((t) => (

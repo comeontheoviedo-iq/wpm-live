@@ -20,12 +20,12 @@ const faqs: { q: string; a: string }[] = [
     a: "Yes. Unlimited: cancel in the Stripe Customer Portal (Settings → Plan → Manage billing) so you do not convert to £22/mo. Pass: Cancel trial in Settings. You keep access until the trial end date when cancelled mid-trial.",
   },
   {
-    q: "What is BYO Notebook / Research paste?",
-    a: "Bring-your-own research is the product core. Paste notes into Research, organise buckets, and keep your own voice for day-one prep.",
+    q: "How do I bring my notes into CoComms?",
+    a: "Bring your notes. We file them where you need them. Paste your match prep into Research — CoComms sorts it into Notes, Scripts, and profiles so you keep your own voice for day-one prep.",
   },
   {
     q: "What’s included on Unlimited?",
-    a: "BYO Notebook / Research paste, News RSS, live-feed sync, notes buckets, dossiers, Stats, Scripts, Print, and unlimited match desks on your account after the trial.",
+    a: "Paste your match prep into Research, News RSS, live-feed sync, notes buckets, dossiers, Stats, Scripts, Print, and unlimited match desks on your account after the trial.",
   },
   {
     q: "How do Match Desk Pass credits work after the trial?",
@@ -81,7 +81,7 @@ export default function FaqPage() {
           </div>
           <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Frequently asked questions</h1>
           <p className="mt-3 text-slate-400 text-sm sm:text-base leading-relaxed">
-            Warm, short answers for trial, plans, notebook, and cancel. Need the walkthrough? See{" "}
+            Warm, short answers for trial, plans, notes, and cancel. Need the walkthrough? See{" "}
             <Link href="/training" className="text-teal-300 hover:underline">
               Training
             </Link>

@@ -4,7 +4,7 @@ Public page: `/faq` · Training: `/training` · Brand: CoComms (broadcast desk c
 
 ## What is CoComms?
 
-Prep + live match desk for football commentators. BYO Notebook, live feed, Scripts, pitch board, and overlays — built for matchday commentary prep and the broadcast call.
+Prep + live match desk for football commentators. Bring your notes, live feed, Scripts, pitch board, and overlays — built for matchday commentary prep and the broadcast call.
 
 ## Trial
 
@@ -25,13 +25,13 @@ Prep + live match desk for football commentators. BYO Notebook, live feed, Scrip
 - **Pass / app-side:** Settings → Plan → Cancel trial
 - Access continues until trial end when cancelled mid-trial
 
-## BYO Notebook / Research paste
+## Bring your notes / Research paste
 
-Core product. Paste research into Research, organise buckets, and keep your own voice for day-one prep.
+Core product. Paste your match prep — CoComms sorts it into Notes, Scripts, and profiles. Keep your own voice for day-one prep.
 
 ## Unlimited includes
 
-BYO Notebook / Research paste · News RSS · Live-feed sync · Notes buckets · dossiers · Stats · Scripts · Print · unlimited match desks after trial
+Paste your match prep · News RSS · Live-feed sync · Notes buckets · dossiers · Stats · Scripts · Print · unlimited match desks after trial
 
 ## Pass credits after trial
 

@@ -14,8 +14,8 @@ import {
 const pillars = [
   {
     icon: NotebookPen,
-    title: "BYO Notebook at the core",
-    body: "Paste research, organise buckets, and keep your own voice. No scramble through tabs when the fourth official board goes up.",
+    title: "Bring your notes",
+    body: "We file them where you need them. Paste your match prep — CoComms sorts it into Notes, Scripts, and profiles. No scramble through tabs when the fourth official board goes up.",
   },
   {
     icon: Radio,
@@ -92,7 +92,7 @@ export default function MarketingHome() {
                 <span className="text-teal-300">before kick-off</span>.
               </h1>
               <p className="mt-4 max-w-xl text-base leading-relaxed text-slate-400 sm:text-lg">
-                CoComms is prep + live commentary craft: your notebook, live feed,
+                CoComms is prep + live commentary craft: bring your notes, live feed,
                 Scripts, pitch board, and overlays — built for matchday commentary
                 prep and the broadcast call.
               </p>
@@ -142,7 +142,7 @@ export default function MarketingHome() {
                   </div>
                   <div className="mt-4 grid grid-cols-3 gap-2 text-[11px]">
                     {[
-                      { k: "Notebook", v: "Ready" },
+                      { k: "Notes", v: "Ready" },
                       { k: "Hooks", v: "Pinned" },
                       { k: "Overlay", v: "Armed" },
                     ].map((row) => (

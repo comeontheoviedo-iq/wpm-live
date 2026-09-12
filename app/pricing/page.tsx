@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Check } from "lucide-react";
 
 const unlimitedFeatures = [
-  "BYO Notebook / Research paste (core)",
+  "Paste your match prep — sorted into Notes, Scripts, profiles",
   "News RSS",
   "Live-feed sync",
   "Notes buckets + relevance heuristics",

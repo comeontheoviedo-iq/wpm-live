@@ -5,7 +5,7 @@ import { ArrowRight, HelpCircle } from "lucide-react";
 const faqs: { q: string; a: string }[] = [
   {
     q: "What is CoComms?",
-    a: "CoComms is a prep + live match desk for football commentators. Paste your own research, organise notes, run the live desk, and ship broadcast-ready output — built for the call, not another generic SaaS shell.",
+    a: "CoComms is a prep + live match desk for football commentators. Paste your own research, organise notes, run the live desk, and stay ready for kick-off — built for matchday commentary prep and the broadcast call.",
   },
   {
     q: "How does the trial work?",
@@ -21,11 +21,11 @@ const faqs: { q: string; a: string }[] = [
   },
   {
     q: "What is BYO Notebook / Research paste?",
-    a: "Bring-your-own research is the product core. Paste notes into Research, organise buckets, and keep your voice — no Gemini required for day-one prep.",
+    a: "Bring-your-own research is the product core. Paste notes into Research, organise buckets, and keep your own voice for day-one prep.",
   },
   {
     q: "What’s included on Unlimited?",
-    a: "BYO Notebook / Research paste, News RSS, live-feed sync, notes buckets, OBS overlay, dossiers, Stats, Speaks, Print, and unlimited match desks on your account after the trial.",
+    a: "BYO Notebook / Research paste, News RSS, live-feed sync, notes buckets, dossiers, Stats, Scripts, Print, and unlimited match desks on your account after the trial.",
   },
   {
     q: "How do Match Desk Pass credits work after the trial?",
@@ -33,7 +33,7 @@ const faqs: { q: string; a: string }[] = [
   },
   {
     q: "What about my data and privacy?",
-    a: "Match desks and notes are personal to your account — locked to your signed-in user. We do not share your desk content across accounts. Use Settings to manage billing; cancel anytime.",
+    a: "Match desks and notes stay personal to your account. You can opt in so anonymised notes help grow a shared CoComms intel pool — optional, never forced. Use Settings to manage billing; cancel anytime.",
   },
 ];
 

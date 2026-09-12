@@ -11,7 +11,7 @@ const unlimitedFeatures = [
   "News RSS",
   "Live-feed sync",
   "Notes buckets + relevance heuristics",
-  "OBS overlay, dossiers, Stats, Speaks, Print",
+  "Dossiers, Stats, Scripts, Print",
   "Unlimited match desks on your account after trial",
 ];
 

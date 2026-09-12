@@ -20,12 +20,12 @@ const pillars = [
   {
     icon: Radio,
     title: "Live desk that stays out of the way",
-    body: "Pitch board, speaks, dossiers, scorebug craft, and a live event composer built for the call — not a generic dashboard.",
+    body: "Pitch board, Scripts, dossiers, scorebug craft, and a live event composer built for matchday commentary and the broadcast call.",
   },
   {
     icon: MonitorPlay,
     title: "Broadcast-ready output",
-    body: "OBS overlay, print packs, Stats, and match intel shaped for commentators and producers on a real matchday.",
+    body: "Print packs, Stats, and match intel shaped for commentators and producers on a real matchday.",
   },
 ];
 
@@ -77,7 +77,7 @@ export default function MarketingHome() {
       </header>
 
       <main>
-        {/* Hero — desk craft, not SaaS chrome */}
+        {/* Hero — matchday commentary craft */}
         <section className="relative overflow-hidden border-b border-white/5">
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_20%_0%,rgba(45,212,191,0.18),transparent_45%),radial-gradient(ellipse_at_90%_20%,rgba(244,63,94,0.12),transparent_40%),linear-gradient(180deg,#070b12_0%,#0a1524_100%)]" />
           <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-teal-500/40 to-transparent" />
@@ -93,8 +93,8 @@ export default function MarketingHome() {
               </h1>
               <p className="mt-4 max-w-xl text-base leading-relaxed text-slate-400 sm:text-lg">
                 CoComms is prep + live commentary craft: your notebook, live feed,
-                speaks, pitch board, and overlays — tuned for the call, not another
-                blank SaaS shell.
+                Scripts, pitch board, and overlays — built for matchday commentary
+                prep and the broadcast call.
               </p>
               <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
                 <Link
@@ -129,7 +129,7 @@ export default function MarketingHome() {
                   <div className="flex items-center justify-between gap-3">
                     <div className="text-center flex-1">
                       <div className="text-[10px] uppercase tracking-wider text-slate-500">Home</div>
-                      <div className="mt-1 text-lg font-bold">XI · Speaks</div>
+                      <div className="mt-1 text-lg font-bold">XI · Scripts</div>
                     </div>
                     <div className="rounded-lg bg-teal-500/15 px-3 py-2 text-center border border-teal-500/30">
                       <div className="text-[10px] text-teal-300/80">LIVE</div>
@@ -158,7 +158,7 @@ export default function MarketingHome() {
                 </div>
                 <div className="mt-3 flex items-center gap-2 text-[11px] text-slate-500">
                   <Clapperboard className="h-3.5 w-3.5 text-teal-400" />
-                  Broadcast desk craft — not generic project software
+                  Built for matchday commentary prep
                 </div>
               </div>
             </div>

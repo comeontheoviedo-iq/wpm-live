@@ -4,7 +4,7 @@ Public page: `/faq` · Training: `/training` · Brand: CoComms (broadcast desk c
 
 ## What is CoComms?
 
-Prep + live match desk for football commentators. BYO Notebook, live feed, speaks, pitch board, overlays — tuned for the call, not generic SaaS.
+Prep + live match desk for football commentators. BYO Notebook, live feed, Scripts, pitch board, and overlays — built for matchday commentary prep and the broadcast call.
 
 ## Trial
 
@@ -27,11 +27,11 @@ Prep + live match desk for football commentators. BYO Notebook, live feed, speak
 
 ## BYO Notebook / Research paste
 
-Core product. Paste research into Research, organise buckets — no Gemini required for day-one prep. AI lab gate is testing-only, not a paid tier.
+Core product. Paste research into Research, organise buckets, and keep your own voice for day-one prep.
 
 ## Unlimited includes
 
-BYO Notebook / Research paste · News RSS · Live-feed sync · Notes buckets · OBS overlay · dossiers · Stats · Speaks · Print · unlimited match desks after trial
+BYO Notebook / Research paste · News RSS · Live-feed sync · Notes buckets · dossiers · Stats · Scripts · Print · unlimited match desks after trial
 
 ## Pass credits after trial
 
@@ -39,7 +39,7 @@ One credit = one match desk. Credits remain after the 14d / 3-desk trial. Top up
 
 ## Data / privacy (light)
 
-Match desks and notes are personal to the signed-in account (`session.userId`). See `docs/TENANCY.md`.
+Match desks and notes stay personal to the signed-in account (`session.userId`). Commentators can **opt in** so anonymised notes help grow a shared CoComms intel pool — optional, never forced. See `docs/TENANCY.md`.
 
 ## Related routes
 

@@ -33,12 +33,12 @@ const steps = [
   {
     n: "5",
     title: "Organise",
-    body: "Sort buckets, pin hooks, and tidy speaks so you are not scrambling when the board goes up.",
+    body: "Sort buckets, pin hooks, and tidy Scripts so you are not scrambling when the board goes up.",
   },
   {
     n: "6",
     title: "Matchday desk",
-    body: "Go live with pitch board, event composer, dossiers, and overlays — broadcast craft, not project software.",
+    body: "Go live with pitch board, event composer, dossiers, and overlays — ready for the broadcast call.",
   },
 ];
 
@@ -149,7 +149,7 @@ export default function TrainingPage() {
             {[
               "Trial: 14 days · 3 desks · card-upfront",
               "Cancel anytime from Settings / Customer Portal",
-              "BYO Notebook is the core — no AI required to start",
+              "BYO Notebook is the core — paste your own prep and go",
             ].map((t) => (
               <li key={t} className="flex items-start gap-2">
                 <Check className="mt-0.5 h-4 w-4 shrink-0 text-teal-400" />

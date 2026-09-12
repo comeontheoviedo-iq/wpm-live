@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "CoComms — Commentary prep & live desk",
   description:
-    "Football commentary preparation and live desk. Prep, speaks, pitch board, and live events — built for matchday.",
+    "Football commentary preparation and live desk. Prep, Scripts, pitch board, and live events — built for matchday.",
 };
 
 export default function RootLayout({

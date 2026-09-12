@@ -51,7 +51,7 @@ export default function LoginPage() {
             Prep sharper. Call cleaner. Go live without the scramble.
           </h1>
           <p className="text-teal-50/90 text-sm leading-relaxed">
-            CoComms is your matchday workspace — speaks, squad boards, injuries,
+            CoComms is your matchday workspace — Scripts, squad boards, injuries,
             venue intel, and a live event composer that stays out of your way.
           </p>
         </div>

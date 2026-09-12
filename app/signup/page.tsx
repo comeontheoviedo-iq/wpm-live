@@ -112,7 +112,7 @@ function SignupForm() {
           <ul className="space-y-2 text-sm text-teal-50/90">
             {[
               "BYO Notebook + live feed sync",
-              "Speaks, pitch board, dossiers, OBS",
+              "Scripts, pitch board, dossiers",
               "Cancel mid-trial supported on both paths",
             ].map((t) => (
               <li key={t} className="flex gap-2">

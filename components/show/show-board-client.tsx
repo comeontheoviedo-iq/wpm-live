@@ -29,6 +29,7 @@ type Creative = {
   assetUrl: string | null;
   status: string;
   sortOrder: number;
+  placeholder?: string | null;
 };
 
 type SocialDraft = {
@@ -56,12 +57,13 @@ export type Board = {
   matchDayId: string;
   status: string;
   statuses: readonly string[] | string[];
-  ytThumbUrl: string;
+  ytThumbUrl: string | null;
   ytTitle: string;
   ytDescription: string;
-  fbCoverUrl: string;
+  fbCoverUrl: string | null;
   igStillUrl: string | null;
-  igStillNote?: string;
+  igStillNote?: string | null;
+  creativesPlaceholder?: string;
   youtubeWatchUrl: string | null;
   restreamExternalUrl: string | null;
   destinationsGate: { pass: boolean; reason: string };
@@ -81,8 +83,15 @@ export type Board = {
     afFixtureId: number | null;
     home: string | null;
     away: string | null;
+    homeShort?: string | null;
+    awayShort?: string | null;
+    homeCrestUrl?: string | null;
+    awayCrestUrl?: string | null;
     kickoff: string | null;
+    kickoffLondon?: string | null;
+    venue?: string | null;
   } | null;
+  creativePackKey?: string | null;
   graphics: {
     rfcStudio: { label: string; note: string; localPro: string };
     overlayUrl: string;
@@ -359,6 +368,68 @@ export function ShowBoardClient({
           </ol>
         </section>
 
+        {/* Match autofill summary */}
+        {board.matchDay ? (
+          <section
+            className="rounded-lg border border-white/10 p-3 sm:p-4"
+            style={{ background: UR_PALETTE.steel }}
+          >
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">
+                Match autofill
+              </div>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => patch({ action: "refresh-from-match" })}
+                className="rounded border border-white/15 bg-black/30 px-2.5 py-1 text-[10px] font-semibold text-white/65 hover:border-[var(--ur-accent)]/50 disabled:opacity-40"
+              >
+                Refresh from match
+              </button>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              {board.matchDay.homeCrestUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={board.matchDay.homeCrestUrl}
+                  alt=""
+                  className="h-10 w-10 object-contain"
+                />
+              ) : null}
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-bold">
+                  {board.matchDay.home} vs {board.matchDay.away}
+                </div>
+                <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-white/50">
+                  <span>{board.matchDay.competition}</span>
+                  {board.matchDay.venue ? <span>{board.matchDay.venue}</span> : null}
+                  {board.matchDay.kickoffLondon ? (
+                    <span className="font-semibold text-white/70">
+                      KO {board.matchDay.kickoffLondon}
+                    </span>
+                  ) : null}
+                  {board.matchDay.afFixtureId ? (
+                    <span>AF #{board.matchDay.afFixtureId}</span>
+                  ) : null}
+                  {board.creativePackKey ? (
+                    <span style={{ color: UR_PALETTE.accent }}>
+                      pack:{board.creativePackKey}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+              {board.matchDay.awayCrestUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={board.matchDay.awayCrestUrl}
+                  alt=""
+                  className="h-10 w-10 object-contain"
+                />
+              ) : null}
+            </div>
+          </section>
+        ) : null}
+
         <div className="grid gap-4 lg:grid-cols-2">
           {/* Destinations gate */}
           <section
@@ -382,8 +453,9 @@ export function ShowBoardClient({
               </span>
             </div>
             <p className="mb-3 text-[11px] text-white/45">
-              Critical U&R runbook gate — scheduled YouTube watch URL must equal
-              Restream destination externalUrl.
+              Critical U&R runbook gate — YouTube watch URL must equal Restream
+              destination externalUrl. Stay empty/stub until U+R wires APIs on
+              handoff — board shows FAIL until both present and equal.
             </p>
             <label className="mb-2 block text-[10px] font-semibold uppercase tracking-wider text-white/40">
               YouTube watch URL
@@ -546,8 +618,11 @@ export function ShowBoardClient({
                   }}
                 >
                   {!c.assetUrl ? (
-                    <div className="flex h-full items-center justify-center text-[10px] uppercase tracking-wider text-white/25">
-                      Asset hook pending
+                    <div className="flex h-full flex-col items-center justify-center gap-1 px-3 text-center text-[10px] uppercase tracking-wider text-white/30">
+                      <span>Awaiting match-specific creatives pack</span>
+                      <span className="normal-case tracking-normal text-white/20">
+                        Never shows another fixture&apos;s art
+                      </span>
                     </div>
                   ) : null}
                   <span
@@ -576,12 +651,12 @@ export function ShowBoardClient({
                       Canva {c.canvaId}
                       <ExternalLink className="h-2.5 w-2.5" />
                     </a>
-                  ) : c.kind === "ig_live" ? (
-                    <div className="text-[10px] text-amber-200/80">
-                      Awaiting British soccer Canva id from Remote desk
-                    </div>
                   ) : (
-                    <div className="text-[10px] text-white/30">Canva TBD · British soccer</div>
+                    <div className="text-[10px] text-amber-200/70">
+                      {c.placeholder ||
+                        board.creativesPlaceholder ||
+                        "Awaiting match-specific creatives pack"}
+                    </div>
                   )}
                   <div className="flex gap-1.5">
                     <button
@@ -642,9 +717,7 @@ export function ShowBoardClient({
                   />
                 ) : (
                   <div className="flex h-14 w-24 shrink-0 flex-col items-center justify-center rounded bg-black/40 px-1 text-center text-[8px] uppercase leading-tight text-white/35 ring-1 ring-white/10">
-                    {s.slot === "were_live"
-                      ? "Awaiting British soccer Canva"
-                      : "No asset"}
+                    Awaiting pack
                   </div>
                 )}
                 <div className="min-w-0 flex-1">

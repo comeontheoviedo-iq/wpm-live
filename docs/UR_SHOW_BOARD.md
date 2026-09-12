@@ -1,6 +1,6 @@
 # U&R Show board — runbook
 
-Personal-account enable for Up & Running match-days. **Not** a separate portal or producer role — Chris enables on his own CoComms account (`chris@ronniedogmedia.com`). Remote football comms desk owns Restream / creatives / OBS after handoff.
+Personal-account enable for Up & Running match-days. **Not** a separate portal or producer role — Chris enables on his own CoComms account (`chris@ronniedogmedia.com`). Remote football comms desk (U+R) owns Restream / creatives / OBS / Postiz after handoff.
 
 ## Privacy allowlist (hard lock)
 
@@ -18,44 +18,79 @@ U&R chrome (Enable U&R, `/show/*`, `/api/show/*`) is visible **only** to emails 
 2. Dashboard → **Enable U&R** on a desk (or open `/show/<matchDayId>` → Enable).
 3. One Show board per claimed MatchDay: `/show/[matchDayId]`.
 
+On Enable (and on board open / `PATCH action=refresh-from-match`): **full autofill from MatchDay**:
+
+- home/away names + crest URLs (AF team logos)
+- competition, venue
+- KO time labelled **Europe/London**
+- YT title + description derived from match
+- overlay URL: `{APP}/match-day/{matchId}/overlay?scorebug=0&flashes=lower`
+- socialDrafts `t_day` / `t_1h` / `were_live` / `ft` with match-specific copy
+
 Tenancy: `session.userId` only (`docs/TENANCY.md`). Claim sets `UrShow.claimedByUserId` to the signed-in user; MatchDay must already be owned. Allowlist is checked **before** tenancy for all U&R routes.
 
 ## Status spine
 
-`Planned → Creatives → Bound → Soundcheck → Live → Done`  
-Advance / back / jump on the board. Persisted on `UrShow.status`.
+`Planned → Creatives → Bound → Soundcheck → Live → Done`
+
+- Manual advance / back / jump still work.
+- **Auto-forward from completeness** (never invents APIs):
+  - → **Creatives** when any match-specific creative asset/Canva id is present
+  - → **Bound** when destinations URL gate PASSes
+- Soundcheck / Live / Done stay manual.
 
 ## Destinations / URL gate
 
-Scheduled **YouTube watch URL** must equal **Restream destination externalUrl**. Board shows **PASS / FAIL**. Critical U&R runbook gate.
+Scheduled **YouTube watch URL** must equal **Restream destination externalUrl**. Board shows **PASS / FAIL**.
 
-## Creatives + social
+URLs stay stub/empty until U+R wires Restream+YT on handoff — **FAIL until both present and equal**. Do not fake create APIs here.
 
-Approve/reject queue with Canva hooks. Direction: **British soccer only** — club crests + match line + KO time (London). No WPM gold; palette `#0B0F14 / #1A2332 / #F4F7FA / #7EB6FF`.
+## Creatives + social (per-show only)
+
+**Never** seed another fixture’s Canva ids or preview art (no Everton / United / Nice / Lille / shared `/ur-creatives/thumb.jpg` defaults).
+
+Placeholder copy when empty: **“Awaiting match-specific creatives pack”**.
+
+| Slot | Hook fields (PATCH) |
+|------|---------------------|
+| YT thumb | `ytThumbUrl`, `ytThumbCanvaId`, `ytThumbCanvaUrl` |
+| FB cover | `fbCoverUrl`, `fbCoverCanvaId`, `fbCoverCanvaUrl` |
+| IG We're Live | `igStillUrl`, `igStillCanvaId`, `igStillCanvaUrl` |
+| Open / HT / FT | `openUrl`/`openCanvaId`/`openCanvaUrl`, `ht*`, `ft*` |
+
+Also: `PATCH { action: "set-assets", ... }` or `action: "creative"` with `assetUrl`/`canvaId`/`canvaUrl`.
+
+Known pack (code): `UR_MATCH_CREATIVE_PACKS` in `lib/ur-show.ts` — applied only when home/away match.
+
+### Strasbourg vs Monaco (current pack)
 
 | Asset | Canva | Preview |
 |-------|-------|---------|
-| YT thumb | `DAHU_BOLwbc` (provisional — may be replaced) · https://www.canva.com/d/zni2rAcLhanH8gL | `/ur-creatives/thumb.jpg` |
-| FB cover | `DAHU_GnpDU8` · https://www.canva.com/d/89dPLgBu5vHYsQ6 | `/ur-creatives/cover.jpg` |
-| IG We're Live | **placeholder** — awaiting confirmed British soccer Canva id | empty |
+| YT thumb | `DAHU_c69KLc` · https://www.canva.com/d/Jl4_OpWSo6paZs0 | `/ur-creatives/strasbourg-monaco/yt1.jpg` |
+| FB cover | `DAHU_QxBX5U` · https://www.canva.com/d/8g_Ybqm87ydLA0s | `/ur-creatives/strasbourg-monaco/fb1.jpg` |
+| IG We're Live | `DAHU_X1BZwI` · https://www.canva.com/d/PGb7QLCk9z7WaH- | `/ur-creatives/strasbourg-monaco/ig1.jpg` |
+| Open / HT / FT | empty TBD — U+R pushes later | — |
 
-Do **not** lock We're Live or a new YT thumb until Remote sends confirmed Canva ids. Chris still picking crest+KO candidates.
+Approve creative → matching social slots schedule (`t_day`, `t_1h`, `were_live`, `ft`). Postiz posting is U+R after approve — stub only here.
 
-**Rejected:** `DAHU_M_olhE` / `live2.jpg` (American-football look) — do not use.
-
-Approve creative → matching social slots schedule (`t_day`, `t_1h`, `were_live`, `ft`).
-
-Board JSON shape: `ytThumbUrl`, `ytTitle`, `ytDescription`, `fbCoverUrl`, `igStillUrl`, `socialDrafts[{ slot, platform, copy, assetUrl, approved }]`.
+Board JSON: `ytThumbUrl`, `ytTitle`, `ytDescription`, `fbCoverUrl`, `igStillUrl`, `socialDrafts[{ slot, platform, copy, assetUrl, approved }]`, `matchDay{ home, away, crests, venue, kickoffLondon, … }`.
 
 ## Restream / YouTube
 
-On claim: placeholder `restreamEventStubId` + `youtubeUpcomingStubId`. **No real Restream/YT API** until keys exist — stub + TODO. Social API wiring is Remote desk’s after handoff.
+On claim: placeholder `restreamEventStubId` + `youtubeUpcomingStubId`. **No real Restream/YT API** — U+R creates on handoff. Social/Postiz wiring is Remote desk’s after handoff.
 
 ## Ready for desk handoff
 
-Button packages: AF fixture id, match-day id, overlay URL (`/match-day/<matchId>/overlay?scorebug=0&flashes=lower`), approved creatives/social, destination gate. Writes in-app `UrHandoffLog`. Optional `UR_HANDOFF_WEBHOOK_URL`.
+Button packages complete JSON for Remote football comms desk:
 
-**Consumer:** Remote football comms desk.
+- AF fixture id, matchDayId, matchId
+- overlay URL + params (`scorebug=0&flashes=lower`)
+- destinations + gate
+- approved creatives + approved social drafts
+- YT title/desc, thumb/cover/IG urls, canva metadata
+- match autofill block
+
+Writes in-app `UrHandoffLog`. Optional `UR_HANDOFF_WEBHOOK_URL` POSTs the same payload when set.
 
 ## Graphics checklist
 
@@ -64,12 +99,12 @@ Button packages: AF fixture id, match-day id, overlay URL (`/match-day/<matchId>
 
 ## API
 
-| Method | Path |
-|--------|------|
-| GET/PATCH | `/api/show/[matchDayId]` |
-| POST | `/api/show/[matchDayId]/claim` |
-| POST | `/api/show/[matchDayId]/status` |
-| POST | `/api/show/[matchDayId]/handoff` |
+| Method | Path | Notes |
+|--------|------|--------|
+| GET/PATCH | `/api/show/[matchDayId]` | GET refreshes autofill; PATCH destinations / creatives / `set-assets` / `refresh-from-match` |
+| POST | `/api/show/[matchDayId]/claim` | Enable U&R + autofill (+ known pack if any) |
+| POST | `/api/show/[matchDayId]/status` | Advance / back / jump |
+| POST | `/api/show/[matchDayId]/handoff` | Package JSON + optional webhook |
 
 ## Schema
 

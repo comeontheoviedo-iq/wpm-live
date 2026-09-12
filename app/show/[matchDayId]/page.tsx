@@ -5,6 +5,8 @@ import {
   claimMatchDayForUr,
   findOwnedUrShow,
   toBoardJson,
+  refreshUrShowFromMatch,
+  maybeAdvanceUrStatusFromCompleteness,
 } from "@/lib/ur-show";
 import { ShowBoardClient } from "@/components/show/show-board-client";
 import { ClaimUrButton } from "@/components/show/claim-ur-button";
@@ -47,6 +49,14 @@ export default async function ShowBoardPage({
       />
     );
   }
+
+  // Autofill + strip legacy wrong-fixture art / apply known pack (e.g. Strasbourg–Monaco)
+  const refreshed = await refreshUrShowFromMatch(matchDayId, user.id, {
+    forceText: true,
+  });
+  if (refreshed.ok) show = refreshed.show;
+  await maybeAdvanceUrStatusFromCompleteness(matchDayId, user.id);
+  show = (await findOwnedUrShow(matchDayId, user.id)) || show;
 
   return (
     <ShowBoardClient

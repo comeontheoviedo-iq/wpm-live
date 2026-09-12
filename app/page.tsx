@@ -178,7 +178,7 @@ export default function MarketingHome() {
                     </span>
                   </div>
                   <span className="hidden font-[family-name:var(--font-plex-mono)] text-[9px] uppercase tracking-[0.14em] text-slate-600 sm:inline">
-                    Trailer · ~40s
+                    Trailer · 30s
                   </span>
                 </div>
                 <div className="relative aspect-video bg-[#03050a]">
@@ -214,7 +214,7 @@ export default function MarketingHome() {
                 </div>
                 <div className="flex items-center justify-between gap-3 border-t border-white/10 bg-[#0a0d12] px-3 py-2">
                   <p className="text-[11px] leading-relaxed text-slate-500">
-                    ~40s trailer — pitch alive, ticker, STATS, LEAGUE & HOOKS.
+                    30s promo — matchday prep, organised. Try it free.
                   </p>
                   <span className="shrink-0 font-[family-name:var(--font-plex-mono)] text-[9px] uppercase tracking-[0.12em] text-amber-400/80">
                     Stay on the call

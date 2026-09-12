@@ -19,6 +19,7 @@ import {
   Pin,
   SlidersHorizontal,
   History,
+  LayoutTemplate,
 } from "lucide-react";
 import { PitchBoard, type PitchPlayer } from "@/components/match/pitch";
 import type { MatchKitColors } from "@/lib/kit-colors";
@@ -44,6 +45,7 @@ import { PlayerDossier } from "@/components/match/player-dossier";
 import { ClubDossier } from "@/components/match/club-dossier";
 import { SpeakNameButton } from "@/components/match/speak-name-button";
 import { FieldSettingsModal } from "@/components/match/field-settings-modal";
+import { HooksPosterOverlay } from "@/components/match/hooks-poster-overlay";
 import { EventTimeline } from "@/components/match/event-timeline";
 import { EventComposer } from "@/components/live/event-composer";
 import { Button } from "@/components/ui/button";
@@ -614,6 +616,10 @@ export function MatchDesk({
     DEFAULT_FIELD_SETTINGS
   );
   const [fieldSettingsOpen, setFieldSettingsOpen] = useState(false);
+  const [hooksPosterOpen, setHooksPosterOpen] = useState(false);
+  const [hooksPosterExists, setHooksPosterExists] = useState(false);
+  const [hooksPosterSrc, setHooksPosterSrc] = useState<string | null>(null);
+  const hooksWasFullscreenRef = useRef(false);
   const [fieldSettingsTab, setFieldSettingsTab] =
     useState<FieldSettingsTab>("player");
   const openFieldSettings = useCallback((tab: FieldSettingsTab = "player") => {
@@ -698,6 +704,77 @@ export function MatchDesk({
   const updateFieldSettings = useCallback((next: FieldSettings) => {
     setFieldSettings(next);
     saveFieldSettings(next);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/matches/${matchId}/hooks-poster?meta=1`,
+          { cache: "no-store" }
+        );
+        if (!res.ok || cancelled) return;
+        const json = (await res.json()) as {
+          exists?: boolean;
+          updatedAt?: string;
+        };
+        if (cancelled) return;
+        const exists = Boolean(json.exists);
+        setHooksPosterExists(exists);
+        if (exists) {
+          const bust = json.updatedAt
+            ? encodeURIComponent(json.updatedAt)
+            : String(Date.now());
+          setHooksPosterSrc(
+            `/api/matches/${matchId}/hooks-poster?t=${bust}`
+          );
+        } else {
+          setHooksPosterSrc(null);
+        }
+      } catch {
+        if (!cancelled) {
+          setHooksPosterExists(false);
+          setHooksPosterSrc(null);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [matchId]);
+
+  const openHooksPoster = useCallback(() => {
+    if (!hooksPosterExists || !hooksPosterSrc) {
+      setMsg("Upload a HOOKS poster in Research first");
+      return;
+    }
+    hooksWasFullscreenRef.current = isFullscreen;
+    setHooksPosterOpen(true);
+  }, [hooksPosterExists, hooksPosterSrc, isFullscreen]);
+
+  const closeHooksPoster = useCallback(() => {
+    setHooksPosterOpen(false);
+    // Native Esc may exit document fullscreen — re-enter desk FS if we had it.
+    window.setTimeout(() => {
+      if (!hooksWasFullscreenRef.current) return;
+      const node = deskRootRef.current as
+        | (HTMLElement & { webkitRequestFullscreen?: () => void })
+        | null;
+      const doc = document as Document & {
+        webkitFullscreenElement?: Element | null;
+        webkitRequestFullscreen?: () => void;
+      };
+      const active =
+        document.fullscreenElement || doc.webkitFullscreenElement;
+      if (active || !node) return;
+      try {
+        if (node.requestFullscreen) void node.requestFullscreen();
+        else if (node.webkitRequestFullscreen) node.webkitRequestFullscreen();
+      } catch {
+        /* ignore */
+      }
+    }, 50);
   }, []);
 
   const markerPct = effectiveMarkerPct(fieldSettings, isFullscreen);
@@ -1125,13 +1202,15 @@ export function MatchDesk({
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key !== "Escape") return;
+      // HOOKS poster owns Esc while open (capture handler on overlay).
+      if (hooksPosterOpen) return;
       setPlacing(null);
       setMsg(null);
       clearAllLivePopups();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [clearAllLivePopups]);
+  }, [clearAllLivePopups, hooksPosterOpen]);
 
   const reopenIntelHistory = useCallback(
     (item: LivePopup) => {
@@ -2581,6 +2660,26 @@ export function MatchDesk({
             <Sparkles className="h-3 w-3" />
             Research{packCount ? ` (${packCount})` : ""}
           </Link>
+          <button
+            type="button"
+            className={cn(
+              "desk-btn font-bold tracking-[0.08em]",
+              hooksPosterExists
+                ? "border-teal-400/40 text-teal-100"
+                : "opacity-45"
+            )}
+            disabled={!hooksPosterExists}
+            onClick={openHooksPoster}
+            title={
+              hooksPosterExists
+                ? "HOOKS poster (Esc to close)"
+                : "Upload HOOKS poster in Research"
+            }
+            aria-label="HOOKS poster"
+          >
+            <LayoutTemplate className="h-3 w-3" />
+            HOOKS
+          </button>
           {!apiFootballFixtureId && (
             <Link
               href={`/match-day/${matchId}/prep`}
@@ -3390,6 +3489,12 @@ export function MatchDesk({
           }}
         />
       )}
+
+      <HooksPosterOverlay
+        open={hooksPosterOpen}
+        src={hooksPosterSrc}
+        onClose={closeHooksPoster}
+      />
 
       <FieldSettingsModal
         open={fieldSettingsOpen}

@@ -56,3 +56,6 @@ data/feedback.jsonl
 
 # Local Netlify folder
 .netlify
+
+# Local HOOKS poster cache (prod uses Netlify Blobs)
+data/hooks-posters/

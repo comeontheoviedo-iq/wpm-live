@@ -27,3 +27,9 @@ export function clampPitchCoord(n: unknown): number | null {
   // 0.01% precision — tiny commentary nudges must stick first try (was 0.1).
   return Math.max(0, Math.min(100, Math.round(v * 100) / 100));
 }
+
+/** Mirror a landscape pitch % across the centre (HT side flip). */
+export function mirrorPitchCoord(n: number | null | undefined): number | null {
+  if (n == null || !Number.isFinite(n)) return null;
+  return clampPitchCoord(100 - Number(n));
+}

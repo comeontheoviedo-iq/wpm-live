@@ -3,7 +3,7 @@
  * Persist DnD swaps / free-move so AF sync does not wipe commentary placement.
  */
 import { prisma } from "./prisma";
-import { clampPitchCoord } from "./player-overrides";
+import { clampPitchCoord, mirrorPitchCoord } from "./player-overrides";
 
 export type PlacementInput = {
   matchId: string;
@@ -140,7 +140,13 @@ export async function reapplyPitchPlacements(matchId: string) {
     if (!row.formationSlot) continue;
     const player = await prisma.player.findUnique({
       where: { id: row.playerId },
-      select: { id: true, clubId: true, formationSlot: true },
+      select: {
+        id: true,
+        clubId: true,
+        formationSlot: true,
+        onPitch: true,
+        isStarter: true,
+      },
     });
     if (!player) continue;
     if (
@@ -148,6 +154,12 @@ export async function reapplyPitchPlacements(matchId: string) {
       player.clubId !== match.awayClubId
     )
       continue;
+
+    // Live subs park leavers on BENCH / off-pitch. Never resurrect them into
+    // ST/LW (etc.) from a stale override — that wiped the sub-on and left
+    // empty dashed slots on the Venezia–Fiorentina desk.
+    if (player.formationSlot === "BENCH") continue;
+    if (!player.onPitch && !player.isStarter) continue;
 
     const occupant = await prisma.player.findFirst({
       where: {
@@ -158,8 +170,19 @@ export async function reapplyPitchPlacements(matchId: string) {
       },
     });
     if (occupant) {
+      // Prefer keeping the live occupant when the override player is the same
+      // slot already — only swap when both are active on-pitch commentary moves.
       const prev = player.formationSlot;
-      if (prev && prev !== row.formationSlot) {
+      if (prev && prev !== row.formationSlot && (player.onPitch || player.isStarter)) {
+        await prisma.player.update({
+          where: { id: occupant.id },
+          data: {
+            formationSlot: prev,
+            isStarter: true,
+            onPitch: true,
+          },
+        });
+      } else if (prev && prev !== row.formationSlot) {
         await prisma.player.update({
           where: { id: occupant.id },
           data: {
@@ -169,10 +192,11 @@ export async function reapplyPitchPlacements(matchId: string) {
           },
         });
       } else {
-        await prisma.player.update({
-          where: { id: occupant.id },
-          data: { formationSlot: null, isStarter: false, onPitch: false },
-        });
+        // Occupant already holds this slot for a live XI — do not clear them
+        // just to re-stamp the same override player.
+        if (occupant.id !== player.id) {
+          continue;
+        }
       }
     }
 
@@ -187,4 +211,38 @@ export async function reapplyPitchPlacements(matchId: string) {
     applied++;
   }
   return { applied };
+}
+
+/**
+ * HT / side-flip: mirror every free-place pitchX/pitchY so manually moved
+ * players travel with the teams (official slots already re-layout via homeOnLeft).
+ */
+export async function mirrorAllFreePlaceCoords(matchId: string) {
+  const rows = await prisma.matchPlayerOverride.findMany({
+    where: {
+      matchId,
+      OR: [{ pitchX: { not: null } }, { pitchY: { not: null } }],
+    },
+  });
+  let mirrored = 0;
+  for (const row of rows) {
+    const pitchX = mirrorPitchCoord(row.pitchX);
+    const pitchY = mirrorPitchCoord(row.pitchY);
+    if (pitchX === row.pitchX && pitchY === row.pitchY) continue;
+    await prisma.matchPlayerOverride.update({
+      where: { id: row.id },
+      data: { pitchX, pitchY },
+    });
+    mirrored++;
+  }
+  return { mirrored };
+}
+
+/** Clear slot/coords override when a player is subbed off (keeps name/flag). */
+export async function clearPlacementAfterSub(matchId: string, playerId: string) {
+  return upsertPitchPlacement({
+    matchId,
+    playerId,
+    clearPlacement: true,
+  });
 }

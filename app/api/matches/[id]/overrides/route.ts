@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { clampPitchCoord } from "@/lib/player-overrides";
 import {
   clearAllPitchPlacements,
+  mirrorAllFreePlaceCoords,
   upsertPitchPlacement,
 } from "@/lib/pitch-placement";
 
@@ -50,7 +51,8 @@ export async function GET(
 /**
  * PATCH upsert one player override.
  * Body: { playerId, displayName?, pronunciation?, pitchFlag?, jerseyNumber?,
- *         formationSlot?, pitchX?, pitchY?, clear?: boolean, clearPlacements?: boolean }
+ *         formationSlot?, pitchX?, pitchY?, clear?: boolean, clearPlacements?: boolean,
+ *         mirrorFreePlace?: boolean }
  */
 export async function PATCH(
   req: Request,
@@ -64,6 +66,11 @@ export async function PATCH(
   if (body.clearPlacements === true && !body.playerId) {
     const r = await clearAllPitchPlacements(matchId);
     return NextResponse.json({ clearedPlacements: r.cleared });
+  }
+
+  if (body.mirrorFreePlace === true && !body.playerId) {
+    const r = await mirrorAllFreePlaceCoords(matchId);
+    return NextResponse.json({ mirrored: r.mirrored });
   }
 
   const playerId = String(body.playerId || "").trim();

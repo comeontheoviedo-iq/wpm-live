@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { jwtVerify } from "jose";
 
-const publicPaths = ["/login", "/pricing"];
+const publicPaths = ["/login", "/signup", "/pricing"];
 
 /** OBS Browser Source has no login cookie — allow transparent overlay pages. */
 function isObsOverlayPath(pathname: string) {
@@ -14,12 +14,9 @@ function isObsOverlayPath(pathname: string) {
 }
 
 function withPathname(req: NextRequest, res: NextResponse) {
-  // Request header so server layouts can read via headers()
   const requestHeaders = new Headers(req.headers);
   requestHeaders.set("x-pathname", req.nextUrl.pathname);
-  // Rebuild next() responses with the mutated request headers.
   if (res.status >= 300 && res.status < 400) {
-    // redirects — keep as-is; overlay detection only needed for page renders
     return res;
   }
   return NextResponse.next({
@@ -59,17 +56,19 @@ export async function middleware(req: NextRequest) {
     }
   }
 
+  // Marketing homepage for guests; signed-in users go to the desk hub
   if (pathname === "/") {
-    return NextResponse.redirect(
-      new URL(authed ? "/dashboard" : "/login", req.url)
-    );
+    if (authed) {
+      return NextResponse.redirect(new URL("/dashboard", req.url));
+    }
+    return withPathname(req, NextResponse.next());
   }
 
   if (!authed && !isPublic && !pathname.startsWith("/api/")) {
     return NextResponse.redirect(new URL("/login", req.url));
   }
 
-  if (authed && pathname === "/login") {
+  if (authed && (pathname === "/login" || pathname === "/signup")) {
     return NextResponse.redirect(new URL("/dashboard", req.url));
   }
 

@@ -5,6 +5,8 @@ Brand: CoComms (Pitchline rebrand). Demo login: demo@pitchline.app / demo1234
 
 ## Plans (business model)
 
+**Trial** — 14 days · 3 match desks · converts to Unlimited £22/mo unless cancelled. Card-upfront Checkout when billing keys exist; otherwise app-side trial + Settings cancel. See `docs/TRIAL.md`.
+
 **Unlimited (Basic) £22/mo** — single commercial plan at launch. BYO Notebook is the product core.
 - BYO Notebook / Research paste (local organise — no Gemini required)
 - News RSS
@@ -15,7 +17,7 @@ Brand: CoComms (Pitchline rebrand). Demo login: demo@pitchline.app / demo1234
 
 **Intel is not a separate paid tier at launch.** Gemini brief / Auto Gen / note-draft remain behind an internal AI lab gate (`PITCHLINE_PLAN=base|intel` + Settings testing toggle) for Chris — not sold as Intel+.
 
-Stripe: Checkout/portal for Unlimited when `STRIPE_SECRET_KEY` + `STRIPE_PRICE_UNLIMITED` exist; otherwise app-side plan model + Pricing copy + TODO for keys.
+Billing: Checkout/portal for Unlimited when `STRIPE_SECRET_KEY` + `STRIPE_PRICE_UNLIMITED` exist; otherwise app-side trial + plan model + Pricing copy + TODO for keys.
 
 ## Tenancy
 
@@ -28,7 +30,7 @@ Core commentary workflows with strong UX, live desk, mobile and automation.
 Next.js App Router, TypeScript, Tailwind, Prisma + Postgres (Netlify), seed data.
 
 ## Screens
-Auth, Dashboard, Match Day (pitch + widgets), Speaks, Prep, Injuries, Scorers/Keepers,
+Marketing homepage (`/`), Signup trial, Auth, Dashboard, Match Day (pitch + widgets), Speaks, Prep, Injuries, Scorers/Keepers,
 Penalties, Venue, Clubs, Weather, Fans, Live event composer, Print/Export, Settings,
 Pricing, Feedback.
 

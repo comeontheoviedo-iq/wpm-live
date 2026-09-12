@@ -20,12 +20,14 @@ async function main() {
       role: "commentator",
       avatarInitials: "CB",
       theme: "system",
+      billingStatus: "active",
     },
     update: {
       passwordHash,
       name: "Chris Beaumont",
       role: "commentator",
       avatarInitials: "CB",
+      billingStatus: "active",
     },
   });
 

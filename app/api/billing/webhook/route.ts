@@ -8,7 +8,8 @@ import { stripePublicStatus } from "@/lib/stripe";
  *   1. Create webhook endpoint → https://www.cocomms.online/api/billing/webhook
  *   2. Events: checkout.session.completed, customer.subscription.updated|deleted
  *   3. Set STRIPE_WEBHOOK_SECRET in Netlify env
- *   4. Persist subscription status on User (schema field TBD)
+ *   4. Persist on User: billingStatus=active|cancelled, stripeCustomerId, stripeSubscriptionId
+ *   5. Trial desk cap remains enforced in lib/trial until status is active
  */
 export async function POST(req: Request) {
   const secret = process.env.STRIPE_WEBHOOK_SECRET?.trim();

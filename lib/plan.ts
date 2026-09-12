@@ -175,8 +175,12 @@ export const PLAN_COPY = {
     pricePence: 2200,
     interval: "month" as const,
     blurb: "Full matchday desk with BYO Notebook at the core. One simple plan.",
+    trialDays: 14,
+    trialDeskLimit: 3,
+    trialBlurb:
+      "14-day trial · 3 match desks · converts to £22/mo unless cancelled (card-upfront when billing configured).",
     includes: [
-      "BYO Notebook / Research paste (core — no Gemini required)",
+      "BYO Notebook / Research paste (core)",
       "News RSS",
       "Live-feed sync",
       "Notes buckets + relevance heuristics",
@@ -239,8 +243,8 @@ export function planStatus() {
     canGeminiRelevantRerank: canGeminiRelevantRerank(),
     copy: PLAN_COPY,
     stripe: stripe.configured
-      ? `Stripe ${stripe.mode} — Checkout ready for Unlimited £22.`
-      : "Stripe keys missing — app-side Unlimited £22 model live; TODO: add STRIPE_SECRET_KEY + price id in Netlify env.",
+      ? `Billing ${stripe.mode} — card-upfront 14-day trial then Unlimited £22.`
+      : "Billing keys missing — app-side 14-day / 3-desk trial live; TODO: add STRIPE_SECRET_KEY + STRIPE_PRICE_UNLIMITED in Netlify env.",
     stripeConfigured: stripe.configured,
     stripeMode: stripe.mode,
   };

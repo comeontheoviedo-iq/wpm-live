@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Check } from "lucide-react";
 
 const unlimitedFeatures = [
-  "BYO Notebook / Research paste (core — no Gemini required)",
+  "BYO Notebook / Research paste (core)",
   "News RSS",
   "Live-feed sync",
   "Notes buckets + relevance heuristics",
@@ -26,15 +26,12 @@ export default function PricingPage() {
       const res = await fetch("/api/billing/checkout", { method: "POST" });
       const json = await res.json().catch(() => ({}));
       if (res.status === 401) {
-        window.location.href = "/login?next=/pricing";
+        window.location.href = "/signup?next=/pricing";
         return;
       }
       if (res.status === 503) {
         setMsg(
-          String(
-            json.todo ||
-              "Stripe keys not set yet — sign in to use the desk. Chris: add STRIPE_SECRET_KEY + STRIPE_PRICE_UNLIMITED in Netlify."
-          )
+          "Billing not configured yet — create an account to start the 14-day / 3-desk app-side trial. Chris: add billing keys + Unlimited £22 price in Netlify for card-upfront Checkout."
         );
         return;
       }
@@ -50,16 +47,22 @@ export default function PricingPage() {
   }
 
   return (
-    <div className="min-h-screen">
-      <header className="border-b border-slate-200 dark:border-slate-800">
+    <div className="min-h-screen bg-[#070b12] text-slate-100">
+      <header className="border-b border-white/10">
         <div className="mx-auto max-w-5xl px-4 h-14 flex items-center justify-between">
-          <Logo href="/login" />
+          <Logo href="/" />
           <div className="flex items-center gap-3 text-sm">
-            <Link href="/settings" className="text-slate-500 hover:text-teal-600 hidden sm:inline">
-              Settings
+            <Link href="/" className="text-slate-400 hover:text-teal-300 hidden sm:inline">
+              Home
             </Link>
-            <Link href="/login" className="text-teal-600 font-medium">
+            <Link href="/login" className="text-slate-300 hover:text-white">
               Sign in
+            </Link>
+            <Link
+              href="/signup"
+              className="rounded-lg bg-teal-500 px-3 py-1.5 text-sm font-semibold text-slate-950 hover:bg-teal-400"
+            >
+              Start trial
             </Link>
           </div>
         </div>
@@ -69,40 +72,46 @@ export default function PricingPage() {
           <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
             One plan. Unlimited matchday desk.
           </h1>
-          <p className="mt-3 text-slate-500">
-            Unlimited (Basic) at £22/mo — BYO Notebook is the core. No separate
-            Intel tier at launch. Compare to ~£35/mo rivals.
+          <p className="mt-3 text-slate-400">
+            Start with a 14-day trial (3 match desks). Converts to Unlimited £22/mo
+            unless you cancel in Settings. BYO Notebook is the core — no separate
+            AI upsell at launch.
           </p>
         </div>
         <div className="max-w-md mx-auto">
-          <div className="rounded-2xl border border-teal-500 shadow-lg shadow-teal-900/10 bg-gradient-to-b from-teal-50 to-white dark:from-teal-950 dark:to-slate-900 p-6 flex flex-col">
-            <div className="text-sm font-semibold text-teal-700 dark:text-teal-300">
+          <div className="rounded-2xl border border-teal-500/50 shadow-lg shadow-teal-900/20 bg-gradient-to-b from-teal-500/10 to-[#0d1524] p-6 flex flex-col">
+            <div className="text-sm font-semibold text-teal-300">
               Unlimited
               <span className="ml-2 text-xs font-normal text-slate-500">also called Basic</span>
             </div>
             <div className="mt-2 flex items-baseline gap-2">
               <span className="text-3xl font-bold">£22</span>
-              <span className="text-sm text-slate-500">/mo</span>
+              <span className="text-sm text-slate-400">/mo after trial</span>
             </div>
-            <p className="mt-2 text-sm text-slate-500">
-              Full commentary prep desk — your Notebook, RSS, live sync, OBS.
+            <p className="mt-2 text-sm text-slate-400">
+              Card-upfront trial when billing is live · 14 days · 3 desks · then £22/mo
             </p>
             <ul className="mt-4 space-y-2 flex-1">
               {unlimitedFeatures.map((f) => (
                 <li key={f} className="flex items-start gap-2 text-sm">
-                  <Check className="h-4 w-4 text-teal-600 mt-0.5 shrink-0" />
+                  <Check className="h-4 w-4 text-teal-400 mt-0.5 shrink-0" />
                   {f}
                 </li>
               ))}
             </ul>
             <div className="mt-6 space-y-2">
+              <Link href="/signup" className="block">
+                <Button className="w-full" variant="primary">
+                  Start 14-day trial
+                </Button>
+              </Link>
               <Button
                 className="w-full"
-                variant="primary"
+                variant="outline"
                 disabled={busy}
                 onClick={startCheckout}
               >
-                {busy ? "Starting checkout…" : "Get Unlimited — £22/mo"}
+                {busy ? "Starting checkout…" : "Checkout / card-upfront trial"}
               </Button>
               <Link href="/login" className="block">
                 <Button className="w-full" variant="outline">
@@ -111,7 +120,7 @@ export default function PricingPage() {
               </Link>
             </div>
             {msg && (
-              <p className="mt-3 text-xs text-slate-500 whitespace-pre-wrap">{msg}</p>
+              <p className="mt-3 text-xs text-slate-400 whitespace-pre-wrap">{msg}</p>
             )}
           </div>
         </div>

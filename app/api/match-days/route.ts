@@ -5,6 +5,7 @@ import { DEFAULT_CHECKLIST, DEFAULT_SCRIPT_SLOTS } from "@/lib/defaults";
 import { ensureClub, parseAfTeamId } from "@/lib/ensure-club";
 import { getFixture, assertFixtureCompatible } from "@/lib/api-football";
 import { leagueIdForCompetition } from "@/lib/competitions";
+import { assertCanCreateDesk } from "@/lib/trial";
 
 function sanitizeCreateError(e: unknown): { status: number; error: string } {
   if (
@@ -62,6 +63,14 @@ export async function POST(req: Request) {
     return NextResponse.json(
       { error: "Session expired — please sign in again" },
       { status: 401 }
+    );
+  }
+
+  const deskGate = await assertCanCreateDesk(session.id);
+  if (!deskGate.ok) {
+    return NextResponse.json(
+      { error: deskGate.error, trial: deskGate.snapshot },
+      { status: deskGate.status }
     );
   }
 

@@ -49,6 +49,23 @@ type PlanStatus = {
   };
 };
 
+type TrialSnapshot = {
+  billingStatus: string;
+  trialActive: boolean;
+  trialDays: number;
+  trialDeskLimit: number;
+  desksUsed: number;
+  desksRemaining: number | null;
+  canCreateDesk: boolean;
+  trialEndsAt: string | null;
+  cancelAtPeriodEnd: boolean;
+  daysRemaining: number | null;
+  convertPrice: string;
+  stripeConfigured: boolean;
+  message: string;
+  cancelPath: string;
+};
+
 export default function SettingsPage() {
   const router = useRouter();
   const { theme, setTheme } = useTheme();
@@ -66,12 +83,22 @@ export default function SettingsPage() {
   const [plan, setPlan] = useState<PlanStatus | null>(null);
   const [planBusy, setPlanBusy] = useState(false);
   const [planMsg, setPlanMsg] = useState<string | null>(null);
+  const [trial, setTrial] = useState<TrialSnapshot | null>(null);
 
   function loadPlan() {
     return fetch("/api/plan")
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => {
         if (j) setPlan(j as PlanStatus);
+      })
+      .catch(() => undefined);
+  }
+
+  function loadTrial() {
+    return fetch("/api/billing/status")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (j?.trial) setTrial(j.trial as TrialSnapshot);
       })
       .catch(() => undefined);
   }
@@ -93,6 +120,7 @@ export default function SettingsPage() {
       })
       .catch(() => undefined);
     loadPlan();
+    loadTrial();
   }, [router]);
 
   async function testApiFootball() {
@@ -156,13 +184,87 @@ export default function SettingsPage() {
       const res = await fetch("/api/billing/portal", { method: "POST" });
       const json = await res.json();
       if (res.status === 503) {
-        setPlanMsg(String(json.todo || "Stripe keys not configured yet."));
+        setPlanMsg(
+          String(
+            json.todo ||
+              "Billing keys not configured yet — use Cancel trial below for app-side cancel."
+          )
+        );
         return;
       }
       if (!res.ok || !json.url) throw new Error(String(json.error || json.hint || "Portal failed"));
       window.location.href = String(json.url);
     } catch (e) {
       setPlanMsg(e instanceof Error ? e.message : "Portal failed");
+    } finally {
+      setPlanBusy(false);
+    }
+  }
+
+  async function startAppTrial() {
+    setPlanBusy(true);
+    setPlanMsg(null);
+    try {
+      const res = await fetch("/api/billing/status", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "start" }) });
+      const json = await res.json();
+      if (res.status === 409) {
+        // Prefer Checkout when billing configured
+        await startUnlimitedCheckout();
+        return;
+      }
+      if (!res.ok) throw new Error(String(json.error || "Could not start trial"));
+      if (json.trial) setTrial(json.trial as TrialSnapshot);
+      setPlanMsg(String(json.message || "Trial started"));
+    } catch (e) {
+      setPlanMsg(e instanceof Error ? e.message : "Could not start trial");
+    } finally {
+      setPlanBusy(false);
+    }
+  }
+
+  async function cancelTrial() {
+    setPlanBusy(true);
+    setPlanMsg(null);
+    try {
+      if (trial?.stripeConfigured) {
+        await openBillingPortal();
+        return;
+      }
+      const res = await fetch("/api/billing/trial", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "cancel" }),
+      });
+      const json = await res.json();
+      if (res.status === 409 && json.usePortal) {
+        await openBillingPortal();
+        return;
+      }
+      if (!res.ok) throw new Error(String(json.error || "Cancel failed"));
+      if (json.trial) setTrial(json.trial as TrialSnapshot);
+      setPlanMsg(String(json.message || "Trial cancelled"));
+    } catch (e) {
+      setPlanMsg(e instanceof Error ? e.message : "Cancel failed");
+    } finally {
+      setPlanBusy(false);
+    }
+  }
+
+  async function resumeTrial() {
+    setPlanBusy(true);
+    setPlanMsg(null);
+    try {
+      const res = await fetch("/api/billing/trial", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "resume" }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(String(json.error || "Resume failed"));
+      if (json.trial) setTrial(json.trial as TrialSnapshot);
+      setPlanMsg(String(json.message || "Trial resumed"));
+    } catch (e) {
+      setPlanMsg(e instanceof Error ? e.message : "Resume failed");
     } finally {
       setPlanBusy(false);
     }
@@ -248,7 +350,7 @@ export default function SettingsPage() {
               <Card>
                 <CardHeader><CardTitle className="flex items-center gap-2"><ClipboardList className="h-4 w-4" /> AI commentary templates</CardTitle></CardHeader>
                 <CardBody className="text-sm space-y-2 text-slate-600 dark:text-slate-300">
-                  <p>On-device template suggestions for goals, cards, VAR, corners — no Gemini. Live desk shortcuts: G goal, Y yellow, R red, S sub, C corner, V VAR, H half-time, F full-time.</p>
+                  <p>On-device template suggestions for goals, cards, VAR, corners — on-device only. Live desk shortcuts: G goal, Y yellow, R red, S sub, C corner, V VAR, H half-time, F full-time.</p>
                 </CardBody>
               </Card>
             )}
@@ -256,10 +358,10 @@ export default function SettingsPage() {
               <Card>
                 <CardHeader><CardTitle className="flex items-center gap-2"><Plug className="h-4 w-4" /> Integrations</CardTitle></CardHeader>
                 <CardBody className="space-y-4 text-sm">
-                  <p className="text-slate-500">Optional keys: live-feed, <code className="font-mono">GEMINI_API_KEY</code>, <code className="font-mono">PITCHLINE_PLAN</code>. Commercial plan is Unlimited £22. A Gemini key alone does <strong>not</strong> unlock Auto Gen — AI lab gate required.</p>
+                  <p className="text-slate-500">Optional keys: live-feed + AI lab env. Commercial plan is Unlimited £22. An AI key alone does <strong>not</strong> unlock Auto Gen — AI lab gate required.</p>
                   <div className="flex flex-wrap gap-2">
                     <span className={apiFootball ? "rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200 px-2.5 py-1 text-xs font-medium" : "rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 px-2.5 py-1 text-xs font-medium"}>Live feed {apiFootball ? "configured" : "not configured"}</span>
-                    <span className={gemini ? "rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200 px-2.5 py-1 text-xs font-medium" : "rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 px-2.5 py-1 text-xs font-medium"}>Gemini key {gemini ? "present" : "not set"}</span>
+                    <span className={gemini ? "rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200 px-2.5 py-1 text-xs font-medium" : "rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 px-2.5 py-1 text-xs font-medium"}>AI key {gemini ? "present" : "not set"}</span>
                     <span className={plan?.hasIntel ? "rounded-full bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-200 px-2.5 py-1 text-xs font-medium" : "rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 px-2.5 py-1 text-xs font-medium"}>Plan {plan?.plan === "intel" ? "Intel" : "Base"}</span>
                   </div>
                   {integrationsHint && <p className="text-xs text-slate-500">{integrationsHint}</p>}
@@ -283,15 +385,51 @@ export default function SettingsPage() {
                       BYO Notebook is core. Full matchday desk — no separate Intel paid tier at launch.
                     </p>
                   </div>
+                  <div className="rounded-xl border border-amber-200 dark:border-amber-900/60 bg-amber-50/50 dark:bg-amber-950/20 p-4 space-y-3">
+                    <div className="font-medium">Trial</div>
+                    <p className="text-xs text-slate-600 dark:text-slate-300">
+                      {trial?.message || "14 days · 3 match desks · converts to Unlimited £22/mo unless cancelled."}
+                    </p>
+                    {trial && (
+                      <div className="flex flex-wrap gap-2 text-[11px] text-slate-500">
+                        <span>Status: {trial.billingStatus}</span>
+                        {trial.daysRemaining != null && <span>· {trial.daysRemaining}d left</span>}
+                        <span>· Desks {trial.desksUsed}/{trial.trialDeskLimit}</span>
+                        {trial.cancelAtPeriodEnd && <span>· Cancel at period end</span>}
+                      </div>
+                    )}
+                    <div className="flex flex-wrap gap-2">
+                      {(!trial || trial.billingStatus === "none" || trial.billingStatus === "expired") && (
+                        <Button type="button" disabled={planBusy} onClick={startAppTrial}>
+                          Start 14-day trial
+                        </Button>
+                      )}
+                      {trial?.trialActive && !trial.cancelAtPeriodEnd && (
+                        <Button type="button" variant="outline" disabled={planBusy} onClick={cancelTrial}>
+                          Cancel trial
+                        </Button>
+                      )}
+                      {trial?.trialActive && trial.cancelAtPeriodEnd && !trial.stripeConfigured && (
+                        <Button type="button" variant="outline" disabled={planBusy} onClick={resumeTrial}>
+                          Resume trial (will convert)
+                        </Button>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-400">
+                      Cancel path: {trial?.cancelPath || "Settings → Plan. Billing portal when keys exist."}
+                    </p>
+                  </div>
                   <div className="rounded-xl border border-teal-200 dark:border-teal-900 p-4 space-y-3">
                     <div className="font-medium">Billing</div>
-                    <p className="text-xs text-slate-500">{plan?.stripe || "Stripe path scaffolds Checkout when keys exist."}</p>
+                    <p className="text-xs text-slate-500">
+                      {plan?.stripe || "Checkout / portal when billing keys exist; otherwise app-side trial above."}
+                    </p>
                     <div className="flex flex-wrap gap-2">
                       <Button type="button" disabled={planBusy} onClick={startUnlimitedCheckout}>
-                        Subscribe Unlimited £22
+                        {trial?.stripeConfigured ? "Start trial with card (→ £22/mo)" : "Subscribe Unlimited £22"}
                       </Button>
                       <Button type="button" variant="outline" disabled={planBusy} onClick={openBillingPortal}>
-                        Manage billing
+                        Manage billing / cancel
                       </Button>
                     </div>
                     {planMsg && <p className="text-xs text-slate-600 dark:text-slate-300 whitespace-pre-wrap">{planMsg}</p>}
@@ -319,7 +457,7 @@ export default function SettingsPage() {
                     </div>
                     {plan?.override && <p className="text-[11px] text-slate-400">Override active: {plan.override}</p>}
                     <p className="text-[11px] text-slate-400">
-                      Lab status: {plan?.hasIntel ? "AI features unlocked (if GEMINI_API_KEY set)" : "BYO / RSS only"}
+                      Lab status: {plan?.hasIntel ? "AI features unlocked (if AI key set)" : "BYO / RSS only"}
                     </p>
                   </div>
                   <p className="text-xs text-slate-500">{plan?.copy?.rivalCompare || "Unlimited £22/mo — no Intel upsell."}</p>

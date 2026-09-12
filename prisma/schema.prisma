@@ -10,18 +10,27 @@ datasource db {
 }
 
 model User {
-  id             String     @id @default(cuid())
-  email          String     @unique
-  passwordHash   String
-  name           String
-  role           String     @default("commentator")
-  avatarInitials String     @default("PL")
-  theme          String     @default("system")
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
-  matchDays      MatchDay[]
-  notes          Note[]
-  speaks         Speak[]
+  id                   String     @id @default(cuid())
+  email                String     @unique
+  passwordHash         String
+  name                 String
+  role                 String     @default("commentator")
+  avatarInitials       String     @default("PL")
+  theme                String     @default("system")
+  /// none | trial | active | cancelled | expired
+  billingStatus        String     @default("none")
+  trialStartedAt       DateTime?
+  trialEndsAt          DateTime?
+  trialCancelledAt     DateTime?
+  /// App-side: do not convert to paid at trial end. Stripe cancel uses Customer Portal.
+  cancelAtPeriodEnd    Boolean    @default(false)
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+  matchDays            MatchDay[]
+  notes                Note[]
+  speaks               Speak[]
 }
 
 model Club {

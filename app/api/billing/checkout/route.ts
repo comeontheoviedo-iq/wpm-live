@@ -51,6 +51,8 @@ export async function POST(req: Request) {
       customer_email: session.email,
       client_reference_id: session.id,
       line_items: [{ price: priceId, quantity: 1 }],
+      // Card-upfront trial → Unlimited £22 unless cancelled in Customer Portal
+      payment_method_collection: "always",
       success_url: successUrl.includes("{CHECKOUT_SESSION_ID}")
         ? successUrl
         : `${successUrl}${successUrl.includes("?") ? "&" : "?"}session_id={CHECKOUT_SESSION_ID}`,
@@ -59,11 +61,14 @@ export async function POST(req: Request) {
         userId: session.id,
         plan: "unlimited",
         product: "cocomms-unlimited",
+        trial: "14d-3desks",
       },
       subscription_data: {
+        trial_period_days: 14,
         metadata: {
           userId: session.id,
           plan: "unlimited",
+          trialDeskLimit: "3",
         },
       },
       allow_promotion_codes: true,
@@ -94,7 +99,7 @@ export async function GET() {
     plan: "unlimited",
     price: "£22",
     message: isStripeConfigured()
-      ? "POST to create Checkout Session for Unlimited."
+      ? "POST to create Checkout Session — 14-day card-upfront trial then Unlimited £22/mo."
       : "Stripe keys missing — Pricing UI still shows £22 Unlimited.",
   });
 }

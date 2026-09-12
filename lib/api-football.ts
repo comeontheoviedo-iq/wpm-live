@@ -64,6 +64,26 @@ export type AfLineup = {
   coach?: { id: number; name: string; photo?: string };
 };
 
+/**
+ * True when AF payload looks like a real Official XI — not a pre-match squad dump.
+ * Today\'s Strasbourg–Monaco feed returned startXI with formation=null and grid=null;
+ * treating that as confirmed mapped players by array order (mids in defence, etc.).
+ */
+export function isUsableOfficialLineup(
+  lineup: AfLineup | null | undefined
+): boolean {
+  const xi = lineup?.startXI || [];
+  if (xi.length < 11) return false;
+  const withGrid = xi.filter((r) =>
+    /^\d+:\d+$/.test(String(r.player?.grid || ""))
+  ).length;
+  const formation = String(lineup?.formation || "").trim();
+  if (formation && withGrid >= 8) return true;
+  // Formation can lag a beat behind grids on some feeds.
+  if (withGrid >= 10) return true;
+  return false;
+}
+
 export type AfEvent = {
   time: { elapsed: number | null; extra: number | null };
   team: { id: number; name: string; logo?: string };
@@ -613,9 +633,16 @@ export function assignSlotsFromStartXI(
     byRow.set(p.row, list);
   }
   const playerRows = [...byRow.keys()].filter((r) => r < 900).sort((a, b) => a - b);
+  const gridCount = parsed.filter((p) => p.hasGrid).length;
+  const gridsReliable = gridCount >= Math.min(8, Math.max(n, 1));
 
   let mapped = false;
-  if (playerRows.length && playerRows.length === lines.length && n === ordered.length) {
+  if (
+    gridsReliable &&
+    playerRows.length &&
+    playerRows.length === lines.length &&
+    n === ordered.length
+  ) {
     mapped = true;
     for (let li = 0; li < lines.length; li++) {
       const rowPlayers = (byRow.get(playerRows[li]) || []).sort((a, b) => a.col - b.col);
@@ -635,12 +662,56 @@ export function assignSlotsFromStartXI(
     }
   }
 
-  if (!mapped && n === ordered.length) {
+  // Grid row/col order only when AF actually sent grids — never array-order on
+  // provisional dumps (all row=999), which put mids in the back line.
+  if (!mapped && gridsReliable && n === ordered.length) {
     const sorted = [...parsed].sort((a, b) => a.row - b.row || a.col - b.col);
     for (let i = 0; i < sorted.length; i++) {
       result[sorted[i].index] = ordered[i].id;
     }
     mapped = true;
+  }
+
+  // No grids: place by AF pos band (G/D/M/F) onto formation lines.
+  if (!mapped && n === ordered.length) {
+    const bandOf = (pos: string) => {
+      const p = String(pos || "").toUpperCase();
+      if (p.startsWith("G")) return 0;
+      if (p.startsWith("D")) return 1;
+      if (p.startsWith("M")) return 2;
+      if (p.startsWith("F") || p.startsWith("A")) return 3;
+      return 2;
+    };
+    const buckets: (typeof parsed)[] = [[], [], [], []];
+    for (const p of parsed) buckets[bandOf(p.pos)].push(p);
+    // Stable within band (AF list order) — no L/R signal without grid.
+    const usedIdx = new Set<number>();
+    for (let li = 0; li < lines.length; li++) {
+      const line = lines[li];
+      const prefer =
+        li === 0 ? [0] : li === 1 ? [1] : li >= lines.length - 1 ? [3, 2] : [2, 1, 3];
+      const picked: typeof parsed = [];
+      for (const b of prefer) {
+        while (picked.length < line.length && buckets[b].length) {
+          const next = buckets[b].shift()!;
+          if (usedIdx.has(next.index)) continue;
+          usedIdx.add(next.index);
+          picked.push(next);
+        }
+      }
+      for (const b of [0, 1, 2, 3]) {
+        while (picked.length < line.length && buckets[b].length) {
+          const next = buckets[b].shift()!;
+          if (usedIdx.has(next.index)) continue;
+          usedIdx.add(next.index);
+          picked.push(next);
+        }
+      }
+      for (let i = 0; i < picked.length; i++) {
+        result[picked[i].index] = line[i].id;
+      }
+    }
+    mapped = result.every(Boolean);
   }
 
   if (!mapped) {

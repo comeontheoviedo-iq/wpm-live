@@ -61,6 +61,7 @@ export async function POST(req: Request) {
       name: user.name,
       avatarInitials: user.avatarInitials,
       theme: user.theme,
+      image: user.image || null,
     };
     await createSession(sessionUser);
 

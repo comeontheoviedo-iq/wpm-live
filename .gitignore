@@ -61,3 +61,7 @@ data/language-requests.jsonl
 
 # Local HOOKS poster cache (prod uses Netlify Blobs)
 data/hooks-posters/
+
+# Local user avatar cache (prod uses Netlify Blobs)
+data/user-avatars/
+data/desk-posters/

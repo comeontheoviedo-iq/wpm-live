@@ -19,7 +19,7 @@ export function AppHeader({
   user,
   matchId,
 }: {
-  user: { name: string; avatarInitials: string };
+  user: { name: string; avatarInitials: string; image?: string | null };
   matchId?: string;
 }) {
   const router = useRouter();
@@ -73,9 +73,23 @@ export function AppHeader({
             >
               <Settings className="h-3.5 w-3.5" />
             </Link>
-            <div className="ml-1 flex h-7 w-7 items-center justify-center rounded-[2px] bg-[var(--surface-elevated)] text-[10px] font-bold text-[var(--foreground)] ring-1 ring-[var(--border)]">
-              {user.avatarInitials}
-            </div>
+            <Link
+              href="/settings"
+              className="ml-1 flex h-7 w-7 items-center justify-center overflow-hidden rounded-[2px] bg-[var(--surface-elevated)] text-[10px] font-bold text-[var(--foreground)] ring-1 ring-[var(--border)]"
+              aria-label={`${user.name} profile`}
+              title={user.name}
+            >
+              {user.image ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={user.image}
+                  alt=""
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                user.avatarInitials
+              )}
+            </Link>
             <IconBtn ariaLabel="Log out" onClick={logout}>
               <LogOut className="h-3.5 w-3.5" />
             </IconBtn>

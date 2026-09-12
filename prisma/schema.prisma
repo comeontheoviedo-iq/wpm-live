@@ -16,6 +16,12 @@ model User {
   name                 String
   role                 String     @default("commentator")
   avatarInitials       String     @default("PL")
+  /// Public path to avatar bytes (e.g. /api/auth/avatar?v=…). Served only for the signed-in owner.
+  image                String?
+  /// Optional short bio shown on profile.
+  bio                  String?
+  /// IANA timezone preference (e.g. Europe/London).
+  timezone             String?
   theme                String     @default("system")
   /// BCP-47 UI locale preference (i18n foundation). See lib/i18n.ts.
   preferredLocale      String     @default("en-GB")

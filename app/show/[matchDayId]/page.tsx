@@ -46,7 +46,7 @@ export default async function ShowBoardPage({
       <ClaimGate
         matchDayId={matchDayId}
         title={matchDay.title}
-        user={{ name: user.name, avatarInitials: user.avatarInitials }}
+        user={{ name: user.name, avatarInitials: user.avatarInitials, image: user.image }}
       />
     );
   }
@@ -62,7 +62,7 @@ export default async function ShowBoardPage({
   return (
     <ShowBoardClient
       initialBoard={toBoardJson(show) as Parameters<typeof ShowBoardClient>[0]["initialBoard"]}
-      user={{ name: user.name, avatarInitials: user.avatarInitials }}
+      user={{ name: user.name, avatarInitials: user.avatarInitials, image: user.image }}
     />
   );
 }
@@ -74,7 +74,7 @@ function ClaimGate({
 }: {
   matchDayId: string;
   title: string;
-  user: { name: string; avatarInitials: string };
+  user: { name: string; avatarInitials: string; image?: string | null };
 }) {
   return (
     <div

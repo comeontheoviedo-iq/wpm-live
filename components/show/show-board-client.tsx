@@ -135,7 +135,7 @@ export function ShowBoardClient({
   user,
 }: {
   initialBoard: Board;
-  user: { name: string; avatarInitials: string };
+  user: { name: string; avatarInitials: string; image?: string | null };
 }) {
   const [board, setBoard] = useState(initialBoard);
   const [busy, setBusy] = useState(false);

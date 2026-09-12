@@ -40,3 +40,7 @@ See `lib/tenancy.ts` (`assertMatchOwned`, `findOwnedNote`, `matchDayOwnerWhere`,
 
 Account preference `sharedIntelOptIn` (default **false**) does **not** change tenancy. Desks and notes remain owner-scoped. Opt-in only gates a future anonymised aggregate pool — see `docs/SHARED_INTEL_OPTIN.md`. Never treat opt-in as permission to read another user's notes.
 
+## Profile
+
+`PATCH /api/auth/me` and `/api/auth/avatar` mutate **only** `session.id`. Email is auth-bound (read-only). Avatar bytes are private to the owner (`GET /api/auth/avatar` requires that session).
+

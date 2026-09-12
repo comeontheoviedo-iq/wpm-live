@@ -15,6 +15,8 @@ export type SessionUser = {
   name: string;
   avatarInitials: string;
   theme: string;
+  /** Serve URL for avatar photo, or null when using initials only. */
+  image: string | null;
 };
 
 export async function hashPassword(password: string) {
@@ -32,6 +34,7 @@ export async function createSession(user: SessionUser) {
     name: user.name,
     avatarInitials: user.avatarInitials,
     theme: user.theme,
+    image: user.image,
   })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
@@ -53,18 +56,48 @@ export async function destroySession() {
   jar.delete(COOKIE);
 }
 
+/**
+ * Resolve signed-in user. Verifies JWT then refreshes profile fields from DB
+ * so Settings edits (name / avatar) show in header without re-login.
+ */
 export async function getSession(): Promise<SessionUser | null> {
   const jar = await cookies();
   const token = jar.get(COOKIE)?.value;
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, secret());
+    const id = String(payload.id);
+    try {
+      const row = await prisma.user.findUnique({
+        where: { id },
+        select: {
+          email: true,
+          name: true,
+          avatarInitials: true,
+          theme: true,
+          image: true,
+        },
+      });
+      if (row) {
+        return {
+          id,
+          email: row.email,
+          name: row.name,
+          avatarInitials: row.avatarInitials || "PL",
+          theme: row.theme || "system",
+          image: row.image || null,
+        };
+      }
+    } catch {
+      /* DB briefly unavailable — fall back to JWT claims */
+    }
     return {
-      id: String(payload.id),
+      id,
       email: String(payload.email),
       name: String(payload.name),
       avatarInitials: String(payload.avatarInitials || "PL"),
       theme: String(payload.theme || "system"),
+      image: payload.image ? String(payload.image) : null,
     };
   } catch {
     return null;
@@ -88,5 +121,6 @@ export async function authenticate(email: string, password: string) {
     name: user.name,
     avatarInitials: user.avatarInitials,
     theme: user.theme,
+    image: user.image || null,
   } satisfies SessionUser;
 }

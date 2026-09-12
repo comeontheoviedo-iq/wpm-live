@@ -29,9 +29,10 @@ const LIGUE_1_ID = 61;
 
 export default function NewMatchDayPage() {
   const router = useRouter();
-  const [user, setUser] = useState<{ name: string; avatarInitials: string }>({
+  const [user, setUser] = useState<{ name: string; avatarInitials: string; image?: string | null }>({
     name: "Commentator",
     avatarInitials: "PL",
+    image: null,
   });
   const [competition, setCompetition] = useState(PRIORITY_COMPETITIONS[0].name);
   const [customCompetition, setCustomCompetition] = useState("");
@@ -59,7 +60,7 @@ export default function NewMatchDayPage() {
     fetch("/api/auth/me")
       .then((r) => r.json())
       .then((j) => {
-        if (j.user) setUser({ name: j.user.name, avatarInitials: j.user.avatarInitials });
+        if (j.user) setUser({ name: j.user.name, avatarInitials: j.user.avatarInitials, image: j.user.image ?? null });
       });
     fetch("/api/integrations")
       .then((r) => r.json())

@@ -22,11 +22,13 @@ import {
   GraduationCap,
   Shield,
   Search,
+  Camera,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLocale } from "@/components/i18n/locale-provider";
 import { localesForPicker, type AppLocale } from "@/lib/i18n";
 import type { AfUsageSnapshot } from "@/lib/af-usage";
+import { PROFILE_TIMEZONES } from "@/lib/profile-options";
 
 type Tab =
   | "profile"
@@ -83,8 +85,17 @@ export default function SettingsPage() {
     name: string;
     email: string;
     avatarInitials: string;
+    image?: string | null;
+    bio?: string | null;
+    timezone?: string | null;
     sharedIntelOptIn?: boolean;
   } | null>(null);
+  const [profileName, setProfileName] = useState("");
+  const [profileBio, setProfileBio] = useState("");
+  const [profileTimezone, setProfileTimezone] = useState("");
+  const [profileBusy, setProfileBusy] = useState(false);
+  const [profileMsg, setProfileMsg] = useState<string | null>(null);
+  const [avatarBusy, setAvatarBusy] = useState(false);
   const [apiFootball, setApiFootball] = useState(false);
   const [gemini, setGemini] = useState(false);
   const [integrationsHint, setIntegrationsHint] = useState<string | null>(null);
@@ -146,7 +157,93 @@ export default function SettingsPage() {
     }
   }
 
-  function loadPlan() {
+
+  async function saveProfile(e?: React.FormEvent) {
+    e?.preventDefault();
+    setProfileBusy(true);
+    setProfileMsg(null);
+    try {
+      const res = await fetch("/api/auth/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: profileName,
+          bio: profileBio,
+          timezone: profileTimezone || null,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(String(json.error || "Could not save profile"));
+      setUser((prev) =>
+        prev
+          ? {
+              ...prev,
+              name: json.user.name,
+              avatarInitials: json.user.avatarInitials,
+              bio: json.user.bio,
+              timezone: json.user.timezone,
+              image: json.user.image ?? prev.image,
+            }
+          : prev
+      );
+      setProfileName(String(json.user.name || ""));
+      setProfileBio(String(json.user.bio || ""));
+      setProfileTimezone(String(json.user.timezone || ""));
+      setProfileMsg("Profile saved");
+      router.refresh();
+    } catch (err) {
+      setProfileMsg(err instanceof Error ? err.message : "Could not save profile");
+    } finally {
+      setProfileBusy(false);
+    }
+  }
+
+  async function onAvatarFile(file: File | null) {
+    if (!file) return;
+    setAvatarBusy(true);
+    setProfileMsg(null);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch("/api/auth/avatar", { method: "POST", body: form });
+      const json = await res.json();
+      if (!res.ok) throw new Error(String(json.error || "Upload failed"));
+      setUser((prev) =>
+        prev
+          ? {
+              ...prev,
+              image: json.image ?? json.user?.image ?? null,
+              avatarInitials: json.user?.avatarInitials ?? prev.avatarInitials,
+            }
+          : prev
+      );
+      setProfileMsg("Photo updated");
+      router.refresh();
+    } catch (err) {
+      setProfileMsg(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setAvatarBusy(false);
+    }
+  }
+
+  async function removeAvatar() {
+    setAvatarBusy(true);
+    setProfileMsg(null);
+    try {
+      const res = await fetch("/api/auth/avatar", { method: "DELETE" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(String(json.error || "Could not remove photo"));
+      setUser((prev) => (prev ? { ...prev, image: null } : prev));
+      setProfileMsg("Photo removed");
+      router.refresh();
+    } catch (err) {
+      setProfileMsg(err instanceof Error ? err.message : "Could not remove photo");
+    } finally {
+      setAvatarBusy(false);
+    }
+  }
+
+    function loadPlan() {
     return fetch("/api/plan")
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => {
@@ -170,7 +267,14 @@ export default function SettingsPage() {
         if (!r.ok) throw new Error();
         return r.json();
       })
-      .then((d) => setUser(d.user))
+      .then((d) => {
+        setUser(d.user);
+        if (d.user) {
+          setProfileName(String(d.user.name || ""));
+          setProfileBio(String(d.user.bio || ""));
+          setProfileTimezone(String(d.user.timezone || ""));
+        }
+      })
       .catch(() => router.push("/login"));
     fetch("/api/integrations")
       .then((r) => r.json())
@@ -261,7 +365,7 @@ export default function SettingsPage() {
         setPlanMsg(
           String(
             json.todo ||
-              "Billing keys not configured yet — use Cancel trial below for app-side cancel."
+              "Stripe verify pending — Customer Portal is not available until billing keys are configured. Use Cancel trial below for app-side cancel."
           )
         );
         return;
@@ -438,11 +542,104 @@ export default function SettingsPage() {
             {tab === "profile" && (
               <Card>
                 <CardHeader><CardTitle>Profile</CardTitle></CardHeader>
-                <CardBody className="space-y-3 text-sm">
-                  <div><div className="text-xs text-slate-500">Name</div><div className="font-medium">{user.name}</div></div>
-                  <div><div className="text-xs text-slate-500">Email</div><div className="font-medium">{user.email}</div></div>
-                  <div><div className="text-xs text-slate-500">Role</div><div className="font-medium">Commentator</div></div>
-                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 space-y-3 mt-2">
+                <CardBody className="space-y-5 text-sm">
+                  <div className="flex flex-col sm:flex-row gap-4 items-start">
+                    <div className="flex flex-col items-center gap-2 shrink-0">
+                      <div className="relative h-20 w-20 overflow-hidden rounded-2xl bg-slate-100 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 flex items-center justify-center text-lg font-bold">
+                        {user.image ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={user.image} alt="" className="h-full w-full object-cover" />
+                        ) : (
+                          user.avatarInitials
+                        )}
+                      </div>
+                      <label className="inline-flex items-center gap-1.5 text-xs font-medium text-teal-700 dark:text-teal-300 cursor-pointer hover:underline">
+                        <Camera className="h-3.5 w-3.5" />
+                        {avatarBusy ? "Uploading…" : "Upload photo"}
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp"
+                          className="sr-only"
+                          disabled={avatarBusy}
+                          onChange={(e) => {
+                            const f = e.target.files?.[0] || null;
+                            e.target.value = "";
+                            void onAvatarFile(f);
+                          }}
+                        />
+                      </label>
+                      {user.image && (
+                        <button
+                          type="button"
+                          disabled={avatarBusy}
+                          onClick={() => void removeAvatar()}
+                          className="text-[11px] text-slate-500 hover:text-rose-600 disabled:opacity-50"
+                        >
+                          Remove photo
+                        </button>
+                      )}
+                      <p className="text-[10px] text-slate-400 text-center max-w-[9rem]">PNG, JPG or WebP · max 2 MB</p>
+                    </div>
+                    <form onSubmit={saveProfile} className="flex-1 space-y-3 w-full min-w-0">
+                      <div>
+                        <label className="text-xs text-slate-500" htmlFor="profile-name">Display name</label>
+                        <input
+                          id="profile-name"
+                          value={profileName}
+                          onChange={(e) => setProfileName(e.target.value)}
+                          maxLength={80}
+                          required
+                          className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm outline-none focus:border-teal-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-500" htmlFor="profile-email">Email</label>
+                        <input
+                          id="profile-email"
+                          value={user.email}
+                          readOnly
+                          className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-3 py-2.5 text-sm text-slate-500 cursor-not-allowed"
+                        />
+                        <p className="text-[11px] text-slate-400 mt-1">Sign-in email is account-bound and cannot be changed here.</p>
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-500" htmlFor="profile-bio">Bio <span className="text-slate-400">(optional)</span></label>
+                        <textarea
+                          id="profile-bio"
+                          value={profileBio}
+                          onChange={(e) => setProfileBio(e.target.value)}
+                          maxLength={280}
+                          rows={3}
+                          placeholder="Short note about your commentary work…"
+                          className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm outline-none focus:border-teal-500 resize-y"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-500" htmlFor="profile-tz">Timezone <span className="text-slate-400">(optional)</span></label>
+                        <select
+                          id="profile-tz"
+                          value={profileTimezone}
+                          onChange={(e) => setProfileTimezone(e.target.value)}
+                          className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm outline-none focus:border-teal-500"
+                        >
+                          <option value="">Not set</option>
+                          {PROFILE_TIMEZONES.map((z) => (
+                            <option key={z.id} value={z.id}>{z.label} · {z.id}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        <Button type="submit" disabled={profileBusy || avatarBusy}>
+                          {profileBusy ? "Saving…" : "Save profile"}
+                        </Button>
+                        <span className="text-xs text-slate-500">Role: Commentator</span>
+                      </div>
+                      {profileMsg && (
+                        <p className="text-xs text-slate-600 dark:text-slate-300">{profileMsg}</p>
+                      )}
+                    </form>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 space-y-3">
                     <div className="flex items-center gap-2 font-medium">
                       <Shield className="h-4 w-4 text-teal-600 dark:text-teal-400" />
                       Shared CoComms intel
@@ -746,16 +943,29 @@ export default function SettingsPage() {
                   <div className="rounded-xl border border-teal-200 dark:border-teal-900 p-4 space-y-3">
                     <div className="font-medium">Billing</div>
                     <p className="text-xs text-slate-500">
-                      {plan?.stripe || "Checkout / portal when billing keys exist; otherwise app-side trial above."}
+                      {trial?.stripeConfigured
+                        ? (plan?.stripe || "Manage subscription, payment method, or cancel in the Stripe Customer Portal.")
+                        : "Stripe verify pending — Customer Portal opens only when STRIPE_SECRET_KEY + price ids are configured. App-side trial cancel still works above."}
                     </p>
                     <div className="flex flex-wrap gap-2">
                       <Button type="button" disabled={planBusy} onClick={startUnlimitedCheckout}>
                         {trial?.stripeConfigured ? "Checkout Unlimited trial (→ £22/mo)" : "Subscribe Unlimited £22"}
                       </Button>
-                      <Button type="button" variant="outline" disabled={planBusy} onClick={openBillingPortal}>
-                        Manage billing / cancel
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={planBusy}
+                        onClick={openBillingPortal}
+                        title={trial?.stripeConfigured ? "Open Stripe Customer Portal" : "Opens portal when Stripe is configured"}
+                      >
+                        Manage billing
                       </Button>
                     </div>
+                    {!trial?.stripeConfigured && (
+                      <p className="text-[11px] text-amber-700 dark:text-amber-300">
+                        Manage billing requires Stripe. Until keys are verified, use Cancel trial for app-side access control.
+                      </p>
+                    )}
                     <div className="text-xs font-medium text-slate-700 dark:text-slate-200 pt-1">
                       Match Desk Pass (top-up)
                     </div>

@@ -46,22 +46,36 @@ export const UR_CREATIVES_PLACEHOLDER =
   "Awaiting match-specific creatives pack";
 
 /**
- * Default YT thumbnail brief (Chris replicate winners) — encoded on Enable autofill
- * as pack notes / board.thumbnailBrief. NOT a fake Canva render.
- * One idea only; title carries SEO — thumb stays visual + 3–4 words.
+ * Locked U&R visual system — layout #4 + Canva master template family.
+ * Enable autofill encodes these as pack notes / board.thumbnailBrief / creativeBriefs.
+ * U+R clones masters per match (swap crests + KO). CoComms does NOT fake-render Canva.
  */
+export const UR_CANVA_MASTERS = {
+  /** YT thumb — crests + LIVE WATCHALONG + U&R chip */
+  ytThumb: "DAHU_uCOrho",
+  /** FB post resize */
+  fbPost: "DAHU_jpNj84",
+  /** IG square */
+  igSquare: "DAHU_vJLKus",
+  /** IG 4:5 */
+  igPortrait: "DAHU_soeUfk",
+  /** Story 9:16 */
+  story: "DAHU_kTJRTo",
+} as const;
+
 export const UR_THUMBNAIL_BRIEF =
-  "ONE idea only: big home crest + big away crest + 3–4 words max (LIVE WATCHALONG / WE'RE LIVE). No full title on thumb (title carries SEO). High contrast, mobile-first, safe zone. Optional later: Chris face cutout looking toward crests.";
+  "U&R visual system — layout #4. Dark charcoal + steel-blue rim; large home/away crests; LIVE WATCHALONG (3–4 words max) + small U&R chip; NO full SEO title on creative. Same system across all social sizes. Canva masters (clone per match — swap crests + KO): YT thumb DAHU_uCOrho · FB post DAHU_jpNj84 · IG square DAHU_vJLKus · IG 4:5 DAHU_soeUfk · Story 9:16 DAHU_kTJRTo. GO LIVE social: WE'RE LIVE text variant of same layout. CoComms does not fake-render — U+R autofills Canva from this family.";
 
 export const UR_CREATIVE_BRIEFS = {
-  thumb: UR_THUMBNAIL_BRIEF,
+  thumb:
+    "YT thumb — layout #4 master DAHU_uCOrho (clone; swap crests + KO). Dark charcoal, steel-blue rim, large crest pair, LIVE WATCHALONG (3–4 words) + small U&R chip. NO full SEO title.",
   cover:
-    "FB cover: same crest pair language as thumb; room for KO + competition line; mobile crop safe.",
+    "FB post/cover — layout #4 master DAHU_jpNj84 (clone; swap crests + KO). Same charcoal / steel-blue / crest / LIVE WATCHALONG + U&R chip system. Never full SEO title.",
   ig_live:
-    "IG We're Live still: crests + WE'RE LIVE (3–4 words). Visual-first — copy stays short on post.",
-  open: "Open moment graphic — match-specific only.",
-  ht: "HT moment graphic — match-specific only.",
-  ft: "FT moment graphic — match-specific only.",
+    "IG We're Live — layout #4 (masters DAHU_vJLKus square / DAHU_soeUfk 4:5; Story DAHU_kTJRTo). WE'RE LIVE text variant of same layout for GO LIVE social. Crests + 3–4 words + U&R chip; no full SEO title.",
+  open: "Open moment — match-specific; keep layout #4 language (charcoal / steel-blue / crests).",
+  ht: "HT moment — match-specific; keep layout #4 language (charcoal / steel-blue / crests).",
+  ft: "FT moment — match-specific; keep layout #4 language (charcoal / steel-blue / crests).",
 } as const;
 
 export type UrCreativeAsset = {
@@ -281,37 +295,83 @@ export function hashtagToken(name: string) {
   return cleaned || "Football";
 }
 
+/** KO line for public YT desc — London clock + UK label */
+export function formatKoLondonUk(kickoff: Date) {
+  const london = kickoff.toLocaleString("en-GB", {
+    timeZone: "Europe/London",
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  return `${london} UK`;
+}
+
+/**
+ * Locked YT title formula (Chris):
+ * `{Home} vs {Away} Watchalong LIVE | Reaction & Banter Desk`
+ * Brand optional at end if ≤100: ` · Unofficial & Remote`
+ * Never "CoComms" in public titles. Competition is NOT appended.
+ */
 export function buildYtTitle(af: {
   homeShort: string;
   awayShort: string;
-  competition: string;
+  competition?: string;
 }) {
-  const core = `${af.homeShort} vs ${af.awayShort} Live Watchalong | Unofficial & Remote`;
-  const withComp = af.competition
-    ? `${core} | ${af.competition}`
-    : core;
-  if (withComp.length <= 100) return withComp;
+  const core = `${af.homeShort} vs ${af.awayShort} Watchalong LIVE | Reaction & Banter Desk`;
+  const withBrand = `${core} · Unofficial & Remote`;
+  if (withBrand.length <= 100) return withBrand;
   if (core.length <= 100) return core;
-  return core.slice(0, 100);
+  const shortCore = `${af.homeShort} vs ${af.awayShort} Watchalong LIVE`;
+  if (shortCore.length <= 100) return shortCore;
+  return shortCore.slice(0, 100);
 }
 
+/**
+ * Locked YT description:
+ * 1) First 2 lines — LIVE U&R watchalong + voice/graphics + KO UK[, venue]
+ * 2) Bullets — live score & events / reaction & banter / no TV delay stress
+ * 3) CTA subscribe for more Unofficial & Remote
+ * 4) 3 hashtags max: #HomeShort #AwayShort #Watchalong (+ competition if room)
+ */
 export function buildYtDescription(af: {
-  fixtureLabelFull: string;
+  homeName: string;
+  awayName: string;
   competition: string;
-  kickoffLondon: string;
+  kickoff: Date;
   venue: string | null;
   homeShort: string;
   awayShort: string;
+  /** @deprecated unused — kept for call-site compat */
+  fixtureLabelFull?: string;
+  kickoffLondon?: string;
 }) {
-  const venueBit = af.venue ? ` at ${af.venue}` : "";
-  const tagHome = hashtagToken(af.homeShort);
-  const tagAway = hashtagToken(af.awayShort);
-  const tagComp = hashtagToken(af.competition || "Football");
-  return [
-    `Live watchalong — voice commentary + graphics only (no match footage). ${af.fixtureLabelFull}${af.competition ? ` · ${af.competition}` : ""}.`,
-    `KO ${af.kickoffLondon}${venueBit}. On stream: live score & events, real-time reaction, and the Unofficial & Remote desk.`,
-    `Subscribe for more watchalongs. #${tagHome} #${tagAway} #${tagComp} #Watchalong #UnofficialAndRemote`,
-  ].join("\n\n");
+  const home = af.homeName || af.homeShort;
+  const away = af.awayName || af.awayShort;
+  const compBit = af.competition ? ` (${af.competition})` : "";
+  const venueBit = af.venue ? `, ${af.venue}` : "";
+  const koUk = formatKoLondonUk(af.kickoff);
+  const line1 = `LIVE Unofficial & Remote watchalong — ${home} vs ${away}${compBit}.`;
+  const line2 = `Voice + graphics desk, no match footage. KO ${koUk}${venueBit}.`;
+  const bullets = [
+    "• Live score & events",
+    "• Reaction & banter",
+    "• No TV delay stress",
+  ].join("\n");
+  const cta = "Subscribe for more Unofficial & Remote.";
+  const tags = [
+    `#${hashtagToken(af.homeShort)}`,
+    `#${hashtagToken(af.awayShort)}`,
+    "#Watchalong",
+  ];
+  // Competition only if room (soft: keep ≤4 tags / short token)
+  if (af.competition) {
+    const tagComp = `#${hashtagToken(af.competition)}`;
+    if (tagComp.length <= 24 && tags.length < 4) tags.push(tagComp);
+  }
+  return [line1, line2, "", bullets, "", cta, "", tags.join(" ")].join("\n");
 }
 
 /**
@@ -321,31 +381,30 @@ export function buildYtDescription(af: {
  * We're live copy is the GO LIVE cadence (clear join CTA + link; gate must PASS).
  */
 export function buildSocialDraftsFromMatch(af: MatchAutofill) {
-  const { homeShort, awayShort, fixtureLabelFull, kickoffLondon, competition, venue } =
-    af;
+  const { homeShort, awayShort, kickoffLondon, competition, venue } = af;
   const venueBit = venue ? ` · ${venue}` : "";
   const link = "{WATCH_LINK}";
   const tagHome = hashtagToken(homeShort);
   const tagAway = hashtagToken(awayShort);
-  const tagComp = hashtagToken(competition || "Football");
+  const tagComp = competition ? ` #${hashtagToken(competition)}` : "";
   const nextTease = competition
     ? `Next up: more ${competition} watchalongs — hit subscribe.`
-    : "Next up: more Live Watchalongs — hit subscribe.";
+    : "Next up: more Watchalong LIVE shows — hit subscribe.";
   return [
     {
       slotKey: "t_day",
       label: "T−day",
       platform: "youtube",
-      // YT community / longer: anticipation + teams + KO + link
-      copy: `Match day energy 🔥\n\n${homeShort} vs ${awayShort} — Live Watchalong today.\nKO ${kickoffLondon}${venueBit}.\n\nVoice + graphics only (no match footage). Join us later:\n${link}\n\n#${tagHome} #${tagAway} #${tagComp} #Watchalong #UnofficialAndRemote`,
+      // YT community / longer: teams + Watchalong LIVE hook + KO + link
+      copy: `Match day energy 🔥\n\n${homeShort} vs ${awayShort} — Watchalong LIVE | Reaction & Banter Desk.\nKO ${kickoffLondon}${venueBit}.\n\nVoice + graphics only (no match footage). Join us later:\n${link}\n\n#${tagHome} #${tagAway} #Watchalong${tagComp}`,
       creativeKind: "thumb",
     },
     {
       slotKey: "t_1h",
       label: "T−1h",
       platform: "facebook",
-      // FB longer: reminder + link
-      copy: `One hour reminder ⏱\n\n${homeShort} vs ${awayShort} kicks off at ${kickoffLondon}.\nLive Watchalong locking in — voice, graphics, live score & reaction.\n\nSet a reminder / jump in here:\n${link}\n\n#${tagHome} #${tagAway} #Watchalong`,
+      // FB longer: reminder + teams + KO + link
+      copy: `One hour ⏱\n\n${homeShort} vs ${awayShort} — Watchalong LIVE locking in.\nKO ${kickoffLondon}${venueBit}.\nVoice + graphics, live score & reaction — no TV delay stress.\n\nSet a reminder / jump in:\n${link}\n\n#${tagHome} #${tagAway} #Watchalong`,
       creativeKind: "cover",
     },
     {
@@ -353,15 +412,15 @@ export function buildSocialDraftsFromMatch(af: MatchAutofill) {
       label: "We're live",
       platform: "instagram",
       // IG shorter + visual; GO LIVE fires this cadence — clear join CTA + link
-      copy: `🔴 WE'RE LIVE\n${homeShort} vs ${awayShort}\nJoin now → ${link}\n#Watchalong #UnofficialAndRemote`,
+      copy: `🔴 WE'RE LIVE\n${homeShort} vs ${awayShort} — Watchalong LIVE\nJoin now → ${link}\n#${tagHome} #${tagAway} #Watchalong`,
       creativeKind: "ig_live",
     },
     {
       slotKey: "ft",
       label: "FT (optional)",
       platform: "youtube",
-      // thanks + subscribe + next tease
-      copy: `Full time — thanks for watching ${homeShort} vs ${awayShort}${competition ? ` (${competition})` : ""} with us.\n\nIf you enjoyed the Live Watchalong, subscribe for the next one.\n${nextTease}\n\nReplay / channel: ${link}\n\n#${tagHome} #${tagAway} #Watchalong #UnofficialAndRemote`,
+      // thanks + subscribe + next tease — same title language
+      copy: `Full time — thanks for watching ${homeShort} vs ${awayShort}${competition ? ` (${competition})` : ""} with the Reaction & Banter Desk.\n\nIf you enjoyed the Watchalong LIVE, subscribe for more Unofficial & Remote.\n${nextTease}\n\nReplay / channel: ${link}\n\n#${tagHome} #${tagAway} #Watchalong`,
       creativeKind: "ft",
     },
   ] as const;
@@ -757,7 +816,7 @@ export function toBoardJson(show: {
     ytDescription:
       show.ytDescription ||
       af?.ytDescription ||
-      `Live watchalong — voice + graphics only (no match footage). ${fixtureLabel}. #Watchalong #UnofficialAndRemote`,
+      `LIVE Unofficial & Remote watchalong — ${fixtureLabel}.\nVoice + graphics desk, no match footage.\n\n• Live score & events\n• Reaction & banter\n• No TV delay stress\n\nSubscribe for more Unofficial & Remote.\n\n#Watchalong`,
     fbCoverUrl,
     igStillUrl,
     igStillNote: igStillUrl ? null : UR_CREATIVES_PLACEHOLDER,
@@ -773,6 +832,7 @@ export function toBoardJson(show: {
     youtubeApi: "stub",
     thumbnailBrief: UR_THUMBNAIL_BRIEF,
     creativeBriefs: UR_CREATIVE_BRIEFS,
+    canvaMasters: UR_CANVA_MASTERS,
     creatives: show.creatives.map((c) => {
       const brief =
         c.kind in UR_CREATIVE_BRIEFS
@@ -1362,6 +1422,7 @@ export function buildEnableProvisionPayload(show: {
     ytDescription: board.ytDescription,
     thumbnailBrief: UR_THUMBNAIL_BRIEF,
     creativeBriefs: UR_CREATIVE_BRIEFS,
+    canvaMasters: UR_CANVA_MASTERS,
     socialDrafts: board.socialDrafts,
     socialCadence: {
       t_day: "anticipation + teams + KO + link (YT/FB longer)",

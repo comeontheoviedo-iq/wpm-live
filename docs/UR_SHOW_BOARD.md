@@ -34,26 +34,50 @@ Tenancy: `session.userId` only. Allowlist checked **before** tenancy.
 
 ### YT title (≤100 chars)
 
-`{Home} vs {Away} Live Watchalong | Unofficial & Remote | {Competition}`
+`{Home} vs {Away} Watchalong LIVE | Reaction & Banter Desk`
 
-Front-load teams + Live Watchalong. **NEVER** “CoComms U&R” in public titles.
+- Teams + LIVE + format first
+- Brand optional at end if space: ` · Unofficial & Remote`
+- **NEVER** “CoComms” in public titles
+- Competition is **not** appended to the title
 
-### YT description (2–3 short paras)
+### YT description
 
-Voice + graphics watchalong (no match footage); KO London + venue; live score/events + reaction; CTA subscribe + `#TeamA #TeamB #Competition #Watchalong #UnofficialAndRemote`.
+1. First 2 lines: `LIVE Unofficial & Remote watchalong — {Home} vs {Away} ({Competition}).` then `Voice + graphics desk, no match footage. KO {London time} UK{, venue}.`
+2. Bullets: live score & events / reaction & banter / no TV delay stress
+3. CTA: subscribe for more Unofficial & Remote
+4. **3 hashtags max:** `#{HomeShort} #{AwayShort} #Watchalong` (+ competition if room)
 
-### Thumbnail brief (Enable pack notes — not a Canva render)
+### Thumbnail / creatives — layout #4 + Canva masters
 
-ONE idea only: **big home crest + big away crest + 3–4 words max** (`LIVE WATCHALONG` / `WE'RE LIVE`). No full title on thumb (title carries SEO). High contrast, mobile-first, safe zone. Optional later: Chris face cutout looking toward crests.
+Locked visual system (same across YT/FB/IG/Story):
 
-Exposed as `board.thumbnailBrief` / `creatives[].brief` / `enable_provision.thumbnailBrief`.
+- Dark charcoal background + steel-blue rim
+- Large home + away crests
+- `LIVE WATCHALONG` (3–4 words max) + small U&R chip
+- **NO** full SEO title on creative
+- GO LIVE social: **WE'RE LIVE** text variant of same layout
+
+Canva masters (U+R clones per match — swap crests + KO; CoComms does not fake-render):
+
+| Size | Master id |
+|------|-----------|
+| YT thumb | `DAHU_uCOrho` |
+| FB post resize | `DAHU_jpNj84` |
+| IG square | `DAHU_vJLKus` |
+| IG 4:5 | `DAHU_soeUfk` |
+| Story 9:16 | `DAHU_kTJRTo` |
+
+Exposed as `board.thumbnailBrief` / `board.creativeBriefs` / `board.canvaMasters` / `enable_provision.*`.
 
 ### Social cadence (platform-fit)
+
+Keep slots `t_day` / `t_1h` / `were_live` / `ft`. Hook energy = teams + Watchalong LIVE / Reaction & Banter Desk + KO + `{WATCH_LINK}` — do not contradict title language. Hashtags lean 3-tag max.
 
 | Slot | Intent | Platform fit |
 |------|--------|--------------|
 | `t_day` | Anticipation + teams + KO + `{WATCH_LINK}` | YT community longer |
-| `t_1h` | Reminder + `{WATCH_LINK}` | FB longer |
+| `t_1h` | Reminder + teams + KO + `{WATCH_LINK}` | FB longer |
 | `were_live` | **GO LIVE** fires — clear join CTA + link (gate must PASS) | IG shorter + visual |
 | `ft` | Thanks + subscribe + next tease | YT longer |
 
@@ -133,10 +157,11 @@ One vertical spine: status → match → provision → sticky destinations → G
     { "key": "creatives_generate", "label": "Creatives generate request", "status": "pending" },
     { "key": "social_drafts", "label": "Social drafts ready", "status": "pending" }
   ],
-  "ytTitle": "Home vs Away Live Watchalong | Unofficial & Remote | Comp",
+  "ytTitle": "Home vs Away Watchalong LIVE | Reaction & Banter Desk · Unofficial & Remote",
   "ytDescription": "…",
-  "thumbnailBrief": "ONE idea only: big home crest + big away crest + 3–4 words max (LIVE WATCHALONG / WE'RE LIVE). …",
+  "thumbnailBrief": "U&R visual system — layout #4 … Canva masters DAHU_uCOrho / DAHU_jpNj84 / …",
   "creativeBriefs": { "thumb": "…", "cover": "…", "ig_live": "…" },
+  "canvaMasters": { "ytThumb": "DAHU_uCOrho", "fbPost": "DAHU_jpNj84", "igSquare": "DAHU_vJLKus", "igPortrait": "DAHU_soeUfk", "story": "DAHU_kTJRTo" },
   "socialDrafts": [],
   "socialCadence": {
     "t_day": "anticipation + teams + KO + link (YT/FB longer)",

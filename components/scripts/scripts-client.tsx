@@ -215,8 +215,8 @@ export function ScriptsClient({
           <h2 className="text-xl font-bold tracking-tight">Scripts</h2>
           <p className="text-sm text-[var(--muted)]">
             Timed commentary cues for {homeShort} vs {awayShort}. Edit freely —
-            your changes are marked edited and kept when Research / lineup
-            auto-distribute runs.
+            your changes are marked edited and kept when Research files prep
+            or Official XI fills the lineup.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -238,7 +238,7 @@ export function ScriptsClient({
             href={`/match-day/${matchId}/packs`}
             className="text-sm font-semibold text-[var(--brand-dark)] dark:text-[var(--brand)] hover:underline"
           >
-            Generate from Research →
+            File prep from Research →
           </a>
         </div>
       </div>

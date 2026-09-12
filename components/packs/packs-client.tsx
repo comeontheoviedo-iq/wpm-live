@@ -293,8 +293,7 @@ export function PacksClient({ matchId }: { matchId: string }) {
       <div>
         <h2 className="text-xl font-bold">Research</h2>
         <p className="text-sm text-[var(--muted)]">
-          Bring your notes. We file them where you need them. Paste your match
-          prep — CoComms sorts it into Notes, Scripts, and profiles.
+          Bring your notes / paste your prep — we file them into Notes, Scripts, profiles.
         </p>
       </div>
 
@@ -373,8 +372,8 @@ export function PacksClient({ matchId }: { matchId: string }) {
           )}
           {!draft.trim() && (
             <p className="text-[11px] text-[var(--muted)]">
-              Dump is empty — paste your match prep, then file it into Notes,
-              Scripts, and profiles.
+              Dump is empty — paste your prep, then file it into Notes, Scripts,
+              profiles.
             </p>
           )}
           <textarea
@@ -384,7 +383,7 @@ export function PacksClient({ matchId }: { matchId: string }) {
               draftDirty.current = true;
               setDraft(e.target.value);
             }}
-            placeholder="Paste your match prep here — CoComms sorts it into Notes, Scripts, and profiles…"
+            placeholder="Paste your prep here — one dump. We file it into Notes, Scripts, profiles."
           />
         </CardBody>
       </Card>

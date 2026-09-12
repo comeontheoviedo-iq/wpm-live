@@ -27,8 +27,7 @@ export function ResearchStagesHeader({
             Research dump
           </div>
           <p className="text-[11px] text-[var(--muted)] mt-0.5">
-            Bring your notes. We file them where you need them. Paste your match
-            prep — CoComms sorts it into Notes, Scripts, and profiles.
+            Bring your notes / paste your prep — we file them into Notes, Scripts, profiles.
           </p>
         </div>
         <div className="text-[11px] font-semibold tabular-nums text-[var(--muted)]">

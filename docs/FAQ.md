@@ -1,10 +1,10 @@
 # CoComms FAQ (internal mirror)
 
-Public page: `/faq` · Training: `/training` · Brand: CoComms (broadcast desk craft).
+Public page: `/faq` · Training: `/training` (signed-in only — Settings / in-app) · Brand: CoComms.
 
 ## What is CoComms?
 
-Prep + live match desk for football commentators. Bring your notes, live feed, Scripts, pitch board, and overlays — built for matchday commentary prep and the broadcast call.
+Your commentary co-pilot — you bring the notes and the voice, CoComms takes care of everything else you need to make the match comms seamless. Live feed, dynamic lineups, data viz, Scripts, pitch board, and dossiers on one desk.
 
 ## Trial
 
@@ -31,7 +31,7 @@ Core product. Paste your match prep — CoComms sorts it into Notes, Scripts, an
 
 ## Unlimited includes
 
-Paste your match prep · News RSS · Live-feed sync · Notes buckets · dossiers · Stats · Scripts · Print · unlimited match desks after trial
+Bring your notes · Research paste · live feed · dynamic lineups · data viz · Notes · Scripts · pitch board · dossiers · Stats · Print · unlimited match desks after trial
 
 ## Pass credits after trial
 
@@ -46,7 +46,7 @@ Match desks and notes stay personal to the signed-in account (`session.userId`).
 | Route | Role |
 |-------|------|
 | `/faq` | Public FAQ |
-| `/training` | Training hub (video placeholders + quick-start) |
+| `/training` | Training hub (auth required — Settings / in-app) |
 | `/pricing` | Unlimited vs Pass |
 | `/signup` | Plan picker + trial |
 | `/settings` | Trial status · portal · FAQ / Training links |

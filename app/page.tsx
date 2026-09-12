@@ -8,7 +8,6 @@ import {
   Timer,
   ArrowRight,
   Check,
-  Clapperboard,
 } from "lucide-react";
 
 const pillars = [
@@ -20,12 +19,12 @@ const pillars = [
   {
     icon: Radio,
     title: "Live desk that stays out of the way",
-    body: "Pitch board, Scripts, dossiers, scorebug craft, and a live event composer built for matchday commentary and the broadcast call.",
+    body: "Pitch board, Scripts, dossiers, live feed, and dynamic lineups — the desk stays ready so you can stay on the call.",
   },
   {
     icon: MonitorPlay,
     title: "Broadcast-ready output",
-    body: "Print packs, Stats, and match intel shaped for commentators and producers on a real matchday.",
+    body: "Less sorting, more calling — your prep filed and ready when you open the mic.",
   },
 ];
 
@@ -56,9 +55,6 @@ export default function MarketingHome() {
           <nav className="flex items-center gap-2 sm:gap-3 text-sm">
             <Link href="/faq" className="hidden sm:inline text-slate-400 hover:text-teal-300">
               FAQ
-            </Link>
-            <Link href="/training" className="hidden sm:inline text-slate-400 hover:text-teal-300">
-              Training
             </Link>
             <Link href="/pricing" className="hidden sm:inline text-slate-400 hover:text-teal-300">
               Pricing
@@ -92,9 +88,12 @@ export default function MarketingHome() {
                 <span className="text-teal-300">before kick-off</span>.
               </h1>
               <p className="mt-4 max-w-xl text-base leading-relaxed text-slate-400 sm:text-lg">
-                CoComms is prep + live commentary craft: bring your notes, live feed,
-                Scripts, pitch board, and overlays — built for matchday commentary
-                prep and the broadcast call.
+                CoComms is your commentary co-pilot — you bring the notes and the
+                voice, CoComms takes care of everything else you need to make the
+                match comms seamless.
+              </p>
+              <p className="mt-3 max-w-xl text-sm font-medium tracking-wide text-teal-200/90">
+                Live feed · dynamic lineups · data viz · Scripts · pitch board
               </p>
               <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
                 <Link
@@ -116,7 +115,7 @@ export default function MarketingHome() {
               </p>
             </div>
 
-            {/* Fake scorebug / desk card — distinct from Sports Pro chrome */}
+            {/* Honest placeholder — real desk demo video coming */}
             <div className="relative">
               <div className="rounded-2xl border border-white/10 bg-[#0d1524] p-4 shadow-2xl shadow-black/50 ring-1 ring-teal-500/20">
                 <div className="mb-3 flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
@@ -125,40 +124,15 @@ export default function MarketingHome() {
                   </span>
                   <span>CoComms</span>
                 </div>
-                <div className="rounded-xl bg-[#05080f] p-4 border border-white/5">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-center flex-1">
-                      <div className="text-[10px] uppercase tracking-wider text-slate-500">Home</div>
-                      <div className="mt-1 text-lg font-bold">XI · Scripts</div>
-                    </div>
-                    <div className="rounded-lg bg-teal-500/15 px-3 py-2 text-center border border-teal-500/30">
-                      <div className="text-[10px] text-teal-300/80">LIVE</div>
-                      <div className="text-2xl font-black tabular-nums text-teal-200">67&apos;</div>
-                    </div>
-                    <div className="text-center flex-1">
-                      <div className="text-[10px] uppercase tracking-wider text-slate-500">Away</div>
-                      <div className="mt-1 text-lg font-bold">Dossier</div>
-                    </div>
-                  </div>
-                  <div className="mt-4 grid grid-cols-3 gap-2 text-[11px]">
-                    {[
-                      { k: "Notes", v: "Ready" },
-                      { k: "Hooks", v: "Pinned" },
-                      { k: "Overlay", v: "Armed" },
-                    ].map((row) => (
-                      <div
-                        key={row.k}
-                        className="rounded-lg border border-white/5 bg-white/[0.03] px-2 py-2"
-                      >
-                        <div className="text-slate-500">{row.k}</div>
-                        <div className="font-semibold text-teal-200">{row.v}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div className="mt-3 flex items-center gap-2 text-[11px] text-slate-500">
-                  <Clapperboard className="h-3.5 w-3.5 text-teal-400" />
-                  Built for matchday commentary prep
+                <div className="flex aspect-video flex-col items-center justify-center rounded-xl border border-dashed border-white/15 bg-[#05080f] px-6 text-center">
+                  <MonitorPlay className="h-8 w-8 text-teal-400/80" />
+                  <p className="mt-3 text-sm font-semibold text-slate-200">
+                    Demo video coming soon
+                  </p>
+                  <p className="mt-1 max-w-xs text-xs leading-relaxed text-slate-500">
+                    A real walkthrough of the live desk — notes, Scripts, pitch board,
+                    and feed — will land here.
+                  </p>
                 </div>
               </div>
             </div>
@@ -270,9 +244,6 @@ export default function MarketingHome() {
           <div className="flex flex-wrap gap-4">
             <Link href="/faq" className="hover:text-slate-300">
               FAQ
-            </Link>
-            <Link href="/training" className="hover:text-slate-300">
-              Training
             </Link>
             <Link href="/pricing" className="hover:text-slate-300">
               Pricing

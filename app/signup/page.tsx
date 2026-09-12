@@ -241,10 +241,6 @@ function SignupForm() {
               FAQ
             </Link>
             {" · "}
-            <Link href="/training" className="hover:underline">
-              Training
-            </Link>
-            {" · "}
             <Link href="/pricing" className="hover:underline">
               Pricing
             </Link>

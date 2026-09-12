@@ -5,7 +5,7 @@ import { ArrowRight, HelpCircle } from "lucide-react";
 const faqs: { q: string; a: string }[] = [
   {
     q: "What is CoComms?",
-    a: "CoComms is a prep + live match desk for football commentators. Paste your own research, organise notes, run the live desk, and stay ready for kick-off — built for matchday commentary prep and the broadcast call.",
+    a: "CoComms is your commentary co-pilot — you bring the notes and the voice, CoComms takes care of everything else you need to make the match comms seamless. Live feed, dynamic lineups, data viz, Scripts, pitch board, and dossiers on one desk.",
   },
   {
     q: "How does the trial work?",
@@ -25,7 +25,7 @@ const faqs: { q: string; a: string }[] = [
   },
   {
     q: "What’s included on Unlimited?",
-    a: "Paste your match prep into Research, News RSS, live-feed sync, notes buckets, dossiers, Stats, Scripts, Print, and unlimited match desks on your account after the trial.",
+    a: "Bring your notes and Research paste, live feed with dynamic lineups, data viz, Notes, Scripts, pitch board, dossiers, Stats, Print, and unlimited match desks on your account after the trial.",
   },
   {
     q: "How do Match Desk Pass credits work after the trial?",
@@ -54,9 +54,6 @@ export default function FaqPage() {
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
           <Logo href="/" />
           <nav className="flex items-center gap-2 sm:gap-3 text-sm">
-            <Link href="/training" className="hidden sm:inline text-slate-400 hover:text-teal-300">
-              Training
-            </Link>
             <Link href="/pricing" className="hidden sm:inline text-slate-400 hover:text-teal-300">
               Pricing
             </Link>
@@ -81,11 +78,8 @@ export default function FaqPage() {
           </div>
           <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Frequently asked questions</h1>
           <p className="mt-3 text-slate-400 text-sm sm:text-base leading-relaxed">
-            Warm, short answers for trial, plans, notes, and cancel. Need the walkthrough? See{" "}
-            <Link href="/training" className="text-teal-300 hover:underline">
-              Training
-            </Link>
-            .
+            Warm, short answers for trial, plans, notes, and cancel. Signed-in accounts
+            can open Training from Settings anytime.
           </p>
         </div>
 
@@ -124,9 +118,6 @@ export default function FaqPage() {
             <Link href="/pricing" className="text-sm text-slate-400 hover:text-teal-300 px-1">
               View pricing →
             </Link>
-            <Link href="/training" className="text-sm text-slate-400 hover:text-teal-300 px-1">
-              Training hub →
-            </Link>
           </div>
         </div>
       </main>
@@ -137,9 +128,6 @@ export default function FaqPage() {
           <div className="flex flex-wrap gap-4">
             <Link href="/faq" className="hover:text-slate-300">
               FAQ
-            </Link>
-            <Link href="/training" className="hover:text-slate-300">
-              Training
             </Link>
             <Link href="/pricing" className="hover:text-slate-300">
               Pricing

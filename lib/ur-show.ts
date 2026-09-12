@@ -50,6 +50,12 @@ export const UR_CREATIVES_PLACEHOLDER =
  * Enable autofill encodes these as pack notes / board.thumbnailBrief / creativeBriefs.
  * U+R clones masters per match (swap crests + KO). CoComms does NOT fake-render Canva.
  */
+/**
+ * PERMANENT LOCK (Chris / U+R): creative family is fixed.
+ * Every Enable U&R autofill MUST reference these masters.
+ * Clone only — swap crests + KO. GO LIVE social = WE'RE LIVE text variant.
+ * Do NOT regenerate random styles or invent alternate creative systems.
+ */
 export const UR_CANVA_MASTERS = {
   /** YT thumb — crests + LIVE WATCHALONG + U&R chip */
   ytThumb: "DAHU_uCOrho",
@@ -61,6 +67,15 @@ export const UR_CANVA_MASTERS = {
   igPortrait: "DAHU_soeUfk",
   /** Story 9:16 */
   story: "DAHU_kTJRTo",
+} as const;
+
+export const UR_CREATIVE_FAMILY_LOCK = {
+  permanent: true as const,
+  layout: "#4",
+  rule:
+    "PERMANENT LOCK — clone Canva masters only (swap crests + KO). Do NOT regenerate random styles or invent alternate creative systems. GO LIVE social uses WE'RE LIVE text variant of same layout.",
+  masters: UR_CANVA_MASTERS,
+  goLiveTextVariant: "WE'RE LIVE",
 } as const;
 
 export const UR_THUMBNAIL_BRIEF =
@@ -833,6 +848,7 @@ export function toBoardJson(show: {
     thumbnailBrief: UR_THUMBNAIL_BRIEF,
     creativeBriefs: UR_CREATIVE_BRIEFS,
     canvaMasters: UR_CANVA_MASTERS,
+    creativeFamilyLock: UR_CREATIVE_FAMILY_LOCK,
     creatives: show.creatives.map((c) => {
       const brief =
         c.kind in UR_CREATIVE_BRIEFS
@@ -1423,6 +1439,7 @@ export function buildEnableProvisionPayload(show: {
     thumbnailBrief: UR_THUMBNAIL_BRIEF,
     creativeBriefs: UR_CREATIVE_BRIEFS,
     canvaMasters: UR_CANVA_MASTERS,
+    creativeFamilyLock: UR_CREATIVE_FAMILY_LOCK,
     socialDrafts: board.socialDrafts,
     socialCadence: {
       t_day: "anticipation + teams + KO + link (YT/FB longer)",
@@ -1438,7 +1455,7 @@ export function buildEnableProvisionPayload(show: {
     youtubeUpcomingStubId: show.youtubeUpcomingStubId,
     writeBack: UR_WRITEBACK_FIELDS,
     note:
-      "Enable U&R auto-provision — create Restream encoder + scheduled YT/FB, generate creatives, lock social drafts. PATCH destination URLs back to clear Provisioning… on CoComms.",
+      "Enable U&R auto-provision — create Restream encoder + scheduled YT/FB, clone locked Canva masters (DAHU_uCOrho + resizes; swap crests+KO only — no new styles), lock social drafts. PATCH destination URLs back to clear Provisioning… on CoComms.",
     apis: { restream: "stub", youtube: "stub", social: "stub" },
     at: new Date().toISOString(),
   };

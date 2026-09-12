@@ -58,7 +58,7 @@ Locked visual system (same across YT/FB/IG/Story):
 - **NO** full SEO title on creative
 - GO LIVE social: **WE'RE LIVE** text variant of same layout
 
-Canva masters (U+R clones per match — swap crests + KO; CoComms does not fake-render):
+**PERMANENT LOCK** — Canva masters (U+R clones per match — swap crests + KO only; never regenerate alternate styles; CoComms does not fake-render). Exposed as `board.canvaMasters` + `board.creativeFamilyLock`:
 
 | Size | Master id |
 |------|-----------|

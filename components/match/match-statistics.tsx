@@ -2,6 +2,7 @@
 
 import { EventTimeline, type TimelineEvent } from "@/components/match/event-timeline";
 import { cn } from "@/lib/utils";
+import { selectScoredGoals } from "@/lib/match-goals";
 import { deskVenueName } from "@/lib/venue-name";
 
 export type StatRow = { label: string; homeValue: string; awayValue: string };
@@ -136,10 +137,7 @@ export function MatchStatisticsView({
   const statusLabel =
     status === "Full Time" ? "Full Time" : status === "Live" ? "Live" : status;
 
-  const goals = events
-    .filter((e) => /goal/i.test(String(e.type || "")))
-    .slice()
-    .sort((a, b) => (a.minute ?? 0) - (b.minute ?? 0));
+  const goals = selectScoredGoals(events);
 
   const poss = findStat(statistics, /possession/i);
   const shots = findStat(statistics, /total shots|shots total/i);

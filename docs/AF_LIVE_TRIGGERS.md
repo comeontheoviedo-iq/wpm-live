@@ -14,6 +14,7 @@ Mapped via `mapEventType`:
 | Goal | `goal` |
 | Goal + penalty | `penalty_goal` |
 | Goal + own | `own_goal` |
+| Goal cancelled / disallowed | `goal_cancelled` (pruned from GOALS) |
 | Missed penalty | `penalty_miss` |
 | Card yellow | `yellow` |
 | Card red | `red` |

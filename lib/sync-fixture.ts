@@ -3,7 +3,12 @@ import { prisma } from "./prisma";
 import {
   clearAllPitchPlacements,
   reapplyPitchPlacements,
+  clearPlacementAfterSub,
 } from "./pitch-placement";
+import {
+  isCancelledGoalText,
+  isScoredGoalType,
+} from "./match-goals";
 import { slotsFor } from "./formations";
 import {
   assertFixtureCompatible,
@@ -861,6 +866,8 @@ async function applySubEvent(
         where: { id: outP.id },
         data: { onPitch: false, isStarter: false, formationSlot: "BENCH" },
       });
+      // Drop stale ST/LW override so reapplyPitchPlacements cannot resurrect them
+      await clearPlacementAfterSub(_matchId, outP.id).catch(() => null);
     }
   }
   if (inName || ev.assist?.id) {
@@ -902,6 +909,7 @@ function mapEventType(ev: AfEvent): string {
   const t = (ev.type || "").toLowerCase();
   const d = (ev.detail || "").toLowerCase();
   if (t === "goal") {
+    if (isCancelledGoalText(ev.detail)) return "goal_cancelled";
     if (d.includes("own")) return "own_goal";
     if (d.includes("missed") && d.includes("penalty")) return "penalty_miss";
     if (d.includes("penalty")) return "penalty_goal";
@@ -915,7 +923,10 @@ function mapEventType(ev: AfEvent): string {
     return "yellow";
   }
   if (t === "subst") return "sub";
-  if (t === "var") return "var";
+  if (t === "var") {
+    // Keep as var for banners; cancelled goal text handled in pruneStaleGoals.
+    return "var";
+  }
   return t || "note";
 }
 
@@ -967,6 +978,83 @@ async function dedupeClubSlots(clubId: string, formation?: string | null) {
 
 
 
+
+/** Drop DB scored-goals that AF no longer reports (VAR cancel / feed rewrite). */
+async function pruneStaleGoals(
+  matchId: string,
+  afEvents: AfEvent[],
+  homeAfId: number | null,
+  awayAfId: number | null
+) {
+  const afScored: { minute: number; teamSide: string | null; name: string }[] =
+    [];
+  const cancelled: { minute: number; teamSide: string | null; name: string }[] =
+    [];
+
+  for (const ev of afEvents) {
+    const type = mapEventType(ev);
+    const elapsed = ev.time?.elapsed ?? 0;
+    const teamSide =
+      ev.team?.id === homeAfId
+        ? "home"
+        : ev.team?.id === awayAfId
+          ? "away"
+          : null;
+    const name = (ev.player?.name || "").toLowerCase().trim();
+    if (
+      type === "goal_cancelled" ||
+      (type === "var" && isCancelledGoalText(ev.detail))
+    ) {
+      cancelled.push({ minute: elapsed, teamSide, name });
+      continue;
+    }
+    if (!isScoredGoalType(type)) continue;
+    afScored.push({ minute: elapsed, teamSide, name });
+  }
+
+  const dbGoals = await prisma.matchEvent.findMany({
+    where: {
+      matchId,
+      type: { in: ["goal", "penalty_goal", "own_goal", "goal_cancelled"] },
+    },
+  });
+
+  let removed = 0;
+  for (const g of dbGoals) {
+    if (g.type === "goal_cancelled") {
+      await prisma.matchEvent.delete({ where: { id: g.id } });
+      removed++;
+      continue;
+    }
+    const desc = (g.description || "").toLowerCase();
+    const min = g.minute ?? 0;
+
+    const wasCancelled = cancelled.some((c) => {
+      if (Math.abs(c.minute - min) > 3) return false;
+      if (c.teamSide && g.teamSide && c.teamSide !== g.teamSide) return false;
+      if (c.name && !desc.includes(c.name)) return false;
+      return true;
+    });
+    if (wasCancelled) {
+      await prisma.matchEvent.delete({ where: { id: g.id } });
+      removed++;
+      continue;
+    }
+
+    // AF removed this goal from the feed (common after VAR overturn)
+    const afNear = afScored.filter((a) => {
+      if (Math.abs(a.minute - min) > 2) return false;
+      if (g.teamSide && a.teamSide && a.teamSide !== g.teamSide) return false;
+      return true;
+    });
+    if (!afNear.length) {
+      await prisma.matchEvent.delete({ where: { id: g.id } });
+      removed++;
+    }
+  }
+  return removed;
+}
+
 /** Collapse duplicate AF goal/card rows (same minute+type+player) keeping richest description. */
 async function dedupeMatchEvents(matchId: string) {
   const events = await prisma.matchEvent.findMany({
@@ -975,7 +1063,11 @@ async function dedupeMatchEvents(matchId: string) {
   });
   const groups = new Map<string, typeof events>();
   for (const e of events) {
-    const key = `${e.minute}|${e.type}|${e.playerId || e.description.split("(")[0].trim()}`;
+    // Goals: bucket by type+player+side only — minute drift handled by merge below.
+    const playerPart = e.playerId || e.description.split("(")[0].trim();
+    const key = isScoredGoalType(e.type)
+      ? `goal|${e.type}|${e.teamSide || ""}|${playerPart}`
+      : `${e.minute}|${e.type}|${playerPart}`;
     const list = groups.get(key) || [];
     list.push(e);
     groups.set(key, list);
@@ -983,6 +1075,25 @@ async function dedupeMatchEvents(matchId: string) {
   let removed = 0;
   for (const list of groups.values()) {
     if (list.length < 2) continue;
+    // For goals, only collapse rows within ±2' of each other
+    if (isScoredGoalType(list[0]!.type)) {
+      const sorted = [...list].sort(
+        (a, b) => (b.description?.length || 0) - (a.description?.length || 0)
+      );
+      const keepers: typeof list = [];
+      for (const cand of sorted) {
+        const near = keepers.find(
+          (k) => Math.abs((k.minute ?? 0) - (cand.minute ?? 0)) <= 2
+        );
+        if (near) {
+          await prisma.matchEvent.delete({ where: { id: cand.id } });
+          removed++;
+        } else {
+          keepers.push(cand);
+        }
+      }
+      continue;
+    }
     const sorted = [...list].sort(
       (a, b) => (b.description?.length || 0) - (a.description?.length || 0)
     );
@@ -991,7 +1102,6 @@ async function dedupeMatchEvents(matchId: string) {
       await prisma.matchEvent.delete({ where: { id: d.id } });
       removed++;
     }
-    // If a shorter duplicate was kept earlier, ensure keep has richest text (already)
     void keep;
   }
   return removed;
@@ -1989,7 +2099,9 @@ async function runSyncMatchFromApiFootball(
       playerId = pl?.id ?? null;
     }
 
-    // Prefer same minute+type+player (description can grow when assist arrives)
+    // Prefer same minute+type+player (description can grow when assist arrives).
+    // For scored goals also fuzzy-match ±2' so AF minute drift (29→30→31) does
+    // not create ghost duplicate GOALS rows.
     let existing = await prisma.matchEvent.findFirst({
       where: {
         matchId,
@@ -2005,6 +2117,27 @@ async function runSyncMatchFromApiFootball(
       existing = await prisma.matchEvent.findFirst({
         where: { matchId, minute: elapsed, type, description: desc },
       });
+    }
+    if (!existing && isScoredGoalType(type) && (playerId || ev.player?.name)) {
+      const near = await prisma.matchEvent.findMany({
+        where: {
+          matchId,
+          type: { in: ["goal", "penalty_goal", "own_goal"] },
+          minute: { gte: Math.max(0, elapsed - 2), lte: elapsed + 2 },
+          ...(playerId ? { playerId } : {}),
+          ...(teamSide ? { teamSide } : {}),
+        },
+        orderBy: { createdAt: "asc" },
+      });
+      if (playerId) {
+        existing = near[0] || null;
+      } else {
+        const pname = (ev.player?.name || "").toLowerCase();
+        existing =
+          near.find((e) =>
+            (e.description || "").toLowerCase().includes(pname)
+          ) || null;
+      }
     }
     if (!existing) {
       await prisma.matchEvent.create({
@@ -2111,6 +2244,8 @@ async function runSyncMatchFromApiFootball(
         playerId?: string;
         description?: string;
         teamSide?: string | null;
+        minute?: number;
+        type?: string;
       } = {};
       if (playerId && !existing.playerId) patch.playerId = playerId;
       if (
@@ -2121,6 +2256,8 @@ async function runSyncMatchFromApiFootball(
         patch.description = desc;
       }
       if (teamSide && !existing.teamSide) patch.teamSide = teamSide;
+      if (existing.minute !== elapsed) patch.minute = elapsed;
+      if (existing.type !== type && isScoredGoalType(type)) patch.type = type;
       if (Object.keys(patch).length) {
         await prisma.matchEvent.update({
           where: { id: existing.id },
@@ -2148,6 +2285,10 @@ async function runSyncMatchFromApiFootball(
   // pitch cards add today's match contribution at display time
   // (liveAdjustedSeasonStat). Writing seasonOrdinal bumps caused
   // double-count (e.g. Mbeumo DB=2 + card +1 → 3).
+
+  await pruneStaleGoals(matchId, events, homeAfId, awayAfId).catch((err) =>
+    console.error("[sync] prune stale goals failed", matchId, err)
+  );
 
   await dedupeMatchEvents(matchId).catch((err) =>
     console.error("[sync] dedupe events failed", matchId, err)

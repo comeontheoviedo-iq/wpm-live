@@ -5,6 +5,7 @@
  * Catalogue + gaps: docs/DATA_VIZ_FLASH.md
  */
 
+import { selectScoredGoals } from "./match-goals";
 import type { LivePlayerStatRow } from "@/lib/live-stat-triggers";
 
 export type ShotPoint = {
@@ -330,8 +331,7 @@ function mapSide(side: string | null): "home" | "away" | null {
 }
 
 export function buildGoalTimeline(bags: VizBags): VizPayload | null {
-  const goals = (bags.events || [])
-    .filter((e) => /goal|own_goal|penalty_goal/i.test(e.type || ""))
+  const goals = selectScoredGoals(bags.events || [])
     .map((e) => {
       const side = mapSide(e.teamSide);
       if (side == null || !Number.isFinite(e.minute)) return null;

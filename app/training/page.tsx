@@ -5,7 +5,6 @@ import {
   Clapperboard,
   GraduationCap,
   NotebookPen,
-  PlayCircle,
   Check,
 } from "lucide-react";
 
@@ -86,7 +85,7 @@ export default function TrainingPage() {
           </div>
           <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Training hub</h1>
           <p className="mt-3 text-slate-400 text-sm sm:text-base leading-relaxed">
-            Watch the Matchday Cut below, then follow the written quick-start — Signup → plan → desk →
+            Watch the Matchday Cut or the How-to below, then follow the written quick-start — Signup → plan → desk →
             paste prep → organise → matchday.
           </p>
         </div>
@@ -122,16 +121,28 @@ export default function TrainingPage() {
               </span>
             </div>
             <div className="rounded-2xl border border-white/10 bg-gradient-to-b from-white/[0.04] to-transparent p-5">
-              <div className="flex h-28 items-center justify-center rounded-xl border border-dashed border-white/15 bg-[#05080f]">
-                <PlayCircle className="h-10 w-10 text-slate-600" />
+              <div className="overflow-hidden rounded-xl border border-white/10 bg-[#05080f] aspect-video">
+                <video
+                  className="h-full w-full object-cover"
+                  controls
+                  playsInline
+                  preload="metadata"
+                >
+                  <source
+                    src="/videos/cocomms-howto.mp4"
+                    type="video/mp4"
+                  />
+                </video>
               </div>
               <h3 className="mt-4 font-semibold flex items-center gap-2">
                 <NotebookPen className="h-4 w-4 text-teal-300" />
                 How-to video
               </h3>
-              <p className="mt-1 text-sm text-slate-500">Coming soon — paste your prep & matchday desk.</p>
-              <span className="mt-3 inline-block rounded-full border border-white/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                Placeholder
+              <p className="mt-1 text-sm text-slate-500">
+                ~60s — signup, desk, Research dump, Notes/Scripts, live basics.
+              </p>
+              <span className="mt-3 inline-block rounded-full border border-teal-500/30 bg-teal-500/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-teal-300">
+                Live
               </span>
             </div>
           </div>

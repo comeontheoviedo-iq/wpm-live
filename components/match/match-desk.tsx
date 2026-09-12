@@ -49,6 +49,7 @@ import { SpeakNameButton } from "@/components/match/speak-name-button";
 import { FieldSettingsModal } from "@/components/match/field-settings-modal";
 import { HooksPosterOverlay } from "@/components/match/hooks-poster-overlay";
 import { EventTimeline } from "@/components/match/event-timeline";
+import { ActionTicker } from "@/components/match/action-ticker";
 import { EventComposer } from "@/components/live/event-composer";
 import { Button } from "@/components/ui/button";
 import { FORMATIONS } from "@/lib/formations"
@@ -2857,6 +2858,24 @@ export function MatchDesk({
           if (p) openPlayer(p);
         }}
       />
+
+      {/* Action ticker scaffold — live AF events strip; polish parked */}
+      {(status === "Live" || status === "Half Time") && (
+        <div className="mx-0.5">
+          <ActionTicker
+            items={[...events]
+              .slice(-8)
+              .reverse()
+              .map((e) => ({
+                id: e.id,
+                minute: e.minute,
+                type: e.type,
+                description: e.description,
+                teamSide: e.teamSide,
+              }))}
+          />
+        </div>
+      )}
 
       <CompetitionScoresStrip matchId={matchId} className="mx-0.5" />
 

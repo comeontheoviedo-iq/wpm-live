@@ -22,6 +22,9 @@ import {
   GraduationCap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useLocale } from "@/components/i18n/locale-provider";
+import { SUPPORTED_LOCALES, type AppLocale } from "@/lib/i18n";
+import type { AfUsageSnapshot } from "@/lib/af-usage";
 
 type Tab =
   | "profile"
@@ -84,6 +87,10 @@ export default function SettingsPage() {
   const [integrationsHint, setIntegrationsHint] = useState<string | null>(null);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [statusPending, setStatusPending] = useState(false);
+  const [afUsage, setAfUsage] = useState<AfUsageSnapshot | null>(null);
+  const { locale, setLocale, t } = useLocale();
+  const [localeBusy, setLocaleBusy] = useState(false);
+  const [localeMsg, setLocaleMsg] = useState<string | null>(null);
   const [plan, setPlan] = useState<PlanStatus | null>(null);
   const [planBusy, setPlanBusy] = useState(false);
   const [planMsg, setPlanMsg] = useState<string | null>(null);
@@ -121,6 +128,14 @@ export default function SettingsPage() {
         setApiFootball(Boolean(j.apiFootball));
         setGemini(Boolean(j.gemini));
         if (j.hint) setIntegrationsHint(String(j.hint));
+        if (j.apiFootball) {
+          fetch("/api/football/status")
+            .then((r) => (r.ok ? r.json() : null))
+            .then((s) => {
+              if (s?.usage) setAfUsage(s.usage as AfUsageSnapshot);
+            })
+            .catch(() => undefined);
+        }
       })
       .catch(() => undefined);
     loadPlan();
@@ -135,6 +150,7 @@ export default function SettingsPage() {
       const json = await res.json();
       setApiFootball(Boolean(json.configured));
       setStatusMsg(json.message || (json.ok ? "Connection OK" : "Connection failed"));
+      if (json.usage) setAfUsage(json.usage as AfUsageSnapshot);
     } catch (e) {
       setStatusMsg(e instanceof Error ? e.message : "Connection test failed");
     } finally {
@@ -388,9 +404,43 @@ export default function SettingsPage() {
                   <p className="text-sm text-slate-500 mb-4">Customize how CoComms looks on your device.</p>
                   <div className="text-sm font-medium mb-2">Theme</div>
                   <div className="grid grid-cols-3 gap-2">
-                    {(["light", "dark", "system"] as const).map((t) => (
-                      <button key={t} type="button" onClick={() => setTheme(t)} className={cn("rounded-xl border px-3 py-3 text-sm capitalize", theme === t ? "border-teal-500 bg-teal-50 dark:bg-teal-950 text-teal-800 dark:text-teal-200" : "border-slate-200 dark:border-slate-700")}>{t}</button>
+                    {(["light", "dark", "system"] as const).map((themeOpt) => (
+                      <button key={themeOpt} type="button" onClick={() => setTheme(themeOpt)} className={cn("rounded-xl border px-3 py-3 text-sm capitalize", theme === themeOpt ? "border-teal-500 bg-teal-50 dark:bg-teal-950 text-teal-800 dark:text-teal-200" : "border-slate-200 dark:border-slate-700")}>{themeOpt}</button>
                     ))}
+                  </div>
+                  <div className="mt-6">
+                    <div className="text-sm font-medium mb-1">{t("settings.preferredLanguage")}</div>
+                    <p className="text-xs text-slate-500 mb-3">{t("settings.preferredLanguageHelp")}</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {SUPPORTED_LOCALES.map((opt) => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          disabled={localeBusy}
+                          onClick={async () => {
+                            setLocaleBusy(true);
+                            setLocaleMsg(null);
+                            try {
+                              await setLocale(opt.id as AppLocale);
+                              setLocaleMsg(`Saved · ${opt.label}`);
+                            } catch (e) {
+                              setLocaleMsg(e instanceof Error ? e.message : "Could not save language");
+                            } finally {
+                              setLocaleBusy(false);
+                            }
+                          }}
+                          className={cn(
+                            "rounded-xl border px-3 py-3 text-sm text-left",
+                            locale === opt.id
+                              ? "border-teal-500 bg-teal-50 dark:bg-teal-950 text-teal-800 dark:text-teal-200"
+                              : "border-slate-200 dark:border-slate-700"
+                          )}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                    {localeMsg && <p className="text-xs text-slate-500 mt-2">{localeMsg}</p>}
                   </div>
                 </CardBody>
               </Card>
@@ -414,8 +464,33 @@ export default function SettingsPage() {
                     <span className={plan?.hasIntel ? "rounded-full bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-200 px-2.5 py-1 text-xs font-medium" : "rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 px-2.5 py-1 text-xs font-medium"}>Plan {plan?.plan === "intel" ? "Intel" : "Base"}</span>
                   </div>
                   {integrationsHint && <p className="text-xs text-slate-500">{integrationsHint}</p>}
+                  {afUsage && (afUsage.level === "warn" || afUsage.level === "high") && afUsage.message && (
+                    <div
+                      className={cn(
+                        "rounded-xl border px-3 py-2.5 text-xs",
+                        afUsage.level === "high"
+                          ? "border-rose-300 bg-rose-50 text-rose-900 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-100"
+                          : "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100"
+                      )}
+                    >
+                      <div className="font-semibold">
+                        {afUsage.level === "high" ? "Live-feed usage high" : "Live-feed usage warning"}
+                        {afUsage.current != null && afUsage.limit != null
+                          ? ` · ${afUsage.current}/${afUsage.limit}`
+                          : ""}
+                      </div>
+                      <p className="mt-1 opacity-90">{afUsage.message}</p>
+                      {afUsage.todo && <p className="mt-1 opacity-70">{afUsage.todo}</p>}
+                    </div>
+                  )}
+                  {afUsage?.todo && afUsage.level === "unknown" && (
+                    <p className="text-xs text-slate-500">{afUsage.todo}</p>
+                  )}
                   <Button type="button" variant="outline" disabled={statusPending} onClick={testApiFootball}>{statusPending ? "Testing…" : "Test live-feed connection"}</Button>
                   {statusMsg && <p className="text-xs text-slate-600 dark:text-slate-300 whitespace-pre-wrap">{statusMsg}</p>}
+                  {afUsage && afUsage.level === "ok" && afUsage.current != null && afUsage.limit != null && (
+                    <p className="text-xs text-slate-500">Usage today: {afUsage.current}/{afUsage.limit} requests</p>
+                  )}
                 </CardBody>
               </Card>
             )}

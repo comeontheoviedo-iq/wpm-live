@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { Logo } from "./logo";
 import { useTheme } from "@/components/theme-provider";
+import { useLocale } from "@/components/i18n/locale-provider";
 import { FeedbackWidget } from "@/components/feedback/feedback-widget";
 
 export function AppHeader({
@@ -23,6 +24,7 @@ export function AppHeader({
 }) {
   const router = useRouter();
   const { resolved, setTheme } = useTheme();
+  const { t } = useLocale();
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -37,7 +39,7 @@ export function AppHeader({
           <Logo />
           <div className="hidden min-w-0 items-center gap-2 sm:flex">
             <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">
-              Commentary desk
+              {t("header.commentaryDesk")}
             </span>
           </div>
           <div className="ml-auto flex items-center gap-0.5">

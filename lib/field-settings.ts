@@ -142,9 +142,9 @@ export const DEFAULT_FIELD_SETTINGS: FieldSettings = {
 
 /**
  * Fullscreen desired marker % when user never adjusted Field Settings.
- * Cap at 0 so Full never auto-grows above windowed default.
+ * Bumps tokens up for aging-eyes readability (windowed default is −18).
  */
-export const FULLSCREEN_DEFAULT_MARKER_PCT = 0;
+export const FULLSCREEN_DEFAULT_MARKER_PCT = 32;
 
 export function clampPct(n: number): number {
   if (!Number.isFinite(n)) return 0;
@@ -402,7 +402,8 @@ export function effectiveMarkerPct(
 ): number {
   if (settings.userAdjusted) return settings.markerSizePct;
   if (isFullscreen) {
-    return Math.min(FULLSCREEN_DEFAULT_MARKER_PCT, settings.markerSizePct);
+    // Grow cards in Full — Math.max so we never stay stuck at the tiny windowed %.
+    return Math.max(FULLSCREEN_DEFAULT_MARKER_PCT, settings.markerSizePct);
   }
   return settings.markerSizePct;
 }

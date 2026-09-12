@@ -764,6 +764,7 @@ export function PitchBoard({
   homeOnLeft = true,
   onToggleHomeOnLeft,
   liveCompact,
+  isFullscreen = false,
   onAirMode,
   onFreePlace,
   onCoachClick,
@@ -836,6 +837,8 @@ export function PitchBoard({
   onToggleHomeOnLeft?: () => void;
   /** LIVE: prefer smaller cards / less chrome. */
   liveCompact?: boolean;
+  /** Desk fullscreen — skip LIVE compact crush so tokens can grow. */
+  isFullscreen?: boolean;
   /** On-air presentation: hide secondary pitch badges / tools. */
   onAirMode?: boolean;
   /** Drop anywhere on pitch (free-move, not slot snap). */
@@ -988,7 +991,7 @@ export function PitchBoard({
   // LIVE desk: quieter default cards only when the user has NOT touched Field
   // Settings. Never clamp userAdjusted markerSizePct (slider −40…+40 must show).
   const liveDesiredPct =
-    liveCompact && !resolvedSettings.userAdjusted
+    liveCompact && !isFullscreen && !resolvedSettings.userAdjusted
       ? Math.min(resolvedMarkerPct, -28)
       : resolvedMarkerPct;
   // Keep dataRows from Field Settings (default 2) so M GOL / M AST stay visible

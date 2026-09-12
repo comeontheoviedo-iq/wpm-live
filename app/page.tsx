@@ -115,25 +115,32 @@ export default function MarketingHome() {
               </p>
             </div>
 
-            {/* Honest placeholder — real desk demo video coming */}
+            {/* Matchday Cut demo — see docs/DEMO_VIDEO.md */}
             <div className="relative">
               <div className="rounded-2xl border border-white/10 bg-[#0d1524] p-4 shadow-2xl shadow-black/50 ring-1 ring-teal-500/20">
                 <div className="mb-3 flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
                   <span className="inline-flex items-center gap-1.5 text-rose-400">
                     <span className="h-1.5 w-1.5 rounded-full bg-rose-500" /> On air desk
                   </span>
-                  <span>CoComms</span>
+                  <span>Matchday Cut</span>
                 </div>
-                <div className="flex aspect-video flex-col items-center justify-center rounded-xl border border-dashed border-white/15 bg-[#05080f] px-6 text-center">
-                  <MonitorPlay className="h-8 w-8 text-teal-400/80" />
-                  <p className="mt-3 text-sm font-semibold text-slate-200">
-                    Demo video coming soon
-                  </p>
-                  <p className="mt-1 max-w-xs text-xs leading-relaxed text-slate-500">
-                    A real walkthrough of the live desk — notes, Scripts, pitch board,
-                    and feed — will land here.
-                  </p>
+                <div className="overflow-hidden rounded-xl border border-white/10 bg-[#05080f] aspect-video">
+                  <video
+                    className="h-full w-full object-cover"
+                    controls
+                    playsInline
+                    preload="metadata"
+                  >
+                    <source
+                      src="/videos/cocomms-matchday-demo.mp4"
+                      type="video/mp4"
+                    />
+                    Your browser does not support the demo video.
+                  </video>
                 </div>
+                <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
+                  ~45s matchday cut — co-pilot desk, live feed, lineups, Scripts.
+                </p>
               </div>
             </div>
           </div>

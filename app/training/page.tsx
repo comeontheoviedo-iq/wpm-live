@@ -86,7 +86,7 @@ export default function TrainingPage() {
           </div>
           <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Training hub</h1>
           <p className="mt-3 text-slate-400 text-sm sm:text-base leading-relaxed">
-            Videos are coming soon. Until then, follow the written quick-start — Signup → plan → desk →
+            Watch the Matchday Cut below, then follow the written quick-start — Signup → plan → desk →
             paste prep → organise → matchday.
           </p>
         </div>
@@ -97,16 +97,28 @@ export default function TrainingPage() {
           </p>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="rounded-2xl border border-white/10 bg-gradient-to-b from-white/[0.04] to-transparent p-5">
-              <div className="flex h-28 items-center justify-center rounded-xl border border-dashed border-white/15 bg-[#05080f]">
-                <PlayCircle className="h-10 w-10 text-slate-600" />
+              <div className="overflow-hidden rounded-xl border border-white/10 bg-[#05080f] aspect-video">
+                <video
+                  className="h-full w-full object-cover"
+                  controls
+                  playsInline
+                  preload="metadata"
+                >
+                  <source
+                    src="/videos/cocomms-matchday-demo.mp4"
+                    type="video/mp4"
+                  />
+                </video>
               </div>
               <h3 className="mt-4 font-semibold flex items-center gap-2">
                 <Clapperboard className="h-4 w-4 text-teal-300" />
-                Demo video
+                Demo video — Matchday Cut
               </h3>
-              <p className="mt-1 text-sm text-slate-500">Coming soon — full product walkthrough.</p>
-              <span className="mt-3 inline-block rounded-full border border-white/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                Placeholder
+              <p className="mt-1 text-sm text-slate-500">
+                ~45s co-pilot cut — notes, live feed, lineups, desk.
+              </p>
+              <span className="mt-3 inline-block rounded-full border border-teal-500/30 bg-teal-500/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-teal-300">
+                Live
               </span>
             </div>
             <div className="rounded-2xl border border-white/10 bg-gradient-to-b from-white/[0.04] to-transparent p-5">

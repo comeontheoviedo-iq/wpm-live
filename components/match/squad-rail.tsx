@@ -151,9 +151,16 @@ export function SquadRail({
                 <div className="text-[9px] text-slate-400 truncate">
                   {p.position || "—"}
                   {onXi ? ` · ${p.formationSlot}` : ""}
-                  {p.noteCount ? ` · ${p.noteCount} notes` : ""}
                 </div>
               </div>
+              {p.noteCount ? (
+                <span
+                  className="accent-secondary-chip shrink-0"
+                  title={`${p.noteCount} note${p.noteCount === 1 ? "" : "s"} · open dossier from pitch`}
+                >
+                  {p.noteCount}n
+                </span>
+              ) : null}
               {onXi && (
                 <span className="text-[8px] font-bold uppercase text-teal-600 shrink-0">
                   XI

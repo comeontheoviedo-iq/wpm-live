@@ -57,12 +57,38 @@ export function LivePitch({
   // Match main desk: editable even when Official
   const locked = false;
 
+  const noteCountById = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const n of notes) {
+      if (!n.entityId) continue;
+      m.set(n.entityId, (m.get(n.entityId) || 0) + 1);
+    }
+    return m;
+  }, [notes]);
+
+  const homeWithNotes = useMemo(
+    () =>
+      homePlayers.map((p) => ({
+        ...p,
+        noteCount: noteCountById.get(p.id) || 0,
+      })),
+    [homePlayers, noteCountById]
+  );
+  const awayWithNotes = useMemo(
+    () =>
+      awayPlayers.map((p) => ({
+        ...p,
+        noteCount: noteCountById.get(p.id) || 0,
+      })),
+    [awayPlayers, noteCountById]
+  );
+
   const byId = useMemo(() => {
     const m = new Map<string, PitchPlayer & { side: "home" | "away" }>();
-    for (const p of homePlayers) m.set(p.id, { ...p, side: "home" });
-    for (const p of awayPlayers) m.set(p.id, { ...p, side: "away" });
+    for (const p of homeWithNotes) m.set(p.id, { ...p, side: "home" });
+    for (const p of awayWithNotes) m.set(p.id, { ...p, side: "away" });
     return m;
-  }, [homePlayers, awayPlayers]);
+  }, [homeWithNotes, awayWithNotes]);
 
   const filtered = useMemo(() => {
     if (!selectedId) return notes;
@@ -138,8 +164,8 @@ export function LivePitch({
         awayKit={awayKit}
         homeFormation={homeFormation}
         awayFormation={awayFormation}
-        homePlayers={homePlayers}
-        awayPlayers={awayPlayers}
+        homePlayers={homeWithNotes}
+        awayPlayers={awayWithNotes}
         homeCoach={homeCoach}
         awayCoach={awayCoach}
         referee={referee}
@@ -159,6 +185,10 @@ export function LivePitch({
           selectedId ? byId.get(selectedId)?.name || "Player" : "Match"
         }
         compact
+        playerNameById={Object.fromEntries(
+          [...byId.entries()].map(([id, p]) => [id, p.name])
+        )}
+        onNotePlayerClick={(pid) => setSelectedId(pid)}
       />
       {selectedId && (
         <>
@@ -172,6 +202,8 @@ export function LivePitch({
           <PlayerDossier
             matchId={matchId}
             playerId={selectedId}
+            initialTab="notes"
+            initialNotes={notes.filter((n) => n.entityId === selectedId)}
             onClose={() => setSelectedId(null)}
           />
         </>

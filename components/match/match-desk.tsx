@@ -23,6 +23,7 @@ import {
   BarChart3,
   Trophy,
   Target,
+  Rows2,
 } from "lucide-react";
 import { PitchBoard, type PitchPlayer } from "@/components/match/pitch";
 import type { MatchKitColors } from "@/lib/kit-colors";
@@ -64,6 +65,12 @@ import { cn } from "@/lib/utils";
 import { formatLiveClock } from "@/lib/live-clock";
 import { ordinal, seasonOrdinal } from "@/lib/season-tally";
 import { bindDeskHotkeys } from "@/lib/desk-hotkeys";
+import {
+  loadDeskDensity,
+  saveDeskDensity,
+  toggleDeskDensity,
+  type DeskDensity,
+} from "@/lib/desk-density";
 import { enrichFlashLines, momentFingerprint, shouldEmitMomentFlash } from "@/lib/flash-enrich";
 import {
   evaluateMomentumProxy,
@@ -655,6 +662,8 @@ export function MatchDesk({
     DEFAULT_FIELD_SETTINGS
   );
   const [fieldSettingsOpen, setFieldSettingsOpen] = useState(false);
+  const [deskDensity, setDeskDensity] = useState<DeskDensity>("compact");
+  const [dossierTab, setDossierTab] = useState<"overview" | "notes">("overview");
   const [hooksPosterOpen, setHooksPosterOpen] = useState(false);
   const [hooksPosterExists, setHooksPosterExists] = useState(false);
   const [hooksPosterSrc, setHooksPosterSrc] = useState<string | null>(null);
@@ -700,6 +709,7 @@ export function MatchDesk({
 
   useEffect(() => {
     setFieldSettings(loadFieldSettings());
+    setDeskDensity(loadDeskDensity());
   }, []);
   useEffect(() => {
     try {
@@ -1001,6 +1011,7 @@ export function MatchDesk({
             ? o?.formationSlot || p.formationSlot
             : p.formationSlot,
           noteHook: noteHookByPlayer.get(p.id) || null,
+          noteCount: notes.filter((n) => n.entityId === p.id).length,
           displayName: o?.displayName ?? null,
           pronunciation: o?.pronunciation ?? null,
           pitchFlag: o?.pitchFlag ?? null,
@@ -1009,7 +1020,7 @@ export function MatchDesk({
           pitchY: place ? o?.pitchY ?? null : null,
         };
       }),
-    [homePlayers, events, noteHookByPlayer, overrideById]
+    [homePlayers, events, noteHookByPlayer, overrideById, notes]
   );
   const awayEnriched = useMemo(
     () =>
@@ -1022,6 +1033,7 @@ export function MatchDesk({
             ? o?.formationSlot || p.formationSlot
             : p.formationSlot,
           noteHook: noteHookByPlayer.get(p.id) || null,
+          noteCount: notes.filter((n) => n.entityId === p.id).length,
           displayName: o?.displayName ?? null,
           pronunciation: o?.pronunciation ?? null,
           pitchFlag: o?.pitchFlag ?? null,
@@ -1030,7 +1042,7 @@ export function MatchDesk({
           pitchY: place ? o?.pitchY ?? null : null,
         };
       }),
-    [awayPlayers, events, noteHookByPlayer, overrideById]
+    [awayPlayers, events, noteHookByPlayer, overrideById, notes]
   );
 
   const squad: SquadPlayer[] = useMemo(() => {
@@ -1120,6 +1132,8 @@ export function MatchDesk({
           squad.find((p) => p.shirtNumber === shirt);
         if (hit) {
           setSelected(hit);
+          const nc = notes.filter((n) => n.entityId === hit.id).length;
+          setDossierTab(nc > 0 ? "notes" : "overview");
           setDossierId(hit.id);
         } else {
           setMsg(`No shirt #${shirt} on this desk`);
@@ -2226,10 +2240,15 @@ export function MatchDesk({
     setSelected(null);
   }
 
-  function openPlayer(p: PitchPlayer | SquadPlayer) {
+  function openPlayer(
+    p: PitchPlayer | SquadPlayer,
+    opts?: { tab?: "overview" | "notes" }
+  ) {
     if (placing) return;
     const full = squad.find((s) => s.id === p.id);
     if (full) setSelected(full);
+    // Default overview; notes tab only when caller asks (note CTA / shirt with notes)
+    setDossierTab(opts?.tab ?? "overview");
     setDossierId(p.id);
     // No Players bucket — roll into home/away; entity scope still filters to player
     const side = homePlayers.some((h) => h.id === p.id)
@@ -2403,6 +2422,7 @@ export function MatchDesk({
     <div
       ref={deskRootRef}
       data-desk-mode={deskMode}
+      data-desk-density={deskDensity}
       className={cn(
         "relative flex flex-col gap-1.5 overflow-hidden bg-[var(--background)] text-[var(--foreground)]",
         deskMode === "onair" && "onair-desk",
@@ -2867,6 +2887,27 @@ export function MatchDesk({
           >
             <SlidersHorizontal className="h-3 w-3" />
             Field
+          </button>
+          <button
+            type="button"
+            className={cn(
+              "desk-btn desk-btn-secondary-accent",
+              deskDensity === "comfortable" && "is-active"
+            )}
+            onClick={() => {
+              const next = toggleDeskDensity(deskDensity);
+              setDeskDensity(next);
+              saveDeskDensity(next);
+            }}
+            title={
+              deskDensity === "compact"
+                ? "Density: Compact · click for Comfortable"
+                : "Density: Comfortable · click for Compact"
+            }
+            aria-label={`Desk density ${deskDensity}`}
+          >
+            <Rows2 className="h-3 w-3" />
+            {deskDensity === "compact" ? "Compact" : "Comfy"}
           </button>
           <button
             type="button"
@@ -3609,7 +3650,7 @@ export function MatchDesk({
         <PlayerDossier
           matchId={matchId}
           playerId={dossierId}
-          initialTab="overview"
+          initialTab={dossierTab}
           initialNotes={notes.filter((n) => n.entityId === dossierId)}
           playerName={squad.find((s) => s.id === dossierId)?.name}
           initialOverride={overrideById.get(dossierId) || null}
@@ -3617,6 +3658,7 @@ export function MatchDesk({
           onClose={() => {
             setDossierId(null);
             setSelected(null);
+            setDossierTab("overview");
           }}
         />
       )}

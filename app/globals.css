@@ -27,10 +27,16 @@
   --brand-soft: rgba(20, 184, 166, 0.14);
   --brand-glow: rgba(45, 212, 191, 0.14);
 
+  /* Secondary accent — amber for warnings / severity / pinned moments (not a rebrand) */
+  --accent-secondary: #f59e0b;
+  --accent-secondary-soft: rgba(245, 158, 11, 0.16);
+  --accent-secondary-glow: rgba(245, 158, 11, 0.22);
+  --accent-secondary-ink: #0b0e12;
+
   /* Broadcast accents — live edge only (goal/card/injury/break) */
   --live: #e11d48;
   --live-soft: rgba(244, 63, 94, 0.18);
-  --warning: #f59e0b;
+  --warning: var(--accent-secondary);
   --success: #34d399;
   --edge-goal: #34d399;
   --edge-card: #facc15;
@@ -122,9 +128,14 @@
   --brand-soft: #ccfbf1;
   --brand-glow: rgba(13, 148, 136, 0.18);
 
+  --accent-secondary: #d97706;
+  --accent-secondary-soft: rgba(217, 119, 6, 0.14);
+  --accent-secondary-glow: rgba(217, 119, 6, 0.2);
+  --accent-secondary-ink: #0b0e12;
+
   --live: #e11d48;
   --live-soft: #ffe4e6;
-  --warning: #f59e0b;
+  --warning: var(--accent-secondary);
   --success: #059669;
   --edge-goal: #059669;
   --edge-card: #eab308;
@@ -165,6 +176,7 @@
   --color-brand: var(--brand);
   --color-brand-dark: var(--brand-dark);
   --color-brand-soft: var(--brand-soft);
+  --color-accent-secondary: var(--accent-secondary);
   --color-live: var(--live);
   --font-sans: var(--font-plex-sans);
   --font-mono: var(--font-plex-mono);
@@ -627,6 +639,23 @@
     overflow: hidden;
   }
   /* Subtle kit accent — thin left edge + top hairline (not a thick bar) */
+
+  /* Note presence pip — dossier cue only; never render note text under tokens */
+  .pitch-token-note-pip {
+    position: absolute;
+    right: 3px;
+    bottom: 3px;
+    z-index: 3;
+    width: 6px;
+    height: 6px;
+    border-radius: 1px;
+    background: var(--accent-secondary);
+    box-shadow:
+      0 0 0 1px rgba(0, 0, 0, 0.55),
+      0 0 6px var(--accent-secondary-glow);
+    pointer-events: none;
+  }
+
   .pitch-token-kit-edge {
     position: absolute;
     left: 0;
@@ -909,7 +938,7 @@
   .queue-row-pin {
     border-color: rgba(255, 255, 255, 0.08);
     border-left-width: 4px;
-    border-left-color: var(--warning);
+    border-left-color: var(--accent-secondary);
     background: #10141a;
     box-shadow: none;
   }
@@ -2685,3 +2714,63 @@ body.obs-overlay-active {
     transform: none;
   }
 }
+
+/* Desk density presets — fixed chrome, spacing only (no widget rearrange) */
+[data-desk-density="comfortable"] {
+  --desk-gap: 0.5rem;
+  --desk-header-py: 0.35rem;
+  --desk-header-px: 0.65rem;
+  --desk-queue-pad-y: 0.45rem;
+  --desk-queue-min-h: 42px;
+  --desk-rail-pad: 0.55rem;
+}
+[data-desk-density="compact"] {
+  --desk-gap: 0.35rem;
+  --desk-header-py: 0.2rem;
+  --desk-header-px: 0.45rem;
+  --desk-queue-pad-y: 0.3rem;
+  --desk-queue-min-h: 34px;
+  --desk-rail-pad: 0.35rem;
+}
+[data-desk-density] .desk-header {
+  padding-left: var(--desk-header-px);
+  padding-right: var(--desk-header-px);
+  padding-top: var(--desk-header-py);
+  padding-bottom: var(--desk-header-py);
+}
+[data-desk-density="comfortable"] .queue-row {
+  min-height: var(--desk-queue-min-h);
+  padding-top: var(--desk-queue-pad-y);
+  padding-bottom: var(--desk-queue-pad-y);
+}
+[data-desk-density="comfortable"].scan-desk,
+[data-desk-density="comfortable"].onair-desk {
+  gap: var(--desk-gap);
+}
+[data-desk-density="comfortable"] .desk-btn {
+  min-height: 1.85rem;
+  padding-inline: 0.55rem;
+}
+.desk-btn-secondary-accent.is-active {
+  border-color: color-mix(in oklab, var(--accent-secondary) 55%, transparent);
+  color: var(--accent-secondary);
+  background: var(--accent-secondary-soft);
+}
+.accent-secondary-edge {
+  border-left: 4px solid var(--accent-secondary);
+}
+.accent-secondary-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 2px;
+  border: 1px solid color-mix(in oklab, var(--accent-secondary) 45%, transparent);
+  background: var(--accent-secondary-soft);
+  color: var(--accent-secondary);
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.15rem 0.4rem;
+}
+

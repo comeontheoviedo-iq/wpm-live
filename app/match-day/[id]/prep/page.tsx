@@ -4,7 +4,7 @@ import { ChecklistClient } from "@/components/match/checklist";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { STATUS_FLOW } from "@/lib/utils";
 import { LinkFixtureCard } from "@/components/match/link-fixture";
-import { NotesPanel } from "@/components/notes/notes-panel";
+import { NotesMatchClient } from "@/components/notes/notes-match-client";
 
 export default async function PrepPage({
   params,
@@ -52,7 +52,7 @@ export default async function PrepPage({
           matchId={match.id}
           currentFixtureId={match.apiFootballFixtureId}
         />
-        <NotesPanel
+        <NotesMatchClient
           matchId={match.id}
           initialNotes={match.notes.map((n) => ({
             id: n.id,
@@ -63,7 +63,14 @@ export default async function PrepPage({
             entityId: n.entityId,
             pinned: n.pinned,
           }))}
-          compact
+          playerNameById={Object.fromEntries(
+            [
+              ...(match.homeClub?.players || []),
+              ...(match.awayClub?.players || []),
+            ]
+              .filter((p) => p?.id && p?.name)
+              .map((p) => [p.id, p.name])
+          )}
         />
       </div>
     </div>

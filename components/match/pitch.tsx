@@ -86,8 +86,10 @@ export type PitchPlayer = {
   matchApps?: number;
   /** Estimated minutes this match */
   matchMinutes?: number | null;
-  /** Optional 1-line hook from pinned player note title */
+  /** Optional 1-line hook from pinned player note title (tooltip only — never under-token) */
   noteHook?: string | null;
+  /** Notes count for dossier cue pip — not rendered as under-token text */
+  noteCount?: number;
   /** Match-scoped overrides */
   displayName?: string | null;
   pronunciation?: string | null;
@@ -466,7 +468,10 @@ function PitchCardToken({
           flagTitle,
           player.age != null ? `Age ${player.age}` : null,
           player.pronunciation ? `🔊 ${player.pronunciation}` : null,
-          player.noteHook || null,
+          (player.noteCount ?? 0) > 0
+            ? `${player.noteCount} note${player.noteCount === 1 ? "" : "s"} · click dossier`
+            : null,
+          player.noteHook ? `Hook: ${player.noteHook}` : null,
         ]
           .filter(Boolean)
           .join(" · ")}
@@ -596,6 +601,13 @@ function PitchCardToken({
             ) : null}
           </span>
         )}
+        {(player.noteCount ?? 0) > 0 ? (
+          <span
+            className="pitch-token-note-pip"
+            title={`${player.noteCount} note${player.noteCount === 1 ? "" : "s"} · open dossier`}
+            aria-hidden
+          />
+        ) : null}
       </span>
     </span>
   );

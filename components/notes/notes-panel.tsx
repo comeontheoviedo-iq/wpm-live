@@ -570,16 +570,17 @@ export function NotesPanel({
                 {n.pinned ? <span className="note-queue-chip">pin</span> : null}
               </div>
             )}
-            {expanded && playerLinked && n.entityId && (
+            {playerLinked && n.entityId && (
               <button
                 type="button"
-                className="mt-1.5 text-[10px] font-semibold text-slate-300 hover:text-white hover:underline"
+                className="accent-secondary-chip mt-1.5"
                 onClick={(e) => {
                   e.stopPropagation();
                   onNotePlayerClick?.(n.entityId!);
                 }}
+                title="Open dossier · Notes"
               >
-                Open player profile
+                Dossier
               </button>
             )}
           </div>
@@ -858,13 +859,14 @@ export function NotesPanel({
                 onNotePlayerClick && (
                   <button
                     type="button"
-                    className="mt-3 text-[11px] font-semibold text-slate-300 hover:text-white hover:underline"
+                    className="accent-secondary-chip mt-3"
                     onClick={() => {
                       onNotePlayerClick(popupNote.entityId!);
                       setPopupNoteId(null);
                     }}
+                    title="Open dossier · Notes"
                   >
-                    Open player profile
+                    Open dossier
                   </button>
                 )}
             </div>

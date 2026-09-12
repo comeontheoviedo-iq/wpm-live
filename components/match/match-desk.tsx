@@ -22,6 +22,7 @@ import {
   LayoutTemplate,
   BarChart3,
   Trophy,
+  Target,
 } from "lucide-react";
 import { PitchBoard, type PitchPlayer } from "@/components/match/pitch";
 import type { MatchKitColors } from "@/lib/kit-colors";
@@ -49,7 +50,8 @@ import { SpeakNameButton } from "@/components/match/speak-name-button";
 import { FieldSettingsModal } from "@/components/match/field-settings-modal";
 import { HooksPosterOverlay } from "@/components/match/hooks-poster-overlay";
 import { EventTimeline } from "@/components/match/event-timeline";
-import { ActionTicker } from "@/components/match/action-ticker";
+import { ActionTicker, type ActionTickerItem } from "@/components/match/action-ticker";
+import { MatchStatisticsView } from "@/components/match/match-statistics";
 import { EventComposer } from "@/components/live/event-composer";
 import { Button } from "@/components/ui/button";
 import { FORMATIONS } from "@/lib/formations"
@@ -527,6 +529,40 @@ export function MatchDesk({
   const recentVizKindsRef = useRef<VizFlashKind[]>([]);
   const eventsRef = useRef(events);
   eventsRef.current = events;
+
+  function mapEventsToTicker(list: MatchEventRow[]): ActionTickerItem[] {
+    return [...list]
+      .slice()
+      .sort((a, b) => b.minute - a.minute || b.id.localeCompare(a.id))
+      .slice(0, 12)
+      .map((e) => ({
+        id: e.id,
+        minute: e.minute,
+        type: e.type,
+        description: e.description,
+        teamSide: e.teamSide,
+      }));
+  }
+  const [tickerItems, setTickerItems] = useState<ActionTickerItem[]>(() =>
+    mapEventsToTicker(events)
+  );
+  useEffect(() => {
+    setTickerItems(mapEventsToTicker(events));
+  }, [events]);
+  const [statsOverlayOpen, setStatsOverlayOpen] = useState(false);
+
+  useEffect(() => {
+    if (!statsOverlayOpen) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      setStatsOverlayOpen(false);
+    }
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [statsOverlayOpen]);
+
   const scoreSampleRef = useRef({ home: homeScore, away: awayScore });
   scoreSampleRef.current = { home: homeScore, away: awayScore };
   const advStatsCacheRef = useRef<{
@@ -1033,9 +1069,12 @@ export function MatchDesk({
   useEffect(() => {
     setLiveMinuteExtra(minuteExtra ?? null);
   }, [minuteExtra]);
-  const clockLabel = formatLiveClock(liveMinute, liveMinuteExtra, {
-    status,
-  });
+  const clockLabel =
+    periodProp === "HT" || status === "Half Time"
+      ? "HT"
+      : periodProp === "FT" || status === "Full Time"
+        ? "FT"
+        : formatLiveClock(liveMinute, liveMinuteExtra, { status });
 
   useEffect(() => {
     if (!placing) return;
@@ -1529,10 +1568,30 @@ export function MatchDesk({
             minute: number;
             description: string;
             playerId?: string | null;
+            teamSide?: string | null;
             seasonLines?: string[];
             assistSeasonLines?: string[];
           }[];
           if (news.length) {
+            // Prompt ticker from live sync path before SSR refresh lands
+            setTickerItems((prev) => {
+              const mapped: ActionTickerItem[] = news.map((e, i) => ({
+                id: `live|${e.minute}|${e.type}|${e.description}|${i}|${Date.now()}`,
+                minute: e.minute,
+                type: e.type,
+                description: e.description,
+                teamSide: e.teamSide ?? null,
+              }));
+              const seen = new Set<string>();
+              const merged: ActionTickerItem[] = [];
+              for (const it of [...mapped, ...prev]) {
+                const k = `${it.minute}|${it.type}|${it.description}`;
+                if (seen.has(k)) continue;
+                seen.add(k);
+                merged.push(it);
+              }
+              return merged.slice(0, 12);
+            });
             const top = news
               .slice(0, 3)
               .map((e) => `${e.minute}' ${e.description}`)
@@ -2772,6 +2831,25 @@ export function MatchDesk({
               <BarChart3 className="h-3 w-3" />
               DATA VIZ
             </button>
+            <button
+              type="button"
+              className={cn(
+                "desk-btn font-bold tracking-[0.1em]",
+                statsOverlayOpen && "border-sky-400/50 text-sky-100",
+                !statistics.length && "opacity-45"
+              )}
+              disabled={!statistics.length && !events.length}
+              onClick={() => setStatsOverlayOpen(true)}
+              title={
+                statistics.length
+                  ? "Match statistics (Esc to close)"
+                  : "Sync to pull match statistics"
+              }
+              aria-label="STATS"
+            >
+              <Target className="h-3 w-3" />
+              STATS
+            </button>
           </div>
           {!apiFootballFixtureId && (
             <Link
@@ -2861,21 +2939,10 @@ export function MatchDesk({
         }}
       />
 
-      {/* Action ticker scaffold — live AF events strip; polish parked */}
+      {/* Live action ticker — fed by SSR events + sync newEvents */}
       {(status === "Live" || status === "Half Time") && (
         <div className="mx-0.5">
-          <ActionTicker
-            items={[...events]
-              .slice(-8)
-              .reverse()
-              .map((e) => ({
-                id: e.id,
-                minute: e.minute,
-                type: e.type,
-                description: e.description,
-                teamSide: e.teamSide,
-              }))}
-          />
+          <ActionTicker items={tickerItems} />
         </div>
       )}
 
@@ -3552,6 +3619,64 @@ export function MatchDesk({
             setSelected(null);
           }}
         />
+      )}
+
+
+      {statsOverlayOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Match statistics"
+          data-cocomms="stats-overlay"
+          className="fixed inset-0 z-[200] flex flex-col bg-black/80"
+          onClick={() => setStatsOverlayOpen(false)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setStatsOverlayOpen(false);
+          }}
+        >
+          <div
+            className="relative m-auto max-h-[94dvh] w-[min(96vw,42rem)] overflow-y-auto rounded-xl shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-white/10 bg-[#0a0d12]/95 px-3 py-2">
+              <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/70">
+                STATS · Esc to return
+              </span>
+              <button
+                type="button"
+                className="rounded-md border border-white/15 bg-black/50 p-1.5 text-white/80 hover:bg-white/10"
+                aria-label="Close stats"
+                onClick={() => setStatsOverlayOpen(false)}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <MatchStatisticsView
+              homeName={homeName}
+              awayName={awayName}
+              homeColor={homeColor}
+              awayColor={awayColor}
+              homeScore={scoreSampleRef.current.home}
+              awayScore={scoreSampleRef.current.away}
+              status={status}
+              competition={competition}
+              kickoffLabel={kickoffLabel}
+              venueName={venueName}
+              venueCity={venueCity}
+              attendance={attendance}
+              venueCapacity={venueCapacity}
+              statistics={statistics}
+              events={events.map((e) => ({
+                id: e.id,
+                type: e.type,
+                minute: e.minute,
+                description: e.description,
+                teamSide: e.teamSide,
+                playerId: e.playerId,
+              }))}
+            />
+          </div>
+        </div>
       )}
 
       <HooksPosterOverlay

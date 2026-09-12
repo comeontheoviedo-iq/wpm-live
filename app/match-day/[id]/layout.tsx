@@ -76,7 +76,7 @@ export default async function MatchDayLayout({
             </span>
           </div>
           <div className="flex items-center gap-2 sm:ml-auto">
-            <StatusControl matchId={match.id} status={match.status} />
+            <StatusControl matchId={match.id} status={match.status} period={(match as { period?: string | null }).period ?? null} />
             <DeleteMatchDesk
               matchDayId={match.matchDayId}
               matchLabel={`${match.homeClub.shortName} vs ${match.awayClub.shortName}`}

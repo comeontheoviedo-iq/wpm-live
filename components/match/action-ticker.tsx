@@ -1,10 +1,12 @@
 "use client";
 
 /**
- * Thin scaffold: live AF events ticker for the desk.
- * Wire to sync `newEvents` / MatchEvent stream after fixture fan-in is solid.
- * Polish (animation density, filters, pinning) parked.
+ * Live AF events ticker for the desk.
+ * Prefer feeding via sync `newEvents` so items appear before full refresh.
  */
+
+import { useEffect, useRef, useState } from "react";
+import { cn } from "@/lib/utils";
 
 export type ActionTickerItem = {
   id: string;
@@ -21,6 +23,22 @@ export function ActionTicker({
   items: ActionTickerItem[];
   emptyLabel?: string;
 }) {
+  const prevIdsRef = useRef<Set<string>>(new Set());
+  const [freshIds, setFreshIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const next = new Set(items.map((i) => i.id));
+    const added: string[] = [];
+    for (const id of next) {
+      if (!prevIdsRef.current.has(id)) added.push(id);
+    }
+    prevIdsRef.current = next;
+    if (!added.length) return;
+    setFreshIds(new Set(added));
+    const t = window.setTimeout(() => setFreshIds(new Set()), 2400);
+    return () => window.clearTimeout(t);
+  }, [items]);
+
   if (!items.length) {
     return (
       <div
@@ -39,22 +57,28 @@ export function ActionTicker({
       aria-label="Live action ticker"
     >
       <div className="flex gap-2 overflow-x-auto px-2 py-1.5 scrollbar-thin">
-        {items.slice(0, 12).map((ev) => (
-          <div
-            key={ev.id}
-            className="shrink-0 rounded-md bg-[var(--surface-elevated)] px-2 py-1 text-[11px] ring-1 ring-[var(--border)]"
-          >
-            <span className="font-semibold tabular-nums text-[var(--foreground)]">
-              {ev.minute}&apos;
-            </span>{" "}
-            <span className="uppercase tracking-wide text-[var(--muted)]">
-              {ev.type.replace(/_/g, " ")}
-            </span>
-            <span className="ml-1 text-[var(--foreground)]/90">
-              {ev.description}
-            </span>
-          </div>
-        ))}
+        {items.slice(0, 12).map((ev) => {
+          const isFresh = freshIds.has(ev.id);
+          return (
+            <div
+              key={ev.id}
+              className={cn(
+                "shrink-0 rounded-md bg-[var(--surface-elevated)] px-2 py-1 text-[11px] ring-1 ring-[var(--border)] transition-colors",
+                isFresh && "action-ticker-item-fresh ring-rose-400/50"
+              )}
+            >
+              <span className="font-semibold tabular-nums text-[var(--foreground)]">
+                {ev.minute}&apos;
+              </span>{" "}
+              <span className="uppercase tracking-wide text-[var(--muted)]">
+                {ev.type.replace(/_/g, " ")}
+              </span>
+              <span className="ml-1 text-[var(--foreground)]/90">
+                {ev.description}
+              </span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

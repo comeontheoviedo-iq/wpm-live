@@ -2214,6 +2214,7 @@ async function runSyncMatchFromApiFootball(
     minute: number;
     description: string;
     playerId?: string | null;
+    teamSide?: string | null;
     /** Pre-built season tally lines for rich goal popups */
     seasonLines?: string[];
     assistSeasonLines?: string[];
@@ -2371,6 +2372,7 @@ async function runSyncMatchFromApiFootball(
         minute: elapsed,
         description: desc,
         playerId,
+        teamSide,
         seasonLines,
         assistSeasonLines,
       });

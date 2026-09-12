@@ -17,6 +17,7 @@ import {
   isApiFootballConfigured,
 } from "@/lib/api-football";
 import { flagUrl } from "@/lib/flags";
+import { resolvePersonAge } from "@/lib/person-age";
 
 function formFromFixtures(
   fixtures: Awaited<ReturnType<typeof getTeamRecentFinished>>,
@@ -63,6 +64,8 @@ async function buildClubPayload(opts: {
       nationality: string;
       photoUrl: string | null;
       apiFootballPlayerId: number | null;
+      age?: number | null;
+      birthDate?: string | null;
     }[];
   };
   opponentAfId: number | null;
@@ -131,9 +134,9 @@ async function buildClubPayload(opts: {
     },
     trophies: [] as { league?: string | null; country?: string | null; season?: string | null; place?: string | null }[],
     transfers: { in: [] as unknown[], out: [] as unknown[] },
-    coaches: club.coaches,
+    coaches: club.coaches.map((c) => ({ ...c, age: resolvePersonAge(c) })),
     afCoaches: [] as { id: number; name: string; photo?: string | null; nationality?: string | null; start?: string | null; end?: string | null }[],
-    squad: club.players,
+    squad: club.players.map((pl) => ({ ...pl, age: resolvePersonAge(pl) })),
     afSquad: [] as { id: number; name: string; number: number | null; position: string | null; photo?: string }[],
     schedule: { live: [] as unknown[], upcoming: [] as unknown[], recent: [] as unknown[] },
     sidelined: [] as { player?: string; type?: string | null; start?: string | null; end?: string | null }[],

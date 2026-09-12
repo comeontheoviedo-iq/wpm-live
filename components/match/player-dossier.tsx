@@ -24,6 +24,7 @@ import {
   loadFieldSettings,
   type HeightUnit,
 } from "@/lib/field-settings";
+import { alignAgeMentions, resolvePersonAge } from "@/lib/person-age";
 
 type DossierPayload = {
   player: {
@@ -282,6 +283,10 @@ export function PlayerDossier({
   }, [playerId, matchId, initialTab]);
 
   const p = data?.player;
+  const displayAge = resolvePersonAge({
+    birthDate: p?.birthDate || data?.afStats?.player?.birth?.date || null,
+    age: p?.age ?? data?.afStats?.player?.age ?? null,
+  });
   const notesList = data?.notes?.length ? data.notes : initialNotes;
   const afRows = data?.afStats?.statistics || [];
   const af = afRows[0];
@@ -448,7 +453,7 @@ export function PlayerDossier({
           p.club.shortName || p.club.name,
           `#${p.shirtNumber}`,
           posCode(p.position),
-          p.age != null ? `${p.age} y/o` : null,
+          displayAge != null ? `${displayAge} y/o` : null,
           p.nationality || null,
         ]
           .filter(Boolean)
@@ -593,7 +598,7 @@ export function PlayerDossier({
                   ·
                 </span>
                 <span className="player-dossier-age">
-                  {p.age != null ? `${p.age} y/o` : "— y/o"}
+                  {displayAge != null ? `${displayAge} y/o` : "— y/o"}
                 </span>
                 <Flag nationality={p.nationality} />
                 {birthCountry && birthCountry !== p.nationality ? (
@@ -746,9 +751,9 @@ export function PlayerDossier({
         {p && tab === "overview" && !loading && (
           <div className="player-dossier-overview space-y-3">
             <VerdictBlock
-              line={sayableLine}
-              sub={sayableSub}
-              fullBody={sayableNote?.body || null}
+              line={alignAgeMentions(sayableLine, displayAge) ?? sayableLine}
+              sub={alignAgeMentions(sayableSub, displayAge)}
+              fullBody={alignAgeMentions(sayableNote?.body || null, displayAge)}
             />
 
             <div className="player-dossier-overview-cols">
@@ -757,7 +762,7 @@ export function PlayerDossier({
                   <Kv label="Club" value={p.club.name} />
                   <Kv
                     label="Age"
-                    value={p.age != null ? String(p.age) : "—"}
+                    value={displayAge != null ? String(displayAge) : "—"}
                   />
                   <Kv
                     label="Height"

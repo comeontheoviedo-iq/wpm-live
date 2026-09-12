@@ -6,6 +6,7 @@ import { canPlayerNoteDraft, INTEL_REQUIRED_MESSAGE } from "@/lib/plan";
 import { normalizeApostrophes } from "@/lib/utils";
 import { europeanSeasonYear } from "@/lib/season";
 import { getPlayerById } from "@/lib/api-football";
+import { resolvePersonAge } from "@/lib/person-age";
 
 /**
  * Optional Gemini fill for + Create note: one factual blurb from existing
@@ -98,7 +99,9 @@ export async function POST(
 Use ONLY the RESEARCH NOTES and AF STATS provided. Do not invent transfers, injuries, ages, scores, or opinions.
 If facts are thin, write a cautious line that only restates what is given. Never mention data-provider brand names.`;
 
+  const age = resolvePersonAge(player);
   const user = `Player: ${player.name} (#${player.shirtNumber}) — ${player.club.name}, ${player.position}, ${player.nationality}
+Age: ${age != null ? age : "unknown"}${player.birthDate ? ` (born ${player.birthDate})` : ""} — use this age only; do not invent another.
 Season desk apps/goals/assists (stored): ${player.appearances} apps, ${player.goals}G, ${player.assists}A
 
 AF STATS:

@@ -1,13 +1,23 @@
 import { rechunkOverlongLeagueNotes } from "./rechunk-league-notes";
 import { prisma } from "./prisma";
 import { displayText } from "./utils";
-
+import { resolvePersonAge } from "./person-age";
 
 /** Decode stored HTML entities on the in-memory desk payload (never persisted). */
 function presentMatchFull(m: object): void {
   const rec = m as {
-    homeClub?: { name: string; shortName: string; players?: { name: string }[]; coaches?: { name: string }[] };
-    awayClub?: { name: string; shortName: string; players?: { name: string }[]; coaches?: { name: string }[] };
+    homeClub?: {
+      name: string;
+      shortName: string;
+      players?: { name: string; age?: number | null; birthDate?: string | null }[];
+      coaches?: { name: string; age?: number | null }[];
+    };
+    awayClub?: {
+      name: string;
+      shortName: string;
+      players?: { name: string; age?: number | null; birthDate?: string | null }[];
+      coaches?: { name: string; age?: number | null }[];
+    };
     venue?: { name: string; city: string } | null;
     matchDay?: { title: string; competition: string };
     notes?: { title: string; body: string }[];
@@ -19,15 +29,24 @@ function presentMatchFull(m: object): void {
     }[];
     officials?: { official?: { name: string } | null }[];
   };
-  const cleanClub = (c?: { name: string; shortName: string; players?: { name: string }[]; coaches?: { name: string }[] }) => {
+  const cleanClub = (
+    c?: {
+      name: string;
+      shortName: string;
+      players?: { name: string; age?: number | null; birthDate?: string | null }[];
+      coaches?: { name: string; age?: number | null }[];
+    }
+  ) => {
     if (!c) return;
     c.name = displayText(c.name);
     c.shortName = displayText(c.shortName);
     c.players?.forEach((p) => {
       p.name = displayText(p.name);
+      p.age = resolvePersonAge(p);
     });
     c.coaches?.forEach((co) => {
       co.name = displayText(co.name);
+      co.age = resolvePersonAge(co);
     });
   };
   cleanClub(rec.homeClub);

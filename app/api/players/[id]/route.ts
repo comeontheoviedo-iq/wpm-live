@@ -14,6 +14,7 @@ import {
 } from "@/lib/api-football";
 import { nationalityToIso } from "@/lib/flags";
 import { isFriendlyCompetition } from "@/lib/season-tally";
+import { resolvePersonAge } from "@/lib/person-age";
 
 function parseCm(h?: string | null) {
   if (!h) return null;
@@ -353,9 +354,15 @@ export async function GET(
           if (cur === "" || cur === "ENG" || cur === "UNK" || player.nationality !== nat)
             patch.nationality = nat;
         }
-        const age =
-          (rowPlayer?.age as number | undefined) || profilePlayer?.age || null;
-        if (age && !player.age) patch.age = age;
+        const resolvedAge = resolvePersonAge({
+          birthDate: (birthDate as string | null) || player.birthDate,
+          age:
+            (rowPlayer?.age as number | undefined) ||
+            profilePlayer?.age ||
+            player.age ||
+            null,
+        });
+        if (resolvedAge != null && resolvedAge !== player.age) patch.age = resolvedAge;
         const statsAll =
           ((rows?.[0] as { statistics?: AfStatRow[] } | null)?.statistics || []);
         const clubStats = clubAf
@@ -631,7 +638,7 @@ export async function GET(
       position: player.position,
       nationality: player.nationality,
       birthCountry: player.birthCountry,
-      age: player.age,
+      age: resolvePersonAge(player),
       heightCm: player.heightCm,
       weightKg: player.weightKg,
       birthDate: player.birthDate,

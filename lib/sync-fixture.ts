@@ -1,5 +1,6 @@
 import { createHash } from "crypto";
 import { prisma } from "./prisma";
+import { resolvePersonAge } from "./person-age";
 import {
   clearAllPitchPlacements,
   reapplyPitchPlacements,
@@ -190,7 +191,7 @@ async function upsertPlayerBioFromAf(
         shirtNumber: 0,
         position: posGuess(row.position),
         apiFootballPlayerId: row.apiId,
-        age: row.age ?? null,
+        age: resolvePersonAge({ birthDate: row.birth, age: row.age }),
         nationality: nat || "UNK",
         birthCountry: birthCountry,
         photoUrl: row.photo || null,
@@ -220,7 +221,13 @@ async function upsertPlayerBioFromAf(
   const w = parseKg(row.weight);
   if (w && !existing.weightKg) data.weightKg = w;
   if (row.birth && !existing.birthDate) data.birthDate = row.birth;
-  if (row.age && !existing.age) data.age = row.age;
+  {
+    const resolved = resolvePersonAge({
+      birthDate: row.birth || existing.birthDate,
+      age: row.age ?? existing.age,
+    });
+    if (resolved != null && resolved !== existing.age) data.age = resolved;
+  }
   if (row.rating != null) data.rating = row.rating;
   if (row.apps) data.appearances = row.apps;
   if (row.goals != null && row.goals > (existing.goals || 0)) data.goals = row.goals;
@@ -310,7 +317,10 @@ export async function syncSquadForClub(
       name: p.name,
       shirtNumber: p.number ?? existing?.shirtNumber ?? 0,
       position: posGuess(p.position),
-      age: p.age ?? existing?.age ?? null,
+      age: resolvePersonAge({
+        birthDate: existing?.birthDate,
+        age: p.age ?? existing?.age ?? null,
+      }),
       apiFootballPlayerId: p.id,
       ...(p.photo ? { photoUrl: p.photo } : {}),
     };
@@ -572,8 +582,10 @@ async function upsertCoachFromLineup(clubId: string, lineup: AfLineup) {
     detail = null;
   }
 
-  const age =
-    detail?.age != null && Number.isFinite(detail.age) ? detail.age : null;
+  const age = resolvePersonAge({
+    birthDate: detail?.birth?.date,
+    age: detail?.age,
+  });
   // Only store AF-provided photo URLs — never invent from coach id.
   // Drop AF's grey "NO PHOTO YET" stub so UI uses our User placeholder.
   const photoUrl = await afCoachPhotoOrNull(
@@ -664,8 +676,10 @@ export async function syncCoachForClub(clubId: string, teamAfId: number) {
     existing?.nationality,
     teamCountry
   );
-  const age =
-    detail.age != null && Number.isFinite(detail.age) ? detail.age : null;
+  const age = resolvePersonAge({
+    birthDate: detail.birth?.date,
+    age: detail.age,
+  });
   // Only store AF-provided photo URLs — never invent from coach id.
   // Drop AF's grey "NO PHOTO YET" stub so UI uses our User placeholder.
   const photoUrl = await afCoachPhotoOrNull(detail.photo?.trim() || null);
@@ -1535,7 +1549,7 @@ async function syncSeasonScorers(
           shirtNumber: 0,
           position: posGuess(row.position),
           apiFootballPlayerId: row.apiId,
-          age: row.age ?? null,
+          age: resolvePersonAge({ birthDate: row.birth, age: row.age }),
           nationality: (row.nationalTeam &&
             (!row.nationality || !sameCountryLabel(row.nationality, row.nationalTeam))
               ? row.nationalTeam
@@ -1571,7 +1585,15 @@ async function syncSeasonScorers(
           ...(row.birthCountry && !player.birthCountry
             ? { birthCountry: row.birthCountry }
             : {}),
-          ...(row.age && !player.age ? { age: row.age } : {}),
+          ...(() => {
+            const resolved = resolvePersonAge({
+              birthDate: row.birth || player.birthDate,
+              age: row.age ?? player.age,
+            });
+            return resolved != null && resolved !== player.age
+              ? { age: resolved }
+              : {};
+          })(),
           ...(row.rating != null ? { rating: row.rating } : {}),
         },
       });

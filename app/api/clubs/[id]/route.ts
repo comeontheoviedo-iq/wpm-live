@@ -12,6 +12,7 @@ import {
   getSquads,
 } from "@/lib/api-football";
 import { leagueIdForCompetition } from "@/lib/competitions";
+import { resolvePersonAge } from "@/lib/person-age";
 
 export async function GET(
   req: Request,
@@ -196,7 +197,7 @@ export async function GET(
       shirtNumber: pl.shirtNumber,
       position: pl.position,
       nationality: pl.nationality,
-      age: pl.age,
+      age: resolvePersonAge(pl),
       isCaptain: pl.isCaptain,
       goals: pl.goals,
       assists: pl.assists,
@@ -207,7 +208,7 @@ export async function GET(
       id: c.id,
       name: c.name,
       nationality: c.nationality,
-      age: c.age,
+      age: resolvePersonAge(c),
       role: c.role,
       photoUrl: c.photoUrl,
     })),
@@ -216,7 +217,7 @@ export async function GET(
           id: coach.id,
           name: coach.name,
           nationality: coach.nationality,
-          age: coach.age,
+          age: resolvePersonAge(coach),
           photo: coach.photo,
           career: (coach.career || []).slice(0, 8),
         }

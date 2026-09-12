@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppHeader } from "@/components/layout/app-header";
 import { AppSidebar } from "@/components/layout/app-sidebar";
@@ -21,10 +21,11 @@ import {
   HelpCircle,
   GraduationCap,
   Shield,
+  Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLocale } from "@/components/i18n/locale-provider";
-import { SUPPORTED_LOCALES, type AppLocale } from "@/lib/i18n";
+import { localesForPicker, type AppLocale } from "@/lib/i18n";
 import type { AfUsageSnapshot } from "@/lib/af-usage";
 
 type Tab =
@@ -93,6 +94,22 @@ export default function SettingsPage() {
   const { locale, setLocale, t } = useLocale();
   const [localeBusy, setLocaleBusy] = useState(false);
   const [localeMsg, setLocaleMsg] = useState<string | null>(null);
+  const [localeSearch, setLocaleSearch] = useState("");
+  const [langReqOpen, setLangReqOpen] = useState(false);
+  const [langReqName, setLangReqName] = useState("");
+  const [langReqNote, setLangReqNote] = useState("");
+  const [langReqBusy, setLangReqBusy] = useState(false);
+  const [langReqMsg, setLangReqMsg] = useState<string | null>(null);
+  const localeOptions = useMemo(() => {
+    const q = localeSearch.trim().toLowerCase();
+    const all = localesForPicker();
+    if (!q) return all;
+    return all.filter(
+      (opt) =>
+        opt.label.toLowerCase().includes(q) ||
+        opt.id.toLowerCase().includes(q)
+    );
+  }, [localeSearch]);
   const [sharedIntelBusy, setSharedIntelBusy] = useState(false);
   const [sharedIntelMsg, setSharedIntelMsg] = useState<string | null>(null);
   const [plan, setPlan] = useState<PlanStatus | null>(null);
@@ -477,11 +494,31 @@ export default function SettingsPage() {
                   <div className="mt-6">
                     <div className="text-sm font-medium mb-1">{t("settings.preferredLanguage")}</div>
                     <p className="text-xs text-slate-500 mb-3">{t("settings.preferredLanguageHelp")}</p>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                      {SUPPORTED_LOCALES.map((opt) => (
+                    <div className="relative mb-2">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+                      <input
+                        type="search"
+                        value={localeSearch}
+                        onChange={(e) => setLocaleSearch(e.target.value)}
+                        placeholder={t("settings.preferredLanguageSearch")}
+                        className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 pl-9 pr-3 py-2.5 text-sm outline-none focus:border-teal-500"
+                        aria-label={t("settings.preferredLanguageSearch")}
+                      />
+                    </div>
+                    <div
+                      className="max-h-64 overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-800"
+                      role="listbox"
+                      aria-label={t("settings.preferredLanguage")}
+                    >
+                      {localeOptions.length === 0 && (
+                        <div className="px-3 py-4 text-sm text-slate-500">No languages match.</div>
+                      )}
+                      {localeOptions.map((opt) => (
                         <button
                           key={opt.id}
                           type="button"
+                          role="option"
+                          aria-selected={locale === opt.id}
                           disabled={localeBusy}
                           onClick={async () => {
                             setLocaleBusy(true);
@@ -496,17 +533,89 @@ export default function SettingsPage() {
                             }
                           }}
                           className={cn(
-                            "rounded-xl border px-3 py-3 text-sm text-left",
+                            "w-full px-3 py-2.5 text-sm text-left flex items-center justify-between gap-2 hover:bg-slate-50 dark:hover:bg-slate-800/60 disabled:opacity-60",
                             locale === opt.id
-                              ? "border-teal-500 bg-teal-50 dark:bg-teal-950 text-teal-800 dark:text-teal-200"
-                              : "border-slate-200 dark:border-slate-700"
+                              ? "bg-teal-50 dark:bg-teal-950 text-teal-800 dark:text-teal-200"
+                              : ""
                           )}
                         >
-                          {opt.label}
+                          <span>{opt.label}</span>
+                          <span className="text-[11px] uppercase tracking-wide text-slate-400 shrink-0">{opt.id}</span>
                         </button>
                       ))}
                     </div>
                     {localeMsg && <p className="text-xs text-slate-500 mt-2">{localeMsg}</p>}
+                    <div className="mt-4 rounded-xl border border-dashed border-slate-300 dark:border-slate-600 p-3">
+                      <button
+                        type="button"
+                        className="text-sm font-medium text-teal-700 dark:text-teal-300 hover:underline"
+                        onClick={() => {
+                          setLangReqOpen((v) => !v);
+                          setLangReqMsg(null);
+                        }}
+                      >
+                        {t("settings.requestLanguage")}
+                      </button>
+                      {langReqOpen && (
+                        <div className="mt-3 space-y-2">
+                          <p className="text-xs text-slate-500">{t("settings.requestLanguageHelp")}</p>
+                          <input
+                            type="text"
+                            value={langReqName}
+                            onChange={(e) => setLangReqName(e.target.value)}
+                            placeholder={t("settings.requestLanguageName")}
+                            className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm outline-none focus:border-teal-500"
+                            maxLength={120}
+                          />
+                          <textarea
+                            value={langReqNote}
+                            onChange={(e) => setLangReqNote(e.target.value)}
+                            placeholder={t("settings.requestLanguageNote")}
+                            rows={2}
+                            className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm outline-none focus:border-teal-500 resize-y"
+                            maxLength={2000}
+                          />
+                          <Button
+                            type="button"
+                            disabled={langReqBusy || langReqName.trim().length < 2}
+                            onClick={async () => {
+                              setLangReqBusy(true);
+                              setLangReqMsg(null);
+                              try {
+                                const res = await fetch("/api/language-request", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({
+                                    languageName: langReqName.trim(),
+                                    note: langReqNote.trim() || undefined,
+                                  }),
+                                });
+                                const json = await res.json().catch(() => ({}));
+                                if (!res.ok) {
+                                  throw new Error(String(json.error || "Could not submit request"));
+                                }
+                                setLangReqMsg(
+                                  String(json.message || t("settings.requestLanguageThanks"))
+                                );
+                                setLangReqName("");
+                                setLangReqNote("");
+                              } catch (e) {
+                                setLangReqMsg(
+                                  e instanceof Error ? e.message : "Could not submit request"
+                                );
+                              } finally {
+                                setLangReqBusy(false);
+                              }
+                            }}
+                          >
+                            {t("settings.requestLanguageSubmit")}
+                          </Button>
+                          {langReqMsg && (
+                            <p className="text-xs text-slate-500">{langReqMsg}</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </CardBody>
               </Card>

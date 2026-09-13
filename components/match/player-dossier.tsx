@@ -757,6 +757,21 @@ export function PlayerDossier({
               fullBody={alignAgeMentions(sayableNote?.body || null, displayAge)}
             />
 
+            <Section title={`Notes (${notesList.length})`} dense>
+              {notesList.length === 0 ? (
+                <p className="text-xs text-[#64748b]">No player notes linked yet.</p>
+              ) : (
+                <NotesPanel
+                  matchId={matchId}
+                  initialNotes={notesList}
+                  entityType="player"
+                  entityId={playerId}
+                  entityLabel={p.name}
+                  fillHeight
+                />
+              )}
+            </Section>
+
             <div className="player-dossier-overview-cols">
               <Section title="General" dense quiet>
                 <div className="player-dossier-kv">

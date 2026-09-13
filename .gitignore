@@ -65,3 +65,7 @@ data/hooks-posters/
 # Local user avatar cache (prod uses Netlify Blobs)
 data/user-avatars/
 data/desk-posters/
+
+.polar_access_token.env
+.polar_webhook_secret.env
+.polar_product_ids.json

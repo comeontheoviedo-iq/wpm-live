@@ -1,8 +1,11 @@
 import { notFound } from "next/navigation";
 import { getMatchFull } from "@/lib/match-data";
+import { prisma } from "@/lib/prisma";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { MapPin, Users, Ruler, ExternalLink, CloudSun } from "lucide-react";
 import { splitVenueNames } from "@/lib/venue-name";
+import { isVenueNote } from "@/lib/notes-buckets";
+import { VenueNotesClient } from "@/components/match/venue-notes-client";
 
 export default async function VenuePage({
   params,
@@ -23,11 +26,25 @@ export default async function VenuePage({
           )}`
         : null;
 
+  const allNotes = await prisma.note.findMany({
+    where: { matchId: match.id },
+    orderBy: [{ pinned: "desc" }, { updatedAt: "desc" }],
+    take: 200,
+  });
+  const venueNotes = allNotes.filter(
+    (n) =>
+      n.entityType === "venue" ||
+      (v?.id && n.entityId === v.id) ||
+      isVenueNote(n)
+  );
+
   return (
     <div className="space-y-4">
       <div>
         <h2 className="text-xl font-bold">Venue</h2>
-        <p className="text-sm text-slate-500">Ground intel for commentary</p>
+        <p className="text-sm text-slate-500">
+          Ground intel for commentary · sponsored + original names for comms
+        </p>
       </div>
       {!v ? (
         <p className="text-sm text-slate-500">
@@ -52,36 +69,32 @@ export default async function VenuePage({
                 />
               )}
 
-              {(names?.sponsored || names?.historic) && (
-                <div className="grid sm:grid-cols-2 gap-3 rounded-xl border border-teal-100 dark:border-teal-900 bg-teal-50/60 dark:bg-teal-950/30 p-3">
-                  <div>
-                    <div className="text-[10px] font-bold uppercase tracking-wide text-teal-700 dark:text-teal-300">
-                      Sponsored name
-                    </div>
-                    <div className="font-semibold mt-0.5">
-                      {names?.sponsored || "—"}
-                    </div>
+              <div className="grid sm:grid-cols-2 gap-3 rounded-xl border border-teal-100 dark:border-teal-900 bg-teal-50/60 dark:bg-teal-950/30 p-3">
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-wide text-teal-700 dark:text-teal-300">
+                    Sponsored name
                   </div>
-                  <div>
-                    <div className="text-[10px] font-bold uppercase tracking-wide text-teal-700 dark:text-teal-300">
-                      Original / historic name
-                    </div>
-                    <div className="font-semibold mt-0.5">
-                      {names?.historic || "—"}
-                    </div>
+                  <div className="font-semibold mt-0.5">
+                    {names?.sponsored || "—"}
                   </div>
-                  {names?.sponsored && names?.historic ? null : (
-                    <p className="sm:col-span-2 text-[11px] text-slate-500">
-                      Full AF name: {v.name}
-                    </p>
-                  )}
                 </div>
-              )}
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-wide text-teal-700 dark:text-teal-300">
+                    Original / historic name
+                  </div>
+                  <div className="font-semibold mt-0.5">
+                    {names?.historic || names?.primary || "—"}
+                  </div>
+                </div>
+                <p className="sm:col-span-2 text-[11px] text-slate-500">
+                  Full AF name: {v.name || "—"}
+                </p>
+              </div>
 
               <div className="grid sm:grid-cols-2 gap-3">
-                <Info label="City" value={v.city} />
+                <Info label="City" value={v.city || "—"} />
                 <Info label="Address" value={v.address || "—"} />
-                <Info label="Surface" value={v.surface} />
+                <Info label="Surface" value={v.surface || "—"} />
                 <Info label="Opened" value={v.opened ? String(v.opened) : "—"} />
               </div>
               {osm && (
@@ -100,6 +113,26 @@ export default async function VenuePage({
                   {v.notes}
                 </div>
               )}
+
+              <div className="rounded-xl border border-slate-100 dark:border-slate-800 p-3">
+                <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-2">
+                  Research notes
+                </div>
+                <VenueNotesClient
+                  matchId={match.id}
+                  venueId={v.id}
+                  venueLabel={names?.primary || v.name}
+                  initialNotes={venueNotes.map((n) => ({
+                    id: n.id,
+                    title: n.title,
+                    body: n.body,
+                    category: n.category,
+                    pinned: n.pinned,
+                    entityType: n.entityType,
+                    entityId: n.entityId,
+                                      }))}
+                />
+              </div>
             </CardBody>
           </Card>
           <div className="space-y-4">
@@ -120,7 +153,9 @@ export default async function VenuePage({
                 <div>
                   <div className="text-xs text-slate-500">Pitch</div>
                   <div className="text-lg font-bold">
-                    {v.pitchLength} × {v.pitchWidth} m
+                    {v.pitchLength != null && v.pitchWidth != null
+                      ? `${v.pitchLength} × ${v.pitchWidth} m`
+                      : "—"}
                   </div>
                 </div>
               </CardBody>

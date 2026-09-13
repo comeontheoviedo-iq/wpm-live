@@ -13,7 +13,6 @@ import {
   Users,
   LayoutGrid,
   Printer,
-  StickyNote,
   Sparkles,
   Trophy,
   Newspaper,
@@ -40,7 +39,6 @@ const sections: NavSection[] = [
       { slug: "", label: "Desk", icon: LayoutGrid },
       { slug: "packs", label: "Research", icon: Sparkles },
       { slug: "scripts", label: "Scripts", icon: Mic2 },
-      { slug: "notes", label: "Notes", icon: StickyNote },
     ],
   },
   {
@@ -50,14 +48,7 @@ const sections: NavSection[] = [
       { slug: "stats", label: "Stats", icon: Target },
       { slug: "league", label: "League", icon: Trophy },
       { slug: "news", label: "News", icon: Newspaper },
-      { slug: "scorers", label: "Scorers", icon: Target },
-      { slug: "injuries", label: "Injuries", icon: HeartPulse },
-    ],
-  },
-  {
-    id: "squad",
-    label: "Squad",
-    items: [
+      { slug: "injuries", label: "Unavailable", icon: HeartPulse },
       { slug: "squad", label: "Squad", icon: Users },
       { slug: "venue", label: "Venue", icon: MapPin },
       { slug: "clubs", label: "Clubs", icon: Building2 },

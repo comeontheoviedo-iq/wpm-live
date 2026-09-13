@@ -10,6 +10,8 @@ import {
   getLeagueRecentResults,
   getLeagueUpcoming,
   getStandings,
+  getTopScorers,
+  getTopAssists,
   isApiFootballConfigured,
   searchFixturesSmart,
   type AfFixture,
@@ -42,6 +44,28 @@ function slimFixture(fx: AfFixture) {
     venue: venueName || venueCity
       ? { name: venueName, city: venueCity }
       : null,
+  };
+}
+
+
+function slimLeader(row: Awaited<ReturnType<typeof getTopScorers>>[number], kind: "goals" | "assists" | "passes") {
+  const st = row.statistics?.[0];
+  const goals = st?.goals?.total ?? null;
+  const assists = st?.goals?.assists ?? null;
+  const passes = st?.passes?.total ?? null;
+  const value =
+    kind === "goals" ? goals : kind === "assists" ? assists : passes;
+  return {
+    playerId: row.player?.id ?? null,
+    player: row.player?.name || "—",
+    photo: row.player?.photo || null,
+    teamId: st?.team?.id ?? null,
+    team: st?.team?.name || "—",
+    teamLogo: st?.team?.logo || null,
+    goals,
+    assists,
+    passes,
+    value,
   };
 }
 
@@ -304,7 +328,40 @@ export async function GET(
     /* soft */
   }
 
+
+  let leaders: {
+    scorers: ReturnType<typeof slimLeader>[];
+    assists: ReturnType<typeof slimLeader>[];
+    passes: ReturnType<typeof slimLeader>[];
+    note: string | null;
+  } = { scorers: [], assists: [], passes: [], note: null };
+
+  try {
+    const tops = await getTopScorers(leagueId!, standingsSeason).catch(() => []);
+    leaders.scorers = (tops || []).slice(0, 15).map((r) => slimLeader(r, "goals"));
+    // Passes: AF has no dedicated top-passes league endpoint on typical plans —
+    // surface pass totals from topscorers rows when present.
+    const passRows = (tops || [])
+      .map((r) => slimLeader(r, "passes"))
+      .filter((r) => r.passes != null)
+      .sort((a, b) => (b.passes || 0) - (a.passes || 0))
+      .slice(0, 15);
+    leaders.passes = passRows;
+    if (!passRows.length) {
+      leaders.note = "AF has no league top-passes leaderboard — pass totals empty.";
+    }
+  } catch (e) {
+    warnings.push(`Top scorers soft-failed: ${e instanceof Error ? e.message : "error"}`);
+  }
+  try {
+    const assists = await getTopAssists(leagueId!, standingsSeason).catch(() => []);
+    leaders.assists = (assists || []).slice(0, 15).map((r) => slimLeader(r, "assists"));
+  } catch (e) {
+    warnings.push(`Top assists soft-failed: ${e instanceof Error ? e.message : "error"}`);
+  }
+
   const homeAf = match.homeClub.apiFootballTeamId;
+
   const awayAf = match.awayClub.apiFootballTeamId;
 
   return NextResponse.json({
@@ -331,5 +388,6 @@ export async function GET(
     hallOfFame,
     lastChampion,
     lastRunnerUp,
+    leaders,
   });
 }

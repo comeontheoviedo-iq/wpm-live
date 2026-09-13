@@ -1139,6 +1139,7 @@ export type AfTopScorer = {
     league?: { id: number; name: string; country: string; season: number };
     games?: { appearences?: number | null; lineups?: number | null; minutes?: number | null; position?: string | null; rating?: string | number | null };
     goals?: { total?: number | null; assists?: number | null; conceded?: number | null; saves?: number | null };
+    passes?: { total?: number | null; key?: number | null; accuracy?: string | number | null };
     cards?: { yellow?: number | null; red?: number | null };
   }[];
 };
@@ -1146,6 +1147,14 @@ export type AfTopScorer = {
 export async function getTopScorers(leagueId: number, season: number) {
   return afFetch<AfTopScorer[]>(
     "/players/topscorers",
+    { league: leagueId, season },
+    300_000
+  );
+}
+
+export async function getTopAssists(leagueId: number, season: number) {
+  return afFetch<AfTopScorer[]>(
+    "/players/topassists",
     { league: leagueId, season },
     300_000
   );

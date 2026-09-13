@@ -13,12 +13,13 @@ const tone: Record<string, string> = {
 
 function parseOutSince(notes: string | null | undefined): string | null {
   if (!notes) return null;
-  const m = notes.match(/Out since\s+(\d{4}-\d{2}-\d{2}|\d{1,2}[\/.]\d{1,2}[\/.]\d{2,4})/i);
+  const m = notes.match(
+    /Out since\s+(\d{4}-\d{2}-\d{2}|\d{1,2}[\/.]\d{1,2}[\/.]\d{2,4})/i
+  );
   return m?.[1] || null;
 }
 
 function formatDay(raw: string): string {
-  // Prefer en-GB London label when ISO-ish
   if (/^\d{4}-\d{2}-\d{2}/.test(raw)) {
     try {
       return new Intl.DateTimeFormat("en-GB", {
@@ -34,7 +35,43 @@ function formatDay(raw: string): string {
   return raw;
 }
 
-export default async function InjuriesPage({
+type InjRow = {
+  id: string;
+  clubId: string;
+  playerId: string;
+  status: string;
+  injuryType: string;
+  expectedReturn: string | null;
+  notes: string | null;
+  player: { id: string; name: string; shirtNumber: number };
+};
+
+function richness(i: InjRow): number {
+  return (
+    (i.expectedReturn ? 2 : 0) +
+    (i.notes ? 1 : 0) +
+    (i.injuryType ? 1 : 0) +
+    (i.status === "suspended" ? 1 : 0)
+  );
+}
+
+function dedupeUnavailable(items: InjRow[]): InjRow[] {
+  const byKey = new Map<string, InjRow>();
+  for (const i of items) {
+    const key = i.playerId || `${i.clubId}:${i.player.name.toLowerCase()}`;
+    const prev = byKey.get(key);
+    if (!prev || richness(i) >= richness(prev)) byKey.set(key, i);
+  }
+  return Array.from(byKey.values()).sort((a, b) => {
+    const rank = (s: string) =>
+      s === "suspended" ? 0 : s === "out" ? 1 : s === "doubtful" ? 2 : 3;
+    const d = rank(a.status) - rank(b.status);
+    if (d !== 0) return d;
+    return a.player.name.localeCompare(b.player.name);
+  });
+}
+
+export default async function UnavailablePage({
   params,
 }: {
   params: Promise<{ id: string }>;
@@ -46,21 +83,25 @@ export default async function InjuriesPage({
   const byClub = [
     {
       club: match.homeClub,
-      items: match.injuries.filter((i) => i.clubId === match.homeClubId),
+      items: dedupeUnavailable(
+        match.injuries.filter((i) => i.clubId === match.homeClubId) as InjRow[]
+      ),
     },
     {
       club: match.awayClub,
-      items: match.injuries.filter((i) => i.clubId === match.awayClubId),
+      items: dedupeUnavailable(
+        match.injuries.filter((i) => i.clubId === match.awayClubId) as InjRow[]
+      ),
     },
   ];
 
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-xl font-bold">Injuries & availability</h2>
+        <h2 className="text-xl font-bold">Unavailable</h2>
         <p className="text-sm text-slate-500">
-          Matchday medical board · out-since / return when the live feed provides
-          them · Sync to refresh
+          Injuries and current suspensions · out-since / return when the live
+          feed provides them · Sync to refresh · duplicates collapsed
         </p>
       </div>
       <div className="grid md:grid-cols-2 gap-4">
@@ -78,6 +119,10 @@ export default async function InjuriesPage({
               {items.map((inj) => {
                 const outSince = parseOutSince(inj.notes);
                 const ret = inj.expectedReturn;
+                const label =
+                  inj.status === "suspended"
+                    ? "suspended"
+                    : inj.status || "out";
                 return (
                   <div
                     key={inj.id}
@@ -85,14 +130,17 @@ export default async function InjuriesPage({
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div className="font-semibold text-sm">
-                        #{inj.player.shirtNumber} {inj.player.name}
+                        {inj.player.shirtNumber
+                          ? `#${inj.player.shirtNumber} `
+                          : ""}
+                        {inj.player.name}
                       </div>
-                      <Badge className={tone[inj.status] || tone.doubtful}>
-                        {inj.status}
+                      <Badge className={tone[label] || tone.doubtful}>
+                        {label}
                       </Badge>
                     </div>
                     <div className="text-xs text-slate-500 mt-1">
-                      {inj.injuryType}
+                      {inj.injuryType || "—"}
                     </div>
                     <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-600 dark:text-slate-300">
                       <span>

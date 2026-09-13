@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { X, Loader2 } from "lucide-react";
+import { X, Loader2, Trophy } from "lucide-react";
 import { SpeakNameButton } from "@/components/match/speak-name-button";
 import { NotesPanel, type NoteRow } from "@/components/notes/notes-panel";
 import { cn } from "@/lib/utils";
@@ -9,7 +9,23 @@ import { formatTransferFee } from "@/lib/transfer-fee";
 import { VerdictBlock } from "@/components/match/verdict-block";
 import { deskVenueName } from "@/lib/venue-name";
 
-type Tab = "overview" | "squad" | "season" | "history" | "notes";
+type Tab =
+  | "overview"
+  | "squad"
+  | "season"
+  | "history"
+  | "transfers"
+  | "notes";
+
+type ScheduleRow = {
+  id: number | null;
+  date: string;
+  home: string;
+  away: string;
+  score: string;
+  status: string;
+  competition: string | null;
+};
 
 type Payload = {
   club: {
@@ -58,11 +74,21 @@ type Payload = {
     age?: number | null;
     photo?: string | null;
   } | null;
+  formerCoaches?: {
+    id: number;
+    name: string;
+    nationality?: string | null;
+    photo?: string | null;
+    start?: string | null;
+    end?: string | null;
+  }[];
   injuries: {
     id: string;
     status: string;
     injuryType: string;
     expectedReturn: string | null;
+    playerName?: string;
+    shirtNumber?: number | null;
   }[];
   notes: NoteRow[];
   transfers: {
@@ -72,7 +98,18 @@ type Payload = {
     from: string;
     to: string;
   }[];
-  trophies: { league: string; season?: string | null; place?: string | null }[];
+  trophies: {
+    league: string;
+    season?: string | null;
+    place?: string | null;
+    country?: string | null;
+  }[];
+  wonTrophies?: {
+    league: string;
+    season?: string | null;
+    place?: string | null;
+    country?: string | null;
+  }[];
   standingsRow: {
     rank: number;
     played: number;
@@ -83,14 +120,28 @@ type Payload = {
     points: number;
     form?: string | null;
   } | null;
-  schedule: {
-    date: string;
-    home: string;
-    away: string;
-    score: string;
-    status: string;
+  schedule: ScheduleRow[];
+  competitions?: {
+    name: string;
+    results: {
+      id: number | null;
+      date: string;
+      home: string;
+      away: string;
+      score: string;
+      status: string;
+    }[];
   }[];
   afStub: string | null;
+};
+
+type PopupScorer = {
+  minute: number | null;
+  extra: number | null;
+  team: string | null;
+  player: string | null;
+  assist: string | null;
+  detail: string | null;
 };
 
 const TABS: { key: Tab; label: string }[] = [
@@ -98,6 +149,7 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "squad", label: "Squad" },
   { key: "season", label: "Season" },
   { key: "history", label: "History" },
+  { key: "transfers", label: "Transfers" },
   { key: "notes", label: "Notes" },
 ];
 
@@ -106,17 +158,24 @@ export function ClubDossier({
   clubId,
   onClose,
   onPlayerClick,
+  embedded = false,
 }: {
   matchId: string;
   clubId: string;
   onClose: () => void;
   onPlayerClick?: (playerId: string) => void;
+  embedded?: boolean;
 }) {
   const [data, setData] = useState<Payload | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("overview");
-  const [expandedPreviewId, setExpandedPreviewId] = useState<string | null>(null);
+  const [expandedPreviewId, setExpandedPreviewId] = useState<string | null>(
+    null
+  );
+  const [selectedFx, setSelectedFx] = useState<ScheduleRow | null>(null);
+  const [fxScorers, setFxScorers] = useState<PopupScorer[] | null>(null);
+  const [fxLoading, setFxLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -140,15 +199,40 @@ export function ClubDossier({
     };
   }, [clubId, matchId]);
 
+  useEffect(() => {
+    if (!selectedFx?.id) {
+      setFxScorers(null);
+      return;
+    }
+    let cancelled = false;
+    setFxLoading(true);
+    fetch(`/api/football/fixtures/${selectedFx.id}`)
+      .then(async (r) => {
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error || "Unavailable");
+        return j as { scorers?: PopupScorer[] };
+      })
+      .then((j) => {
+        if (!cancelled) setFxScorers(Array.isArray(j.scorers) ? j.scorers : []);
+      })
+      .catch(() => {
+        if (!cancelled) setFxScorers([]);
+      })
+      .finally(() => {
+        if (!cancelled) setFxLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedFx?.id]);
+
   const c = data?.club;
   const notes = data?.notes || [];
   const bioNotes = notes.filter(
     (n) =>
       /bio|narrative/i.test(n.title || "") || /bio/i.test(n.category || "")
   );
-  const funNotes = notes.filter((n) =>
-    /fun|fact|trivia/i.test(n.title || "")
-  );
+  const funNotes = notes.filter((n) => /fun|fact|trivia/i.test(n.title || ""));
   const hookNotes = notes.filter(
     (n) =>
       /hook|scout|verdict|sayable|lead/i.test(n.title || "") ||
@@ -187,24 +271,88 @@ export function ClubDossier({
         }`
       : null;
 
+  const won = data?.wonTrophies?.length
+    ? data.wonTrophies
+    : (data?.trophies || []).filter((t) =>
+        /^(winner|champion|1st|first|winners)$/i.test((t.place || "").trim())
+      );
+
+  const notesBlock = (
+    <div className="space-y-2">
+      {(bioNotes.length > 0 || funNotes.length > 0) && (
+        <div className="space-y-2">
+          {[...bioNotes, ...funNotes].slice(0, 4).map((n) => {
+            const open = expandedPreviewId === n.id;
+            return (
+              <div
+                key={n.id}
+                className="note-preview note-preview-expandable"
+                role="button"
+                tabIndex={0}
+                aria-expanded={open}
+                title={open ? "Collapse note" : "Expand full note"}
+                onClick={() =>
+                  setExpandedPreviewId((cur) => (cur === n.id ? null : n.id))
+                }
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setExpandedPreviewId((cur) =>
+                      cur === n.id ? null : n.id
+                    );
+                  }
+                }}
+              >
+                <div
+                  className={`text-[11px] font-bold text-[#e2e8f0] mb-0.5 ${open ? "" : "truncate"}`}
+                >
+                  {n.title}
+                </div>
+                <p
+                  className={`text-[11px] text-[#94a3b8] whitespace-pre-wrap ${open ? "" : "line-clamp-4"}`}
+                >
+                  {n.body}
+                </p>
+                <div className="mt-0.5 text-[9px] font-semibold uppercase tracking-wide text-[#64748b]">
+                  {open ? "Collapse" : "Expand"}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <NotesPanel
+        matchId={matchId}
+        initialNotes={notes}
+        entityType="club"
+        entityId={clubId}
+        entityLabel={c?.name || "Club"}
+        fillHeight
+      />
+    </div>
+  );
+
   return (
     <div
       className="player-dossier club-dossier"
       data-club-dossier="1"
       data-dossier-kind="club"
       data-dossier-craft="v2"
+      data-embedded={embedded ? "1" : undefined}
     >
       <div className="player-dossier-titlebar">
         <div className="player-dossier-title">Club dossier</div>
         <div className="player-dossier-titlebar-actions">
-          <button
-            type="button"
-            className="player-dossier-icon-btn focus-ring"
-            onClick={onClose}
-            aria-label="Close dossier"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
+          {!embedded ? (
+            <button
+              type="button"
+              className="player-dossier-icon-btn focus-ring"
+              onClick={onClose}
+              aria-label="Close dossier"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -265,7 +413,9 @@ export function ClubDossier({
                       ·
                     </span>
                     <span className="player-dossier-meta-quiet">
-                      {c.stadiumName || deskVenueName(c.venue?.name) || c.venue?.name}
+                      {c.stadiumName ||
+                        deskVenueName(c.venue?.name) ||
+                        c.venue?.name}
                     </span>
                   </>
                 ) : null}
@@ -293,6 +443,9 @@ export function ClubDossier({
             {t.key === "squad" && data?.squad?.length
               ? ` (${data.squad.length})`
               : ""}
+            {t.key === "transfers" && data?.transfers?.length
+              ? ` (${data.transfers.length})`
+              : ""}
           </button>
         ))}
       </div>
@@ -313,6 +466,16 @@ export function ClubDossier({
               fullBody={sayableNote?.body || null}
             />
 
+            <Section title={`Notes (${notes.length})`} dense>
+              {notes.length === 0 ? (
+                <p className="text-xs text-[#64748b]">
+                  No club notes linked yet.
+                </p>
+              ) : (
+                notesBlock
+              )}
+            </Section>
+
             <div className="player-dossier-overview-cols">
               <Section title="Identity" dense quiet>
                 <div className="player-dossier-kv">
@@ -323,7 +486,12 @@ export function ClubDossier({
                   <Kv label="City" value={c.city || "—"} />
                   <Kv
                     label="Stadium"
-                    value={c.stadiumName || deskVenueName(c.venue?.name) || c.venue?.name || "—"}
+                    value={
+                      c.stadiumName ||
+                      deskVenueName(c.venue?.name) ||
+                      c.venue?.name ||
+                      "—"
+                    }
                   />
                   <Kv
                     label="Capacity"
@@ -363,10 +531,7 @@ export function ClubDossier({
                       label="W-D-L"
                       value={`${data.standingsRow.won}-${data.standingsRow.drawn}-${data.standingsRow.lost}`}
                     />
-                    <Kv
-                      label="GD"
-                      value={String(data.standingsRow.gd)}
-                    />
+                    <Kv label="GD" value={String(data.standingsRow.gd)} />
                     <Kv
                       label="Form"
                       value={data.standingsRow.form || "—"}
@@ -380,11 +545,30 @@ export function ClubDossier({
               </Section>
             </div>
 
-            <Section title="Today's match" dense quiet>
-              <p className="text-xs text-[#64748b]">
-                Match H2H for the club lives on the desk Form/H2H strip. Add
-                club notes for talking points.
-              </p>
+            <Section title="Other competitions" dense>
+              {(data?.competitions?.length || 0) === 0 ? (
+                <p className="text-xs text-[#64748b]">
+                  No other competition results in feed yet.
+                </p>
+              ) : (
+                <ul className="space-y-2 text-xs">
+                  {(data?.competitions || []).map((comp) => (
+                    <li key={comp.name}>
+                      <div className="font-semibold text-[#e2e8f0] mb-0.5">
+                        {comp.name}
+                      </div>
+                      <ul className="space-y-0.5 text-[#94a3b8]">
+                        {comp.results.slice(0, 4).map((r, i) => (
+                          <li key={i}>
+                            {(r.date || "").slice(0, 10)} · {r.home} {r.score}{" "}
+                            {r.away}
+                          </li>
+                        ))}
+                      </ul>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </Section>
 
             {data?.afStub ? (
@@ -442,12 +626,18 @@ export function ClubDossier({
             <Section title="Season snapshot" dense quiet>
               {data?.standingsRow ? (
                 <div className="grid grid-cols-3 gap-2 text-xs">
-                  <Fact label="Played" value={String(data.standingsRow.played)} />
+                  <Fact
+                    label="Played"
+                    value={String(data.standingsRow.played)}
+                  />
                   <Fact
                     label="W-D-L"
                     value={`${data.standingsRow.won}-${data.standingsRow.drawn}-${data.standingsRow.lost}`}
                   />
-                  <Fact label="Points" value={String(data.standingsRow.points)} />
+                  <Fact
+                    label="Points"
+                    value={String(data.standingsRow.points)}
+                  />
                 </div>
               ) : (
                 <p className="text-xs text-[#64748b]">
@@ -456,15 +646,20 @@ export function ClubDossier({
               )}
             </Section>
 
-            <Section title="Sidelined" dense>
+            <Section title="Unavailable" dense>
               {(data?.injuries?.length || 0) === 0 ? (
                 <p className="text-xs text-[#64748b]">No injuries on file.</p>
               ) : (
                 <ul className="space-y-1 text-xs">
                   {(data?.injuries || []).map((i) => (
                     <li key={i.id}>
-                      <span className="font-semibold text-[#f87171]">
-                        {i.injuryType}
+                      <span className="font-semibold text-[#e2e8f0]">
+                        {i.shirtNumber ? `#${i.shirtNumber} ` : ""}
+                        {i.playerName || "—"}
+                      </span>
+                      <span className="text-[#f87171]">
+                        {" "}
+                        · {i.injuryType || "—"}
                       </span>
                       <span className="text-[#64748b]"> · {i.status}</span>
                       {i.expectedReturn ? (
@@ -490,6 +685,7 @@ export function ClubDossier({
                     <thead>
                       <tr>
                         <th>Date</th>
+                        <th>Comp</th>
                         <th>Fixture</th>
                         <th>Score</th>
                         <th>Status</th>
@@ -501,8 +697,19 @@ export function ClubDossier({
                           <td className="muted">
                             {(fx.date || "").slice(0, 10)}
                           </td>
+                          <td className="muted">{fx.competition || "—"}</td>
                           <td className="font-medium">
-                            {fx.home} vs {fx.away}
+                            {fx.id ? (
+                              <button
+                                type="button"
+                                className="hover:underline text-left text-[#e2e8f0]"
+                                onClick={() => setSelectedFx(fx)}
+                              >
+                                {fx.home} vs {fx.away}
+                              </button>
+                            ) : (
+                              `${fx.home} vs ${fx.away}`
+                            )}
                           </td>
                           <td className="font-semibold">{fx.score}</td>
                           <td className="muted">{fx.status}</td>
@@ -518,31 +725,75 @@ export function ClubDossier({
 
         {!loading && c && tab === "history" && (
           <div className="space-y-3">
-            <Section title="Trophies">
-              {(data?.trophies?.length || 0) === 0 ? (
-                <p className="text-xs text-[#64748b]">No trophies in feed.</p>
+            <Section title="Competitions won">
+              {won.length === 0 ? (
+                <p className="text-xs text-[#64748b]">
+                  No winner trophies in feed.
+                </p>
               ) : (
-                <ul className="space-y-1 text-xs max-h-64 overflow-y-auto">
-                  {(data?.trophies || []).map((tr, i) => (
-                    <li key={i}>
-                      <span className="font-semibold text-[#e2e8f0]">
-                        {tr.league}
+                <ul className="space-y-2 max-h-72 overflow-y-auto">
+                  {won.map((tr, i) => (
+                    <li
+                      key={i}
+                      className="flex items-start gap-2 rounded-[2px] border border-white/[0.06] bg-[#10141a] px-2.5 py-2"
+                    >
+                      <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[2px] bg-[#1a222d] text-amber-400">
+                        <Trophy className="h-4 w-4" aria-hidden />
                       </span>
-                      {tr.season ? (
-                        <span className="text-[#64748b]"> · {tr.season}</span>
-                      ) : null}
-                      {tr.place ? (
-                        <span className="text-[#64748b]"> · {tr.place}</span>
-                      ) : null}
+                      <div className="min-w-0">
+                        <div className="text-xs font-semibold text-[#e2e8f0]">
+                          {tr.league}
+                        </div>
+                        <div className="text-[10px] text-[#64748b]">
+                          {[tr.season || null, tr.place || null, tr.country || null]
+                            .filter(Boolean)
+                            .join(" · ") || "—"}
+                        </div>
+                      </div>
                     </li>
                   ))}
                 </ul>
               )}
             </Section>
 
-            <Section title="Coaches" dense>
+            <Section title="Former head coaches" dense>
+              {(data?.formerCoaches?.length || 0) === 0 ? (
+                <p className="text-xs text-[#64748b]">
+                  No former coaches in feed.
+                </p>
+              ) : (
+                <ul className="space-y-2 text-xs">
+                  {(data?.formerCoaches || []).map((ch) => (
+                    <li key={ch.id} className="flex items-center gap-2">
+                      {ch.photo ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={ch.photo}
+                          alt=""
+                          className="h-8 w-8 rounded-[2px] object-cover object-top border border-white/[0.08]"
+                        />
+                      ) : (
+                        <span className="h-8 w-8 rounded-[2px] bg-[#1a222d]" />
+                      )}
+                      <div>
+                        <div className="font-semibold text-[#e2e8f0]">
+                          {ch.name}
+                        </div>
+                        <div className="text-[#64748b]">
+                          {[ch.nationality || null, ch.start || null, ch.end ? `→ ${ch.end}` : null]
+                            .filter(Boolean)
+                            .join(" · ") || "—"}
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Section>
+
+            <Section title="Current coach" dense>
               {data?.afCoach ? (
-                <div className="flex items-center gap-3 text-xs mb-3">
+                <div className="flex items-center gap-3 text-xs">
                   {data.afCoach.photo ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -563,9 +814,6 @@ export function ClubDossier({
                     </div>
                   </div>
                 </div>
-              ) : null}
-              {(data?.coaches?.length || 0) === 0 && !data?.afCoach ? (
-                <p className="text-xs text-[#64748b]">No coaches on file.</p>
               ) : (data?.coaches?.length || 0) > 0 ? (
                 <ul className="space-y-1 text-xs">
                   {(data?.coaches || []).map((ch) => (
@@ -577,101 +825,123 @@ export function ClubDossier({
                     </li>
                   ))}
                 </ul>
-              ) : null}
-            </Section>
-
-            <Section title="Transfers">
-              {(data?.transfers?.length || 0) === 0 ? (
-                <p className="text-xs text-[#64748b]">No transfers in feed.</p>
               ) : (
-                <div className="overflow-x-auto max-h-[40vh]">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Date</th>
-                        <th>Player</th>
-                        <th>Move</th>
-                        <th>Fee</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(data?.transfers || []).map((tr, i) => (
-                        <tr key={i}>
-                          <td className="muted">{tr.date}</td>
-                          <td className="font-semibold">{tr.player}</td>
-                          <td className="muted">
-                            {tr.from} → {tr.to}
-                          </td>
-                          <td className="muted">{formatTransferFee(tr.type)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <p className="text-xs text-[#64748b]">No coaches on file.</p>
               )}
             </Section>
 
-            <Section title="Contracts" dense>
+            <Section title="Club records" dense quiet>
               <p className="text-xs text-[#64748b]">
-                Contract end dates are not available in the feed — honest empty.
+                AF does not publish a club-records endpoint — —
               </p>
             </Section>
           </div>
         )}
 
-        {!loading && c && tab === "notes" && (
-          <div className="space-y-3">
-            {(bioNotes.length > 0 || funNotes.length > 0) && (
-              <div className="space-y-2">
-                {[...bioNotes, ...funNotes].slice(0, 4).map((n) => {
-                  const open = expandedPreviewId === n.id;
-                  return (
-                  <div
-                    key={n.id}
-                    className="note-preview note-preview-expandable"
-                    role="button"
-                    tabIndex={0}
-                    aria-expanded={open}
-                    title={open ? "Collapse note" : "Expand full note"}
-                    onClick={() =>
-                      setExpandedPreviewId((cur) => (cur === n.id ? null : n.id))
-                    }
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        setExpandedPreviewId((cur) =>
-                          cur === n.id ? null : n.id
-                        );
-                      }
-                    }}
-                  >
-                    <div className={`text-[11px] font-bold text-[#e2e8f0] mb-0.5 ${open ? "" : "truncate"}`}>
-                      {n.title}
-                    </div>
-                    <p
-                      className={`text-[11px] text-[#94a3b8] whitespace-pre-wrap ${open ? "" : "line-clamp-4"}`}
-                    >
-                      {n.body}
-                    </p>
-                    <div className="mt-0.5 text-[9px] font-semibold uppercase tracking-wide text-[#64748b]">
-                      {open ? "Collapse" : "Expand"}
-                    </div>
-                  </div>
-                  );
-                })}
+        {!loading && c && tab === "transfers" && (
+          <Section title="Transfer history">
+            {(data?.transfers?.length || 0) === 0 ? (
+              <p className="text-xs text-[#64748b]">No transfers in feed.</p>
+            ) : (
+              <div className="overflow-x-auto max-h-[55vh]">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Player</th>
+                      <th>Move</th>
+                      <th>Fee</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(data?.transfers || []).map((tr, i) => (
+                      <tr key={i}>
+                        <td className="muted">{tr.date || "—"}</td>
+                        <td className="font-semibold">{tr.player}</td>
+                        <td className="muted">
+                          {tr.from} → {tr.to}
+                        </td>
+                        <td className="muted">
+                          {formatTransferFee(tr.type)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
-            <NotesPanel
-              matchId={matchId}
-              initialNotes={notes}
-              entityType="club"
-              entityId={clubId}
-              entityLabel={c.name}
-              fillHeight
-            />
-          </div>
+          </Section>
         )}
+
+        {!loading && c && tab === "notes" && notesBlock}
       </div>
+
+      {selectedFx ? (
+        <div className="league-match-popup-root" data-club-match-popup="1">
+          <button
+            type="button"
+            className="league-match-popup-backdrop"
+            aria-label="Close match info"
+            onClick={() => setSelectedFx(null)}
+          />
+          <div
+            className="league-match-popup"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Match info"
+          >
+            <div className="league-match-popup-header">
+              <div className="min-w-0">
+                <div className="text-[10px] font-bold uppercase tracking-wide text-[#64748b]">
+                  {selectedFx.competition || "Match"}
+                </div>
+                <div className="font-bold text-sm text-[#e2e8f0]">
+                  {selectedFx.home} {selectedFx.score} {selectedFx.away}
+                </div>
+                <div className="text-[11px] text-[#94a3b8]">
+                  {(selectedFx.date || "").slice(0, 16).replace("T", " ")} ·{" "}
+                  {selectedFx.status || "—"}
+                </div>
+              </div>
+              <button
+                type="button"
+                className="player-dossier-icon-btn focus-ring"
+                onClick={() => setSelectedFx(null)}
+                aria-label="Close"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <div className="league-match-popup-section">
+              <div className="league-match-popup-section-title">Scorers</div>
+              {fxLoading ? (
+                <div className="flex items-center gap-2 text-xs text-[#64748b]">
+                  <Loader2 className="h-3 w-3 animate-spin" /> Loading…
+                </div>
+              ) : fxScorers && fxScorers.length > 0 ? (
+                <ul className="space-y-1 text-xs">
+                  {fxScorers.map((g, i) => (
+                    <li key={i} className="text-[#e2e8f0]">
+                      {g.minute != null ? `${g.minute}'` : "—"}{" "}
+                      {g.player || "—"}
+                      {g.assist ? (
+                        <span className="text-[#64748b]"> · {g.assist}</span>
+                      ) : null}
+                      {g.detail ? (
+                        <span className="text-[#64748b]"> · {g.detail}</span>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-xs text-[#64748b]">
+                  No scorers in feed for this fixture.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

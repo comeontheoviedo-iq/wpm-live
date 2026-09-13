@@ -68,6 +68,45 @@ type LeaguePayload = {
   }[];
   lastChampion?: { season: number; name: string; logo?: string | null } | null;
   lastRunnerUp?: { season: number; name: string; logo?: string | null } | null;
+  leaders?: {
+    scorers: {
+      playerId: number | null;
+      player: string;
+      photo: string | null;
+      teamId: number | null;
+      team: string;
+      teamLogo: string | null;
+      goals: number | null;
+      assists: number | null;
+      passes: number | null;
+      value: number | null;
+    }[];
+    assists: {
+      playerId: number | null;
+      player: string;
+      photo: string | null;
+      teamId: number | null;
+      team: string;
+      teamLogo: string | null;
+      goals: number | null;
+      assists: number | null;
+      passes: number | null;
+      value: number | null;
+    }[];
+    passes: {
+      playerId: number | null;
+      player: string;
+      photo: string | null;
+      teamId: number | null;
+      team: string;
+      teamLogo: string | null;
+      goals: number | null;
+      assists: number | null;
+      passes: number | null;
+      value: number | null;
+    }[];
+    note: string | null;
+  };
 };
 
 type Tab = "overview" | "table" | "results" | "fixtures" | "history" | "notes";
@@ -536,6 +575,56 @@ export function LeagueDossier({
               sub={sayableSub}
               fullBody={sayableNote?.body || null}
             />
+
+            <Section title={`Notes (${notes.length})`} dense>
+              {notes.length === 0 ? (
+                <p className="text-xs text-[#64748b]">No league notes linked yet.</p>
+              ) : (
+                <NotesPanel
+                  matchId={matchId}
+                  initialNotes={notes}
+                  entityType="league"
+                  entityId={String(data.leagueId || data.competition || "league")}
+                  entityLabel={leagueName}
+                  fillHeight
+                />
+              )}
+            </Section>
+
+            <Section title="Season leaders" dense>
+              <div className="grid gap-3 md:grid-cols-3">
+                <LeaderList
+                  title="Scorers"
+                  rows={(data.leaders?.scorers || []).map((r) => ({
+                    name: r.player,
+                    team: r.team,
+                    value: r.goals,
+                    suffix: "G",
+                  }))}
+                  empty="No scorers from feed."
+                />
+                <LeaderList
+                  title="Assists"
+                  rows={(data.leaders?.assists || []).map((r) => ({
+                    name: r.player,
+                    team: r.team,
+                    value: r.assists,
+                    suffix: "A",
+                  }))}
+                  empty="No assists from feed."
+                />
+                <LeaderList
+                  title="Passes"
+                  rows={(data.leaders?.passes || []).map((r) => ({
+                    name: r.player,
+                    team: r.team,
+                    value: r.passes,
+                    suffix: "P",
+                  }))}
+                  empty={data.leaders?.note || "No pass totals from feed."}
+                />
+              </div>
+            </Section>
 
             <div className="player-dossier-overview-cols">
               <Section title="Identity" dense quiet>
@@ -1324,7 +1413,48 @@ function Kv({
   );
 }
 
+
+function LeaderList({
+  title,
+  rows,
+  empty,
+}: {
+  title: string;
+  rows: { name: string; team: string; value: number | null; suffix: string }[];
+  empty: string;
+}) {
+  return (
+    <div className="rounded-[2px] border border-white/[0.06] bg-[#10141a] p-2">
+      <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-[#64748b]">
+        {title}
+      </div>
+      {rows.length === 0 ? (
+        <p className="text-[11px] text-[#64748b]">{empty}</p>
+      ) : (
+        <ol className="space-y-1">
+          {rows.slice(0, 8).map((r, i) => (
+            <li
+              key={`${title}-${i}`}
+              className="flex items-baseline justify-between gap-2 text-[11px]"
+            >
+              <span className="min-w-0 truncate text-[#e2e8f0]">
+                <span className="text-[#64748b] tabular-nums">{i + 1}. </span>
+                {r.name}
+                <span className="text-[#64748b]"> · {r.team}</span>
+              </span>
+              <span className="shrink-0 font-semibold tabular-nums text-[#94a3b8]">
+                {r.value != null ? `${r.value}${r.suffix}` : "—"}
+              </span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  );
+}
+
 /** Back-compat export used by League page */
+
 export function LeagueIntel({ matchId }: { matchId: string }) {
   return <LeagueDossier matchId={matchId} />;
 }

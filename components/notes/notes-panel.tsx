@@ -66,7 +66,8 @@ function isEntityScoped(entityType?: string | null): boolean {
     entityType === "coach" ||
     entityType === "club" ||
     entityType === "team" ||
-    entityType === "league"
+    entityType === "league" ||
+    entityType === "venue"
   );
 }
 

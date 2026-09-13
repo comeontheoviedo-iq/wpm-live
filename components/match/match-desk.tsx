@@ -2681,11 +2681,11 @@ export function MatchDesk({
                     League table & fixtures
                   </Link>
                   <Link
-                    href={`/match-day/${matchId}/scorers`}
+                    href={`/match-day/${matchId}/league`}
                     className="block rounded-md px-2 py-1.5 hover:bg-[var(--surface-muted)]"
                     onClick={() => setIntelOpen(false)}
                   >
-                    Scorers {scorers.length ? `(${scorers.length})` : ""}
+                    League leaders {scorers.length ? `(${scorers.length})` : ""}
                   </Link>
                   <Link
                     href={`/match-day/${matchId}/keepers`}

@@ -1946,7 +1946,9 @@ button.player-dossier-verdict:focus-visible {
   object-fit: contain;
   object-position: center;
   padding: 0.35rem;
-  background: #10141a;
+  background:
+    radial-gradient(circle at 50% 45%, #e2e8f0 0%, #94a3b8 55%, #64748b 100%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 
@@ -2535,7 +2537,9 @@ button.player-dossier-verdict:focus-visible {
   object-fit: contain;
   object-position: center;
   padding: 0.35rem;
-  background: #10141a;
+  background:
+    radial-gradient(circle at 50% 45%, #e2e8f0 0%, #94a3b8 55%, #64748b 100%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
 }
 .player-dossier .club-rail-btn {
   width: 100%;

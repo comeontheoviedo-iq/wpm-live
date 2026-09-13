@@ -5,14 +5,35 @@ import { europeanSeasonYear } from "@/lib/season";
 import {
   getTeam,
   getTeamRecentFinished,
+  getTeamUpcoming,
   getTeamTransfers,
   getTeamTrophies,
   getCoachByTeam,
   getStandings,
   getSquads,
+  listCoachesByTeam,
 } from "@/lib/api-football";
 import { leagueIdForCompetition } from "@/lib/competitions";
 import { resolvePersonAge } from "@/lib/person-age";
+
+function dedupeTransfers<
+  T extends { date: string; player: string; from: string; to: string; type: string | null }
+>(rows: T[]): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const r of rows) {
+    const key = `${r.date}|${r.player.toLowerCase()}|${r.from.toLowerCase()}|${r.to.toLowerCase()}|${(r.type || "").toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(r);
+  }
+  return out;
+}
+
+function isWinnerPlace(place: string | null | undefined) {
+  if (!place) return false;
+  return /^(winner|champion|1st|first|winners)$/i.test(place.trim());
+}
 
 export async function GET(
   req: Request,
@@ -29,7 +50,11 @@ export async function GET(
     include: {
       players: { orderBy: [{ shirtNumber: "asc" }, { name: "asc" }] },
       coaches: true,
-      injuries: { take: 12, orderBy: { injuryType: "asc" } },
+      injuries: {
+        take: 40,
+        orderBy: { injuryType: "asc" },
+        include: { player: true },
+      },
     },
   });
   if (!club) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -54,7 +79,6 @@ export async function GET(
       });
 
   let afTeam: Awaited<ReturnType<typeof getTeam>> | null = null;
-  let recent: Awaited<ReturnType<typeof getTeamRecentFinished>> = [];
   let transfers: {
     date: string;
     type: string | null;
@@ -62,8 +86,21 @@ export async function GET(
     from: string;
     to: string;
   }[] = [];
-  let trophies: { league: string; season?: string | null; place?: string | null }[] = [];
+  let trophies: {
+    league: string;
+    season?: string | null;
+    place?: string | null;
+    country?: string | null;
+  }[] = [];
   let coach: Awaited<ReturnType<typeof getCoachByTeam>> | null = null;
+  let formerCoaches: {
+    id: number;
+    name: string;
+    nationality?: string | null;
+    photo?: string | null;
+    start?: string | null;
+    end?: string | null;
+  }[] = [];
   let standingsRow: {
     rank: number;
     played: number;
@@ -75,11 +112,24 @@ export async function GET(
     form?: string | null;
   } | null = null;
   let schedule: {
+    id: number | null;
     date: string;
     home: string;
     away: string;
     score: string;
     status: string;
+    competition: string | null;
+  }[] = [];
+  let competitions: {
+    name: string;
+    results: {
+      id: number | null;
+      date: string;
+      home: string;
+      away: string;
+      score: string;
+      status: string;
+    }[];
   }[] = [];
   let afStub: string | null = null;
 
@@ -87,8 +137,12 @@ export async function GET(
   if (afId) {
     try {
       afTeam = await getTeam(afId).catch(() => null);
-      recent = await getTeamRecentFinished(afId, 8).catch(() => []);
-      schedule = (recent || []).slice(0, 8).map((fx) => ({
+      const recent = await getTeamRecentFinished(afId, 12).catch(() => []);
+      const upcoming = await getTeamUpcoming(afId, 6).catch(() => []);
+      const allFx = [...(recent || []), ...(upcoming || [])];
+
+      schedule = allFx.slice(0, 16).map((fx) => ({
+        id: fx.fixture?.id ?? null,
         date: fx.fixture?.date || "",
         home: fx.teams?.home?.name || "—",
         away: fx.teams?.away?.name || "—",
@@ -97,7 +151,42 @@ export async function GET(
             ? `${fx.goals.home}–${fx.goals.away}`
             : "—",
         status: fx.fixture?.status?.short || "",
+        competition: fx.league?.name || null,
       }));
+
+      const byComp = new Map<
+        string,
+        {
+          id: number | null;
+          date: string;
+          home: string;
+          away: string;
+          score: string;
+          status: string;
+        }[]
+      >();
+      for (const fx of recent || []) {
+        const name = fx.league?.name || "Other";
+        const row = {
+          id: fx.fixture?.id ?? null,
+          date: fx.fixture?.date || "",
+          home: fx.teams?.home?.name || "—",
+          away: fx.teams?.away?.name || "—",
+          score:
+            fx.goals?.home != null && fx.goals?.away != null
+              ? `${fx.goals.home}–${fx.goals.away}`
+              : "—",
+          status: fx.fixture?.status?.short || "",
+        };
+        const list = byComp.get(name) || [];
+        list.push(row);
+        byComp.set(name, list);
+      }
+      competitions = Array.from(byComp.entries()).map(([name, results]) => ({
+        name,
+        results: results.slice(0, 8),
+      }));
+
       const tr = await getTeamTransfers(afId).catch(() => []);
       for (const row of tr || []) {
         const pname = row.player?.name || "Player";
@@ -111,19 +200,41 @@ export async function GET(
           });
         }
       }
-      transfers = transfers
-        .filter((x) => x.date)
-        .sort((a, b) => b.date.localeCompare(a.date))
-        .slice(0, 24);
+      transfers = dedupeTransfers(
+        transfers
+          .filter((x) => x.date)
+          .sort((a, b) => b.date.localeCompare(a.date))
+      ).slice(0, 60);
+
       const trop = await getTeamTrophies(afId).catch(() => []);
-      trophies = (trop || [])
-        .map((x) => ({
-          league: x.league || "Trophy",
-          season: x.season || null,
-          place: x.place || null,
-        }))
-        .slice(0, 40);
+      trophies = (trop || []).map((x) => ({
+        league: x.league || "Trophy",
+        season: x.season || null,
+        place: x.place || null,
+        country: x.country || null,
+      }));
+
       coach = await getCoachByTeam(afId).catch(() => null);
+      const coachesHist = await listCoachesByTeam(afId).catch(() => []);
+      formerCoaches = (coachesHist || [])
+        .map((c) => {
+          const stints = (c.career || []).filter((x) => x.team?.id === afId);
+          const closed = stints
+            .filter((x) => x.end)
+            .sort((a, b) => String(b.end || "").localeCompare(String(a.end || "")));
+          const latest = closed[0];
+          if (!latest) return null;
+          return {
+            id: c.id,
+            name: c.name,
+            nationality: c.nationality,
+            photo: c.photo,
+            start: latest.start || null,
+            end: latest.end || null,
+          };
+        })
+        .filter(Boolean)
+        .slice(0, 12) as typeof formerCoaches;
 
       if (matchId) {
         const match = await prisma.match.findUnique({
@@ -152,7 +263,6 @@ export async function GET(
           }
         }
       }
-      // Soft squad refresh hint only — local players already loaded
       await getSquads(afId).catch(() => null);
     } catch (e) {
       afStub = "Club stats temporarily unavailable";
@@ -166,6 +276,27 @@ export async function GET(
     ? `https://media.api-sports.io/football/teams/${afId}.png`
     : null;
 
+  const wonTrophies = trophies.filter((t) => isWinnerPlace(t.place));
+
+  // Dedupe injuries by player
+  const injSeen = new Set<string>();
+  const injuries = club.injuries
+    .filter((i) => {
+      const key = i.playerId || i.id;
+      if (injSeen.has(key)) return false;
+      injSeen.add(key);
+      return true;
+    })
+    .map((i) => ({
+      id: i.id,
+      status: i.status,
+      injuryType: i.injuryType,
+      expectedReturn: i.expectedReturn,
+      playerId: i.playerId,
+      playerName: i.player?.name || "—",
+      shirtNumber: i.player?.shirtNumber ?? null,
+    }));
+
   return NextResponse.json({
     club: {
       id: club.id,
@@ -174,9 +305,9 @@ export async function GET(
       abbreviation: club.abbreviation,
       primaryColor: club.primaryColor,
       secondaryColor: club.secondaryColor,
-      founded: club.founded,
-      city: club.city,
-      stadiumName: club.stadiumName,
+      founded: club.founded ?? afTeam?.team?.founded ?? null,
+      city: club.city || afTeam?.venue?.city || null,
+      stadiumName: club.stadiumName || afTeam?.venue?.name || null,
       nickname: club.nickname,
       fansApprox: club.fansApprox,
       apiFootballTeamId: club.apiFootballTeamId,
@@ -222,18 +353,15 @@ export async function GET(
           career: (coach.career || []).slice(0, 8),
         }
       : null,
-    injuries: club.injuries.map((i) => ({
-      id: i.id,
-      status: i.status,
-      injuryType: i.injuryType,
-      expectedReturn: i.expectedReturn,
-      playerId: i.playerId,
-    })),
+    formerCoaches,
+    injuries,
     notes,
     transfers,
     trophies,
+    wonTrophies,
     standingsRow,
     schedule,
+    competitions,
     afStub,
   });
 }

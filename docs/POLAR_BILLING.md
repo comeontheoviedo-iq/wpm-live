@@ -135,3 +135,12 @@ POLAR_PRODUCT_PASS_10=3b6e02a2-f90e-4570-b99c-00fb2a3c41a4
 ```
 
 Webhook endpoint id: `038933a1-35f8-49d6-bd3d-336c86a44c72` (secret only on Netlify).
+
+## Welcome email
+
+On first Polar trial unlock the webhook sends a one-shot CoComms welcome email
+(idempotent via `User.welcomeEmailSentAt`). See **docs/WELCOME_EMAIL.md**.
+
+Requires `RESEND_API_KEY` **or** `SMTP_HOST` + `SMTP_USER` + `SMTP_PASS` on
+Netlify. Without mail env the webhook still unlocks trial and only logs a skip.
+

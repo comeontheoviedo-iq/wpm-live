@@ -41,6 +41,8 @@ model User {
   polarSubscriptionId  String?
   /// One-time Match Desk Pass credits (1 desk per credit). Demo accounts ignore caps.
   matchPassCredits     Int        @default(0)
+  /// Set when the post-checkout trial welcome email was sent (idempotent).
+  welcomeEmailSentAt   DateTime?
   createdAt            DateTime   @default(now())
   updatedAt            DateTime   @updatedAt
   matchDays            MatchDay[]

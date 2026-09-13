@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { parseMatchPassCredits, polarPublicStatus } from "@/lib/polar";
 import { computeTrialWindow } from "@/lib/trial";
+import {
+  isAlreadyOnLiveTrial,
+  maybeSendTrialWelcomeEmail,
+  type WelcomePlanHint,
+} from "@/lib/welcome-email";
 
 export const runtime = "nodejs";
 
@@ -27,6 +32,42 @@ function asMeta(raw: unknown): Meta {
   if (raw && typeof raw === "object") return raw as Meta;
   return {};
 }
+
+
+/** Persist User billing update, then send welcome once on first trial unlock. */
+async function updateUserBillingAndMaybeWelcome(opts: {
+  userId: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  data: Record<string, any>;
+  plan?: WelcomePlanHint;
+}) {
+  if (!Object.keys(opts.data).length) return;
+
+  const existing = await prisma.user.findUnique({
+    where: { id: opts.userId },
+    select: {
+      billingStatus: true,
+      trialEndsAt: true,
+      welcomeEmailSentAt: true,
+    },
+  });
+  if (!existing) return;
+
+  const alreadyLive = isAlreadyOnLiveTrial(existing);
+  const unlockingTrial =
+    opts.data.billingStatus === "trial" && !alreadyLive;
+
+  await prisma.user.update({ where: { id: opts.userId }, data: opts.data });
+
+  if (unlockingTrial) {
+    await maybeSendTrialWelcomeEmail({
+      userId: opts.userId,
+      unlockingTrial: true,
+      plan: opts.plan ?? null,
+    });
+  }
+}
+
 
 async function resolveUserId(opts: {
   metadata?: Meta | null;
@@ -149,9 +190,11 @@ async function applySubscription(opts: {
     data.trialCancelledAt = new Date();
   }
 
-  if (Object.keys(data).length) {
-    await prisma.user.update({ where: { id: userId }, data });
-  }
+  await updateUserBillingAndMaybeWelcome({
+    userId,
+    data,
+    plan: "unlimited",
+  });
 }
 
 async function applyOrderPaid(opts: {
@@ -236,9 +279,11 @@ async function applyOrderPaid(opts: {
       data.trialCancelledAt = null;
       data.cancelAtPeriodEnd = false;
     }
-    if (Object.keys(data).length) {
-      await prisma.user.update({ where: { id: userId }, data });
-    }
+    await updateUserBillingAndMaybeWelcome({
+      userId,
+      data,
+      plan: "match_pass",
+    });
     return;
   }
 
@@ -271,9 +316,11 @@ async function applyOrderPaid(opts: {
     }
   }
 
-  if (Object.keys(data).length) {
-    await prisma.user.update({ where: { id: userId }, data });
-  }
+  await updateUserBillingAndMaybeWelcome({
+    userId,
+    data,
+    plan: "unlimited",
+  });
 }
 
 async function applyCheckoutUpdated(opts: {
@@ -341,9 +388,18 @@ async function applyCheckoutUpdated(opts: {
     data.cancelAtPeriodEnd = false;
   }
 
-  if (Object.keys(data).length) {
-    await prisma.user.update({ where: { id: userId }, data });
-  }
+  const planHint: WelcomePlanHint =
+    plan === "match_pass" || (credits != null && !subscriptionId)
+      ? "match_pass"
+      : plan === "unlimited" || subscriptionId
+        ? "unlimited"
+        : null;
+
+  await updateUserBillingAndMaybeWelcome({
+    userId,
+    data,
+    plan: planHint,
+  });
 }
 
 function buildWebhookHandler() {

@@ -69,3 +69,7 @@ data/desk-posters/
 .polar_access_token.env
 .polar_webhook_secret.env
 .polar_product_ids.json
+
+# Local Polar env bundle (never commit)
+.polar-netlify-env.json
+.polar-*.json

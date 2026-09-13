@@ -105,6 +105,20 @@ Prints product UUIDs to paste into Netlify. Does nothing without a real token.
 - Customer portal: https://polar.sh/docs/features/customer-portal/navigate-customers
 - Checkout API: https://polar.sh/docs/features/checkout/session
 
+## Live product IDs (ronnie-dog-media org)
+
+| Env | Product UUID |
+|-----|--------------|
+| `POLAR_PRODUCT_UNLIMITED` | `b05cb997-f0a6-4830-9331-636bdf9fd25b` |
+| `POLAR_PRODUCT_PASS_1` | `4cbbe0a6-b084-4073-85df-d6bd308c0049` |
+| `POLAR_PRODUCT_PASS_5` | `a442296a-4569-4b3c-9cce-9c9e056329f0` |
+| `POLAR_PRODUCT_PASS_10` | `e7166b4f-e3b1-427d-b83b-85eecb06326c` |
+
+Webhook endpoint (enabled): `https://www.cocomms.online/api/billing/polar/webhook`  
+Webhook id: `038933a1-35f8-49d6-bd3d-336c86a44c72`
+
+These IDs are already set on Netlify `pitchline-app` (production + previews) together with `POLAR_ACCESS_TOKEN` and `POLAR_WEBHOOK_SECRET`.
+
 ## Stripe parking note
 
 Existing Stripe price ids and routes remain. As soon as `POLAR_ACCESS_TOKEN` +

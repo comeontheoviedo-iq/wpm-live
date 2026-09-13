@@ -134,7 +134,11 @@ export function liveAdjustedSeasonStat(
   afTotal: number | null | undefined,
   inMatchCount: number,
   matchStatus?: string | null,
-  opts?: { forceExcludeToday?: boolean }
+  opts?: {
+    forceExcludeToday?: boolean;
+    /** Desk/DB AF snapshot before this enrich — detects mid-match AF catch-up. */
+    deskBaseline?: number | null;
+  }
 ): number {
   const inMatch = Math.max(0, Number(inMatchCount) || 0);
   const af =
@@ -148,9 +152,23 @@ export function liveAdjustedSeasonStat(
     st === "Live" ||
     st === "Half Time" ||
     /^(1H|2H|LIVE|HT|ET|BT|P|PEN)$/i.test(st);
+  const desk =
+    opts?.deskBaseline != null && Number.isFinite(Number(opts.deskBaseline))
+      ? Number(opts.deskBaseline)
+      : null;
+  // Fresh AF already includes today's contribution (caught up past desk baseline)
+  if (desk != null && af >= desk + inMatch) {
+    return af;
+  }
   // Live (or forceExcludeToday while live): snapshot excludes today
   if (live || opts?.forceExcludeToday) {
-    if (live) return af + inMatch;
+    if (live) {
+      // Partial AF bump mid-match — prefer desk + inMatch over double-count
+      if (desk != null && af > desk && af < desk + inMatch) {
+        return desk + inMatch;
+      }
+      return af + inMatch;
+    }
   }
   // FT / finished: trust AF snapshot
   return af;

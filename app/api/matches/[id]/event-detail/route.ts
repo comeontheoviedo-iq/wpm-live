@@ -15,6 +15,7 @@ import { leagueIdForCompetition } from "@/lib/competitions";
 import {
   splitSeasonStats,
   liveAdjustedSeasonStat,
+  seasonOrdinal,
 } from "@/lib/season-tally";
 import {
   benchImpactFromForm,
@@ -159,24 +160,56 @@ export async function POST(
     }
   }
 
+  const deskGoals = player?.goals ?? null;
+  const deskAssists = player?.assists ?? null;
+  const deskYellows = player?.yellowCards ?? null;
+  const deskReds = player?.redCards ?? null;
+
   const goalsCompetitionNow = liveAdjustedSeasonStat(
     goalsCompetition,
     inMatchGoals,
-    matchStatus
+    matchStatus,
+    { deskBaseline: deskGoals }
   );
-  const goalsAllNow = liveAdjustedSeasonStat(goalsAll, inMatchGoals, matchStatus);
+  const goalsAllNow = liveAdjustedSeasonStat(goalsAll, inMatchGoals, matchStatus, {
+    deskBaseline: player?.goalsAllComps ?? deskGoals,
+  });
   const assistsCompetitionNow = liveAdjustedSeasonStat(
     assistsCompetition,
     inMatchAssists,
-    matchStatus
+    matchStatus,
+    { deskBaseline: deskAssists }
   );
   const assistsAllNow = liveAdjustedSeasonStat(
     assistsAll,
     inMatchAssists,
-    matchStatus
+    matchStatus,
+    { deskBaseline: player?.assistsAllComps ?? deskAssists }
   );
-  const yellowsNow = liveAdjustedSeasonStat(yellows, inMatchYellows, matchStatus);
-  const redsNow = liveAdjustedSeasonStat(reds, inMatchReds, matchStatus);
+  const yellowsNow = liveAdjustedSeasonStat(
+    yellows,
+    inMatchYellows,
+    matchStatus,
+    { deskBaseline: deskYellows }
+  );
+  const redsNow = liveAdjustedSeasonStat(reds, inMatchReds, matchStatus, {
+    deskBaseline: deskReds,
+  });
+  // Ordinal for this event — same AF base as the NOW tally (never double-count)
+  const competitionOrdinal =
+    kind === "goal" && inMatchGoals > 0
+      ? seasonOrdinal(
+          goalsCompetition,
+          inMatchGoals,
+          inMatchGoals,
+          // When AF already includes today, treat as FT-style for ordinal math
+          goalsCompetition != null &&
+            deskGoals != null &&
+            goalsCompetition >= deskGoals + inMatchGoals
+            ? "Full Time"
+            : matchStatus
+        )
+      : null;
 
   const wantForm =
     body.includeForm !== false &&
@@ -188,23 +221,33 @@ export async function POST(
   let formSampleSize = 0;
   let formError: string | null = null;
 
+  const kickoffIso = match.kickoff instanceof Date ? match.kickoff.toISOString() : String(match.kickoff || "");
+  const excludeDatePrefix = kickoffIso.slice(0, 10) || null;
+  const excludeFixtureId = match.apiFootballFixtureId ?? null;
+
   if (wantForm && afId && teamAfId) {
     try {
       const form = await getPlayerFormViaTeam(afId, teamAfId, 6);
       formSampleSize = form.length;
-      previousGoal = findPreviousGoal(form);
+      previousGoal = findPreviousGoal(form, {
+        asOf: new Date(),
+        excludeFixtureId,
+        excludeDatePrefix,
+      });
       if (kind === "goal" || !kind) {
         narratives = buildGoalNarrativeHooks({
           form,
           opponentName: body.opponentName || null,
           includeThisGoal: inMatchGoals > 0,
+          excludeFixtureId,
+          excludeDatePrefix,
         });
       }
       if (kind === "sub" || !kind) {
         bench = benchImpactFromForm(form);
       }
     } catch {
-      formError = "Form sample unavailable from feed";
+      formError = "Recent form unavailable from feed";
     }
   }
 
@@ -258,6 +301,7 @@ export async function POST(
       : null,
     goalsCompetitionNow,
     goalsAllCompsNow: goalsAllNow,
+    competitionOrdinal,
     assistsCompetitionNow,
     assistsAllCompsNow: assistsAllNow,
     yellowsNow,

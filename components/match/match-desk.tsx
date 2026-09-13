@@ -3075,7 +3075,10 @@ export function MatchDesk({
         </div>
       )}
 
-      <CompetitionScoresStrip matchId={matchId} className="mx-0.5" />
+      {/* Hide at FT — reclaim vertical room for the pitch board */}
+      {status !== "Full Time" && status !== "Finished" ? (
+        <CompetitionScoresStrip matchId={matchId} className="mx-0.5" />
+      ) : null}
 
       {/* Flash toast — overlay, not a permanent band */}
       {flash && (
@@ -3357,7 +3360,7 @@ export function MatchDesk({
           data-desk-primary="pitch"
           className="relative min-h-0 flex flex-col overflow-hidden order-1 onair-primary"
         >
-          <div className="min-h-0 flex-1">
+          <div className="min-h-[max(300px,32vh)] flex-1">
             <PitchBoard
               homeName={homeName}
               awayName={awayName}

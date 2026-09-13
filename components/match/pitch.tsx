@@ -1005,7 +1005,7 @@ export function PitchBoard({
   // Settings. Never clamp userAdjusted markerSizePct (slider −40…+40 must show).
   const liveDesiredPct =
     liveCompact && !isFullscreen && !resolvedSettings.userAdjusted
-      ? Math.min(resolvedMarkerPct, -28)
+      ? Math.min(resolvedMarkerPct, -18)
       : resolvedMarkerPct;
   // Keep dataRows from Field Settings (default 2) so M GOL / M AST stay visible
   // on LIVE — only shrink marker size for quieter cards when unset by user.
@@ -1309,7 +1309,7 @@ export function PitchBoard({
     <div
       className={cn(
         "relative w-full overflow-hidden rounded-xl border border-emerald-900/40 shadow-inner",
-        compact ? "h-full" : "",
+        compact ? "h-full min-h-[300px]" : "",
         placing && "ring-2 ring-sky-400/70"
       )}
     >
@@ -1317,7 +1317,9 @@ export function PitchBoard({
         ref={pitchRef}
         className={cn(
           "relative w-full",
-          compact ? "h-full min-h-[220px]" : "aspect-[16/9]"
+          // Prefer enough height at normal desktop widths so the XI is not
+          // crammed onto a thin green strip under desk chrome.
+          compact ? "h-full min-h-[max(300px,32vh)]" : "aspect-[16/9]"
         )}
         style={{
           background:

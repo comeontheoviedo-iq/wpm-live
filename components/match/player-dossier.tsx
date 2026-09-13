@@ -5,6 +5,7 @@ import { X, Loader2, User, Settings2, Volume2, Plus } from "lucide-react";
 import { NotesPanel, type NoteRow } from "@/components/notes/notes-panel";
 import { EventTimeline } from "@/components/match/event-timeline";
 import { cn } from "@/lib/utils";
+import { formatTransferFee } from "@/lib/transfer-fee";
 import {
   dualNationalities,
   flagUrl,
@@ -789,11 +790,17 @@ export function PlayerDossier({
                     value={`Y${p.yellowCards} R${p.redCards}`}
                   />
                   {data?.transfers?.[0] ? (
-                    <Kv
-                      label="Transfer"
-                      value={`${data.transfers[0].from.name} → ${data.transfers[0].to.name}`}
-                      sub={data.transfers[0].date}
-                    />
+                    <>
+                      <Kv
+                        label="Transfer"
+                        value={`${data.transfers[0].from.name} → ${data.transfers[0].to.name}`}
+                        sub={data.transfers[0].date}
+                      />
+                      <Kv
+                        label="Fee"
+                        value={formatTransferFee(data.transfers[0].type)}
+                      />
+                    </>
                   ) : (
                     <Kv label="Transfer" value="—" sub="No transfer in feed" />
                   )}
@@ -1131,7 +1138,8 @@ export function PlayerDossier({
                       </span>
                       <span className="text-[#64748b] ml-auto whitespace-nowrap">
                         {tr.date}
-                        {tr.type ? ` · ${tr.type}` : ""}
+                        {" · Fee "}
+                        {formatTransferFee(tr.type)}
                       </span>
                     </li>
                   ))}

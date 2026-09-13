@@ -38,7 +38,7 @@ export function FtPackOffer({
   }
 
   return (
-    <div className="mx-1 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-emerald-50/90 dark:bg-emerald-950/40 px-3 py-2 text-[11px]">
+    <div className="mx-1 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-emerald-50/90 dark:bg-emerald-950/40 px-2.5 py-1 text-[11px]">
       <div className="flex items-center gap-2 flex-wrap">
         <span className="font-bold text-emerald-900 dark:text-emerald-100">
           Full time — FT pack

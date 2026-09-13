@@ -177,28 +177,34 @@ export function buildGoalNarrativeHooks(opts: {
   opponentName?: string | null;
   /** Goals already counted in form for "this" fixture — usually exclude current */
   includeThisGoal?: boolean;
+  /** Current fixture id — skip double-counting when form already has this match */
+  excludeFixtureId?: number | null;
+  excludeDatePrefix?: string | null;
 }): NarrativeHook[] {
   const hooks: NarrativeHook[] = [];
-  const rows = opts.form.filter((r) => r.played);
-  // Goals in last N appearances that had a goal
+  const rows = opts.form.filter((r) => r.played && !isCurrentFixtureFormRow(r, opts));
+  // If form already includes this fixture's goals, do not add includeThisGoal again
+  const formHasThis = opts.form.some(
+    (r) => r.played && isCurrentFixtureFormRow(r, opts) && (r.goals || 0) > 0
+  );
+  const addThis = Boolean(opts.includeThisGoal) && !formHasThis;
   const withGoals = rows.filter((r) => (r.goals || 0) > 0);
   const last5 = rows.slice(0, 5);
-  const goalsInLast5 = last5.reduce((s, r) => s + (r.goals || 0), 0) +
-    (opts.includeThisGoal ? 1 : 0);
-  const appsInLast5 = last5.length + (opts.includeThisGoal ? 1 : 0);
+  const goalsInLast5 =
+    last5.reduce((s, r) => s + (r.goals || 0), 0) + (addThis ? 1 : 0);
+  const appsInLast5 = last5.length + (addThis ? 1 : 0);
   if (goalsInLast5 >= 3 && appsInLast5 >= 3 && appsInLast5 <= 5) {
     hooks.push({
-      text: `${ordinal(goalsInLast5)} goal in last ${appsInLast5} appearances (form sample)`,
+      text: `${ordinal(goalsInLast5)} goal in last ${appsInLast5} appearances`,
     });
-  } else if (withGoals.length >= 3) {
-    // streak of scoring games among recent
-    let streak = opts.includeThisGoal ? 1 : 0;
+  } else if (withGoals.length >= 3 || (addThis && withGoals.length >= 2)) {
+    let streak = addThis ? 1 : 0;
     for (const r of rows) {
       if ((r.goals || 0) > 0) streak += 1;
       else break;
     }
     if (streak >= 3) {
-      hooks.push({ text: `Scored in ${streak} consecutive appearances (form sample)` });
+      hooks.push({ text: `Scored in ${streak} consecutive appearances` });
     }
   }
 
@@ -207,28 +213,54 @@ export function buildGoalNarrativeHooks(opts: {
     const vsOpp = rows.filter((r) =>
       namesLooselyMatch(r.opponent, opts.opponentName)
     );
-    const goalsVs = vsOpp.reduce((s, r) => s + (r.goals || 0), 0) +
-      (opts.includeThisGoal ? 1 : 0);
-    if (goalsVs >= 2 && (vsOpp.length + (opts.includeThisGoal ? 1 : 0)) >= 2) {
-      const n = vsOpp.length + (opts.includeThisGoal ? 1 : 0);
+    const goalsVs =
+      vsOpp.reduce((s, r) => s + (r.goals || 0), 0) + (addThis ? 1 : 0);
+    const meetings = vsOpp.length + (addThis ? 1 : 0);
+    if (goalsVs >= 2 && meetings >= 2) {
       hooks.push({
-        text: `${ordinal(goalsVs)} vs ${opts.opponentName} in last ${n} meetings sampled`,
+        text: `${ordinal(goalsVs)} vs ${opts.opponentName} in last ${meetings} meetings`,
       });
     }
   }
   return hooks.slice(0, 3);
 }
 
+function isCurrentFixtureFormRow(
+  r: PlayerFormRow,
+  opts: {
+    excludeFixtureId?: number | null;
+    excludeDatePrefix?: string | null;
+  }
+): boolean {
+  if (
+    opts.excludeFixtureId != null &&
+    Number.isFinite(opts.excludeFixtureId) &&
+    r.fixtureId === opts.excludeFixtureId
+  ) {
+    return true;
+  }
+  const prefix = (opts.excludeDatePrefix || "").trim();
+  if (prefix && String(r.date || "").startsWith(prefix)) return true;
+  return false;
+}
+
+/** Prior goal BEFORE the current fixture/event — never the goal just scored. */
 export function findPreviousGoal(
   form: PlayerFormRow[],
-  asOf: Date = new Date()
+  opts?: {
+    asOf?: Date;
+    excludeFixtureId?: number | null;
+    excludeDatePrefix?: string | null;
+  }
 ): PreviousGoalInfo | null {
+  const asOf = opts?.asOf ?? new Date();
   for (const r of form) {
     if (!r.played) continue;
     if ((r.goals || 0) <= 0) continue;
+    if (isCurrentFixtureFormRow(r, opts || {})) continue;
     const ago = formatRelativeAgo(r.date, asOf);
     return {
-      date: r.date,
+      date: r.date.slice(0, 10) || r.date,
       opponent: r.opponent || "—",
       ago,
       league: r.league || null,

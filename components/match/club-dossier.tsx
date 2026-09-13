@@ -5,6 +5,7 @@ import { X, Loader2 } from "lucide-react";
 import { SpeakNameButton } from "@/components/match/speak-name-button";
 import { NotesPanel, type NoteRow } from "@/components/notes/notes-panel";
 import { cn } from "@/lib/utils";
+import { formatTransferFee } from "@/lib/transfer-fee";
 import { VerdictBlock } from "@/components/match/verdict-block";
 import { deskVenueName } from "@/lib/venue-name";
 
@@ -590,7 +591,7 @@ export function ClubDossier({
                         <th>Date</th>
                         <th>Player</th>
                         <th>Move</th>
-                        <th>Type</th>
+                        <th>Fee</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -601,7 +602,7 @@ export function ClubDossier({
                           <td className="muted">
                             {tr.from} → {tr.to}
                           </td>
-                          <td className="muted">{tr.type || "—"}</td>
+                          <td className="muted">{formatTransferFee(tr.type)}</td>
                         </tr>
                       ))}
                     </tbody>

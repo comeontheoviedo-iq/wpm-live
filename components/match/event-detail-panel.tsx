@@ -19,6 +19,7 @@ import {
 export type EventDetailEnrich = {
   goalsCompetitionNow?: number | null;
   goalsAllCompsNow?: number | null;
+  competitionOrdinal?: number | null;
   assistsCompetitionNow?: number | null;
   assistsAllCompsNow?: number | null;
   yellowsNow?: number | null;
@@ -268,9 +269,20 @@ export function EventDetailPanel({
                 value={
                   snapshot.isOwnGoal
                     ? "—"
-                    : snapshot.competitionOrdinal != null
-                      ? `${ordinal(snapshot.competitionOrdinal)} (${dash(goalsComp)} now)`
-                      : dash(goalsComp)
+                    : (() => {
+                        const nth =
+                          enrich?.competitionOrdinal ??
+                          snapshot.competitionOrdinal;
+                        if (nth != null && Number.isFinite(nth)) {
+                          return `${ordinal(nth)} this season`;
+                        }
+                        return dash(goalsComp);
+                      })()
+                }
+                hint={
+                  snapshot.isOwnGoal || goalsComp == null
+                    ? undefined
+                    : `${dash(goalsComp)} total`
                 }
               />
               <StatRow
@@ -310,7 +322,7 @@ export function EventDetailPanel({
               ) : enrich?.formError ? (
                 <StatRow label="Previous goal" value="—" hint={enrich.formError} />
               ) : enrich && !enriching ? (
-                <StatRow label="Previous goal" value="—" hint="none in form sample" />
+                <StatRow label="Previous goal" value="—" hint="none in recent form" />
               ) : (
                 <StatRow label="Previous goal" value="—" hint={enriching ? "…" : undefined} />
               )}
@@ -386,12 +398,12 @@ export function EventDetailPanel({
                   <StatRow
                     label="Came on as sub"
                     value={`${bench.subApps} times`}
-                    hint="form sample"
+                    hint="recent form"
                   />
                   <StatRow
                     label="Bench impact"
                     value={`${bench.goalsOffBench}G / ${bench.assistsOffBench}A`}
-                    hint="off bench · sample"
+                    hint="off bench"
                   />
                   {bench.against.length > 0 ? (
                     <div className="mt-1 space-y-0.5">
@@ -507,6 +519,7 @@ export function EventDetailPanelConnected({
         setEnrich({
           goalsCompetitionNow: json.goalsCompetitionNow,
           goalsAllCompsNow: json.goalsAllCompsNow,
+          competitionOrdinal: json.competitionOrdinal,
           assistsCompetitionNow: json.assistsCompetitionNow,
           assistsAllCompsNow: json.assistsAllCompsNow,
           yellowsNow: json.yellowsNow,

@@ -1382,6 +1382,18 @@
   color: #e8eef7;
   box-shadow: -12px 0 32px rgba(0, 0, 0, 0.55);
 }
+
+/* Side-by-side Clubs Intel: fill pane instead of fixed slide-over drawer */
+.player-dossier[data-embedded="1"] {
+  position: absolute;
+  inset: 0;
+  right: auto;
+  z-index: 1;
+  width: 100%;
+  max-width: none;
+  border-left: none;
+  box-shadow: none;
+}
 .player-dossier-titlebar {
   flex-shrink: 0;
   display: flex;

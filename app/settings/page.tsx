@@ -50,6 +50,9 @@ type PlanStatus = {
   canUseGeminiBrief: boolean;
   canAutoGenPack: boolean;
   stripe?: string;
+  billing?: string;
+  billingConfigured?: boolean;
+  billingProvider?: string;
   stripeConfigured?: boolean;
   copy?: {
     unlimited?: { name: string; price: string; includes: string[]; aka?: string };
@@ -343,7 +346,7 @@ export default function SettingsPage() {
       });
       const json = await res.json();
       if (res.status === 503) {
-        setPlanMsg(String(json.todo || "Stripe keys not configured yet."));
+        setPlanMsg(String(json.todo || "Billing keys not configured yet — see docs/POLAR_BILLING.md."));
         return;
       }
       if (!res.ok || !json.url) throw new Error(String(json.error || "Checkout failed"));
@@ -365,7 +368,7 @@ export default function SettingsPage() {
         setPlanMsg(
           String(
             json.todo ||
-              "Stripe verify pending — Customer Portal is not available until billing keys are configured. Use Cancel trial below for app-side cancel."
+              "Billing portal not available until Polar (or Stripe) keys are configured. Use Cancel trial below for app-side cancel. See docs/POLAR_BILLING.md."
           )
         );
         return;
@@ -944,8 +947,8 @@ export default function SettingsPage() {
                     <div className="font-medium">Billing</div>
                     <p className="text-xs text-slate-500">
                       {trial?.stripeConfigured
-                        ? (plan?.stripe || "Manage subscription, payment method, or cancel in the Stripe Customer Portal.")
-                        : "Stripe verify pending — Customer Portal opens only when STRIPE_SECRET_KEY + price ids are configured. App-side trial cancel still works above."}
+                        ? (plan?.stripe || plan?.billing || "Manage subscription, payment method, or cancel in the customer portal.")
+                        : "Billing pending — Customer Portal opens when POLAR_ACCESS_TOKEN + product ids (or Stripe) are configured. App-side trial cancel still works above."}
                     </p>
                     <div className="flex flex-wrap gap-2">
                       <Button type="button" disabled={planBusy} onClick={startUnlimitedCheckout}>
@@ -956,14 +959,14 @@ export default function SettingsPage() {
                         variant="outline"
                         disabled={planBusy}
                         onClick={openBillingPortal}
-                        title={trial?.stripeConfigured ? "Open Stripe Customer Portal" : "Opens portal when Stripe is configured"}
+                        title={trial?.stripeConfigured ? "Open customer portal" : "Opens portal when Polar/Stripe is configured"}
                       >
                         Manage billing
                       </Button>
                     </div>
                     {!trial?.stripeConfigured && (
                       <p className="text-[11px] text-amber-700 dark:text-amber-300">
-                        Manage billing requires Stripe. Until keys are verified, use Cancel trial for app-side access control.
+                        Manage billing requires Polar (temporary MoR) or Stripe. Until keys are set, use Cancel trial for app-side access control. Chris: see docs/POLAR_BILLING.md.
                       </p>
                     )}
                     <div className="text-xs font-medium text-slate-700 dark:text-slate-200 pt-1">

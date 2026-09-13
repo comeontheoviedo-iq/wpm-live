@@ -24,9 +24,16 @@ Both paths are **card-upfront**.
 | Cancel | Unlimited → Portal; Pass → Settings Cancel trial (app-side) |
 | Demo | `@pitchline.app` accounts stay **uncapped** |
 
+## Polar (temporary MoR — preferred)
+
+While Stripe is parked, set **Polar** env on pitchline-app instead of Stripe.
+See **docs/POLAR_BILLING.md** for Chris checklist, product table, webhook URL
+`/api/billing/polar/webhook`, and Netlify keys. Stripe price ids below remain valid
+for a later switch-back; checkout uses Polar when `POLAR_ACCESS_TOKEN` is set.
+
 ## Two modes
 
-### A) Billing keys present (`STRIPE_SECRET_KEY` + prices)
+### A) Billing keys present (`POLAR_*` preferred, else `STRIPE_*`)
 
 1. Signup (`/signup`) plan picker → account create → Checkout for the chosen plan.
 2. **Unlimited:** subscription Checkout with 14-day trial + always collect payment method.
@@ -60,7 +67,9 @@ Secret key + webhook secret must come from **Stripe Dashboard** (never commit).
 
 ## Chris blockers (billing)
 
-Set on **pitchline-app only** (Netlify env):
+Prefer Polar — see docs/POLAR_BILLING.md.
+
+Legacy Stripe (parked) on **pitchline-app only** (Netlify env):
 
 1. `STRIPE_SECRET_KEY` (Dashboard → API keys) — parent collects from Chris; do not set from agents
 2. `STRIPE_PRICE_UNLIMITED=price_1UEqHNDxFzIII5bI65Xe2X2k`

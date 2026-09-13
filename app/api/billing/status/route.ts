@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { buildTrialSnapshot, startAppTrial } from "@/lib/trial";
-import { isStripeConfigured, stripePublicStatus } from "@/lib/stripe";
+import { billingPublicStatus, isBillingConfigured } from "@/lib/billing";
 
 /** GET — trial + billing snapshot for Settings / dashboard. */
 export async function GET() {
@@ -11,13 +11,15 @@ export async function GET() {
   return NextResponse.json({
     ok: true,
     trial,
-    stripe: stripePublicStatus(),
+    billing: billingPublicStatus(),
+    /** @deprecated use billing — kept for older Settings clients */
+    stripe: billingPublicStatus().stripe,
   });
 }
 
 /**
- * POST — start app-side trial when Stripe keys are missing.
- * When Stripe is configured, clients should use /api/billing/checkout with choose-at-start plan body.
+ * POST — start app-side trial when billing keys are missing.
+ * When Polar/Stripe configured, clients should use /api/billing/checkout.
  */
 export async function POST(req: Request) {
   const session = await getSession();
@@ -28,12 +30,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   }
 
-  if (isStripeConfigured()) {
+  if (isBillingConfigured()) {
     return NextResponse.json(
       {
         error: "Use Checkout for card-upfront trial",
         hint: 'POST /api/billing/checkout { plan: "unlimited" } or { plan: "match_pass", credits: 1|5|10 } — choose at start.',
-        stripe: stripePublicStatus(),
+        billing: billingPublicStatus(),
       },
       { status: 409 }
     );
@@ -53,6 +55,6 @@ export async function POST(req: Request) {
     ok: true,
     trial,
     message:
-      "14-day trial started (3 match desks). Converts to Unlimited £22/mo unless you cancel in Settings. Billing portal wires when keys are set.",
+      "14-day trial started (3 match desks). Converts to Unlimited £22/mo unless you cancel in Settings. Billing portal wires when Polar keys are set — see docs/POLAR_BILLING.md.",
   });
 }

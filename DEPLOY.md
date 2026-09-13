@@ -52,3 +52,10 @@ Initial schema is mirrored from prisma/migrations into that folder. Keep editing
 
 Netlify scheduled function `pre-kickoff-hard-sync` runs every 2 minutes and POSTs `/api/cron/pre-kickoff-hard-sync` (Bearer CRON_SECRET or AUTH_SECRET).
 Marks `Match.preKickoffHardSyncAt` after one successful full sync when kickoff is ≤31 minutes away.
+
+
+## Billing (Polar temporary MoR)
+
+Commercial checkout uses **Polar** when `POLAR_ACCESS_TOKEN` + product ids are set on pitchline-app.
+Stripe remains in code but inactive. Full Chris steps: `docs/POLAR_BILLING.md`.
+Webhook: `https://www.cocomms.online/api/billing/polar/webhook`.

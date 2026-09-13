@@ -42,7 +42,7 @@ export default function PricingPage() {
       }
       if (res.status === 503) {
         setMsg(
-          "Billing not configured yet — create an account to start the 14-day / 3-desk app-side trial. Chris: add billing keys on pitchline-app."
+          "Billing not configured yet — create an account to start the 14-day / 3-desk app-side trial. Chris: add Polar keys on pitchline-app (docs/POLAR_BILLING.md)."
         );
         return;
       }
@@ -75,7 +75,7 @@ export default function PricingPage() {
         setMsg(
           String(
             json.todo ||
-              "Match Desk Pass not configured yet — set STRIPE_PRICE_PASS_1 / _5 / _10 in Netlify."
+              "Match Desk Pass not configured yet — set POLAR_PRODUCT_PASS_1 / _5 / _10 (or Stripe) in Netlify."
           )
         );
         return;

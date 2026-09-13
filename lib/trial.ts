@@ -13,7 +13,7 @@
  */
 
 import { prisma } from "./prisma";
-import { isStripeConfigured } from "./stripe";
+import { isBillingConfigured, getBillingProvider } from "./billing";
 import { PLAN_COPY } from "./plan";
 
 export const TRIAL_DAYS = 14;
@@ -42,6 +42,10 @@ export type TrialSnapshot = {
   matchPassCredits: number;
   convertsTo: string;
   convertPrice: string;
+  /** True when Polar or Stripe checkout is live. */
+  billingConfigured: boolean;
+  billingProvider: "polar" | "stripe" | "none";
+  /** @deprecated alias of billingConfigured — Settings still reads this */
   stripeConfigured: boolean;
   message: string;
   cancelPath: string;
@@ -91,6 +95,7 @@ type UserBillingRow = {
   cancelAtPeriodEnd: boolean;
   matchPassCredits: number;
   stripeSubscriptionId: string | null;
+  polarSubscriptionId: string | null;
 };
 
 export async function getUserBilling(userId: string): Promise<UserBillingRow | null> {
@@ -105,6 +110,7 @@ export async function getUserBilling(userId: string): Promise<UserBillingRow | n
       cancelAtPeriodEnd: true,
       matchPassCredits: true,
       stripeSubscriptionId: true,
+      polarSubscriptionId: true,
     },
   });
   return user;
@@ -195,7 +201,9 @@ export async function buildTrialSnapshot(userId: string): Promise<TrialSnapshot 
   if (!user) return null;
 
   const desksUsed = await prisma.matchDay.count({ where: { userId } });
-  const stripeConfigured = isStripeConfigured();
+  const billingConfigured = isBillingConfigured();
+  const billingProvider = getBillingProvider();
+  const stripeConfigured = billingConfigured; // legacy Settings field
   const status = asBillingStatus(user.billingStatus);
   const now = new Date();
   const ends = user.trialEndsAt;
@@ -221,11 +229,13 @@ export async function buildTrialSnapshot(userId: string): Promise<TrialSnapshot 
       matchPassCredits,
       convertsTo: PLAN_COPY.unlimited.name,
       convertPrice: PLAN_COPY.unlimited.price,
+      billingConfigured,
+      billingProvider,
       stripeConfigured,
       message: isUnlimitedAccount(user.email)
         ? "Operator / demo account — Unlimited desk access."
         : "Unlimited plan active — create as many match desks as you need.",
-      cancelPath: stripeConfigured
+      cancelPath: billingConfigured
         ? "Settings → Plan → Manage billing (Customer Portal)"
         : "Settings → Plan → Cancel trial / manage",
     };
@@ -255,7 +265,7 @@ export async function buildTrialSnapshot(userId: string): Promise<TrialSnapshot 
       matchPassCredits > 0 ? ` Match Desk Pass credits: ${matchPassCredits}.` : ""
     }`;
   } else if (trialActive) {
-    const onUnlimitedPath = Boolean(user.stripeSubscriptionId);
+    const onUnlimitedPath = Boolean(user.polarSubscriptionId || user.stripeSubscriptionId);
     if (onUnlimitedPath) {
       message = `Unlimited trial: ${TRIAL_DESK_LIMIT} match desks · ${daysRemaining(ends) ?? "?"} days left. Converts to Unlimited ${PLAN_COPY.unlimited.price}/mo unless you cancel in Settings (Customer Portal).`;
     } else if (matchPassCredits > 0) {
@@ -289,9 +299,11 @@ export async function buildTrialSnapshot(userId: string): Promise<TrialSnapshot 
     matchPassCredits,
     convertsTo: PLAN_COPY.unlimited.name,
     convertPrice: PLAN_COPY.unlimited.price,
+    billingConfigured,
+    billingProvider,
     stripeConfigured,
     message,
-    cancelPath: stripeConfigured
+    cancelPath: billingConfigured
       ? "Settings → Plan — Unlimited: Customer Portal; Match Desk Pass: Cancel trial (app-side)"
       : "Settings → Plan → Cancel trial (app-side until billing keys are set)",
   };

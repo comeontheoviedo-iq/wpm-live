@@ -5,11 +5,12 @@ import {
   cancelAppTrial,
   resumeAppTrial,
 } from "@/lib/trial";
-import { isStripeConfigured, stripePublicStatus } from "@/lib/stripe";
+import { billingPublicStatus, isBillingConfigured } from "@/lib/billing";
 
 /**
  * POST { action: "cancel" | "resume" }
- * App-side cancel when Stripe missing; when Stripe configured, prefer Customer Portal.
+ * App-side cancel when billing missing; when Polar/Stripe configured, prefer Customer Portal
+ * for Unlimited. Pass path can still cancel mid-trial app-side.
  */
 export async function POST(req: Request) {
   const session = await getSession();
@@ -19,13 +20,14 @@ export async function POST(req: Request) {
   const action = String(body.action || "").trim();
 
   if (action === "cancel") {
-    if (isStripeConfigured()) {
+    // Always allow app-side cancel for Pass / mid-trial; Unlimited with portal preferred when configured
+    if (isBillingConfigured() && body.forcePortal === true) {
       return NextResponse.json(
         {
           error: "Use billing portal to cancel",
           hint: "POST /api/billing/portal — cancel before trial ends to avoid the £22/mo charge.",
           usePortal: true,
-          stripe: stripePublicStatus(),
+          billing: billingPublicStatus(),
         },
         { status: 409 }
       );
@@ -36,17 +38,17 @@ export async function POST(req: Request) {
       ok: true,
       trial,
       message:
-        "Trial cancelled. You keep access until the trial end date and will not convert to £22/mo. When billing keys exist, cancel via Manage billing instead.",
+        "Trial cancelled. You keep access until the trial end date and will not convert to £22/mo. For Unlimited subscriptions, also cancel in Manage billing (customer portal) so Polar does not charge.",
     });
   }
 
   if (action === "resume") {
-    if (isStripeConfigured()) {
+    if (isBillingConfigured() && body.forcePortal === true) {
       return NextResponse.json(
         {
           error: "Use billing portal to manage subscription",
           usePortal: true,
-          stripe: stripePublicStatus(),
+          billing: billingPublicStatus(),
         },
         { status: 409 }
       );

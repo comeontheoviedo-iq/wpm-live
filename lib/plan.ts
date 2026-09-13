@@ -7,11 +7,13 @@
  * Internal Gemini gate (unchanged env): PITCHLINE_PLAN=base|intel + Settings
  * override — for Chris testing / soft AI features, not sold as Intel+.
  *
- * Stripe: Checkout/portal when STRIPE_* keys exist; otherwise app-side model only.
+ * Billing: Polar primary when POLAR_* set; Stripe parked but intact; else app-side only.
  */
 
 import { isGeminiConfigured } from "./gemini";
 import { isStripeConfigured, stripePublicStatus } from "./stripe";
+import { billingPublicStatus, isBillingConfigured, getBillingProvider } from "./billing";
+import { polarPublicStatus } from "./polar";
 
 type FsApi = {
   existsSync: (p: string) => boolean;
@@ -237,6 +239,18 @@ export function planStatus() {
   const plan = getEffectivePlan();
   const geminiKey = isGeminiConfigured();
   const stripe = stripePublicStatus();
+  const polar = polarPublicStatus();
+  const billing = billingPublicStatus();
+  const provider = getBillingProvider();
+  let billingCopy: string;
+  if (provider === "polar") {
+    billingCopy = `Polar (${polar.server}) — card-upfront 14-day trial then Unlimited £22. Stripe parked.`;
+  } else if (provider === "stripe") {
+    billingCopy = `Stripe ${stripe.mode} — card-upfront 14-day trial then Unlimited £22.`;
+  } else {
+    billingCopy =
+      "Billing keys missing — app-side 14-day / 3-desk trial live; TODO: add POLAR_ACCESS_TOKEN + product ids (see docs/POLAR_BILLING.md).";
+  }
   return {
     plan,
     commercialPlan: "unlimited" as CommercialPlan,
@@ -252,12 +266,14 @@ export function planStatus() {
     canPlayerNoteDraft: canPlayerNoteDraft(),
     canGeminiRelevantRerank: canGeminiRelevantRerank(),
     copy: PLAN_COPY,
-    stripe: stripe.configured
-      ? `Billing ${stripe.mode} — card-upfront 14-day trial then Unlimited £22.`
-      : "Billing keys missing — app-side 14-day / 3-desk trial live; TODO: add STRIPE_SECRET_KEY + STRIPE_PRICE_UNLIMITED in Netlify env.",
-    stripeConfigured: stripe.configured,
+    billingProvider: provider,
+    billingConfigured: isBillingConfigured(),
+    billing: billingCopy,
+    polar,
+    stripe: billingCopy,
+    stripeConfigured: isBillingConfigured(),
     stripeMode: stripe.mode,
   };
 }
 
-export { isStripeConfigured };
+export { isStripeConfigured, isBillingConfigured, getBillingProvider };

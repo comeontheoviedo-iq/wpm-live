@@ -91,6 +91,7 @@ export function NotesPanel({
   fillHeight,
   liveMode,
   hideComposer,
+  readOnly,
   playerNameById,
   onNotePlayerClick,
   onVizNoteClick,
@@ -121,6 +122,8 @@ export function NotesPanel({
   liveMode?: boolean;
   /** Desk rail: hide add-note composer to free scroll space */
   hideComposer?: boolean;
+  /** Profile Overview: finished notes list only — no composer / edit chrome */
+  readOnly?: boolean;
   /** Optional map for grouping player notes */
   playerNameById?: Record<string, string>;
   /** Click player-linked note → highlight on pitch / open dossier */
@@ -149,7 +152,8 @@ export function NotesPanel({
 
   const activeFilter = externalFilter ?? filter;
   /** Notes rail (desk) or live: hook line collapsed, Full on expand */
-  const railDense = Boolean(fillHeight || liveMode);
+  const railDense = Boolean(!readOnly && (fillHeight || liveMode));
+  const hideAdd = Boolean(hideComposer || readOnly);
 
   useEffect(() => {
     setNotes(initialNotes);
@@ -460,7 +464,8 @@ export function NotesPanel({
     const { minute, sayable } = parseNoteMinute(n.title);
     const severity = noteSeverityClass(n);
     // Rail: hook line only; full note opens in popup. Elsewhere: inline expand.
-    const showBody = expanded || !railDense;
+    // Overview read-only: bodies visible without a second click.
+    const showBody = readOnly || expanded || !railDense;
     const hookLine = sayable;
 
     return (
@@ -521,6 +526,7 @@ export function NotesPanel({
               >
                 {n.category}
               </span>
+              {!readOnly && (
               <div
                 className="flex gap-0.5 shrink-0"
                 onClick={(e) => e.stopPropagation()}
@@ -549,12 +555,13 @@ export function NotesPanel({
                   </button>
                 )}
               </div>
+              )}
             </div>
             {showBody && (
               <p
                 className={cn(
                   "note-queue-body mt-1 whitespace-pre-wrap",
-                  !expanded && "line-clamp-2"
+                  !readOnly && !expanded && "line-clamp-2"
                 )}
               >
                 {normalizeApostrophes(stripVizPayload(n.body))}
@@ -631,9 +638,11 @@ export function NotesPanel({
             fillHeight && "sticky top-0",
             fillHeight || liveMode
               ? "bg-[#0e1218] border-white/[0.06]"
-              : "bg-[var(--surface)] border-[var(--border)]"
+              : "bg-[var(--surface)] border-[var(--border)]",
+            readOnly && "border-transparent pb-0"
           )}
         >
+          {!readOnly && (
           <div className="relative">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-500" />
             <input
@@ -646,6 +655,7 @@ export function NotesPanel({
               className="w-full rounded-[2px] border border-white/10 bg-[#0a0d12] pl-7 pr-2 py-0.5 text-[11px] text-slate-200 placeholder:text-slate-600"
             />
           </div>
+          )}
 
           {!isEntityScoped(entityType) && (
           <div className="space-y-1.5" data-notes-buckets-wrap="1">
@@ -706,8 +716,8 @@ export function NotesPanel({
           </div>
           )}
 
-          {/* Sticky compact composer — hidden on desk rail via hideComposer */}
-          {!hideComposer && (fillHeight || liveMode || !compact) && (
+          {/* Sticky compact composer — hidden on desk rail / Overview read-only */}
+          {!hideAdd && (fillHeight || liveMode || !compact) && (
             <div className="notes-composer space-y-0.5 pt-0.5">
               <label className="notes-composer-label" htmlFor="notes-composer-title">
                 Title

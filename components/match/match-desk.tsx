@@ -714,6 +714,7 @@ export function MatchDesk({
   const [fieldSettingsOpen, setFieldSettingsOpen] = useState(false);
   const [deskDensity, setDeskDensity] = useState<DeskDensity>("compact");
   const [dossierTab, setDossierTab] = useState<"overview" | "notes">("overview");
+  const [coachTab, setCoachTab] = useState<"overview" | "notes">("overview");
   const [hooksPosterOpen, setHooksPosterOpen] = useState(false);
   const [hooksPosterExists, setHooksPosterExists] = useState(false);
   const [hooksPosterSrc, setHooksPosterSrc] = useState<string | null>(null);
@@ -3436,7 +3437,7 @@ export function MatchDesk({
               onResetPlacements={
                 hasCustomPlacements ? () => void resetPlacements() : undefined
               }
-              onCoachClick={(side) => setCoachSide(side)}
+              onCoachClick={(side) => { setCoachTab("overview"); setCoachSide(side); }}
               homeScore={homeScore}
               awayScore={awayScore}
               minute={liveMinute}
@@ -3667,53 +3668,101 @@ export function MatchDesk({
                   clubName,
                 })
               );
+              const coachTabs = (
+                <div className="flex gap-1 border-b border-slate-200 dark:border-slate-800 pb-2" role="tablist" aria-label="Coach profile">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={coachTab === "overview"}
+                    className={
+                      coachTab === "overview"
+                        ? "rounded-md bg-teal-50 dark:bg-teal-950/40 px-2.5 py-1 text-xs font-semibold text-teal-800 dark:text-teal-200"
+                        : "rounded-md px-2.5 py-1 text-xs font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                    }
+                    onClick={() => setCoachTab("overview")}
+                  >
+                    Overview
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={coachTab === "notes"}
+                    className={
+                      coachTab === "notes"
+                        ? "rounded-md bg-teal-50 dark:bg-teal-950/40 px-2.5 py-1 text-xs font-semibold text-teal-800 dark:text-teal-200"
+                        : "rounded-md px-2.5 py-1 text-xs font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                    }
+                    onClick={() => setCoachTab("notes")}
+                  >
+                    Notes{coachNotes.length ? ` (${coachNotes.length})` : ""}
+                  </button>
+                </div>
+              );
               if (!c) {
                 return (
                   <>
+                    {coachTabs}
                     <p className="text-sm text-slate-500">
                       No coach staff row on file — showing Research manager notes
                       for this side when available.
                     </p>
-                    {(() => {
-                      const hook =
-                        coachNotes.find(
-                          (n) =>
-                            /hook|scout|verdict|sayable|lead|manager/i.test(
-                              n.title || ""
+                    {coachTab === "overview" ? (
+                      <>
+                        {(() => {
+                          const hook =
+                            coachNotes.find(
+                              (n) =>
+                                /hook|scout|verdict|sayable|lead|manager/i.test(
+                                  n.title || ""
+                                ) ||
+                                /hook|scout|verdict|manager/i.test(n.category || "")
                             ) ||
-                            /hook|scout|verdict|manager/i.test(n.category || "")
-                        ) ||
-                        coachNotes.find((n) => (n.body || "").trim()) ||
-                        null;
-                      if (!hook && !coachNotes.length) return null;
-                      const line = hook
-                        ? (hook.title || "").trim() ||
-                          (hook.body || "").split("\n")[0].trim()
-                        : coachName;
-                      const sub = hook?.body
-                        ? hook.body
-                            .trim()
-                            .split("\n")
-                            .slice(hook.title ? 0 : 1, 2)
-                            .join(" ")
-                            .slice(0, 180)
-                        : null;
-                      return (
-                        <VerdictBlock
-                          line={line}
-                          sub={sub}
-                          fullBody={hook?.body || null}
-                        />
-                      );
-                    })()}
-                    <NotesPanel
-                      matchId={matchId}
-                      entityType="coach"
-                      entityId={coachId}
-                      entityLabel={coachName}
-                      initialNotes={coachNotes}
-                      fillHeight
-                    />
+                            coachNotes.find((n) => (n.body || "").trim()) ||
+                            null;
+                          if (!hook && !coachNotes.length) return null;
+                          const line = hook
+                            ? (hook.title || "").trim() ||
+                              (hook.body || "").split("\n")[0].trim()
+                            : coachName;
+                          const sub = hook?.body
+                            ? hook.body
+                                .trim()
+                                .split("\n")
+                                .slice(hook.title ? 0 : 1, 2)
+                                .join(" ")
+                                .slice(0, 180)
+                            : null;
+                          return (
+                            <VerdictBlock
+                              line={line}
+                              sub={sub}
+                              fullBody={hook?.body || null}
+                            />
+                          );
+                        })()}
+                        {coachNotes.length === 0 ? (
+                          <p className="text-xs text-slate-500">No coach notes linked yet.</p>
+                        ) : (
+                          <NotesPanel
+                            matchId={matchId}
+                            entityType="coach"
+                            entityId={coachId}
+                            entityLabel={coachName}
+                            initialNotes={coachNotes}
+                            readOnly
+                          />
+                        )}
+                      </>
+                    ) : (
+                      <NotesPanel
+                        matchId={matchId}
+                        entityType="coach"
+                        entityId={coachId}
+                        entityLabel={coachName}
+                        initialNotes={coachNotes}
+                        fillHeight
+                      />
+                    )}
                   </>
                 );
               }
@@ -3764,52 +3813,70 @@ export function MatchDesk({
                   <p className="text-xs text-slate-500">
                     Factual club staff only — no invented bio.
                   </p>
-                  {(() => {
-                    const hook =
-                      coachNotes.find(
-                        (n) =>
-                          /hook|scout|verdict|sayable|lead|manager/i.test(
-                            n.title || ""
+                  {coachTabs}
+                  {coachTab === "overview" ? (
+                    <>
+                      {(() => {
+                        const hook =
+                          coachNotes.find(
+                            (n) =>
+                              /hook|scout|verdict|sayable|lead|manager/i.test(
+                                n.title || ""
+                              ) ||
+                              /hook|scout|verdict|manager/i.test(n.category || "")
                           ) ||
-                          /hook|scout|verdict|manager/i.test(n.category || "")
-                      ) ||
-                      coachNotes.find((n) => (n.body || "").trim()) ||
-                      null;
-                    const line = hook
-                      ? (hook.title || "").trim() ||
-                        (hook.body || "").split("\n")[0].trim()
-                      : [
-                          c.name,
-                          c.nationality || null,
-                          c.age != null ? `${c.age}y` : null,
-                          c.role || "Head Coach",
-                        ]
-                          .filter(Boolean)
-                          .join(" · ");
-                    const sub = hook?.body
-                      ? hook.body
-                          .trim()
-                          .split("\n")
-                          .slice(hook.title ? 0 : 1, 2)
-                          .join(" ")
-                          .slice(0, 180)
-                      : null;
-                    return (
-                      <VerdictBlock
-                        line={line}
-                        sub={sub}
-                        fullBody={hook?.body || null}
-                      />
-                    );
-                  })()}
-                  <NotesPanel
-                    matchId={matchId}
-                    entityType="coach"
-                    entityId={coachId}
-                    entityLabel={c.name}
-                    initialNotes={coachNotes}
-                    fillHeight
-                  />
+                          coachNotes.find((n) => (n.body || "").trim()) ||
+                          null;
+                        const line = hook
+                          ? (hook.title || "").trim() ||
+                            (hook.body || "").split("\n")[0].trim()
+                          : [
+                              c.name,
+                              c.nationality || null,
+                              c.age != null ? `${c.age}y` : null,
+                              c.role || "Head Coach",
+                            ]
+                              .filter(Boolean)
+                              .join(" · ");
+                        const sub = hook?.body
+                          ? hook.body
+                              .trim()
+                              .split("\n")
+                              .slice(hook.title ? 0 : 1, 2)
+                              .join(" ")
+                              .slice(0, 180)
+                          : null;
+                        return (
+                          <VerdictBlock
+                            line={line}
+                            sub={sub}
+                            fullBody={hook?.body || null}
+                          />
+                        );
+                      })()}
+                      {coachNotes.length === 0 ? (
+                        <p className="text-xs text-slate-500">No coach notes linked yet.</p>
+                      ) : (
+                        <NotesPanel
+                          matchId={matchId}
+                          entityType="coach"
+                          entityId={coachId}
+                          entityLabel={c.name}
+                          initialNotes={coachNotes}
+                          readOnly
+                        />
+                      )}
+                    </>
+                  ) : (
+                    <NotesPanel
+                      matchId={matchId}
+                      entityType="coach"
+                      entityId={coachId}
+                      entityLabel={c.name}
+                      initialNotes={coachNotes}
+                      fillHeight
+                    />
+                  )}
                 </>
               );
             })()}

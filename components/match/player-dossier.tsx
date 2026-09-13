@@ -767,7 +767,7 @@ export function PlayerDossier({
                   entityType="player"
                   entityId={playerId}
                   entityLabel={p.name}
-                  fillHeight
+                  readOnly
                 />
               )}
             </Section>

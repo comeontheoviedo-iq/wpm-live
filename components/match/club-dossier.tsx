@@ -277,6 +277,17 @@ export function ClubDossier({
         /^(winner|champion|1st|first|winners)$/i.test((t.place || "").trim())
       );
 
+  const notesOverviewBlock = (
+    <NotesPanel
+      matchId={matchId}
+      initialNotes={notes}
+      entityType="club"
+      entityId={clubId}
+      entityLabel={c?.name || "Club"}
+      readOnly
+    />
+  );
+
   const notesBlock = (
     <div className="space-y-2">
       {(bioNotes.length > 0 || funNotes.length > 0) && (
@@ -472,7 +483,7 @@ export function ClubDossier({
                   No club notes linked yet.
                 </p>
               ) : (
-                notesBlock
+                notesOverviewBlock
               )}
             </Section>
 

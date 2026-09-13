@@ -586,7 +586,7 @@ export function LeagueDossier({
                   entityType="league"
                   entityId={String(data.leagueId || data.competition || "league")}
                   entityLabel={leagueName}
-                  fillHeight
+                  readOnly
                 />
               )}
             </Section>

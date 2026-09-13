@@ -13,7 +13,7 @@ import {
   getSquads,
   listCoachesByTeam,
 } from "@/lib/api-football";
-import { leagueIdForCompetition } from "@/lib/competitions";
+import { leagueIdForMatchDay } from "@/lib/competitions";
 import { resolvePersonAge } from "@/lib/person-age";
 import { rawTransferFeeFrom, selectClubTransferHistory } from "@/lib/transfer-fee";
 
@@ -235,7 +235,7 @@ export async function GET(
           include: { matchDay: true },
         });
         const lid = match
-          ? leagueIdForCompetition(match.matchDay.competition)
+          ? leagueIdForMatchDay(match.matchDay)
           : null;
         const season = europeanSeasonYear(match?.kickoff || new Date());
         if (lid) {

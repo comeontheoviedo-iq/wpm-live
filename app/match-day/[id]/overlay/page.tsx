@@ -41,6 +41,7 @@ export default async function ObsOverlayPage({
         homeTeamAfId={match.homeClub.apiFootballTeamId}
         awayTeamAfId={match.awayClub.apiFootballTeamId}
         competition={match.matchDay.competition}
+        apiFootballLeagueId={match.matchDay.apiFootballLeagueId ?? null}
         apiFootballFixtureId={match.apiFootballFixtureId}
         status={match.status}
         homeScore={match.homeScore}

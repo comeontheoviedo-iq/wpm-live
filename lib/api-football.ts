@@ -557,6 +557,7 @@ export async function searchLeagues(search: string) {
     {
       league: { id: number; name: string; type: string; logo?: string };
       country: { name: string };
+      seasons?: { year: number; current?: boolean }[];
     }[]
   >("/leagues", { search }, 120_000);
 }

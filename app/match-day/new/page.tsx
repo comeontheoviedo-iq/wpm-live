@@ -6,7 +6,7 @@ import { AppHeader } from "@/components/layout/app-header";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { PRIORITY_COMPETITIONS } from "@/lib/competitions";
+import { PRIORITY_COMPETITIONS, type CompetitionOption } from "@/lib/competitions";
 import { todayDateInput } from "@/lib/season";
 
 type Club = {
@@ -23,6 +23,15 @@ type AfFixture = {
     home: { id: number; name: string };
     away: { id: number; name: string };
   };
+};
+
+type LeagueSearchHit = {
+  id: number;
+  apiFootballLeagueId: number;
+  name: string;
+  country: string;
+  type: string | null;
+  season: number | null;
 };
 
 const LIGUE_1_ID = 61;
@@ -53,6 +62,16 @@ export default function NewMatchDayPage() {
   const [importMsg, setImportMsg] = useState<string | null>(null);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [statusPending, setStatusPending] = useState(false);
+  const [pickerCompetitions, setPickerCompetitions] =
+    useState<CompetitionOption[]>(PRIORITY_COMPETITIONS);
+  const [selectedLeagueId, setSelectedLeagueId] = useState<number | null>(
+    PRIORITY_COMPETITIONS[0].apiFootballLeagueId ?? null
+  );
+  const [findQuery, setFindQuery] = useState("");
+  const [findResults, setFindResults] = useState<LeagueSearchHit[]>([]);
+  const [findPending, setFindPending] = useState(false);
+  const [findMsg, setFindMsg] = useState<string | null>(null);
+  const [addPendingId, setAddPendingId] = useState<number | null>(null);
 
   const effectiveCompetition = customCompetition.trim() || competition;
 
@@ -69,7 +88,99 @@ export default function NewMatchDayPage() {
         if (j.hint) setIntegrationsHint(String(j.hint));
       });
     loadClubs("");
+    loadPickerCompetitions();
   }, []);
+
+  async function loadPickerCompetitions() {
+    try {
+      const res = await fetch("/api/competitions");
+      const json = await res.json();
+      if (Array.isArray(json.competitions) && json.competitions.length) {
+        setPickerCompetitions(json.competitions);
+      }
+    } catch {
+      /* keep PRIORITY fallback */
+    }
+  }
+
+  async function searchLeagues() {
+    setFindMsg(null);
+    const q = findQuery.trim();
+    if (q.length < 2) {
+      setFindMsg("Type at least 2 characters");
+      return;
+    }
+    setFindPending(true);
+    try {
+      const res = await fetch(`/api/football/leagues?q=${encodeURIComponent(q)}`);
+      const json = await res.json();
+      const list: LeagueSearchHit[] = json.leagues || [];
+      setFindResults(list);
+      if (!json.configured) {
+        setFindMsg(json.message || "Live feed not configured — showing priority matches only");
+      } else if (json.message && !list.length) {
+        setFindMsg(json.message);
+      } else if (!list.length) {
+        setFindMsg("No leagues found");
+      } else {
+        setFindMsg(null);
+      }
+    } catch (e) {
+      setFindMsg(e instanceof Error ? e.message : "Search failed");
+      setFindResults([]);
+    } finally {
+      setFindPending(false);
+    }
+  }
+
+  async function addCompetitionFromSearch(hit: LeagueSearchHit) {
+    setAddPendingId(hit.apiFootballLeagueId || hit.id);
+    setFindMsg(null);
+    try {
+      const res = await fetch("/api/competitions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          apiFootballLeagueId: hit.apiFootballLeagueId || hit.id,
+          name: hit.name,
+          country: hit.country,
+          type: hit.type || undefined,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setFindMsg(json.error || "Could not add competition");
+        return;
+      }
+      const opt: CompetitionOption = json.competition;
+      setPickerCompetitions((prev) => {
+        if (prev.some((c) => c.apiFootballLeagueId === opt.apiFootballLeagueId)) {
+          return prev.map((c) =>
+            c.apiFootballLeagueId === opt.apiFootballLeagueId ? { ...c, ...opt } : c
+          );
+        }
+        return [...prev, opt];
+      });
+      setCompetition(opt.name);
+      setCustomCompetition("");
+      if (opt.apiFootballLeagueId) {
+        setSelectedLeagueId(opt.apiFootballLeagueId);
+        setImportLeagueId(opt.apiFootballLeagueId);
+      }
+      setSelectedFixture(null);
+      setFindMsg(
+        json.alreadyPriority
+          ? `“${opt.name}” is already in the priority list — selected.`
+          : `Added “${opt.name}” · ${opt.country} for your account.`
+      );
+      setFindResults([]);
+      setFindQuery("");
+    } catch (e) {
+      setFindMsg(e instanceof Error ? e.message : "Add failed");
+    } finally {
+      setAddPendingId(null);
+    }
+  }
 
   async function loadClubs(q: string) {
     const res = await fetch(`/api/clubs?q=${encodeURIComponent(q)}`);
@@ -204,6 +315,10 @@ export default function NewMatchDayPage() {
     setSelectedFixture(fx);
     setCompetition(fx.league.name);
     setCustomCompetition("");
+    if (fx.league?.id) {
+      setSelectedLeagueId(fx.league.id);
+      setImportLeagueId(fx.league.id);
+    }
     setKickoff(fx.fixture.date.slice(0, 16));
     try {
       const homeId = await ensureClubFromAf(fx.teams.home.name, fx.teams.home.id);
@@ -257,14 +372,25 @@ export default function NewMatchDayPage() {
         body: JSON.stringify({
           title: title || undefined,
           competition: effectiveCompetition,
+          apiFootballLeagueId: (() => {
+            if (selectedFixture?.league?.id) return selectedFixture.league.id;
+            if (selectedLeagueId) return selectedLeagueId;
+            const fromPicker = pickerCompetitions.find(
+              (c) => c.name === effectiveCompetition
+            )?.apiFootballLeagueId;
+            return fromPicker || undefined;
+          })(),
           homeClubId,
           awayClubId,
           kickoff: kickoffDate.toISOString(),
           apiFootballFixtureId: (() => {
             if (!selectedFixture) return undefined;
-            const expectedLeague = PRIORITY_COMPETITIONS.find(
-              (c) => c.name === effectiveCompetition
-            )?.apiFootballLeagueId;
+            const expectedLeague =
+              selectedLeagueId ||
+              pickerCompetitions.find((c) => c.name === effectiveCompetition)
+                ?.apiFootballLeagueId ||
+              PRIORITY_COMPETITIONS.find((c) => c.name === effectiveCompetition)
+                ?.apiFootballLeagueId;
             if (
               expectedLeague &&
               selectedFixture.league?.id &&
@@ -387,10 +513,10 @@ export default function NewMatchDayPage() {
                 }
               >
                 <option value="">Any / all leagues</option>
-                {PRIORITY_COMPETITIONS.filter((c) => c.apiFootballLeagueId).map(
+                {pickerCompetitions.filter((c) => c.apiFootballLeagueId).map(
                   (c) => (
                     <option key={c.id} value={c.apiFootballLeagueId}>
-                      {c.name}
+                      {c.name} · {c.country}
                     </option>
                   )
                 )}
@@ -432,34 +558,135 @@ export default function NewMatchDayPage() {
           </CardHeader>
           <CardBody className="space-y-3">
             <label className="block text-xs font-medium text-slate-500">
-              Competition (priority list)
+              Competition (priority + your added)
               <select
                 className="mt-1 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-transparent px-2 py-2 text-sm"
                 value={competition}
                 onChange={(e) => {
                   const name = e.target.value;
                   setCompetition(name);
-                  const leagueId = PRIORITY_COMPETITIONS.find((c) => c.name === name)
+                  setCustomCompetition("");
+                  const leagueId = pickerCompetitions.find((c) => c.name === name)
                     ?.apiFootballLeagueId;
-                  if (leagueId) setImportLeagueId(leagueId);
+                  if (leagueId) {
+                    setSelectedLeagueId(leagueId);
+                    setImportLeagueId(leagueId);
+                  } else {
+                    setSelectedLeagueId(null);
+                  }
                   // Manual competition change invalidates a previously imported fixture
                   setSelectedFixture(null);
                 }}
               >
-                {PRIORITY_COMPETITIONS.map((c) => (
+                {pickerCompetitions.map((c) => (
                   <option key={c.id} value={c.name}>
                     {c.name} · {c.country}
+                    {c.priority === 50 ? " (added)" : ""}
                   </option>
                 ))}
               </select>
             </label>
+
+            <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3 space-y-2">
+              <p className="text-xs font-medium text-slate-500">
+                Find a competition
+              </p>
+              <p className="text-[11px] text-slate-500">
+                Search API-Football leagues (e.g. MLS, J1, Brasileirão) and add them for your account — quota-friendly, no full dump.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <input
+                  className="min-w-[12rem] flex-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-transparent px-2 py-2 text-sm"
+                  placeholder="League name or country…"
+                  value={findQuery}
+                  onChange={(e) => setFindQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      searchLeagues();
+                    }
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={findPending}
+                  onClick={searchLeagues}
+                >
+                  {findPending ? "Searching…" : "Search"}
+                </Button>
+              </div>
+              {findMsg && (
+                <p className="text-xs text-amber-700 dark:text-amber-300">{findMsg}</p>
+              )}
+              {findResults.length > 0 && (
+                <div className="max-h-40 overflow-y-auto space-y-1">
+                  {findResults.map((hit) => {
+                    const lid = hit.apiFootballLeagueId || hit.id;
+                    const already = pickerCompetitions.some(
+                      (c) => c.apiFootballLeagueId === lid
+                    );
+                    return (
+                      <div
+                        key={`${lid}-${hit.country}`}
+                        className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 dark:border-slate-800 px-3 py-2 text-sm"
+                      >
+                        <div className="min-w-0">
+                          <div className="font-medium truncate">
+                            {hit.name}
+                            {hit.type ? (
+                              <span className="ml-1 text-[10px] font-normal text-slate-500">
+                                {hit.type}
+                              </span>
+                            ) : null}
+                          </div>
+                          <div className="text-xs text-slate-500 truncate">
+                            {hit.country}
+                            {hit.season ? ` · ${hit.season}` : ""} · AF #{lid}
+                          </div>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={addPendingId === lid}
+                          onClick={() =>
+                            already
+                              ? (() => {
+                                  setCompetition(hit.name);
+                                  setCustomCompetition("");
+                                  setSelectedLeagueId(lid);
+                                  setImportLeagueId(lid);
+                                  setSelectedFixture(null);
+                                  setFindMsg(`Selected “${hit.name}”.`);
+                                  setFindResults([]);
+                                  setFindQuery("");
+                                })()
+                              : addCompetitionFromSearch(hit)
+                          }
+                        >
+                          {addPendingId === lid
+                            ? "Adding…"
+                            : already
+                              ? "Select"
+                              : "Add"}
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
             <label className="block text-xs font-medium text-slate-500">
               Or free-text competition
               <input
                 className="mt-1 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-transparent px-2 py-2 text-sm"
-                placeholder="Search any competition on demand"
+                placeholder="Custom label (no live-feed league id)"
                 value={customCompetition}
-                onChange={(e) => setCustomCompetition(e.target.value)}
+                onChange={(e) => {
+                  setCustomCompetition(e.target.value);
+                  setSelectedLeagueId(null);
+                }}
               />
             </label>
             <label className="block text-xs font-medium text-slate-500">

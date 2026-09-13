@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { leagueIdForCompetition } from "@/lib/competitions";
+import { leagueIdForMatchDay } from "@/lib/competitions";
 import { europeanSeasonYear, todayDateInput } from "@/lib/season";
 import {
   ApiFootballError,
@@ -107,7 +107,7 @@ export async function GET(
   if (!match) return NextResponse.json({ error: "Match not found" }, { status: 404 });
 
   const competition = match.matchDay.competition;
-  const leagueId = leagueIdForCompetition(competition);
+  const leagueId = leagueIdForMatchDay(match.matchDay);
   const season = europeanSeasonYear(match.kickoff);
   const today = todayDateInput("Europe/London");
 

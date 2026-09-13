@@ -43,6 +43,8 @@ model User {
   matchPassCredits     Int        @default(0)
   /// Set when the post-checkout trial welcome email was sent (idempotent).
   welcomeEmailSentAt   DateTime?
+  /// User-added AF competitions (JSON): [{ apiFootballLeagueId, name, country, broadcastName? }]
+  addedCompetitions    String?
   createdAt            DateTime   @default(now())
   updatedAt            DateTime   @updatedAt
   matchDays            MatchDay[]
@@ -151,17 +153,19 @@ model Venue {
 }
 
 model MatchDay {
-  id          String   @id @default(cuid())
-  title       String
-  date        DateTime
-  competition String
-  userId      String?
-  user        User?    @relation(fields: [userId], references: [id])
-  status      String   @default("upcoming")
-  matches     Match[]
+  id                   String   @id @default(cuid())
+  title                String
+  date                 DateTime
+  competition          String
+  /// AF league id when known (priority, user-added, or fixture import)
+  apiFootballLeagueId  Int?
+  userId               String?
+  user                 User?    @relation(fields: [userId], references: [id])
+  status               String   @default("upcoming")
+  matches              Match[]
   /// U&R Show board (1:1) — claim creates this; Remote football comms desk consumes handoff
-  urShow      UrShow?
-  createdAt   DateTime @default(now())
+  urShow               UrShow?
+  createdAt            DateTime @default(now())
 }
 
 model Match {

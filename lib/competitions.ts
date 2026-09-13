@@ -10,6 +10,15 @@ export type CompetitionOption = {
   priority: number;
 };
 
+/** Persisted on User.addedCompetitions (JSON). */
+export type UserAddedCompetition = {
+  apiFootballLeagueId: number;
+  name: string;
+  country: string;
+  broadcastName?: string;
+  type?: string;
+};
+
 export const PRIORITY_COMPETITIONS: CompetitionOption[] = [
   {
     id: "ligue-1",
@@ -92,6 +101,54 @@ export const PRIORITY_COMPETITIONS: CompetitionOption[] = [
     priority: 10,
   },
   {
+    id: "mls",
+    name: "Major League Soccer",
+    country: "USA",
+    broadcastName: "MLS",
+    apiFootballLeagueId: 253,
+    priority: 11,
+  },
+  {
+    id: "eredivisie",
+    name: "Eredivisie",
+    country: "Netherlands",
+    broadcastName: "Dutch top flight",
+    apiFootballLeagueId: 88,
+    priority: 12,
+  },
+  {
+    id: "liga-portugal",
+    name: "Primeira Liga",
+    country: "Portugal",
+    broadcastName: "Portuguese top flight",
+    apiFootballLeagueId: 94,
+    priority: 13,
+  },
+  {
+    id: "brasileirao",
+    name: "Brasileirão",
+    country: "Brazil",
+    broadcastName: "Brasileirão",
+    apiFootballLeagueId: 71,
+    priority: 14,
+  },
+  {
+    id: "championship",
+    name: "Championship",
+    country: "England",
+    broadcastName: "English Championship",
+    apiFootballLeagueId: 40,
+    priority: 15,
+  },
+  {
+    id: "j1",
+    name: "J1 League",
+    country: "Japan",
+    broadcastName: "J1 League",
+    apiFootballLeagueId: 98,
+    priority: 16,
+  },
+  {
     id: "demo-npl",
     name: "CoComms Demo League",
     country: "England",
@@ -100,28 +157,119 @@ export const PRIORITY_COMPETITIONS: CompetitionOption[] = [
   },
 ];
 
-export function findCompetition(q: string) {
+export function slugForCompetition(name: string, country: string, leagueId: number): string {
+  const base = `${name}-${country}`
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 48);
+  return `af-${leagueId}-${base || "league"}`;
+}
+
+export function userAddedToOption(c: UserAddedCompetition): CompetitionOption {
+  return {
+    id: slugForCompetition(c.name, c.country, c.apiFootballLeagueId),
+    name: c.name,
+    country: c.country,
+    broadcastName: c.broadcastName || c.name,
+    apiFootballLeagueId: c.apiFootballLeagueId,
+    priority: 50,
+  };
+}
+
+export function parseAddedCompetitions(raw: string | null | undefined): UserAddedCompetition[] {
+  if (!raw || !raw.trim()) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    const out: UserAddedCompetition[] = [];
+    for (const row of parsed) {
+      if (!row || typeof row !== "object") continue;
+      const r = row as Record<string, unknown>;
+      const id = Number(r.apiFootballLeagueId);
+      const name = typeof r.name === "string" ? r.name.trim() : "";
+      const country = typeof r.country === "string" ? r.country.trim() : "";
+      if (!Number.isFinite(id) || id <= 0 || !name) continue;
+      out.push({
+        apiFootballLeagueId: id,
+        name,
+        country: country || "Unknown",
+        broadcastName:
+          typeof r.broadcastName === "string" && r.broadcastName.trim()
+            ? r.broadcastName.trim()
+            : undefined,
+        type: typeof r.type === "string" ? r.type : undefined,
+      });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+export function serializeAddedCompetitions(list: UserAddedCompetition[]): string {
+  return JSON.stringify(list);
+}
+
+export function mergeCompetitionOptions(
+  added: UserAddedCompetition[] = []
+): CompetitionOption[] {
+  const priorityIds = new Set(
+    PRIORITY_COMPETITIONS.map((c) => c.apiFootballLeagueId).filter(
+      (id): id is number => typeof id === "number"
+    )
+  );
+  const extras = added
+    .filter((c) => !priorityIds.has(c.apiFootballLeagueId))
+    .map(userAddedToOption);
+  return [...PRIORITY_COMPETITIONS, ...extras];
+}
+
+export function findCompetition(
+  q: string,
+  extras: CompetitionOption[] | UserAddedCompetition[] = []
+) {
   const needle = q.trim().toLowerCase();
-  return PRIORITY_COMPETITIONS.find(
+  const extraOpts: CompetitionOption[] = extras.map((c) =>
+    "id" in c && "priority" in c
+      ? (c as CompetitionOption)
+      : userAddedToOption(c as UserAddedCompetition)
+  );
+  const list = [...PRIORITY_COMPETITIONS, ...extraOpts];
+  return list.find(
     (c) =>
       c.id === needle ||
       c.name.toLowerCase() === needle ||
-      c.broadcastName.toLowerCase() === needle
+      c.broadcastName.toLowerCase() === needle ||
+      `${c.name} · ${c.country}`.toLowerCase() === needle
   );
 }
 
 export function broadcastLabelFor(competitionName: string): string {
-  const found = PRIORITY_COMPETITIONS.find(
-    (c) =>
-      c.name.toLowerCase() === competitionName.toLowerCase() ||
-      c.id === competitionName.toLowerCase()
-  );
+  const found = findCompetition(competitionName);
   return found?.broadcastName || competitionName;
 }
 
-/** AF league id for a priority competition name, or null if unknown / free-text. */
-export function leagueIdForCompetition(competitionName: string): number | null {
-  const found = findCompetition(competitionName);
+/** AF league id for a priority / known competition name, or null if unknown / free-text. */
+export function leagueIdForCompetition(
+  competitionName: string,
+  extras: CompetitionOption[] | UserAddedCompetition[] = []
+): number | null {
+  const found = findCompetition(competitionName, extras);
   return found?.apiFootballLeagueId ?? null;
 }
 
+/** Prefer stored MatchDay AF league id, then name lookup. */
+export function leagueIdForMatchDay(md: {
+  competition: string;
+  apiFootballLeagueId?: number | null;
+}): number | null {
+  if (
+    typeof md.apiFootballLeagueId === "number" &&
+    Number.isFinite(md.apiFootballLeagueId) &&
+    md.apiFootballLeagueId > 0
+  ) {
+    return md.apiFootballLeagueId;
+  }
+  return leagueIdForCompetition(md.competition);
+}

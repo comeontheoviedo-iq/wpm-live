@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { leagueIdForCompetition } from "@/lib/competitions";
+import { leagueIdForMatchDay } from "@/lib/competitions";
 import { europeanSeasonYear } from "@/lib/season";
 import {
   getStandings,
@@ -46,7 +46,7 @@ export async function GET(
     });
   }
 
-  const leagueId = leagueIdForCompetition(match.matchDay.competition);
+  const leagueId = leagueIdForMatchDay(match.matchDay);
   if (!leagueId) {
     return NextResponse.json({
       ...base,

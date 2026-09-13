@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { leagueIdForCompetition } from "@/lib/competitions";
+// Prefer MatchDay.apiFootballLeagueId when passed from server
 import {
   formatLiveClock,
   formatPitchClockBadge,
@@ -65,6 +66,7 @@ export function ObsOverlayClient(props: {
   homeTeamAfId?: number | null;
   awayTeamAfId?: number | null;
   competition: string;
+  apiFootballLeagueId?: number | null;
   apiFootballFixtureId?: number | null;
   status: string;
   homeScore: number;
@@ -87,6 +89,7 @@ export function ObsOverlayClient(props: {
     homeTeamAfId,
     awayTeamAfId,
     competition,
+    apiFootballLeagueId: leagueIdProp,
     apiFootballFixtureId,
   } = props;
 
@@ -210,7 +213,10 @@ export function ObsOverlayClient(props: {
   const awayLogoUrl = awayTeamAfId
     ? `https://media.api-sports.io/football/teams/${awayTeamAfId}.png`
     : null;
-  const leagueAfId = leagueIdForCompetition(competition);
+  const leagueAfId =
+    (typeof leagueIdProp === "number" && leagueIdProp > 0
+      ? leagueIdProp
+      : null) ?? leagueIdForCompetition(competition);
   const leagueLogoUrl = leagueAfId
     ? `https://media.api-sports.io/football/leagues/${leagueAfId}.png`
     : null;

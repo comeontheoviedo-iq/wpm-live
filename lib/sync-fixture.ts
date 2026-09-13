@@ -55,7 +55,7 @@ import {
   kitOverrideForFixture,
   kitMatchesOverride
 } from "./kit-colors";
-import { leagueIdForCompetition } from "./competitions";
+import { leagueIdForMatchDay } from "./competitions";
 import { resolveWeatherForVenue } from "./weather";
 import { nationalityToIso } from "./flags";
 import { maybeAutoGenerateLineupPack } from "./pack-generate";
@@ -1889,10 +1889,10 @@ async function runSyncMatchFromApiFootball(
   const deskAwayAf = match.awayClub.apiFootballTeamId ?? null;
   const matchDay = await prisma.matchDay.findUnique({
     where: { id: match.matchDayId },
-    select: { competition: true },
+    select: { competition: true, apiFootballLeagueId: true },
   });
-  const expectedLeagueId = matchDay?.competition
-    ? leagueIdForCompetition(matchDay.competition)
+  const expectedLeagueId = matchDay
+    ? leagueIdForMatchDay(matchDay)
     : null;
 
   const compat = assertFixtureCompatible({
@@ -2611,7 +2611,7 @@ export async function linkFixtureToMatch(
     include: {
       homeClub: true,
       awayClub: true,
-      matchDay: { select: { competition: true } },
+      matchDay: { select: { competition: true, apiFootballLeagueId: true } },
     },
   });
   if (!match) throw new Error("Match not found");
@@ -2619,8 +2619,8 @@ export async function linkFixtureToMatch(
   const fixture = await getFixture(apiFootballFixtureId);
   if (!fixture) throw new Error(`Fixture #${apiFootballFixtureId} not found on live feed`);
 
-  const expectedLeagueId = match.matchDay?.competition
-    ? leagueIdForCompetition(match.matchDay.competition)
+  const expectedLeagueId = match.matchDay
+    ? leagueIdForMatchDay(match.matchDay)
     : null;
   const compat = assertFixtureCompatible({
     fixture,

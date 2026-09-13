@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { PACK_TEMPLATE_SEEDS } from "@/lib/pack-templates";
 import { applyPackDistribution } from "@/lib/pack-distribute-apply";
 import { formatDistributeSummary } from "@/lib/pack-distribute";
-import { leagueIdForCompetition } from "@/lib/competitions";
+import { leagueIdForMatchDay } from "@/lib/competitions";
 
 export async function POST(
   req: Request,
@@ -103,7 +103,7 @@ export async function POST(
     ];
 
     const competition = match.matchDay?.competition || null;
-    const leagueId = competition ? leagueIdForCompetition(competition) : null;
+    const leagueId = match.matchDay ? leagueIdForMatchDay(match.matchDay) : null;
     const distributed = await applyPackDistribution({
       matchId: id,
       userId: session.id,

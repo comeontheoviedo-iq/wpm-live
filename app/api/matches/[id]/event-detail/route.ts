@@ -11,7 +11,7 @@ import {
   getPlayerSidelined,
 } from "@/lib/api-football";
 import { europeanSeasonYear } from "@/lib/season";
-import { leagueIdForCompetition } from "@/lib/competitions";
+import { leagueIdForMatchDay } from "@/lib/competitions";
 import {
   splitSeasonStats,
   liveAdjustedSeasonStat,
@@ -88,7 +88,7 @@ export async function POST(
   }
 
   const competition = match.matchDay.competition;
-  const leagueAfId = leagueIdForCompetition(competition);
+  const leagueAfId = leagueIdForMatchDay(match.matchDay);
   const season = europeanSeasonYear(match.kickoff);
   const matchStatus = body.matchStatus || match.status;
   const afId = player?.apiFootballPlayerId ?? body.afPlayerId ?? null;

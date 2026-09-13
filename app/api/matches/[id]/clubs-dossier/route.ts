@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { leagueIdForCompetition } from "@/lib/competitions";
+import { leagueIdForMatchDay } from "@/lib/competitions";
 import { europeanSeasonYear } from "@/lib/season";
 import {
   getTeam,
@@ -76,13 +76,17 @@ async function buildClubPayload(opts: {
   opponentAfId: number | null;
   matchId: string;
   competition: string;
+  apiFootballLeagueId?: number | null;
   kickoff: Date;
   fixtureId: number | null;
 }) {
   const { club, opponentAfId, matchId, competition, kickoff, fixtureId } = opts;
   const afId = club.apiFootballTeamId;
   const season = europeanSeasonYear(kickoff);
-  const leagueId = leagueIdForCompetition(competition);
+  const leagueId = leagueIdForMatchDay({
+    competition,
+    apiFootballLeagueId: opts.apiFootballLeagueId,
+  });
 
   const notes = await prisma.note.findMany({
     where: {
@@ -417,6 +421,7 @@ export async function GET(
     opponentAfId: match.awayClub.apiFootballTeamId,
     matchId: match.id,
     competition: match.matchDay.competition,
+    apiFootballLeagueId: match.matchDay.apiFootballLeagueId,
     kickoff: match.kickoff,
     fixtureId: match.apiFootballFixtureId,
   });
@@ -425,6 +430,7 @@ export async function GET(
     opponentAfId: match.homeClub.apiFootballTeamId,
     matchId: match.id,
     competition: match.matchDay.competition,
+    apiFootballLeagueId: match.matchDay.apiFootballLeagueId,
     kickoff: match.kickoff,
     fixtureId: match.apiFootballFixtureId,
   });

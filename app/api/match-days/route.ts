@@ -4,7 +4,10 @@ import { getSession } from "@/lib/auth";
 import { DEFAULT_CHECKLIST, DEFAULT_SCRIPT_SLOTS } from "@/lib/defaults";
 import { ensureClub, parseAfTeamId } from "@/lib/ensure-club";
 import { getFixture, assertFixtureCompatible } from "@/lib/api-football";
-import { leagueIdForCompetition } from "@/lib/competitions";
+import {
+  leagueIdForCompetition,
+  parseAddedCompetitions,
+} from "@/lib/competitions";
 import { assertCanCreateDesk, maybeConsumeMatchPassCredit } from "@/lib/trial";
 import { displayText } from "@/lib/utils";
 
@@ -89,6 +92,22 @@ export async function POST(req: Request) {
       );
     }
 
+    const bodyLeagueRaw = body.apiFootballLeagueId ?? body.leagueId;
+    let resolvedLeagueId: number | null =
+      bodyLeagueRaw === null || bodyLeagueRaw === undefined || bodyLeagueRaw === ""
+        ? null
+        : Number(bodyLeagueRaw);
+    if (resolvedLeagueId !== null && (Number.isNaN(resolvedLeagueId) || resolvedLeagueId <= 0)) {
+      resolvedLeagueId = null;
+    }
+    if (resolvedLeagueId === null) {
+      resolvedLeagueId = leagueIdForCompetition(competition);
+    }
+    if (resolvedLeagueId === null) {
+      const added = parseAddedCompetitions(dbUser.addedCompetitions);
+      resolvedLeagueId = leagueIdForCompetition(competition, added);
+    }
+
     const homeAf = parseAfTeamId(
       body.homeApiFootballTeamId ?? body.homeAfTeamId
     );
@@ -154,7 +173,7 @@ export async function POST(req: Request) {
             { status: 400 }
           );
         }
-        const expectedLeague = leagueIdForCompetition(competition);
+        const expectedLeague = resolvedLeagueId;
         const compat = assertFixtureCompatible({
           fixture: fx,
           homeAfId: homeAf,
@@ -204,6 +223,7 @@ export async function POST(req: Request) {
           title,
           date: kickoff,
           competition,
+          apiFootballLeagueId: resolvedLeagueId,
           userId: dbUser.id,
           status: "upcoming",
         },

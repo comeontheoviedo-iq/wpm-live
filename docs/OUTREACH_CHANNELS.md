@@ -7,6 +7,9 @@ Internal. **Chris approves every outbound message before send.** Bot drafts / qu
 **LinkedIn detail:** `docs/LINKEDIN_OUTREACH.md`  
 **Tracker:** `docs/outreach-tracker.csv` (or Google Sheet with same columns)
 
+
+**Phasing (locked 2026-09-13):** Week 1 = direct commentator outreach only. Week 2+ = commercial/enterprise buyers (section D). Do not DM TalkSport/DAZN/etc contacts in week 1.
+
 ---
 
 ## Hard rules (all channels)

@@ -32,6 +32,10 @@ export type LivePlayerStatRow = {
   goals: number | null;
   assists: number | null;
   rating: string | null;
+  /** AF games.captain === true */
+  captain: boolean;
+  /** True when AF sent a boolean captain flag (incl. false). */
+  captainKnown: boolean;
 };
 
 export type StatThresholds = {
@@ -326,7 +330,11 @@ export function mapAfFixturePlayersToRows(opts: {
     players: {
       player: { id: number; name: string };
       statistics: {
-        games?: { minutes?: number | null; rating?: string | null };
+        games?: {
+          minutes?: number | null;
+          rating?: string | null;
+          captain?: boolean;
+        };
         goals?: {
           total?: number | null;
           assists?: number | null;
@@ -379,6 +387,8 @@ export function mapAfFixturePlayersToRows(opts: {
         goals: num(st.goals?.total ?? null),
         assists: num(st.goals?.assists ?? null),
         rating: st.games?.rating ?? null,
+        captain: st.games?.captain === true,
+        captainKnown: typeof st.games?.captain === "boolean",
       });
     }
   }

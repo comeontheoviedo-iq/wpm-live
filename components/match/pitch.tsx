@@ -499,11 +499,6 @@ function PitchCardToken({
               className="pitch-token-photo"
               style={{ boxShadow: `inset 0 0 0 1px ${accent}55` }}
             >
-              {player.isCaptain ? (
-                <span className="pitch-token-captain" title="Captain" aria-label="Captain">
-                  C
-                </span>
-              ) : null}
               {photo ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -527,6 +522,11 @@ function PitchCardToken({
               >
                 <User className="h-3.5 w-3.5" strokeWidth={1.5} />
               </span>
+              {player.isCaptain ? (
+                <span className="pitch-token-captain" title="Captain" aria-label="Captain">
+                  C
+                </span>
+              ) : null}
             </span>
 
             <div className="pitch-token-copy min-w-0 flex-1">

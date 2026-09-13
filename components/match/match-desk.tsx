@@ -554,6 +554,7 @@ export function MatchDesk({
   const possessionSamplesRef = useRef<number[]>([]);
   const momentumSamplesRef = useRef<MomentumSample[]>([]);
   const livePlayerStatsRef = useRef<LivePlayerStatRow[]>([]);
+  const [liveCaptainIds, setLiveCaptainIds] = useState<string[]>([]);
   const recentVizKindsRef = useRef<VizFlashKind[]>([]);
   const eventsRef = useRef(events);
   eventsRef.current = events;
@@ -1082,9 +1083,10 @@ export function MatchDesk({
           jerseyNumber: o?.jerseyNumber ?? null,
           pitchX: place ? o?.pitchX ?? null : null,
           pitchY: place ? o?.pitchY ?? null : null,
+          isCaptain: Boolean(p.isCaptain) || liveCaptainIds.includes(p.id),
         };
       }),
-    [homePlayers, events, status, noteHookByPlayer, overrideById, notes]
+    [homePlayers, events, status, noteHookByPlayer, overrideById, notes, liveCaptainIds]
   );
   const awayEnriched = useMemo(
     () =>
@@ -1104,9 +1106,10 @@ export function MatchDesk({
           jerseyNumber: o?.jerseyNumber ?? null,
           pitchX: place ? o?.pitchX ?? null : null,
           pitchY: place ? o?.pitchY ?? null : null,
+          isCaptain: Boolean(p.isCaptain) || liveCaptainIds.includes(p.id),
         };
       }),
-    [awayPlayers, events, status, noteHookByPlayer, overrideById, notes]
+    [awayPlayers, events, status, noteHookByPlayer, overrideById, notes, liveCaptainIds]
   );
 
   const squad: SquadPlayer[] = useMemo(() => {
@@ -2027,6 +2030,11 @@ export function MatchDesk({
           try {
             const liveStats = (json.livePlayerStats || []) as LivePlayerStatRow[];
             livePlayerStatsRef.current = liveStats;
+            setLiveCaptainIds(
+              liveStats
+                .filter((r) => r.captain && r.playerId)
+                .map((r) => r.playerId as string)
+            );
             const fired = firedStatTriggersRef.current;
             const thr = evaluatePlayerThresholds(liveStats, fired);
             const mom = evaluateMomentumProxy({

@@ -38,12 +38,15 @@ export type AfFixture = {
 };
 
 export type AfLineupPlayer = {
+  /** Present on some AF lineup payloads; often omitted. */
+  captain?: boolean;
   player: {
     id: number;
     name: string;
     number: number;
     pos?: string;
     grid?: string | null;
+    captain?: boolean;
   };
 };
 

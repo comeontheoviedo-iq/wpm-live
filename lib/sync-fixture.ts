@@ -43,6 +43,11 @@ import {
 } from "./api-football";
 import { planLineupApply } from "./lineup-gate";
 import {
+  afLineupCaptainPlayerIds,
+  isAfLineupCaptain,
+  planCaptainWrites,
+} from "./lineup-captain";
+import {
   parseAfTeamColors,
   serializeKit,
   kitNeedsHydration,
@@ -382,10 +387,77 @@ export async function syncSquadForClub(
   return { upserted, purged };
 }
 
+async function applyCaptainFlags(clubId: string, captainPlayerIds: string[]) {
+  await prisma.player.updateMany({
+    where: { clubId, isCaptain: true, id: { notIn: captainPlayerIds } },
+    data: { isCaptain: false },
+  });
+  if (captainPlayerIds.length) {
+    await prisma.player.updateMany({
+      where: { clubId, id: { in: captainPlayerIds } },
+      data: { isCaptain: true },
+    });
+  }
+}
+
+async function persistOfficialCaptains(opts: {
+  homeClubId: string;
+  awayClubId: string;
+  rows: {
+    playerId: string | null;
+    teamSide: "home" | "away";
+    captain?: boolean;
+    captainKnown?: boolean;
+  }[];
+  onlyClubId?: string;
+}) {
+  for (const side of ["home", "away"] as const) {
+    const clubId = side === "home" ? opts.homeClubId : opts.awayClubId;
+    if (opts.onlyClubId && clubId !== opts.onlyClubId) continue;
+    const plan = planCaptainWrites(
+      opts.rows.filter((r) => r.teamSide === side)
+    );
+    if (!plan.apply) continue;
+    await applyCaptainFlags(clubId, plan.playerIds);
+  }
+}
+
+async function persistCaptainsFromAfFixture(opts: {
+  fixtureId: number;
+  clubId: string;
+  teamAfId: number;
+}) {
+  const fp = await getFixturePlayers(opts.fixtureId).catch(() => []);
+  if (!fp?.length) return;
+  const squadRows = await prisma.player.findMany({
+    where: { clubId: opts.clubId, apiFootballPlayerId: { not: null } },
+    select: { id: true, apiFootballPlayerId: true },
+  });
+  const localByAfId = new Map<number, string>();
+  for (const pl of squadRows) {
+    if (pl.apiFootballPlayerId != null) {
+      localByAfId.set(pl.apiFootballPlayerId, pl.id);
+    }
+  }
+  const rows = mapAfFixturePlayersToRows({
+    teams: fp,
+    homeAfTeamId: opts.teamAfId,
+    awayAfTeamId: -1,
+    localByAfId,
+  });
+  await persistOfficialCaptains({
+    homeClubId: opts.clubId,
+    awayClubId: opts.clubId,
+    rows,
+    onlyClubId: opts.clubId,
+  });
+}
+
 async function upsertLineupSide(
   clubId: string,
   lineup: AfLineup,
-  side: "home" | "away"
+  side: "home" | "away",
+  opts?: { clearCaptainsIfNone?: boolean }
 ) {
   const fallback = side === "home" ? "4-3-3" : "4-2-3-1";
   const formation = normalizeFormation(lineup.formation, fallback);
@@ -420,6 +492,7 @@ async function upsertLineupSide(
           onPitch: true,
           formationSlot: slot,
           apiFootballPlayerId: p.id || existing.apiFootballPlayerId,
+          isCaptain: isAfLineupCaptain(row),
         },
       });
       keptIds.add(existing.id);
@@ -435,6 +508,7 @@ async function upsertLineupSide(
           onPitch: true,
           formationSlot: slot,
           apiFootballPlayerId: p.id || null,
+          isCaptain: isAfLineupCaptain(row),
         },
       });
       keptIds.add(created.id);
@@ -458,6 +532,7 @@ async function upsertLineupSide(
           apiFootballPlayerId: p.id || existing.apiFootballPlayerId,
           shirtNumber: p.number || existing.shirtNumber,
           position: posGuess(p.pos) || existing.position,
+          isCaptain: isAfLineupCaptain(row),
         },
       });
       keptIds.add(existing.id);
@@ -473,6 +548,7 @@ async function upsertLineupSide(
           onPitch: false,
           formationSlot: "BENCH",
           apiFootballPlayerId: p.id || null,
+          isCaptain: isAfLineupCaptain(row),
         },
       });
       keptIds.add(created.id);
@@ -488,6 +564,19 @@ async function upsertLineupSide(
     },
     data: { isStarter: false, onPitch: false, formationSlot: null },
   });
+
+  const lineupCaptainAfIds = afLineupCaptainPlayerIds(lineup);
+  if (lineupCaptainAfIds.length) {
+    const caps = await prisma.player.findMany({
+      where: { clubId, apiFootballPlayerId: { in: lineupCaptainAfIds } },
+      select: { id: true },
+    });
+    await applyCaptainFlags(clubId, caps.map((c) => c.id));
+  } else if (opts?.clearCaptainsIfNone) {
+    // This fixture Official XI: AF lineups usually omit captain — don't keep
+    // last week's armband as if it were this match's official captain.
+    await applyCaptainFlags(clubId, []);
+  }
 
   // Coach is synced separately (current /coachs?team= + confirmed lineup.coach)
   return formation;
@@ -2013,8 +2102,12 @@ async function runSyncMatchFromApiFootball(
   lineupStatus = plan.lineupStatus;
 
   if (plan.action === "confirm") {
-    homeFormation = await upsertLineupSide(match.homeClubId, homeLu!, "home");
-    awayFormation = await upsertLineupSide(match.awayClubId, awayLu!, "away");
+    homeFormation = await upsertLineupSide(match.homeClubId, homeLu!, "home", {
+      clearCaptainsIfNone: true,
+    });
+    awayFormation = await upsertLineupSide(match.awayClubId, awayLu!, "away", {
+      clearCaptainsIfNone: true,
+    });
   } else if (plan.action === "keep_predicted") {
     if (!isLive) {
       await applyPredictedJson(match.homeClubId, match.predictedHomeJson);
@@ -2031,6 +2124,11 @@ async function runSyncMatchFromApiFootball(
         "home"
       );
       expectedFrom = homeLast.fixtureId;
+      await persistCaptainsFromAfFixture({
+        fixtureId: homeLast.fixtureId,
+        clubId: match.homeClubId,
+        teamAfId: homeAfId,
+      }).catch(() => null);
     }
     if (awayLast) {
       awayFormation = await upsertLineupSide(
@@ -2039,6 +2137,11 @@ async function runSyncMatchFromApiFootball(
         "away"
       );
       expectedFrom = expectedFrom || awayLast.fixtureId;
+      await persistCaptainsFromAfFixture({
+        fixtureId: awayLast.fixtureId,
+        clubId: match.awayClubId,
+        teamAfId: awayAfId,
+      }).catch(() => null);
     }
     lineupStatus = homeLast || awayLast ? "expected" : match.lineupStatus || "expected";
   }
@@ -2202,6 +2305,16 @@ async function runSyncMatchFromApiFootball(
         awayAfTeamId: awayAfId,
         localByAfId,
       });
+      // This fixture's players are authoritative once AF names a captain,
+      // or once Official XI is confirmed (don't invent on predicted/expected).
+      const namedThisFixture = livePlayerStats.some((r) => r.captain);
+      if (namedThisFixture || lineupStatus === "confirmed") {
+        await persistOfficialCaptains({
+          homeClubId: match.homeClubId,
+          awayClubId: match.awayClubId,
+          rows: livePlayerStats,
+        });
+      }
     }
   } catch {
     /* player live stats optional — soft-fail */

@@ -73,3 +73,6 @@ data/desk-posters/
 # Local Polar env bundle (never commit)
 .polar-netlify-env.json
 .polar-*.json
+
+# local Resend API key — never commit
+.resend_key.env

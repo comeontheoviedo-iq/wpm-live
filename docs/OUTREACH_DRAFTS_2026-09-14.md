@@ -2,7 +2,8 @@
 
 **Status:** DRAFT ONLY. Chris must approve before any send/post.  
 **Channels:** LinkedIn + Reddit + Facebook  
-**CTA:** https://www.cocomms.online?utm_source=[channel]&utm_medium=outreach&utm_campaign=commentator
+**CTA:** https://www.cocomms.online?utm_source=[channel]&utm_medium=outreach&utm_campaign=commentator  
+**Updated:** 2026-09-13 — Chris connection note + soft-intro voice
 
 Mark each block: `APPROVE` / `EDIT: …` / `KILL`
 
@@ -10,19 +11,19 @@ Mark each block: `APPROVE` / `EDIT: …` / `KILL`
 
 ## A. LinkedIn (primary) — sequence templates
 
-Personalise `[name]` / `[detail]`. Do not paste identical blocks to everyone in the same hour.  
+Personalise `[name]`. Do not paste identical blocks to everyone in the same hour.  
 Exclude Sports Pro / SportsCom / tool builders.
 
 ### A1 — Connection note (default)
 
 ```
-Hi [name] — saw you call [football/soccer / detail]. Building CoComms for commentators (prep + live desk). Would be good to connect.
+Hi [name] — I saw you are a football/soccer commentator. Building CoComms for commentators (prep + live desk). Would be good to connect.
 ```
 
 ### A1b — Connection note (short)
 
 ```
-Hi [name] — fellow football-comms world. Building a match desk for commentators (CoComms). Happy to connect.
+Hi [name] — I saw you are a football/soccer commentator. Building a match desk for commentators (CoComms). Happy to connect.
 ```
 
 ### A2 — Soft intro (after accept)
@@ -30,24 +31,26 @@ Hi [name] — fellow football-comms world. Building a match desk for commentator
 ```
 Thanks for connecting, [name].
 
-Quick context: CoComms is a commentary co-pilot — you bring the notes and the voice; we file the prep and keep live feed, lineups, and the desk ready so you’re not hunting tabs when the board goes up.
+Quick context: CoComms is a commentary co-pilot — you bring the notes and the voice; we file your notes in the right places and have the ultimate live match desk so you are not managing five different screens and 20 different tabs whilst trying to watch the game. Early reviews say it is more detailed and better value-for-money than other tools on the market.
 
-Not selling hard here — just useful if you’re on matches weekly. Happy to answer anything.
+No hard sell here — just a useful tool no matter how many matches you do a month. Happy to send a link for you to look at if interested.
 ```
 
-### A3 — Trial CTA (~3–5 days later, or if they ask)
+### A3 — Trial CTA (~3–5 days later, or if they ask for the link)
 
 ```
-[name] — if you want to try the desk on a real fixture, trial’s open at cocomms.online (14 days, a few match desks).
+[name] — here’s that link if you want a look: cocomms.online
 
-You bring notes + voice; we handle filing + live feed / lineups / desk. No pressure either way — shout if useful.
+14-day trial, a few match desks. You bring the notes and the voice; we file your notes in the right places and keep the live match desk in one place so you’re not managing five screens and 20 tabs mid-game.
+
+No hard sell — shout if useful, ignore if not.
 ```
 
 ### A4 — Reply helpers
 
-**What is it?**
+**What is it? / Send the link**
 ```
-Match desk for commentators. Bring your prep — we file it. Live feed, dynamic lineups, Scripts, pitch board on one desk so you can stay on the call. Trial: cocomms.online
+CoComms is a commentary co-pilot — you bring the notes and the voice; we file your notes in the right places and run the live match desk so you’re not juggling five screens and 20 tabs. Early feedback is that it’s more detailed and better value than other tools out there. Link: cocomms.online
 ```
 
 **Price?**
@@ -70,28 +73,28 @@ Suggested first subs (confirm before posting): `r/sportsbroadcasting`, `r/broadc
 
 **Title:**
 ```
-How do you keep matchday notes + live XI tidy when you’re on the call?
+Football/soccer commentators — how do you stop matchday turning into five screens and 20 tabs?
 ```
 
 **Body:**
 ```
-Curious what other football/soccer callers use mid-match.
+Curious how other football/soccer commentators run matchday.
 
-I got tired of notes in one place, lineups in another, and live updates in a third tab — so I built a small commentary desk (CoComms) that keeps prep filed to players and the live board in one screen.
+I kept ending up with notes in one place, the live game somewhere else, and lineups/tabs everywhere — so I built CoComms as a commentary co-pilot: you bring the notes and the voice; it files your notes in the right places and keeps the live match desk in one screen.
 
-Not trying to spam the sub — genuinely interested how people run it today. If useful, trial’s open at cocomms.online (14 days). Happy to answer questions either way.
+Early reviews say it’s more detailed and better value-for-money than other tools on the market. Not trying to spam the sub — genuinely interested how people handle it today. If useful, trial’s open at cocomms.online (14 days). Happy to answer questions either way.
 ```
 
 ### B2 — Comment reply (when someone asks for the link)
 
 ```
-It’s CoComms — commentary co-pilot for matchday. You bring notes + voice; it files prep and keeps live feed / lineups / desk together. Trial: https://www.cocomms.online
+It’s CoComms — commentary co-pilot. You bring notes + voice; we file notes in the right places and keep the live match desk so you’re not managing five screens / 20 tabs. Link: https://www.cocomms.online
 ```
 
 ### B3 — Comment-only variant (no top-level promo)
 
 ```
-Same pain here — split notes / XI / live feed is brutal mid-call. I’ve been consolidating onto one desk (CoComms) so prep sticks to players. Happy to share what worked if useful.
+Same pain — five screens and 20 tabs mid-game is brutal. I’ve been consolidating onto one live match desk (CoComms) that files notes in the right places. Happy to share a link if useful.
 ```
 
 ---
@@ -103,19 +106,21 @@ Needs: which groups Chris is in. Until then, keep as Page/personal post drafts.
 ### C1 — Group post (only if group allows product shares)
 
 ```
-Anyone else calling football remotely and drowning in tabs?
+Any football/soccer commentators here tired of managing five different screens and 20 tabs on matchday?
 
-I’ve been building CoComms — a commentary co-pilot so you bring the notes and voice, and the desk keeps prep filed + live feed / lineups ready.
+I’ve been building CoComms — a commentary co-pilot. You bring the notes and the voice; we file your notes in the right places and keep the ultimate live match desk in one place. Early reviews say it’s more detailed and better value-for-money than other tools on the market.
 
-14-day trial at cocomms.online if you want a look. Happy to answer questions — not here to spam.
+No hard sell — 14-day trial at cocomms.online if you want a look. Happy to answer questions.
 ```
 
 ### C2 — Page / personal feed (trailer + caption)
 
 ```
-New: CoComms — the co-commentator for your matchday comms.
+CoComms — commentary co-pilot for matchday.
 
-Bring your notes. We file them where you need them. Live feed, lineups, Scripts, one desk.
+You bring the notes and the voice. We file your notes in the right places and keep the live match desk so you’re not juggling five screens and 20 tabs.
+
+Early reviews: more detailed, better value than other tools on the market.
 
 Try it free → cocomms.online
 ```
@@ -124,7 +129,7 @@ Try it free → cocomms.online
 ### C3 — Soft comment in a relevant thread
 
 ```
-I’ve been using a single match desk for this (CoComms) — notes filed to players + live XI in one place. Trial’s open if anyone wants to poke at it: cocomms.online
+Same issue — five screens / 20 tabs mid-game. I’ve been using CoComms (commentary co-pilot) so notes get filed in the right places and the live desk stays in one place. Happy to send the link if useful: cocomms.online
 ```
 
 ---

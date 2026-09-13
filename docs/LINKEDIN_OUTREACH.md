@@ -97,13 +97,13 @@ Swap `[name]` / `[detail]`. Keep line breaks. Edit freely; do not paste robotic 
 ### 1 — Connection request (note)
 
 ```
-Hi [name] — saw you call [football/soccer / detail]. Building CoComms for commentators (prep + live desk). Would be good to connect.
+Hi [name] — I saw you are a football/soccer commentator. Building CoComms for commentators (prep + live desk). Would be good to connect.
 ```
 
 Shorter variant if note length is tight:
 
 ```
-Hi [name] — fellow football-comms world. Building a match desk for commentators (CoComms). Happy to connect.
+Hi [name] — I saw you are a football/soccer commentator. Building a match desk for commentators (CoComms). Happy to connect.
 ```
 
 ### 2 — Soft intro (after accept)
@@ -111,17 +111,19 @@ Hi [name] — fellow football-comms world. Building a match desk for commentator
 ```
 Thanks for connecting, [name].
 
-Quick context: CoComms is a commentary co-pilot — you bring the notes and the voice; we file the prep and keep live feed, lineups, and the desk ready so you’re not hunting tabs when the board goes up.
+Quick context: CoComms is a commentary co-pilot — you bring the notes and the voice; we file your notes in the right places and have the ultimate live match desk so you are not managing five different screens and 20 different tabs whilst trying to watch the game. Early reviews say it is more detailed and better value-for-money than other tools on the market.
 
-Not selling hard here — just useful if you’re on matches weekly. Happy to answer anything.
+No hard sell here — just a useful tool no matter how many matches you do a month. Happy to send a link for you to look at if interested.
 ```
 
 ### 3 — Trial CTA
 
 ```
-[name] — if you want to try the desk on a real fixture, trial’s open at cocomms.online (14 days, a few match desks).
+[name] — here’s that link if you want a look: cocomms.online
 
-You bring notes + voice; we handle filing + live feed / lineups / desk. No pressure either way — shout if useful.
+14-day trial, a few match desks. You bring the notes and the voice; we file your notes in the right places and keep the live match desk in one place so you’re not managing five screens and 20 tabs mid-game.
+
+No hard sell — shout if useful, ignore if not.
 ```
 
 ### Reply helpers (optional)

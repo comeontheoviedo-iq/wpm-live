@@ -18,6 +18,11 @@ import {
 } from "@/lib/api-football";
 import { flagUrl } from "@/lib/flags";
 import { resolvePersonAge } from "@/lib/person-age";
+import {
+  isMoneyTransferFee,
+  rawTransferFeeFrom,
+  resolveTransferFeeRaw,
+} from "@/lib/transfer-fee";
 
 function formFromFixtures(
   fixtures: Awaited<ReturnType<typeof getTeamRecentFinished>>,
@@ -268,25 +273,73 @@ async function buildClubPayload(opts: {
 
   try {
     const transfers = await getTeamTransfers(afId);
-    const inRows: unknown[] = [];
-    const outRows: unknown[] = [];
+    type TrEntry = {
+      player: string | undefined;
+      playerId: number | undefined;
+      date: string | undefined;
+      type: string | null;
+      from: string | null;
+      to: string | null;
+    };
+    const inRows: TrEntry[] = [];
+    const outRows: TrEntry[] = [];
     for (const row of transfers) {
       for (const tr of row.transfers || []) {
-        const type = (tr.type || "").toLowerCase();
-        const entry = {
+        const entry: TrEntry = {
           player: row.player?.name,
           playerId: row.player?.id,
           date: tr.date,
-          type: tr.type || null,
+          type: rawTransferFeeFrom({
+            type: tr.type,
+            fee: tr.fee,
+            transferFee: tr.transferFee,
+          }),
           from: tr.teams?.out?.name || null,
           to: tr.teams?.in?.name || null,
         };
         if (tr.teams?.in?.id === afId) inRows.push(entry);
         if (tr.teams?.out?.id === afId) outRows.push(entry);
-        void type;
       }
     }
-    base.transfers = { in: inRows.slice(0, 40), out: outRows.slice(0, 40) };
+    const pickSide = (rows: TrEntry[]) => {
+      const dated = rows.filter((r) => r.date);
+      const resolved = dated.map((r) => {
+        const fee = resolveTransferFeeRaw(
+          { date: r.date, type: r.type, from: r.from || "", to: r.to || "", player: r.player },
+          dated.map((s) => ({
+            date: s.date,
+            type: s.type,
+            from: s.from || "",
+            to: s.to || "",
+            player: s.player,
+          }))
+        );
+        return fee && fee !== r.type ? { ...r, type: fee } : r;
+      });
+      const byDate = [...resolved].sort((a, b) =>
+        String(b.date).localeCompare(String(a.date))
+      );
+      const recent = byDate.slice(0, 30);
+      const cutoffYear = new Date().getUTCFullYear() - 6;
+      const cutoff = `${cutoffYear}-01-01`;
+      const money = byDate.filter(
+        (r) => String(r.date) >= cutoff && isMoneyTransferFee(r.type)
+      );
+      const merged: TrEntry[] = [];
+      const seen = new Set<string>();
+      const push = (r: TrEntry) => {
+        const key = `${r.date}|${(r.player || "").toLowerCase()}|${r.from}|${r.to}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        merged.push(r);
+      };
+      for (const r of money) push(r);
+      for (const r of recent) push(r);
+      return merged
+        .sort((a, b) => String(b.date).localeCompare(String(a.date)))
+        .slice(0, 40);
+    };
+    base.transfers = { in: pickSide(inRows), out: pickSide(outRows) };
   } catch {
     /* optional */
   }

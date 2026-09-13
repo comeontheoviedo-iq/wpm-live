@@ -93,7 +93,7 @@ describe("liveAdjustedSeasonStat vs ordinal", () => {
 
 describe("formatTransferFee", () => {
   it("shows AF fee strings and dashes unknowns", () => {
-    assert.equal(formatTransferFee("€45M"), "€45M");
+    assert.equal(formatTransferFee("€45M"), "€45m");
     assert.equal(formatTransferFee("Free"), "Free");
     assert.equal(formatTransferFee("N/A"), "—");
     assert.equal(formatTransferFee(null), "—");

@@ -15,6 +15,7 @@ import {
 import { nationalityToIso } from "@/lib/flags";
 import { isFriendlyCompetition } from "@/lib/season-tally";
 import { resolvePersonAge } from "@/lib/person-age";
+import { rawTransferFeeFrom, resolveTransferFeeRaw } from "@/lib/transfer-fee";
 import { relinkPlayerNotesOnRead } from "@/lib/relink-player-notes";
 
 function parseCm(h?: string | null) {
@@ -455,14 +456,18 @@ export async function GET(
         }
       }
 
-      // Transfers
+      // Transfers — backfill money fee onto "Transfer"/N/A rows from siblings
       try {
         const flat: typeof transfers = [];
         for (const row of transfersRes || []) {
           for (const x of row.transfers || []) {
             flat.push({
               date: x.date || "",
-              type: x.type || null,
+              type: rawTransferFeeFrom({
+                type: x.type,
+                fee: x.fee,
+                transferFee: x.transferFee,
+              }),
               from: {
                 id: x.teams?.out?.id,
                 name: x.teams?.out?.name || "—",
@@ -476,8 +481,25 @@ export async function GET(
             });
           }
         }
-        transfers = flat
-          .filter((x) => x.date)
+        const dated = flat.filter((x) => x.date);
+        transfers = dated
+          .map((x) => {
+            const resolved = resolveTransferFeeRaw(
+              {
+                date: x.date,
+                type: x.type,
+                from: x.from.name,
+                to: x.to.name,
+              },
+              dated.map((s) => ({
+                date: s.date,
+                type: s.type,
+                from: s.from.name,
+                to: s.to.name,
+              }))
+            );
+            return resolved && resolved !== x.type ? { ...x, type: resolved } : x;
+          })
           .sort((a, b) => b.date.localeCompare(a.date))
           .slice(0, 12);
       } catch { /* soft */ }

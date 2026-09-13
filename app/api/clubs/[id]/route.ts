@@ -15,20 +15,7 @@ import {
 } from "@/lib/api-football";
 import { leagueIdForCompetition } from "@/lib/competitions";
 import { resolvePersonAge } from "@/lib/person-age";
-
-function dedupeTransfers<
-  T extends { date: string; player: string; from: string; to: string; type: string | null }
->(rows: T[]): T[] {
-  const seen = new Set<string>();
-  const out: T[] = [];
-  for (const r of rows) {
-    const key = `${r.date}|${r.player.toLowerCase()}|${r.from.toLowerCase()}|${r.to.toLowerCase()}|${(r.type || "").toLowerCase()}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(r);
-  }
-  return out;
-}
+import { rawTransferFeeFrom, selectClubTransferHistory } from "@/lib/transfer-fee";
 
 function isWinnerPlace(place: string | null | undefined) {
   if (!place) return false;
@@ -193,18 +180,24 @@ export async function GET(
         for (const x of row.transfers || []) {
           transfers.push({
             date: x.date || "",
-            type: x.type || null,
+            type: rawTransferFeeFrom({
+              type: x.type,
+              fee: x.fee,
+              transferFee: x.transferFee,
+            }),
             player: pname,
             from: x.teams?.out?.name || "—",
             to: x.teams?.in?.name || "—",
           });
         }
       }
-      transfers = dedupeTransfers(
-        transfers
-          .filter((x) => x.date)
-          .sort((a, b) => b.date.localeCompare(a.date))
-      ).slice(0, 60);
+      // Keep recent activity AND money-fee rows from lookback (AF floods recent
+      // window with Loan / Free agent / bare "Transfer" without amounts).
+      transfers = selectClubTransferHistory(transfers, {
+        limit: 60,
+        moneyLookbackYears: 6,
+        recentWindow: 50,
+      });
 
       const trop = await getTeamTrophies(afId).catch(() => []);
       trophies = (trop || []).map((x) => ({

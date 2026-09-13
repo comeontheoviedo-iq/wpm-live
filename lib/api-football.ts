@@ -1366,7 +1366,10 @@ export type AfTransferRow = {
   update?: string;
   transfers?: {
     date?: string;
+    /** Fee / deal label from AF ("€ 45M", "Free", "Loan", "Transfer", "N/A"). */
     type?: string | null;
+    fee?: string | null;
+    transferFee?: string | null;
     teams?: {
       in?: { id?: number; name?: string; logo?: string } | null;
       out?: { id?: number; name?: string; logo?: string } | null;

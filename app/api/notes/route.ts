@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth";
 import { NOTE_CATEGORIES } from "@/lib/defaults";
 import { displayText, normalizeApostrophes } from "@/lib/utils";
 import { rechunkOverlongLeagueNotes } from "@/lib/rechunk-league-notes";
+import { relinkPlayerNotesOnRead } from "@/lib/relink-player-notes";
 import { assertMatchOwned } from "@/lib/tenancy";
 
 export async function GET(req: Request) {
@@ -22,6 +23,11 @@ export async function GET(req: Request) {
     }
     try {
       await rechunkOverlongLeagueNotes(matchId);
+    } catch {
+      /* soft-fail */
+    }
+    try {
+      await relinkPlayerNotesOnRead(matchId);
     } catch {
       /* soft-fail */
     }

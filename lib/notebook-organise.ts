@@ -4,7 +4,7 @@
  * Prefer split-first; never dump one mega Match note as the primary path.
  */
 
-import { namesLooselyMatch, normalizePlayerKey, lastToken } from "./player-name";
+import { namesLooselyMatch, normalizePlayerKey, lastToken, matchSquadPlayer } from "./player-name";
 import { splitByHeadings, extractPlayerSections, type SquadMember } from "./pack-distribute";
 import {
   chunkPackBody,
@@ -70,9 +70,15 @@ export function cleanPlayerHeading(heading: string): string {
 
 function looksLikePlayerHeading(heading: string): boolean {
   const h = heading.trim();
-  // #### 31. Name (Role) or **1. Name (#31)**
-  if (/^\d{1,3}[.)]\s+[A-Za-zÀ-ÿ]/.test(h)) return true;
-  if (/^[A-Za-zÀ-ÿ].+\([^)]*(GK|DF|MF|FW|Goalkeeper|Back|Midfield|Winger|Forward|Keeper)/i.test(h))
+  const letter = "[A-Za-zÀ-ÿİıŞşĞğÜüÖöÇç]";
+  // #### 31. Name (Role) or **1. Name (#31)** — include Turkish İ/ı/ş/ğ
+  if (new RegExp("^\\d{1,3}[.)]\\s+" + letter).test(h)) return true;
+  if (
+    new RegExp(
+      "^" + letter + ".+\\([^)]*(GK|DF|MF|FW|Goalkeeper|Back|Midfield|Winger|Forward|Keeper|Striker|Substitute|Starting)",
+      "i"
+    ).test(h)
+  )
     return true;
   if (/^#{0,4}\s*\d{1,3}\.\s+/.test(h)) return true;
   return false;
@@ -304,34 +310,7 @@ function matchPlayerLoose(
   heading: string,
   players: SquadMember[]
 ): SquadMember | null {
-  const cleaned = cleanPlayerHeading(heading);
-  if (!cleaned || cleaned.length < 2) return null;
-
-  let best: SquadMember | null = null;
-  let bestScore = 0;
-  for (const p of players) {
-    if (namesLooselyMatch(cleaned, p.name)) {
-      const score = normalizePlayerKey(p.name).length + 50;
-      if (score > bestScore) {
-        best = p;
-        bestScore = score;
-      }
-      continue;
-    }
-    // Surname token in cleaned heading (len>=3 so Aye/Ali hit; token equality only)
-    const sur = lastToken(p.name);
-    if (sur.length >= 3) {
-      const tokens = normalizePlayerKey(cleaned).split(" ");
-      if (tokens.includes(sur)) {
-        const score = sur.length;
-        if (score > bestScore) {
-          best = p;
-          bestScore = score;
-        }
-      }
-    }
-  }
-  return best;
+  return matchSquadPlayer(heading, players) || matchSquadPlayer(cleanPlayerHeading(heading), players);
 }
 
 function matchCoach(
@@ -933,14 +912,10 @@ export function organiseNotebookPack(args: OrganiseArgs): OrganisedPack {
     });
   }
 
-  // Also attach player-tagged hooks onto players when surname matches
+  // Also attach player-tagged hooks onto players when the name is unique
   for (const h of hookItems) {
-    for (const p of players) {
-      const sur = lastToken(p.name);
-      // Whole-token only (len>=3) so short surnames like Aye attach without
-      // substring false positives ("daye"/"maybe").
-      const bodyTokens = normalizePlayerKey(h.body).split(" ").filter(Boolean);
-      if (sur.length >= 3 && bodyTokens.includes(sur)) {
+    const p = matchSquadPlayer(`${h.title} ${h.body.slice(0, 160)}`, players);
+    if (p) {
         const title = `${p.name} — Hook`;
         // Upsert-friendly single player hook note — merge later by title
         const existing = notes.find(
@@ -957,8 +932,6 @@ export function organiseNotebookPack(args: OrganiseArgs): OrganisedPack {
             entityId: p.id,
           });
         }
-        break;
-      }
     }
   }
 

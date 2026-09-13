@@ -1,4 +1,4 @@
-import { namesLooselyMatch, normalizePlayerKey, lastToken } from "./player-name";
+import { matchSquadPlayer, normalizePlayerKey, lastToken } from "./player-name";
 
 /** Parse Gemini pack text into per-entity notes. Resilient: partial matches OK. */
 
@@ -60,6 +60,17 @@ function surname(name: string) {
   return lastToken(name) || name;
 }
 
+/** Research packs often use bare "Name (Role - Starting XI)" lines, not markdown. */
+export function isNameRoleHeading(line: string): boolean {
+  const t = (line || "").trim();
+  if (t.length < 8 || t.length > 140) return false;
+  if (!/^[A-Za-zÀ-ÿİıŞşĞğÜüÖöÇç]/.test(t)) return false;
+  if (!/\([^)]{2,80}\)\s*$/.test(t)) return false;
+  return /(Starting\s+XI|Substitute|Squad\s+Member|Goalkeeper|Forward|Winger|Striker|Midfield|Defender|Back|Keeper|OUT:|INJURED|SUSPENDED|DOUBTFUL)/i.test(
+    t
+  );
+}
+
 /** Split markdown/plain text into heading → body sections.
  *  Leading prose before the first heading is kept as "Overview"
  *  (freeform pastes often have no headings at all). */
@@ -98,10 +109,13 @@ export function splitByHeadings(text: string): { heading: string; body: string }
         ? trimmed.replace(/:$/, "")
         : null;
 
+    const nameRole = isNameRoleHeading(trimmed) ? trimmed : null;
+
     let heading: string | null = null;
     if (md) heading = md[2].trim();
     else if (bold) heading = bold[1].trim();
     else if (managerProfile) heading = managerProfile;
+    else if (nameRole) heading = nameRole;
     else if (roman && roman[1].length < 100) heading = roman[1].trim();
     else if (numbered && numbered[2].length < 80) heading = numbered[2].trim();
     else if (plainCaps && /[A-Za-z]{2,}/.test(plainCaps)) heading = plainCaps;
@@ -136,41 +150,7 @@ function matchPlayer(
   heading: string,
   players: SquadMember[]
 ): SquadMember | null {
-  const cleaned = cleanHeadingName(heading);
-  const h = normalize(cleaned);
-  let best: SquadMember | null = null;
-  let bestScore = 0;
-  for (const p of players) {
-    if (namesLooselyMatch(cleaned, p.name) || namesLooselyMatch(heading, p.name)) {
-      const score = normalizePlayerKey(p.name).length + 100;
-      if (score > bestScore) {
-        best = p;
-        bestScore = score;
-      }
-      continue;
-    }
-    const full = normalize(p.name);
-    const sur = normalize(surname(p.name));
-    if (full.length >= 3 && (h === full || h.includes(full) || full.includes(h))) {
-      const score = full.length + 80;
-      if (score > bestScore) {
-        best = p;
-        bestScore = score;
-      }
-      continue;
-    }
-    if (sur.length >= 4) {
-      const tokens = h.split(" ");
-      if (tokens.includes(sur) || h.startsWith(sur + " ") || h.endsWith(" " + sur)) {
-        const score = sur.length;
-        if (score > bestScore) {
-          best = p;
-          bestScore = score;
-        }
-      }
-    }
-  }
-  return best;
+  return matchSquadPlayer(heading, players) || matchSquadPlayer(cleanHeadingName(heading), players);
 }
 
 export type PlayerSection = { player: SquadMember; title: string; body: string };
@@ -201,7 +181,7 @@ export function extractPlayerSections(
     const paras = text.split(/\n{2,}/);
     for (const para of paras) {
       const first = para.trim().split("\n")[0] || "";
-      const player = matchPlayer(first.replace(/^[-*•]\s*/, "").split(/[:—–-]/)[0], players);
+      const player = matchPlayer(first.replace(/^[-*•]\s*/, ""), players);
       if (!player || seen.has(player.id)) continue;
       const body = para.trim();
       if (body.length < 20) continue;
@@ -302,16 +282,14 @@ export function extractPlayerHooks(
   for (const line of lines) {
     const cleaned = line.replace(/^[-*•\d.)\s]+/, "");
     const player = matchPlayer(cleaned.slice(0, 80), players);
-    // Also scan full line for surname tokens
+    // Unique surname token only — skip shared surnames (Yılmaz ×3)
     let hit = player;
     if (!hit) {
-      for (const p of players) {
+      const cands = players.filter((p) => {
         const sur = normalize(surname(p.name));
-        if (sur.length >= 4 && normalize(cleaned).includes(sur)) {
-          hit = p;
-          break;
-        }
-      }
+        return sur.length >= 3 && normalize(cleaned).split(" ").includes(sur);
+      });
+      if (cands.length === 1) hit = cands[0];
     }
     if (!hit) continue;
     const entry = byPlayer.get(hit.id) || { player: hit, bullets: [] };

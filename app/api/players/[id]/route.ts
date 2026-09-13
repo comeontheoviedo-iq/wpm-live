@@ -15,6 +15,7 @@ import {
 import { nationalityToIso } from "@/lib/flags";
 import { isFriendlyCompetition } from "@/lib/season-tally";
 import { resolvePersonAge } from "@/lib/person-age";
+import { relinkPlayerNotesOnRead } from "@/lib/relink-player-notes";
 
 function parseCm(h?: string | null) {
   if (!h) return null;
@@ -155,6 +156,14 @@ export async function GET(
     },
   });
   if (!player) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  if (matchId) {
+    try {
+      await relinkPlayerNotesOnRead(matchId);
+    } catch {
+      /* soft-fail */
+    }
+  }
 
   const notes = matchId
     ? await prisma.note.findMany({

@@ -9,6 +9,9 @@
  * "cak r"/"y lmaz" so they missed ASCII research headings like "Cakir"/"Yilmaz".
  * Other accents (é, ü, ö, ç, ş, ğ, …) already decomposed — which is why
  * "some accented names worked" while ı-names did not.
+ *
+ * Applied to EVERY token (first / middle / last) so "Barış Alper Yılmaz"
+ * and "Florian Ayé" fold the same as ASCII research / AF short names.
  */
 export function normalizePlayerKey(name: string): string {
   return (
@@ -31,27 +34,111 @@ export function normalizePlayerKey(name: string): string {
   );
 }
 
+/** Role / availability junk that research headings append after the name. */
+const ROLE_NOISE = new Set([
+  "starting",
+  "xi",
+  "substitute",
+  "squad",
+  "member",
+  "members",
+  "forward",
+  "winger",
+  "striker",
+  "goalkeeper",
+  "defender",
+  "midfielder",
+  "midfield",
+  "keeper",
+  "utility",
+  "injured",
+  "suspended",
+  "doubtful",
+  "inactive",
+  "questionable",
+  "playmaker",
+  "center",
+  "centre",
+  "right",
+  "left",
+  "central",
+  "attacking",
+  "defensive",
+  "backup",
+  "young",
+  "out",
+  "gk",
+  "df",
+  "mf",
+  "fw",
+  "st",
+  "cam",
+  "cdm",
+  "rb",
+  "lb",
+  "cb",
+  "rw",
+  "lw",
+]);
+
+/**
+ * Strip "(Forward / Winger - Starting XI)" / "— OUT: …" so last-token
+ * matching sees the surname, not "xi" / "striker" / "substitute".
+ */
+export function stripPlayerRoleDecor(name: string): string {
+  return name
+    .replace(/^#+\s*/, "")
+    .replace(/^\*\*|\*\*$/g, "")
+    .replace(/^(?:[IVXLCDM]+)[.)]\s+/i, "")
+    .replace(/^\d{1,3}[.)]?\s+/, "")
+    .replace(/\s*\([^)]*\)\s*$/g, "")
+    .replace(
+      /\s*[—–-]\s*(INJURED|SUSPENDED|DOUBTFUL|OUT|Starting\s+XI|Substitute).*$/i,
+      ""
+    )
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function significantNameTokens(name: string): string[] {
+  const raw = normalizePlayerKey(stripPlayerRoleDecor(name))
+    .split(" ")
+    .filter(Boolean);
+  return raw.filter((t, i) => {
+    if (ROLE_NOISE.has(t)) return false;
+    if (t.length >= 2) return true;
+    // Keep leading initial so "B. Yilmaz" ≠ "A. Yilmaz"
+    return i === 0 && t.length === 1;
+  });
+}
+
 export function lastToken(name: string): string {
-  const parts = normalizePlayerKey(name).split(" ").filter(Boolean);
-  return parts[parts.length - 1] || "";
+  const parts = significantNameTokens(name);
+  if (parts.length) return parts[parts.length - 1];
+  const raw = normalizePlayerKey(stripPlayerRoleDecor(name)).split(" ").filter(Boolean);
+  return raw[raw.length - 1] || "";
 }
 
 /**
  * True when names refer to the same player under common AF/desk variants:
  * exact, last-name-only, or initial + last ("L. Shankland" / "Lawrence Shankland").
+ * Role suffixes on research headings are stripped first so
+ * "Barış Alper Yılmaz (Forward / Winger - Starting XI)" still matches "B. Yilmaz".
  */
 export function namesLooselyMatch(a?: string | null, b?: string | null): boolean {
   if (!a || !b) return false;
-  const na = normalizePlayerKey(a);
-  const nb = normalizePlayerKey(b);
+  const ca = stripPlayerRoleDecor(a);
+  const cb = stripPlayerRoleDecor(b);
+  const na = normalizePlayerKey(ca);
+  const nb = normalizePlayerKey(cb);
   if (!na || !nb) return false;
   if (na === nb) return true;
   if (na.includes(nb) || nb.includes(na)) {
     // Avoid short false positives ("a" inside names)
     if (Math.min(na.length, nb.length) >= 4) return true;
   }
-  const partsA = na.split(" ").filter(Boolean);
-  const partsB = nb.split(" ").filter(Boolean);
+  const partsA = significantNameTokens(ca);
+  const partsB = significantNameTokens(cb);
   const lastA = partsA[partsA.length - 1];
   const lastB = partsB[partsB.length - 1];
   if (!lastA || lastA !== lastB) return false;
@@ -59,6 +146,58 @@ export function namesLooselyMatch(a?: string | null, b?: string | null): boolean
   const initA = partsA[0][0];
   const initB = partsB[0][0];
   return Boolean(initA && initA === initB);
+}
+
+export type NamedSquadMember = { id: string; name: string };
+
+/**
+ * Pick the unique squad player for a research heading / first-line.
+ * Prefers last significant surname + optional first-name/initial fold.
+ * Shared surnames (Yılmaz ×3) require a first-initial hit; ambiguous → null.
+ */
+export function matchSquadPlayer<T extends NamedSquadMember>(
+  heading: string,
+  players: T[]
+): T | null {
+  const cleaned = stripPlayerRoleDecor(heading);
+  if (!cleaned || cleaned.length < 2) return null;
+  const hToks = significantNameTokens(cleaned);
+  const hSur = hToks[hToks.length - 1] || "";
+  const hInit = hToks[0]?.[0] || "";
+
+  type Scored = { player: T; score: number };
+  const hits: Scored[] = [];
+
+  for (const p of players) {
+    const pToks = significantNameTokens(p.name);
+    const pSur = pToks[pToks.length - 1] || lastToken(p.name);
+    const pInit = pToks[0]?.[0] || "";
+    if (!pSur) continue;
+
+    if (namesLooselyMatch(cleaned, p.name) || namesLooselyMatch(heading, p.name)) {
+      hits.push({ player: p, score: 100 + normalizePlayerKey(p.name).length });
+      continue;
+    }
+
+    if (hSur && pSur === hSur && pSur.length >= 3) {
+      if (hToks.length >= 2 && hInit && pInit && hInit !== pInit) continue;
+      const score =
+        hToks.length >= 2 && hInit && pInit && hInit === pInit
+          ? 40 + pSur.length
+          : pSur.length;
+      hits.push({ player: p, score });
+    }
+  }
+
+  if (!hits.length) return null;
+  hits.sort((a, b) => b.score - a.score);
+  const best = hits[0];
+  const tied = hits.filter((h) => h.score === best.score);
+  if (tied.length > 1) {
+    // Shared surname, no first-name fold — skip rather than attach to A. Yilmaz
+    return null;
+  }
+  return best.player;
 }
 
 /** Parse AF-style sub description: "Substitution 1 — Out Name (In Name)". */

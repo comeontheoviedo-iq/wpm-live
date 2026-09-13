@@ -7,10 +7,12 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   lastToken,
+  matchSquadPlayer,
   namesLooselyMatch,
   normalizePlayerKey,
+  stripPlayerRoleDecor,
 } from "./player-name";
-import { extractPlayerSections } from "./pack-distribute";
+import { extractPlayerSections, isNameRoleHeading } from "./pack-distribute";
 import { organiseNotebookPack } from "./notebook-organise";
 
 describe("normalizePlayerKey — Turkish ı / mixed accents", () => {
@@ -132,5 +134,106 @@ Clinical finisher; holds the ball up well.
     assert.ok(ids.has("p-cakir"), "expected Çakır bio");
     assert.ok(ids.has("p-yilmaz"), "expected Yılmaz bio");
     assert.ok(ids.has("p-aye"), "expected Ayé bio");
+  });
+});
+
+describe("Galatasaray desk — exact research headings", () => {
+  const BARIS_HEAD = "Barış Alper Yılmaz (Forward / Winger - Starting XI)";
+  const AYE_HEAD = "Florian Ayé (Striker - Starting XI)";
+  const JANKAT_HEAD = "Jankat Yılmaz (Goalkeeper - Substitute)";
+  const players = [
+    { id: "p-j", name: "J. Yılmaz" },
+    { id: "p-b", name: "B. Yilmaz" },
+    { id: "p-a", name: "A. Yilmaz" },
+    { id: "p-aye", name: "F. Aye" },
+  ];
+
+  it("strips role parens so last token is the surname not xi/striker", () => {
+    assert.equal(stripPlayerRoleDecor(BARIS_HEAD), "Barış Alper Yılmaz");
+    assert.equal(stripPlayerRoleDecor(AYE_HEAD), "Florian Ayé");
+    assert.equal(lastToken(BARIS_HEAD), "yilmaz");
+    assert.equal(lastToken(AYE_HEAD), "aye");
+    assert.equal(normalizePlayerKey("Barış Alper Yılmaz"), "baris alper yilmaz");
+    assert.equal(normalizePlayerKey("B. Yilmaz"), "b yilmaz");
+    assert.equal(normalizePlayerKey("Florian Ayé"), "florian aye");
+    assert.equal(normalizePlayerKey("F. Aye"), "f aye");
+  });
+
+  it("matches Barış heading to B. Yilmaz not A. Yilmaz / J. Yılmaz", () => {
+    assert.equal(namesLooselyMatch(BARIS_HEAD, "B. Yilmaz"), true);
+    assert.equal(namesLooselyMatch(BARIS_HEAD, "A. Yilmaz"), false);
+    assert.equal(namesLooselyMatch(BARIS_HEAD, "J. Yılmaz"), false);
+    const hit = matchSquadPlayer(BARIS_HEAD, players);
+    assert.equal(hit?.id, "p-b");
+  });
+
+  it("matches Florian Ayé heading to F. Aye", () => {
+    assert.equal(namesLooselyMatch(AYE_HEAD, "F. Aye"), true);
+    const hit = matchSquadPlayer(AYE_HEAD, players);
+    assert.equal(hit?.id, "p-aye");
+  });
+
+  it("matches Jankat heading to J. Yılmaz not Barış", () => {
+    const hit = matchSquadPlayer(JANKAT_HEAD, players);
+    assert.equal(hit?.id, "p-j");
+  });
+
+  it("does not attach a bare Yılmaz heading when three Yılmaz share the squad", () => {
+    assert.equal(matchSquadPlayer("Yılmaz", players), null);
+    assert.equal(matchSquadPlayer("Yilmaz", players), null);
+  });
+
+  it("treats Name (Role - Starting XI) lines as headings", () => {
+    assert.equal(isNameRoleHeading(BARIS_HEAD), true);
+    assert.equal(isNameRoleHeading(AYE_HEAD), true);
+    assert.equal(isNameRoleHeading("Nightfall arrives over Seyrantepe"), false);
+  });
+
+  it("extractPlayerSections + organise attach both from the real pack shape", () => {
+    const pack = `
+Starting XI
+
+Roland Sallai (Right-Back / Utility Right - Starting XI)
+Narrative: Hungarian international.
+
+${BARIS_HEAD}
+Narrative: Deployed as the central striker tonight in Osimhen's absence, Yılmaz offers powerful channel running.
+Season Metrics: 4 appearances (310 minutes), 6.53 average rating.
+
+${JANKAT_HEAD}
+Narrative: Young backup goalkeeper.
+
+${AYE_HEAD}
+Narrative: French striker who scored in Kocaelispor's recent victory, leading the line with intelligent movement.
+Season Metrics: 2 appearances (113 minutes), 1 goal.
+`;
+    const squad = [
+      { id: "p-sallai", name: "R. Sallai" },
+      ...players,
+    ];
+    const sections = extractPlayerSections(pack, squad);
+    const byId = Object.fromEntries(sections.map((s) => [s.player.id, s]));
+    assert.ok(byId["p-b"], "Barış must attach to B. Yilmaz");
+    assert.ok(byId["p-aye"], "Ayé must attach to F. Aye");
+    assert.ok(byId["p-j"], "Jankat must attach to J. Yılmaz");
+    assert.equal(byId["p-a"], undefined, "must not steal Barış onto A. Yilmaz");
+    assert.match(byId["p-b"].body, /channel running/i);
+    assert.match(byId["p-aye"].body, /French striker/i);
+
+    const organised = organiseNotebookPack({
+      text: pack,
+      matchId: "m1",
+      homeClub: { id: "c-gala", name: "Galatasaray" },
+      awayClub: { id: "c-koc", name: "Kocaelispor" },
+      players: squad,
+      coaches: [],
+    });
+    const bios = organised.notes.filter(
+      (n) => n.entityType === "player" && n.category === "Bio"
+    );
+    const ids = new Set(bios.map((n) => n.entityId));
+    assert.ok(ids.has("p-b"), "organise: B. Yilmaz bio");
+    assert.ok(ids.has("p-aye"), "organise: F. Aye bio");
+    assert.equal(ids.has("p-a"), false, "organise: not A. Yilmaz");
   });
 });

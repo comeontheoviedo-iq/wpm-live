@@ -229,7 +229,7 @@ async function upsertPlayerBioFromAf(
     if (resolved != null && resolved !== existing.age) data.age = resolved;
   }
   if (row.rating != null) data.rating = row.rating;
-  if (row.apps) data.appearances = row.apps;
+  if (typeof row.apps === "number") data.appearances = row.apps;
   if (row.goals != null && row.goals > (existing.goals || 0)) data.goals = row.goals;
   if (row.assists != null && row.assists > (existing.assists || 0)) data.assists = row.assists;
   if (
@@ -1396,8 +1396,9 @@ async function syncSeasonScorers(
       assists: Math.max(agg.leagueAssists || 0, prev?.assists || 0),
       goalsAllComps: Math.max(agg.allGoals || 0, prev?.goalsAllComps || 0),
       assistsAllComps: Math.max(agg.allAssists || 0, prev?.assistsAllComps || 0),
-      // Club season apps (all comps, ex-friendlies) — not league-only, not career
-      apps: Math.max(agg.allApps || 0, prev?.apps || 0),
+      // Club season apps (all comps, ex-friendlies). Prefer fresh AF — do not
+      // Math.max with a sticky prior (that locked Leão/Nakamura prior-club dumps).
+      apps: agg.allApps || 0,
       cleanSheets: prev?.cleanSheets || 0,
       saves: Math.max(saves || 0, prev?.saves || 0),
       conceded: Math.max(conceded || 0, prev?.conceded || 0),
@@ -1572,7 +1573,7 @@ async function syncSeasonScorers(
         data: {
           goals: row.goals,
           assists: row.assists,
-          ...(row.apps ? { appearances: row.apps } : {}),
+          ...(typeof row.apps === "number" ? { appearances: row.apps } : {}),
           ...(row.photo && !player.photoUrl ? { photoUrl: row.photo } : {}),
           ...(parseCm(row.height) && !player.heightCm
             ? { heightCm: parseCm(row.height) }

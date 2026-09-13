@@ -369,11 +369,11 @@ export function EventDetailPanel({
 
           {kind === "sub" && (
             <>
+              <StatRow label="Player ON" value={primaryName} />
               <StatRow
-                label="Player OFF"
+                label="ON for"
                 value={snapshot.playerOff?.name || "—"}
               />
-              <StatRow label="Player ON" value={primaryName} />
               <StatRow
                 label="Age"
                 value={

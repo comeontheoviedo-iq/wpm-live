@@ -907,28 +907,29 @@ export function MatchDesk({
       setMsg("No data visuals saved for this match yet");
       return;
     }
-    // Reopen most recent first (notes are typically newest-first from SSR)
-    for (const { n, viz } of vizNotes.slice(0, 5).reverse()) {
-      const id = `viz-note|${n.id}|reopen|${Date.now()}`;
-      const popup: LivePopup = {
-        id,
-        createdAt: Date.now(),
-        pinned: true,
-        kind: "fact",
-        title: n.title || "VIZ",
-        subtitle: "From Notes",
-        lines: [],
-        scoreline: `${homeName} ${scoreSampleRef.current.home}-${scoreSampleRef.current.away} ${awayName}`,
-        viz,
-      };
-      setLivePopups((prev) =>
-        [...prev.filter((p) => !p.id.startsWith(`viz-note|${n.id}`)), popup].slice(-5)
-      );
-    }
+    // Newest-first from SSR — reopen only the latest so DATA VIZ is usable.
+    const { n, viz } = vizNotes[0]!;
+    const id = `viz-note|${n.id}|reopen|${Date.now()}`;
+    const popup: LivePopup = {
+      id,
+      createdAt: Date.now(),
+      pinned: true,
+      kind: "fact",
+      title: n.title || "VIZ",
+      subtitle: "From Notes",
+      lines: [],
+      scoreline: `${homeName} ${scoreSampleRef.current.home}-${scoreSampleRef.current.away} ${awayName}`,
+      viz,
+    };
+    setLivePopups((prev) => {
+      // Replace prior viz flashes; keep non-viz intel (pinned or not).
+      const kept = prev.filter((p) => !p.viz && !p.id.startsWith("viz-note|"));
+      return [...kept, popup].slice(-5);
+    });
     setMsg(
       vizNotes.length === 1
-        ? `Reopened viz: ${vizNotes[0].n.title}`
-        : `Reopened ${Math.min(5, vizNotes.length)} data visuals`
+        ? `Reopened viz: ${n.title}`
+        : `Showing latest viz (${vizNotes.length} saved) · ${n.title}`
     );
   }, [notes, homeName, awayName]);
 
@@ -1270,9 +1271,16 @@ export function MatchDesk({
       });
       if (!viz) return;
       recentVizKindsRef.current = [...recentVizKindsRef.current, viz.kind].slice(-6);
-      setLivePopups((prev) =>
-        prev.map((p) => (p.id === popupId ? { ...p, viz } : p))
-      );
+      setLivePopups((prev) => {
+        const updated = prev.map((p) =>
+          p.id === popupId ? { ...p, viz } : p
+        );
+        // Focus the latest viz: drop other unpinned viz carriers so the stack
+        // does not grow into an unusable pile of every chart so far.
+        return updated.filter(
+          (p) => p.id === popupId || p.pinned || !p.viz
+        );
+      });
       // Immediately archive into Notes -> VIZ (deduped) for later reference.
       const host = livePopupsRef.current?.find((p) => p.id === popupId);
       void upsertVizNote({
@@ -1958,16 +1966,26 @@ export function MatchDesk({
                         : null,
                     ].filter(Boolean)
                   : [];
+                const onLabel = onP?.name || inName;
+                const offLabel = offP?.name || outName;
                 const lines = [
-                  onP || inName ? `ON: ${onP?.name || inName}` : null,
-                  offP || outName ? `OFF: ${offP?.name || outName}` : null,
+                  onLabel && offLabel
+                    ? `ON: ${onLabel} for ${offLabel}`
+                    : onLabel
+                      ? `ON: ${onLabel}`
+                      : null,
+                  offLabel && !onLabel ? `OFF: ${offLabel}` : null,
                   ...seasonBits,
                   e.description,
                 ].filter(Boolean) as string[];
                 pushPopup({
                   kind: "sub",
                   title: `SUB ${e.minute}'`,
-                  subtitle: onP?.name || inName || undefined,
+                  subtitle: onLabel
+                    ? offLabel
+                      ? `${onLabel} for ${offLabel}`
+                      : onLabel
+                    : undefined,
                   lines: [...new Set(lines)].slice(0, 6),
                 });
                 openEventDetail(
@@ -1976,7 +1994,9 @@ export function MatchDesk({
                     type: e.type,
                     description: e.description,
                     teamSide: (e as { teamSide?: string | null }).teamSide ?? null,
-                    playerId: onP?.id || newsPlayerId,
+                    // MatchEvent.playerId / AF player = OFF; never pass ON id
+                    // (buildDeskEventDetailSnapshot would treat it as OFF).
+                    playerId: offP?.id || newsPlayerId,
                   },
                   "auto"
                 );
@@ -3111,7 +3131,7 @@ export function MatchDesk({
 
       {/* Live intel popups — interrupt then settle; severity via left edge only */}
       {livePopups.length > 0 && (
-        <div className="absolute left-1/2 top-12 z-[60] flex w-[min(94%,26rem)] -translate-x-1/2 flex-col gap-2">
+        <div className="absolute left-1/2 top-12 z-[60] flex max-h-[min(70vh,34rem)] w-[min(94%,26rem)] -translate-x-1/2 flex-col gap-2 overflow-y-auto overscroll-contain pr-0.5">
           {livePopups.map((popup) => {
             const titleU = `${popup.title} ${popup.subtitle || ""}`.toUpperCase();
             const flashTier =

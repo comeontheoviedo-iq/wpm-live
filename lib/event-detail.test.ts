@@ -4,6 +4,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  buildDeskEventDetailSnapshot,
   buildGoalNarrativeHooks,
   findPreviousGoal,
 } from "./event-detail";
@@ -98,5 +99,96 @@ describe("formatTransferFee", () => {
     assert.equal(formatTransferFee("N/A"), "—");
     assert.equal(formatTransferFee(null), "—");
     assert.equal(formatTransferFee(""), "—");
+  });
+});
+
+describe("buildDeskEventDetailSnapshot sub ON/OFF", () => {
+  const squad = [
+    {
+      id: "on-1",
+      name: "Player On",
+      photoUrl: null,
+      apiFootballPlayerId: 1,
+      position: "MF",
+      birthDate: null,
+      age: 24,
+      goals: 1,
+      assists: 0,
+      goalsAllComps: 1,
+      assistsAllComps: 0,
+      appearances: 10,
+      yellowCards: 0,
+      redCards: 0,
+      matchGoals: 0,
+      matchAssists: 0,
+      noteHook: null,
+      side: "home" as const,
+      team: "Home",
+    },
+    {
+      id: "off-1",
+      name: "Player Off",
+      photoUrl: null,
+      apiFootballPlayerId: 2,
+      position: "MF",
+      birthDate: null,
+      age: 28,
+      goals: 2,
+      assists: 1,
+      goalsAllComps: 2,
+      assistsAllComps: 1,
+      appearances: 12,
+      yellowCards: 1,
+      redCards: 0,
+      matchGoals: 0,
+      matchAssists: 0,
+      noteHook: null,
+      side: "home" as const,
+      team: "Home",
+    },
+  ];
+
+  const baseOpts = {
+    kind: "sub" as const,
+    squad,
+    events: [] as { minute: number; type: string; description: string; teamSide?: string | null; playerId?: string | null }[],
+    matchStatus: "Live",
+    competitionName: "Premier League",
+    homeName: "Home",
+    awayName: "Away",
+    homeScore: 1,
+    awayScore: 0,
+  };
+
+  it("maps AF desc Out (In) with OFF playerId to distinct ON/OFF", () => {
+    const snap = buildDeskEventDetailSnapshot({
+      ...baseOpts,
+      event: {
+        type: "sub",
+        minute: 62,
+        description: "Substitution 1 — Player Off (Player On)",
+        teamSide: "home",
+        playerId: "off-1",
+      },
+    });
+    assert.equal(snap.playerOn?.id, "on-1");
+    assert.equal(snap.playerOff?.id, "off-1");
+    assert.notEqual(snap.playerOn?.id, snap.playerOff?.id);
+  });
+
+  it("does not treat ON playerId as OFF (coming on for himself)", () => {
+    const snap = buildDeskEventDetailSnapshot({
+      ...baseOpts,
+      event: {
+        type: "sub",
+        minute: 62,
+        description: "Substitution 1 — Player Off (Player On)",
+        teamSide: "home",
+        // Mistaken auto-open used to pass the ON id here
+        playerId: "on-1",
+      },
+    });
+    assert.equal(snap.playerOn?.id, "on-1");
+    assert.equal(snap.playerOff?.id, "off-1");
   });
 });

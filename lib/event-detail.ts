@@ -534,10 +534,26 @@ export function buildDeskEventDetailSnapshot(opts: {
     };
   }
 
-  // sub
+  // sub — AF: player = OFF, assist = ON; desc "… — Out (In)".
+  // Resolve ON/OFF from description names first. MatchEvent.playerId is the
+  // AF OFF player; never let a mistaken ON id make playerOff === playerOn
+  // (auto-open used to pass the ON id → "coming on for himself").
   const { outName, inName } = parseSubDescription(event.description);
-  const onP = findByIdOrName(null, inName);
-  const offP = findByIdOrName(event.playerId, outName);
+  const onP =
+    (inName
+      ? squad.find((p) => namesLooselyMatch(p.name, inName)) || null
+      : null);
+  let offP =
+    (outName
+      ? squad.find((p) => namesLooselyMatch(p.name, outName)) || null
+      : null);
+  if (!offP && event.playerId) {
+    const byId = squad.find((p) => p.id === event.playerId) || null;
+    if (byId && (!onP || byId.id !== onP.id)) offP = byId;
+  }
+  if (onP && offP && onP.id === offP.id) {
+    offP = null;
+  }
   const side =
     event.teamSide ||
     onP?.side ||

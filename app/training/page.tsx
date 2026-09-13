@@ -8,6 +8,8 @@ import {
   Check,
 } from "lucide-react";
 
+export const dynamic = "force-dynamic";
+
 const steps = [
   {
     n: "1",

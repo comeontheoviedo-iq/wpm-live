@@ -85,8 +85,8 @@ export default function TrainingPage() {
           </div>
           <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Training hub</h1>
           <p className="mt-3 text-slate-400 text-sm sm:text-base leading-relaxed">
-            Watch the Matchday Cut or the How-to below, then follow the written quick-start — Signup → plan → desk →
-            paste prep → organise → matchday.
+            Watch the Matchday Cut or Chris&apos;s how-to Loom below, then follow the written quick-start — Signup →
+            plan → desk → paste prep → organise → matchday.
           </p>
         </div>
 
@@ -123,7 +123,7 @@ export default function TrainingPage() {
             <div className="rounded-2xl border border-white/10 bg-gradient-to-b from-white/[0.04] to-transparent p-5">
               <div className="overflow-hidden rounded-xl border border-white/10 bg-[#05080f] aspect-video">
                 <video
-                  className="h-full w-full object-cover"
+                  className="h-full w-full object-contain"
                   controls
                   playsInline
                   preload="metadata"
@@ -139,7 +139,7 @@ export default function TrainingPage() {
                 How-to video
               </h3>
               <p className="mt-1 text-sm text-slate-500">
-                ~60s — signup, desk, Research dump, Notes/Scripts, live basics.
+                Chris&apos;s Loom — real CoComms training walkthrough (~17 min).
               </p>
               <span className="mt-3 inline-block rounded-full border border-teal-500/30 bg-teal-500/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-teal-300">
                 Live

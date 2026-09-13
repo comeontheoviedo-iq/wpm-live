@@ -55,6 +55,7 @@ export type PitchPlayer = {
   nationality?: string | null;
   birthCountry?: string | null;
   age?: number | null;
+  birthDate?: string | null;
   photoUrl?: string | null;
   apiFootballPlayerId?: number | null;
   heightCm?: number | null;

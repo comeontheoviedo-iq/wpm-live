@@ -3,11 +3,13 @@
 /**
  * Live AF events ticker for the desk.
  * Prefer feeding via sync `newEvents` so items appear before full refresh.
- * Broadcast-style leftward marquee (CSS), seamless loop, pause on hover.
+ * Broadcast-style leftward marquee (CSS), seamless loop, pause on hover / panel open.
  * Compact All/Goals/Cards/Subs filters + one pinned event slot.
+ * Chip click → event detail panel; pin glyph → pin slot (filters/pin preserved).
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Pin } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type ActionTickerItem = {
@@ -16,6 +18,7 @@ export type ActionTickerItem = {
   type: string;
   description: string;
   teamSide?: string | null;
+  playerId?: string | null;
 };
 
 export type ActionTickerFilter = "all" | "goals" | "cards" | "subs";
@@ -30,7 +33,7 @@ const FILTERS: { id: ActionTickerFilter; label: string }[] = [
 const FILTER_STORAGE = "cocomms.actionTicker.filter";
 const PIN_STORAGE_PREFIX = "cocomms.actionTicker.pin.";
 
-function eventStableKey(ev: ActionTickerItem): string {
+export function eventStableKey(ev: ActionTickerItem): string {
   return `${ev.minute}|${ev.type}|${ev.description}`;
 }
 
@@ -50,6 +53,10 @@ function matchesFilter(type: string, filter: ActionTickerFilter): boolean {
 
 function isGoalType(type: string): boolean {
   return /^(goal|penalty_goal|own_goal)$/i.test(type);
+}
+
+function isDetailType(type: string): boolean {
+  return /^(goal|penalty_goal|own_goal|yellow|red|sub)$/i.test(type);
 }
 
 function readFilter(): ActionTickerFilter {
@@ -97,41 +104,69 @@ function TickerChip({
   isFresh,
   pinned,
   onPin,
+  onOpen,
   interactive,
 }: {
   ev: ActionTickerItem;
   isFresh: boolean;
   pinned?: boolean;
   onPin?: () => void;
+  onOpen?: () => void;
   interactive?: boolean;
 }) {
+  const canOpen = Boolean(onOpen && isDetailType(ev.type));
   return (
-    <button
-      type="button"
-      onClick={interactive ? onPin : undefined}
-      title={
-        interactive
-          ? pinned
-            ? "Pinned — click to unpin"
-            : "Pin this event"
-          : undefined
-      }
+    <div
       className={cn(
-        "inline-flex shrink-0 items-baseline gap-1 rounded-md bg-[var(--surface-elevated)] px-2 py-0.5 text-left text-[11px] leading-tight ring-1 ring-[var(--border)] transition-colors",
+        "inline-flex shrink-0 items-baseline gap-0.5 rounded-md bg-[var(--surface-elevated)] py-0.5 pl-2 pr-0.5 text-left text-[11px] leading-tight ring-1 ring-[var(--border)] transition-colors",
         isFresh && "action-ticker-item-fresh ring-rose-400/50",
-        pinned && "action-ticker-item-pinned ring-amber-400/60",
-        interactive && "cursor-pointer hover:ring-[var(--foreground)]/25",
-        !interactive && "cursor-default"
+        pinned && "action-ticker-item-pinned ring-amber-400/60"
       )}
     >
-      <span className="font-semibold tabular-nums text-[var(--foreground)]">
-        {ev.minute}&apos;
-      </span>
-      <span className="uppercase tracking-wide text-[var(--muted)]">
-        {ev.type.replace(/_/g, " ")}
-      </span>
-      <span className="text-[var(--foreground)]/90">{ev.description}</span>
-    </button>
+      <button
+        type="button"
+        onClick={canOpen ? onOpen : interactive ? onPin : undefined}
+        title={
+          canOpen
+            ? "Open event detail"
+            : interactive
+              ? pinned
+                ? "Pinned — click pin to unpin"
+                : "Pin this event"
+              : undefined
+        }
+        className={cn(
+          "inline-flex items-baseline gap-1 rounded-sm text-left",
+          (canOpen || interactive) && "cursor-pointer hover:opacity-90",
+          !canOpen && !interactive && "cursor-default"
+        )}
+      >
+        <span className="font-semibold tabular-nums text-[var(--foreground)]">
+          {ev.minute}&apos;
+        </span>
+        <span className="uppercase tracking-wide text-[var(--muted)]">
+          {ev.type.replace(/_/g, " ")}
+        </span>
+        <span className="text-[var(--foreground)]/90">{ev.description}</span>
+      </button>
+      {interactive && onPin ? (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onPin();
+          }}
+          title={pinned ? "Unpin" : "Pin this event"}
+          aria-label={pinned ? "Unpin event" : "Pin event"}
+          className={cn(
+            "ml-0.5 rounded p-0.5 text-[var(--muted)] hover:bg-[var(--surface)] hover:text-amber-500",
+            pinned && "text-amber-500"
+          )}
+        >
+          <Pin className={cn("h-2.5 w-2.5", pinned && "fill-amber-400")} />
+        </button>
+      ) : null}
+    </div>
   );
 }
 
@@ -141,12 +176,14 @@ function TickerSegment({
   padKey,
   minWidth,
   onPin,
+  onOpen,
 }: {
   items: ActionTickerItem[];
   freshIds: Set<string>;
   padKey: string;
   minWidth: number;
   onPin: (ev: ActionTickerItem) => void;
+  onOpen?: (ev: ActionTickerItem) => void;
 }) {
   return (
     <div
@@ -160,6 +197,7 @@ function TickerSegment({
           isFresh={freshIds.has(ev.id)}
           interactive
           onPin={() => onPin(ev)}
+          onOpen={onOpen ? () => onOpen(ev) : undefined}
         />
       ))}
       <span
@@ -176,10 +214,15 @@ export function ActionTicker({
   items,
   emptyLabel = "No live actions yet",
   matchId,
+  paused,
+  onEventOpen,
 }: {
   items: ActionTickerItem[];
   emptyLabel?: string;
   matchId?: string;
+  /** Pause marquee (e.g. while event detail panel is open) */
+  paused?: boolean;
+  onEventOpen?: (ev: ActionTickerItem) => void;
 }) {
   const prevIdsRef = useRef<Set<string>>(new Set());
   const rootRef = useRef<HTMLDivElement>(null);
@@ -230,8 +273,6 @@ export function ActionTicker({
   useEffect(() => {
     if (!pinKey || !hydratedRef.current) return;
     if (items.some((i) => eventStableKey(i) === pinKey)) return;
-    // Keep pin key if items briefly empty during refresh; clear only when we have
-    // items but the pinned event is gone from the window.
     if (items.length > 0) setPinPersist(null);
   }, [items, pinKey, setPinPersist]);
 
@@ -245,7 +286,6 @@ export function ActionTicker({
     return filtered.filter((i) => eventStableKey(i) !== pinKey);
   }, [filtered, pinKey]);
 
-  // Keep each loop segment at least as wide as the viewport so short lists still scroll full-width
   useEffect(() => {
     const el = rootRef.current;
     if (!el) return;
@@ -256,13 +296,11 @@ export function ActionTicker({
     return () => ro.disconnect();
   }, [scrollItems.length, pinned?.id, filter]);
 
-  // ~3.5s per chip — readable at desk size; clamp so short lists aren't frantic
   const durationSec = useMemo(() => {
     const n = Math.max(scrollItems.length, 1);
     return Math.min(72, Math.max(22, n * 3.5));
   }, [scrollItems.length]);
 
-  // Remount track when set changes so new AF events enter the loop promptly
   const trackKey = useMemo(
     () => scrollItems.map((i) => i.id).join("|"),
     [scrollItems]
@@ -339,6 +377,7 @@ export function ActionTicker({
             pinned
             interactive
             onPin={() => setPinPersist(null)}
+            onOpen={onEventOpen ? () => onEventOpen(pinned) : undefined}
           />
           <button
             type="button"
@@ -370,20 +409,24 @@ export function ActionTicker({
 
       <div
         ref={rootRef}
-        className="action-ticker-root group relative min-w-0 flex-1 overflow-hidden"
+        className={cn(
+          "action-ticker-root group relative min-w-0 flex-1 overflow-hidden",
+          paused && "action-ticker-paused"
+        )}
         role="marquee"
       >
         {scrollItems.length === 0 ? (
           <div className="px-2 py-0.5 text-[11px] text-[var(--muted)]">
-            {filter === "all"
-              ? emptyLabel
-              : `No ${filter} in ticker`}
+            {filter === "all" ? emptyLabel : `No ${filter} in ticker`}
           </div>
         ) : (
           <div
             key={trackKey}
             className="action-ticker-track flex w-max items-center py-0.5"
-            style={{ animationDuration: `${durationSec}s` }}
+            style={{
+              animationDuration: `${durationSec}s`,
+              animationPlayState: paused ? "paused" : undefined,
+            }}
           >
             <TickerSegment
               items={scrollItems}
@@ -391,6 +434,7 @@ export function ActionTicker({
               padKey="a"
               minWidth={segMinWidth}
               onPin={handlePinToggle}
+              onOpen={onEventOpen}
             />
             <TickerSegment
               items={scrollItems}
@@ -398,6 +442,7 @@ export function ActionTicker({
               padKey="b"
               minWidth={segMinWidth}
               onPin={handlePinToggle}
+              onOpen={onEventOpen}
             />
           </div>
         )}

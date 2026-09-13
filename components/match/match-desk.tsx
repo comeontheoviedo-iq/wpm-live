@@ -52,6 +52,15 @@ import { FieldSettingsModal } from "@/components/match/field-settings-modal";
 import { HooksPosterOverlay } from "@/components/match/hooks-poster-overlay";
 import { EventTimeline } from "@/components/match/event-timeline";
 import { ActionTicker, type ActionTickerItem } from "@/components/match/action-ticker";
+import {
+  EventDetailPanelConnected,
+  eventDetailKey,
+  type EventDetailEnrichArgs,
+} from "@/components/match/event-detail-panel";
+import {
+  buildDeskEventDetailSnapshot,
+  eventDetailKind,
+} from "@/lib/event-detail";
 import { MatchStatisticsView } from "@/components/match/match-statistics";
 import { EventComposer } from "@/components/live/event-composer";
 import { Button } from "@/components/ui/button";
@@ -548,6 +557,7 @@ export function MatchDesk({
         type: e.type,
         description: e.description,
         teamSide: e.teamSide,
+        playerId: e.playerId,
       }));
   }
   const [tickerItems, setTickerItems] = useState<ActionTickerItem[]>(() =>
@@ -556,6 +566,46 @@ export function MatchDesk({
   useEffect(() => {
     setTickerItems(mapEventsToTicker(events));
   }, [events]);
+  type EventDetailFocus = {
+    key: string;
+    minute: number;
+    type: string;
+    description: string;
+    teamSide?: string | null;
+    playerId?: string | null;
+    source: "auto" | "ticker";
+  };
+  const [eventDetail, setEventDetail] = useState<EventDetailFocus | null>(null);
+  const [eventDetailPinned, setEventDetailPinned] = useState(false);
+  const openEventDetail = useCallback(
+    (
+      ev: {
+        minute: number;
+        type: string;
+        description: string;
+        teamSide?: string | null;
+        playerId?: string | null;
+      },
+      source: "auto" | "ticker"
+    ) => {
+      if (!eventDetailKind(ev.type)) return;
+      setEventDetail({
+        key: eventDetailKey(ev),
+        minute: ev.minute,
+        type: ev.type,
+        description: ev.description,
+        teamSide: ev.teamSide ?? null,
+        playerId: ev.playerId ?? null,
+        source,
+      });
+      setEventDetailPinned(source === "ticker");
+    },
+    []
+  );
+  const closeEventDetail = useCallback(() => {
+    setEventDetail(null);
+    setEventDetailPinned(false);
+  }, []);
   const [statsOverlayOpen, setStatsOverlayOpen] = useState(false);
 
   useEffect(() => {
@@ -1595,6 +1645,7 @@ export function MatchDesk({
                 type: e.type,
                 description: e.description,
                 teamSide: e.teamSide ?? null,
+                playerId: e.playerId ?? null,
               }));
               const seen = new Set<string>();
               const merged: ActionTickerItem[] = [];
@@ -1846,6 +1897,16 @@ export function MatchDesk({
                 };
                 lastGoalPopupRef.current = goalPopup;
                 pushPopup(goalPopup);
+                openEventDetail(
+                  {
+                    minute: e.minute,
+                    type: e.type,
+                    description: e.description,
+                    teamSide: (e as { teamSide?: string | null }).teamSide ?? null,
+                    playerId: newsPlayerId,
+                  },
+                  "auto"
+                );
                 // Live data-viz flash on goal — rotate shot map / timeline / xG
                 window.setTimeout(() => {
                   const idGuess = `${key}|`;
@@ -1892,6 +1953,16 @@ export function MatchDesk({
                   subtitle: onP?.name || inName || undefined,
                   lines: [...new Set(lines)].slice(0, 6),
                 });
+                openEventDetail(
+                  {
+                    minute: e.minute,
+                    type: e.type,
+                    description: e.description,
+                    teamSide: (e as { teamSide?: string | null }).teamSide ?? null,
+                    playerId: onP?.id || newsPlayerId,
+                  },
+                  "auto"
+                );
               } else if (/var|penalty_miss|red|yellow/i.test(e.type || "")) {
                 const relevantSnips = notesRef.current
                   .filter((n) => relevantNoteIdsRef.current.includes(n.id))
@@ -1910,6 +1981,18 @@ export function MatchDesk({
                   }).slice(0, 8),
                 };
                 pushPopup(cardPopup);
+                if (/^(yellow|red)$/i.test(e.type || "")) {
+                  openEventDetail(
+                    {
+                      minute: e.minute,
+                      type: e.type,
+                      description: e.description,
+                      teamSide: (e as { teamSide?: string | null }).teamSide ?? null,
+                      playerId: newsPlayerId,
+                    },
+                    "auto"
+                  );
+                }
                 if (/red|yellow/i.test(e.type || "")) {
                   window.setTimeout(() => {
                     const idGuess = `${key}|`;
@@ -2020,7 +2103,7 @@ export function MatchDesk({
         setBusy(false);
       }
     },
-    [apiFootballFixtureId, matchId, router, loadSuggestions, loadRelevantNotes, homeName, awayName, attachVizToPopup, pushLivePopup, homeClubId, awayClubId, status]
+    [apiFootballFixtureId, matchId, router, loadSuggestions, loadRelevantNotes, homeName, awayName, attachVizToPopup, pushLivePopup, homeClubId, awayClubId, status, openEventDetail, competition]
   );
 
   useEffect(() => {
@@ -2983,7 +3066,12 @@ export function MatchDesk({
       {/* Live action ticker — fed by SSR events + sync newEvents */}
       {(status === "Live" || status === "Half Time") && (
         <div className="mx-0.5">
-          <ActionTicker items={tickerItems} matchId={matchId} />
+          <ActionTicker
+            items={tickerItems}
+            matchId={matchId}
+            paused={Boolean(eventDetail)}
+            onEventOpen={(ev) => openEventDetail(ev, "ticker")}
+          />
         </div>
       )}
 
@@ -3131,6 +3219,98 @@ export function MatchDesk({
           })}
         </div>
       )}
+
+      {/* Big event detail panel — goal / card / sub */}
+      {eventDetail && eventDetailKind(eventDetail.type) && (() => {
+        const kind = eventDetailKind(eventDetail.type)!;
+        const snap = buildDeskEventDetailSnapshot({
+          kind,
+          event: {
+            type: eventDetail.type,
+            minute: eventDetail.minute,
+            description: eventDetail.description,
+            teamSide: eventDetail.teamSide ?? null,
+            playerId: eventDetail.playerId ?? null,
+          },
+          squad: squadRef.current.map((p) => ({
+            id: p.id,
+            name: p.name,
+            photoUrl: p.photoUrl,
+            apiFootballPlayerId: p.apiFootballPlayerId,
+            position: p.position,
+            birthDate: (p as { birthDate?: string | null }).birthDate,
+            age: p.age,
+            goals: p.goals,
+            assists: p.assists,
+            goalsAllComps: p.goalsAllComps,
+            assistsAllComps: p.assistsAllComps,
+            appearances: p.appearances,
+            yellowCards: p.yellowCards,
+            redCards: p.redCards,
+            matchGoals: p.matchGoals,
+            matchAssists: p.matchAssists,
+            noteHook: noteHookByPlayerRef.current[p.id] || p.noteHook || null,
+            side: p.side,
+            team: p.team,
+          })),
+          events: eventsRef.current,
+          matchStatus: status,
+          competitionName: competition,
+          leagueAfId: leagueIdForCompetition(competition),
+          homeName,
+          awayName,
+          homeScore: scoreRef.current.home,
+          awayScore: scoreRef.current.away,
+        });
+        const primary =
+          kind === "sub" ? snap.playerOn || snap.player : snap.player;
+        const side = (primary?.side ||
+          (eventDetail.teamSide === "home" || eventDetail.teamSide === "away"
+            ? eventDetail.teamSide
+            : null)) as "home" | "away" | null;
+        const teamAfId =
+          side === "home"
+            ? homeTeamAfId
+            : side === "away"
+              ? awayTeamAfId
+              : null;
+        const opponentName =
+          side === "home" ? awayName : side === "away" ? homeName : null;
+        const enrichArgs: EventDetailEnrichArgs = {
+          kind,
+          type: eventDetail.type,
+          playerId: primary?.id || eventDetail.playerId || null,
+          afPlayerId: primary?.apiFootballPlayerId ?? null,
+          teamAfId: teamAfId ?? null,
+          opponentName,
+          matchStatus: status,
+          inMatchGoals: primary?.matchGoals || (kind === "goal" ? 1 : 0),
+          inMatchAssists:
+            kind === "goal" && snap.assister
+              ? snap.assister.matchAssists || 1
+              : 0,
+          inMatchYellows: kind === "yellow" ? 1 : 0,
+          inMatchReds: kind === "red" ? 1 : 0,
+          includeForm: kind === "goal" || kind === "sub",
+        };
+        // For assist enrich on goals we only enrich scorer; assist tallies from desk/enrich scorer path
+        if (kind === "goal" && snap.assister && !enrichArgs.inMatchAssists) {
+          enrichArgs.inMatchAssists = 0;
+        }
+        return (
+          <div className="pointer-events-none absolute left-1/2 top-[4.5rem] z-[70] flex w-full -translate-x-1/2 justify-center px-2">
+            <EventDetailPanelConnected
+              matchId={matchId}
+              snapshot={snap}
+              enrichArgs={enrichArgs}
+              autoDismiss={eventDetail.source === "auto" && !eventDetailPinned}
+              pinned={eventDetailPinned}
+              onPinToggle={() => setEventDetailPinned((v) => !v)}
+              onClose={closeEventDetail}
+            />
+          </div>
+        );
+      })()}
 
       {/* Placing toast */}
       {placing && (

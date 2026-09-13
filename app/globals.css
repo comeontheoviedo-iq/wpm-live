@@ -2696,6 +2696,16 @@ body.obs-overlay-active {
 .action-ticker-root:hover .action-ticker-track {
   animation-play-state: paused;
 }
+
+.action-ticker-root.action-ticker-paused .action-ticker-track {
+  animation-play-state: paused;
+}
+
+/* Big live event detail panel */
+.event-detail-panel {
+  animation: live-flash-in var(--duration-flash, 0.35s) var(--ease-out, ease-out) both;
+}
+
 @keyframes action-ticker-marquee {
   from { transform: translate3d(0, 0, 0); }
   to { transform: translate3d(-50%, 0, 0); }

@@ -318,9 +318,9 @@ function matchPlayerLoose(
       }
       continue;
     }
-    // Surname token in cleaned heading
+    // Surname token in cleaned heading (len>=3 so Aye/Ali hit; token equality only)
     const sur = lastToken(p.name);
-    if (sur.length >= 4) {
+    if (sur.length >= 3) {
       const tokens = normalizePlayerKey(cleaned).split(" ");
       if (tokens.includes(sur)) {
         const score = sur.length;
@@ -937,7 +937,10 @@ export function organiseNotebookPack(args: OrganiseArgs): OrganisedPack {
   for (const h of hookItems) {
     for (const p of players) {
       const sur = lastToken(p.name);
-      if (sur.length >= 4 && normalizePlayerKey(h.body).includes(sur)) {
+      // Whole-token only (len>=3) so short surnames like Aye attach without
+      // substring false positives ("daye"/"maybe").
+      const bodyTokens = normalizePlayerKey(h.body).split(" ").filter(Boolean);
+      if (sur.length >= 3 && bodyTokens.includes(sur)) {
         const title = `${p.name} — Hook`;
         // Upsert-friendly single player hook note — merge later by title
         const existing = notes.find(

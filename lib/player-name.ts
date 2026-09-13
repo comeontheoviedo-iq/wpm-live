@@ -1,15 +1,34 @@
 /** Loose player-name matching for AF ↔ desk (e.g. "Lawrence Shankland" ↔ "L. Shankland"). */
 
+/**
+ * Fold both sides the same way before compare:
+ * NFKD + strip combining marks + Turkish İ/I/ı/i + ß + casefold.
+ *
+ * Critical: Turkish dotless ı (U+0131) does NOT NFD-decompose. The old path
+ * lowercased then stripped non-[a-z], turning "Çakır"/"Yılmaz" into
+ * "cak r"/"y lmaz" so they missed ASCII research headings like "Cakir"/"Yilmaz".
+ * Other accents (é, ü, ö, ç, ş, ğ, …) already decomposed — which is why
+ * "some accented names worked" while ı-names did not.
+ */
 export function normalizePlayerKey(name: string): string {
-  return name
-    .toLowerCase()
-    // German ß is not NFD-decomposed; fold to ss before stripping non-ascii
-    .replace(/ß/g, "ss")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  return (
+    name
+      // German ß/ẞ are not usefully NFD-decomposed for matching
+      .replace(/ß/g, "ss")
+      .replace(/ẞ/g, "ss")
+      // Turkish I-family BEFORE casefold — JS default toLowerCase leaves ı as
+      // non-a-z (→ space) and maps İ → i+combining-dot (ok after strip, but
+      // fold explicitly so both sides always meet on ASCII "i").
+      .replace(/İ/g, "i")
+      .replace(/I/g, "i")
+      .replace(/ı/g, "i")
+      .toLowerCase()
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9\s]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+  );
 }
 
 export function lastToken(name: string): string {

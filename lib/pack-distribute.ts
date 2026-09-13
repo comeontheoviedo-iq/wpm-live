@@ -1,4 +1,4 @@
-import { namesLooselyMatch, normalizePlayerKey } from "./player-name";
+import { namesLooselyMatch, normalizePlayerKey, lastToken } from "./player-name";
 
 /** Parse Gemini pack text into per-entity notes. Resilient: partial matches OK. */
 
@@ -52,18 +52,12 @@ export function formatDistributeSummary(d: DistributedCounts): string {
 }
 
 function normalize(s: string) {
-  return s
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  // Same fold as AF ↔ desk matching (Turkish ı, NFKD, …).
+  return normalizePlayerKey(s);
 }
 
 function surname(name: string) {
-  const parts = name.trim().split(/\s+/);
-  return parts[parts.length - 1] || name;
+  return lastToken(name) || name;
 }
 
 /** Split markdown/plain text into heading → body sections.

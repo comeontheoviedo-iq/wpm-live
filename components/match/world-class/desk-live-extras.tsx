@@ -10,7 +10,7 @@ import { DeskHotkeyHelp } from "./desk-hotkey-help";
 import { deriveLiveBanners, type BannerEvent, type SquadLite } from "@/lib/live-banners";
 
 const BANNER_TTL_MS: Record<string, number> = {
-  one_away: 18_000,
+  one_away: 20_000,
   var: 20_000,
   pens: 0, // keep while pens mode
 };

@@ -51,11 +51,12 @@ export type EventDetailEnrich = {
   formSampleSize?: number;
 };
 
+/** Auto-open dwell: 20s then dismiss (user can close earlier; pin pauses auto-dismiss). */
 const AUTO_MS: Record<EventDetailKind, number> = {
-  goal: 16_000,
-  yellow: 14_000,
-  red: 16_000,
-  sub: 14_000,
+  goal: 20_000,
+  yellow: 20_000,
+  red: 20_000,
+  sub: 20_000,
 };
 
 function kindLabel(kind: EventDetailKind, type: string): string {
@@ -158,7 +159,7 @@ export function EventDetailPanel({
 
   useEffect(() => {
     if (!autoDismiss || pinned || hovered) return;
-    const t = window.setTimeout(() => onClose(), AUTO_MS[kind] || 14_000);
+    const t = window.setTimeout(() => onClose(), AUTO_MS[kind] || 20_000);
     return () => window.clearTimeout(t);
   }, [autoDismiss, pinned, hovered, kind, onClose, snapshot.minute, snapshot.description]);
 

@@ -1362,8 +1362,8 @@ export function MatchDesk({
         return next;
       });
       if (ttlMs > 0) {
-        // force:true so pinned cards still expire (or auto-unpin via force dismiss)
-        window.setTimeout(() => dismissLivePopup(id, { force: true }), ttlMs);
+        // Respect pin: auto-dismiss only if still unpinned when TTL fires.
+        window.setTimeout(() => dismissLivePopup(id), ttlMs);
       }
       return id;
     },
@@ -1662,7 +1662,7 @@ export function MatchDesk({
               .map((e) => `${e.minute}' ${e.description}`)
               .join(" · ");
             setFlash(`${news.length} new: ${top}`);
-            setTimeout(() => setFlash(null), 8000);
+            setTimeout(() => setFlash(null), 20_000);
             const actionable = news.filter((e) =>
               /goal|yellow|red|sub|penalty/i.test(e.type || "")
             );
@@ -1717,7 +1717,7 @@ export function MatchDesk({
                 const id = `${key}|${Date.now()}`;
                 pushLivePopup(
                   { ...popup, id },
-                  popup.kind === "goal" ? 15_000 : 12_000
+                  20_000
                 );
               };
 
@@ -2046,7 +2046,7 @@ export function MatchDesk({
                   lines: fl.lines.slice(0, 6),
                   scoreline: `${homeName} ${scoreRef.current.home}–${scoreRef.current.away} ${awayName}`,
                 },
-                12_000
+                20_000
               );
               window.setTimeout(() => {
                 void attachVizToPopup(
@@ -2077,7 +2077,7 @@ export function MatchDesk({
                   ],
                   scoreline: `${homeName} ${scoreRef.current.home}–${scoreRef.current.away} ${awayName}`,
                 },
-                18_000
+                20_000
               );
               window.setTimeout(() => {
                 void attachVizToPopup(id, "match_dna", "ht");
@@ -2417,7 +2417,7 @@ export function MatchDesk({
         ],
         scoreline: `${homeName} ${homeScore}–${awayScore} ${awayName}`,
       },
-      16_000
+      20_000
     );
     window.setTimeout(() => void attachVizToPopup(id, "xg_race", "ht"), 100);
   }, [isHalfTime, status, homeName, awayName, homeScore, awayScore, attachVizToPopup, pushLivePopup]);
@@ -2463,7 +2463,7 @@ export function MatchDesk({
         lines: lines.slice(0, 6),
         scoreline: `${homeName} ${homeScore}–${awayScore} ${awayName}`,
       },
-      10_000
+      20_000
     );
     // Rotate viz: HT chain vs moment chain (soft-fail + dedupe recent kinds)
     window.setTimeout(() => {

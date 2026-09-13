@@ -85,7 +85,7 @@ export function FeedBanner({
         const news = (json.newEvents || []) as { minute: number; description: string }[];
         if (news.length) {
           setFlash(`${news.length} new · ${news.slice(0, 2).map((e: {minute:number;description:string}) => `${e.minute}' ${e.description}`).join(" · ")}`);
-          setTimeout(() => setFlash(null), 8000);
+          setTimeout(() => setFlash(null), 20_000);
         }
         setMsg(
           silent

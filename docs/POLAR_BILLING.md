@@ -19,10 +19,13 @@ Copy brand: **CoComms** only (no Gemini / OBS / BYO / Speaks on Pricing).
 
 | Piece | Status |
 |-------|--------|
-| Checkout / portal / webhook routes | **Scaffolded in repo** (`/api/billing/*`, `/api/billing/polar/webhook`) |
+| Checkout / portal / webhook routes | **Live in repo** (`/api/billing/*`, `/api/billing/polar/webhook`) |
 | Provider switch | Polar → Stripe → app-side trial |
-| Product IDs + access token on Netlify | **Blocked on Chris** — paste secrets (never commit) |
-| Real charged checkouts | **Blocked** until Polar org + products + webhook secret exist |
+| Org | **Ronnie Dog Media** (`ronnie-dog-media`) — default presentment **GBP** |
+| Products | **Created** — Unlimited £22/mo + 14d trial; Pass 1 £8 / 5 £25 / 10 £30 |
+| Webhook endpoint | **Live** → `https://www.cocomms.online/api/billing/polar/webhook` |
+| Product IDs + access token + webhook secret on Netlify | **Set on pitchline-app production** (never commit secrets) |
+| Real charged checkouts | **Ready for Chris smoke test** (card-upfront trial on Unlimited) |
 
 ## Chris must… (checklist)
 
@@ -106,3 +109,15 @@ Prints product UUIDs to paste into Netlify. Does nothing without a real token.
 
 Existing Stripe price ids and routes remain. As soon as `POLAR_ACCESS_TOKEN` +
 `POLAR_PRODUCT_UNLIMITED` are set, Checkout and Manage billing use Polar only.
+
+
+## Production product IDs (safe to share)
+
+```
+POLAR_PRODUCT_UNLIMITED=c463ee10-0c73-4968-ae00-e0f5e4c2e31e
+POLAR_PRODUCT_PASS_1=80ae93bc-a45a-496e-900d-72ef5233f3fd
+POLAR_PRODUCT_PASS_5=b759f291-78cd-47b0-a3ad-62403a237586
+POLAR_PRODUCT_PASS_10=3b6e02a2-f90e-4570-b99c-00fb2a3c41a4
+```
+
+Webhook endpoint id: `038933a1-35f8-49d6-bd3d-336c86a44c72` (secret only on Netlify).

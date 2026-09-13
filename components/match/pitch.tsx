@@ -351,7 +351,7 @@ function PitchCardToken({
   const namePx = 9 * scaleFactor(cardSettings.nameSizePct);
   // Preferred craft size (floor 9 via settings); autofit may shrink below for long surnames.
   const preferredNamePx = Math.max(namePx, 9);
-  const nameText = `${player.isCaptain ? "© " : ""}${fieldName}`;
+  const nameText = fieldName;
   const { ref: nameRef, fontPx: fitNamePx } = useTokenNameAutoFit(
     nameText,
     preferredNamePx,
@@ -499,6 +499,11 @@ function PitchCardToken({
               className="pitch-token-photo"
               style={{ boxShadow: `inset 0 0 0 1px ${accent}55` }}
             >
+              {player.isCaptain ? (
+                <span className="pitch-token-captain" title="Captain" aria-label="Captain">
+                  C
+                </span>
+              ) : null}
               {photo ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -783,6 +788,7 @@ export function PitchBoard({
   onAirMode,
   onFreePlace,
   onCoachClick,
+  onRefereeClick,
   hasCustomPlacements,
   onResetPlacements,
 }: {
@@ -864,6 +870,7 @@ export function PitchBoard({
     pitchY: number;
   }) => void;
   onCoachClick?: (side: "home" | "away") => void;
+  onRefereeClick?: () => void;
   hasCustomPlacements?: boolean;
   onResetPlacements?: () => void;
 }) {
@@ -2042,26 +2049,32 @@ export function PitchBoard({
               const showFlag = rc.showFlag !== false;
               const showPrefix = rc.showPrefix !== false;
               const namePx = 9 * scaleFactor(rc.nameSizePct ?? 0);
-              const Comp = onOpenFieldSettings ? "button" : "div";
+              const clickable = Boolean(onRefereeClick || onOpenFieldSettings);
+              const Comp = clickable ? "button" : "div";
               return (
                 <>
                   <Comp
-                    type={onOpenFieldSettings ? "button" : undefined}
+                    type={clickable ? "button" : undefined}
                     onClick={
-                      onOpenFieldSettings
-                        ? () => onOpenFieldSettings("referee")
-                        : undefined
+                      onRefereeClick
+                        ? () => onRefereeClick()
+                        : onOpenFieldSettings
+                          ? () => onOpenFieldSettings("referee")
+                          : undefined
                     }
                     title={
-                      onOpenFieldSettings
-                        ? `Edit referee card · ${referee}`
-                        : referee
+                      onRefereeClick
+                        ? `Open ${referee} referee profile`
+                        : onOpenFieldSettings
+                          ? `Edit referee card · ${referee}`
+                          : referee
                     }
                     className={cn(
                       "pitch-overlay-chip-dark flex max-w-[14rem] items-center gap-1 rounded-full px-1.5 py-0.5",
-                      onOpenFieldSettings &&
+                      clickable &&
                         "pointer-events-auto cursor-pointer hover:ring-2 hover:ring-teal-400/50"
                     )}
+                    data-referee-card="1"
                   >
                     {showFlag ? (
                       <FlagImg

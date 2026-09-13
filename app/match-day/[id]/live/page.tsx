@@ -46,7 +46,9 @@ export default async function LivePage({
     pinned: n.pinned,
   }));
 
-  const referee = match.officials.find((o) => o.role === "Referee")?.official.name;
+  const refOfficial = match.officials.find((o) => o.role === "Referee")?.official;
+  const referee = refOfficial?.name;
+  const refereeNationality = refOfficial?.nationality ?? null;
 
   return (
     <div className="space-y-4">
@@ -101,6 +103,7 @@ export default async function LivePage({
             homeCoach={match.homeClub.coaches[0]}
             awayCoach={match.awayClub.coaches[0]}
             referee={referee}
+            refereeNationality={refereeNationality}
             lineupStatus={match.lineupStatus}
             notes={notes}
           />

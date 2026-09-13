@@ -67,7 +67,9 @@ function isEntityScoped(entityType?: string | null): boolean {
     entityType === "club" ||
     entityType === "team" ||
     entityType === "league" ||
-    entityType === "venue"
+    entityType === "venue" ||
+    entityType === "referee" ||
+    entityType === "official"
   );
 }
 
@@ -218,7 +220,7 @@ export function NotesPanel({
     if (entityId && entityType === "player") {
       if (n.entityId !== entityId) return false;
     }
-    // entityType === "coach": parent (match-desk) already narrows initialNotes
+    // entityType === "coach" / "referee": parent (match-desk) already narrows initialNotes
     if (entityType === "club" || entityType === "team") {
       if (n.entityType !== "club" && n.entityType !== "team") return false;
       if (entityId && n.entityId !== entityId) return false;

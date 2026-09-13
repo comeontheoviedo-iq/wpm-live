@@ -885,14 +885,14 @@ export function organiseNotebookPack(args: OrganiseArgs): OrganisedPack {
     });
   }
 
-  // Referee
+  // Referee — entityType referee so desk card / NotesPanel can scope it
   const refBody = refereeChunks.join("\n\n").trim();
   if (refBody.length >= 40) {
     notes.push({
       title: "Referee",
       body: refBody,
       category: "Match",
-      entityType: "match",
+      entityType: "referee",
       entityId: matchId,
     });
   }

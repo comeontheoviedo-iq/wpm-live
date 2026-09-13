@@ -22,6 +22,8 @@ export default async function MatchOverviewPage({
   const refOfficial = match.officials.find((o) => o.role === "Referee")?.official;
   const referee = refOfficial?.name;
   const refereeNationality = refOfficial?.nationality ?? null;
+  const refereeId = refOfficial?.id ?? null;
+  const refereeAge = refOfficial?.age ?? null;
 
   const packCount = await prisma.packSection.count({ where: { matchId: match.id } });
 
@@ -66,6 +68,8 @@ export default async function MatchOverviewPage({
       awayCoach={match.awayClub.coaches[0]}
       referee={referee}
       refereeNationality={refereeNationality}
+      refereeId={refereeId}
+      refereeAge={refereeAge}
       lineupStatus={match.lineupStatus}
       apiFootballFixtureId={match.apiFootballFixtureId}
       lastFeedSyncAt={match.lastFeedSyncAt}

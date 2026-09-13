@@ -469,4 +469,60 @@ export function noteMatchesCoachCard(
   return false;
 }
 
+
+/**
+ * Referee card on the desk — Research "Referee" / officials notes, or
+ * notes that name this official. Never invent career stats.
+ */
+export function noteMatchesRefereeCard(
+  n: NotesBucketNote,
+  opts: {
+    officialId?: string | null;
+    refereeName?: string | null;
+  }
+): boolean {
+  if (opts.officialId && n.entityId === opts.officialId) return true;
+  if (
+    (n.entityType === "referee" || n.entityType === "official") &&
+    (!opts.officialId || !n.entityId || n.entityId === opts.officialId)
+  ) {
+    return true;
+  }
+
+  const title = (n.title || "").trim();
+  const hay = `${n.title || ""} ${n.body || ""} ${n.category || ""}`;
+  const hayNorm = normalizePlayerKey(hay);
+  const titleNorm = normalizePlayerKey(title);
+  const nameNorm = normalizePlayerKey(opts.refereeName || "");
+  const sur = lastToken(opts.refereeName || "");
+
+  const dedicatedRefTitle =
+    /^referee(\s|$|—|-|:)/i.test(title) ||
+    /match officials|referee watch|ref(eree)?\s*(profile|cards?|paragraph)/i.test(
+      title
+    );
+
+  const nameHit =
+    Boolean(nameNorm) &&
+    ((nameNorm.length >= 4 &&
+      (hayNorm.includes(nameNorm) || titleNorm.includes(nameNorm))) ||
+      (sur.length >= 4 &&
+        (titleNorm === sur ||
+          titleNorm.split(" ").includes(sur) ||
+          hayNorm.split(" ").includes(sur) ||
+          hayNorm.includes(sur))));
+
+  // Organiser writes title "Referee" on entityType match — always show on card
+  if (dedicatedRefTitle) return true;
+
+  if (
+    nameHit &&
+    /referee|officials?|\bvar\b|cards?\s*profile|whistle/i.test(hay)
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 export const NOTES_BUCKET_ORDER = BUCKET_ORDER;

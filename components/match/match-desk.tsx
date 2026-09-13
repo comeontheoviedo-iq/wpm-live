@@ -33,7 +33,7 @@ import {
   type NoteRow,
   type NotesFilterScope,
 } from "@/components/notes/notes-panel";
-import { defaultNotesBucket, noteMatchesCoachCard } from "@/lib/notes-buckets";
+import { defaultNotesBucket, noteMatchesCoachCard, noteMatchesRefereeCard } from "@/lib/notes-buckets";
 import {
   RELEVANT_CAP,
   RELEVANT_TTL_MS,
@@ -380,6 +380,8 @@ export function MatchDesk({
   awayCoach,
   referee,
   refereeNationality,
+  refereeId = null,
+  refereeAge = null,
   lineupStatus,
   apiFootballFixtureId,
   lastFeedSyncAt,
@@ -435,6 +437,8 @@ export function MatchDesk({
   awayCoach?: Coach | null;
   referee?: string;
   refereeNationality?: string | null;
+  refereeId?: string | null;
+  refereeAge?: number | null;
   lineupStatus: string;
   apiFootballFixtureId: number | null;
   lastFeedSyncAt: string | Date | null;
@@ -498,6 +502,7 @@ export function MatchDesk({
   const [intelHistory, setIntelHistory] = useState<LivePopup[]>([]);
   const [intelHistoryOpen, setIntelHistoryOpen] = useState(false);
   const [coachSide, setCoachSide] = useState<"home" | "away" | null>(null);
+  const [refereeOpen, setRefereeOpen] = useState(false);
   const seenEventKeysRef = useRef<Set<string>>(new Set());
   const livePopupsRef = useRef<LivePopup[]>([]);
   const intelHistoryRef = useRef<LivePopup[]>([]);
@@ -722,6 +727,7 @@ export function MatchDesk({
   const [deskDensity, setDeskDensity] = useState<DeskDensity>("compact");
   const [dossierTab, setDossierTab] = useState<"overview" | "notes">("overview");
   const [coachTab, setCoachTab] = useState<"overview" | "notes">("overview");
+  const [refereeTab, setRefereeTab] = useState<"overview" | "notes">("overview");
   const [hooksPosterOpen, setHooksPosterOpen] = useState(false);
   const [hooksPosterExists, setHooksPosterExists] = useState(false);
   const [hooksPosterSrc, setHooksPosterSrc] = useState<string | null>(null);
@@ -3444,7 +3450,16 @@ export function MatchDesk({
               onResetPlacements={
                 hasCustomPlacements ? () => void resetPlacements() : undefined
               }
-              onCoachClick={(side) => { setCoachTab("overview"); setCoachSide(side); }}
+              onCoachClick={(side) => { setCoachTab("overview"); setCoachSide(side); setRefereeOpen(false); }}
+              onRefereeClick={
+                referee
+                  ? () => {
+                      setCoachSide(null);
+                      setRefereeTab("overview");
+                      setRefereeOpen(true);
+                    }
+                  : undefined
+              }
               homeScore={homeScore}
               awayScore={awayScore}
               minute={liveMinute}
@@ -3881,6 +3896,200 @@ export function MatchDesk({
                       entityId={coachId}
                       entityLabel={c.name}
                       initialNotes={coachNotes}
+                      fillHeight
+                    />
+                  )}
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
+
+      {refereeOpen && referee && (
+        <div className="fixed inset-y-0 right-0 z-50 w-full max-w-md shadow-lg border-l border-[var(--border)] bg-[var(--surface)] flex flex-col" data-referee-dossier="1">
+          <div className="shrink-0 flex items-start justify-between gap-3 border-b border-slate-200 dark:border-slate-800 px-4 py-3">
+            <div className="min-w-0">
+              <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                Referee profile
+              </div>
+              <div className="flex items-center gap-2 min-w-0">
+                <h2 className="text-lg font-bold text-slate-900 dark:text-white truncate">
+                  {referee}
+                </h2>
+                <SpeakNameButton
+                  text={referee}
+                  nationality={refereeNationality}
+                  className="!text-slate-600 dark:!text-slate-300 !border-slate-200 dark:!border-slate-700 !bg-white dark:!bg-slate-900"
+                />
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Match official
+                {refereeNationality ? ` · ${refereeNationality}` : ""}
+                {refereeAge != null ? ` · ${refereeAge}y` : ""}
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                className="rounded-md border border-teal-200 dark:border-teal-900 bg-teal-50 dark:bg-teal-950/40 px-2 py-1 text-xs font-semibold text-teal-800 dark:text-teal-200"
+                onClick={() => {
+                  setRefereeOpen(false);
+                  openFieldSettings("referee");
+                }}
+                title="Edit referee chip chrome (Field Settings)"
+              >
+                Edit card
+              </button>
+              <button
+                type="button"
+                className="rounded-md border border-slate-200 dark:border-slate-700 px-2 py-1 text-xs"
+                onClick={() => setRefereeOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-4">
+            {(() => {
+              const officialKey = refereeId || "referee";
+              const refereeNotes = notes.filter((n) =>
+                noteMatchesRefereeCard(n, {
+                  officialId: refereeId,
+                  refereeName: referee,
+                })
+              );
+              const refereeTabs = (
+                <div className="flex gap-1 border-b border-slate-200 dark:border-slate-800 pb-2" role="tablist" aria-label="Referee profile">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={refereeTab === "overview"}
+                    className={
+                      refereeTab === "overview"
+                        ? "rounded-md bg-teal-50 dark:bg-teal-950/40 px-2.5 py-1 text-xs font-semibold text-teal-800 dark:text-teal-200"
+                        : "rounded-md px-2.5 py-1 text-xs font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                    }
+                    onClick={() => setRefereeTab("overview")}
+                  >
+                    Overview
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={refereeTab === "notes"}
+                    className={
+                      refereeTab === "notes"
+                        ? "rounded-md bg-teal-50 dark:bg-teal-950/40 px-2.5 py-1 text-xs font-semibold text-teal-800 dark:text-teal-200"
+                        : "rounded-md px-2.5 py-1 text-xs font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                    }
+                    onClick={() => setRefereeTab("notes")}
+                  >
+                    Notes{refereeNotes.length ? ` (${refereeNotes.length})` : ""}
+                  </button>
+                </div>
+              );
+              return (
+                <>
+                  <div className="flex items-center gap-3">
+                    <div className="relative h-14 w-14 rounded-md overflow-hidden flex items-center justify-center text-white text-lg font-bold ring-1 ring-black/10 bg-slate-700">
+                      <span className="relative z-0">
+                        {(referee || "?")
+                          .split(" ")
+                          .map((w) => w[0])
+                          .slice(0, 2)
+                          .join("")}
+                      </span>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="font-bold text-base truncate">{referee}</div>
+                        <SpeakNameButton
+                          text={referee}
+                          nationality={refereeNationality}
+                          className="!text-slate-600 dark:!text-slate-300 !border-slate-200 dark:!border-slate-700 !bg-white dark:!bg-slate-900"
+                        />
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        {[
+                          "Referee",
+                          refereeNationality || null,
+                          refereeAge != null ? `${refereeAge}y` : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    Factual match official only — no invented career stats.
+                  </p>
+                  {refereeTabs}
+                  {refereeTab === "overview" ? (
+                    <>
+                      {(() => {
+                        const hook =
+                          refereeNotes.find(
+                            (n) =>
+                              /^referee$/i.test(n.title || "") ||
+                              /hook|scout|verdict|sayable|cards?|official/i.test(
+                                n.title || ""
+                              ) ||
+                              /hook|scout|verdict|referee/i.test(n.category || "")
+                          ) ||
+                          refereeNotes.find((n) => (n.body || "").trim()) ||
+                          null;
+                        const line = hook
+                          ? (hook.title || "").trim() ||
+                            (hook.body || "").split("\n")[0].trim()
+                          : [
+                              referee,
+                              "Referee",
+                              refereeNationality || null,
+                              refereeAge != null ? `${refereeAge}y` : null,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ");
+                        const sub = hook?.body
+                          ? hook.body
+                              .trim()
+                              .split("\n")
+                              .slice(hook.title ? 0 : 1, 2)
+                              .join(" ")
+                              .slice(0, 180)
+                          : null;
+                        return (
+                          <VerdictBlock
+                            line={line}
+                            sub={sub}
+                            fullBody={hook?.body || null}
+                          />
+                        );
+                      })()}
+                      {refereeNotes.length === 0 ? (
+                        <p className="text-xs text-slate-500">
+                          No referee notes linked yet. Research organise notes titled
+                          &quot;Referee&quot; appear here when present.
+                        </p>
+                      ) : (
+                        <NotesPanel
+                          matchId={matchId}
+                          entityType="referee"
+                          entityId={officialKey}
+                          entityLabel={referee}
+                          initialNotes={refereeNotes}
+                          readOnly
+                        />
+                      )}
+                    </>
+                  ) : (
+                    <NotesPanel
+                      matchId={matchId}
+                      entityType="referee"
+                      entityId={officialKey}
+                      entityLabel={referee}
+                      initialNotes={refereeNotes}
                       fillHeight
                     />
                   )}

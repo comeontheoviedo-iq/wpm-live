@@ -6,6 +6,7 @@ import { PitchBoard, type PitchPlayer } from "@/components/match/pitch";
 import type { MatchKitColors } from "@/lib/kit-colors";
 import { NotesPanel, type NoteRow } from "@/components/notes/notes-panel";
 import { PlayerDossier } from "@/components/match/player-dossier";
+import { noteMatchesRefereeCard } from "@/lib/notes-buckets";
 
 type Coach = {
   name: string;
@@ -29,6 +30,7 @@ export function LivePitch({
   homeCoach,
   awayCoach,
   referee,
+  refereeNationality = null,
   lineupStatus,
   notes,
 }: {
@@ -46,11 +48,13 @@ export function LivePitch({
   homeCoach?: Coach | null;
   awayCoach?: Coach | null;
   referee?: string;
+  refereeNationality?: string | null;
   lineupStatus: string;
   notes: NoteRow[];
 }) {
   const router = useRouter();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [refereeOpen, setRefereeOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -169,8 +173,20 @@ export function LivePitch({
         homeCoach={homeCoach}
         awayCoach={awayCoach}
         referee={referee}
+        refereeNationality={refereeNationality}
         lineupStatus={lineupStatus}
-        onPlayerClick={(p) => setSelectedId(p.id)}
+        onPlayerClick={(p) => {
+          setRefereeOpen(false);
+          setSelectedId(p.id);
+        }}
+        onRefereeClick={
+          referee
+            ? () => {
+                setSelectedId(null);
+                setRefereeOpen(true);
+              }
+            : undefined
+        }
         onSlotDrop={busy ? undefined : onSlotDrop}
         onSlotClick={onSlotClick}
         onClearSlot={onClearSlot}
@@ -207,6 +223,41 @@ export function LivePitch({
             onClose={() => setSelectedId(null)}
           />
         </>
+      )}
+      {refereeOpen && referee && (
+        <div
+          className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] p-3 space-y-2"
+          data-referee-dossier="1"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                Referee profile
+              </div>
+              <div className="font-bold text-sm truncate">{referee}</div>
+              <p className="text-xs text-slate-500">
+                {[refereeNationality, "Match official"].filter(Boolean).join(" · ")}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="rounded-md border border-slate-200 dark:border-slate-700 px-2 py-1 text-xs"
+              onClick={() => setRefereeOpen(false)}
+            >
+              Close
+            </button>
+          </div>
+          <NotesPanel
+            matchId={matchId}
+            entityType="referee"
+            entityId="referee"
+            entityLabel={referee}
+            initialNotes={notes.filter((n) =>
+              noteMatchesRefereeCard(n, { refereeName: referee })
+            )}
+            compact
+          />
+        </div>
       )}
     </div>
   );

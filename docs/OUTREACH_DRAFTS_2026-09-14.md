@@ -143,3 +143,23 @@ Same issue — five screens / 20 tabs mid-game. I’ve been using CoComms (comme
 | Facebook | One C1 **or** C2 once Chris names group/page |
 
 Prospect list (LinkedIn names) is a separate step — approve these templates first so tomorrow isn’t blocked on copy.
+
+---
+
+## E. Enterprise / commercial license (TalkSport, DAZN, etc.)
+
+### E1 — Soft intro
+
+```
+Hi [name] — I saw you work with football/soccer commentary talent at [org].
+
+I built CoComms, a commentary co-pilot for matchday: commentators bring their notes and voice; we file notes in the right places and keep the live match desk in one screen so they’re not managing five screens and 20 tabs.
+
+Early reviews say it’s more detailed and better value than other tools. Happy to show a desk and talk commercial / team licensing if useful for the people you look after.
+```
+
+### E2 — CTA
+
+```
+[name] — if helpful, I can set up a short walkthrough of the CoComms desk and share commercial options for a group of commentators at [org]. No hard sell — shout if a 15-min look is worth it.
+```

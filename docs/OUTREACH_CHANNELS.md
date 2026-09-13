@@ -115,3 +115,60 @@ Create / claim accounts only when Chris names which handles to use — don’t i
 ## Success (honest)
 
 Same as LinkedIn doc: accepts, replies, attributed trials, desks created. No invented benchmarks.
+
+---
+
+## D. Commercial license / enterprise track (media groups)
+
+**Goal:** Find people at broadcasters and platforms who **manage or book groups of commentators** (not individual callers first) and pitch a **commercial / team license** for CoComms desks.
+
+### Target orgs (global, expand as we go)
+
+| Org | Why |
+|-----|-----|
+| talkSPORT / Wireless Group | Large UK football radio / commentary talent pool |
+| DAZN | Global sports streaming; multi-territory commentary |
+| Sky Sports / Sky | UK + intl football coverage |
+| BBC Sport / BBC Audio | Staff + freelance callers |
+| ESPN / ESPN+ | US + intl soccer commentary |
+| beIN Sports | Multi-territory |
+| CBS Sports / Paramount+ | US soccer |
+| Apple TV (MLS Season Pass) / MLS | Club/league commentary ops |
+| Spalk | Later — after individual signups (do not scrape talent roster) |
+| IMG / Endeavor / Wasserman (talent) | Optional later — agencies who place commentators |
+
+### Who to find (titles / keywords)
+
+- Head / Director of Commentary, Commentary Manager, Talent Producer (football/soccer)
+- Sports Audio Producer, Broadcast Operations (football)
+- Freelance Coordinator / Talent Booker (sports)
+- Head of Production / Exec Producer — football remotes
+- Partnerships / Commercial (only if they clearly own tooling for talent)
+
+**Exclude:** Sports Pro / SportsCom builders; pure sales with no talent ops link; Dan @ Sports Pro.
+
+### Sequence (approve-before-send)
+
+1. Identify 1–2 named contacts per org via LinkedIn (1st/2nd degree first).
+2. Soft connect or InMail/DM with **enterprise** copy (below) — not the individual commentator CTA.
+3. Offer a short demo desk + commercial conversation (seats / unlimited desks / SSO later).
+4. Track in `outreach-tracker.csv` with `channel=linkedin_enterprise` and `league_or_outlet=<org>`.
+
+### Draft enterprise soft intro (approve before send)
+
+```
+Hi [name] — I saw you work with football/soccer commentary talent at [org].
+
+I built CoComms, a commentary co-pilot for matchday: commentators bring their notes and voice; we file notes in the right places and keep the live match desk in one screen so they’re not managing five screens and 20 tabs.
+
+Early reviews say it’s more detailed and better value than other tools. Happy to show a desk and talk commercial / team licensing if useful for the people you look after.
+```
+
+### Draft enterprise CTA
+
+```
+[name] — if helpful, I can set up a short walkthrough of the CoComms desk and share commercial options for a group of commentators at [org]. No hard sell — shout if a 15-min look is worth it.
+```
+
+**Cadence:** build the org contact list this week in parallel with individual LinkedIn; do not pause individual commentator outreach for this.
+

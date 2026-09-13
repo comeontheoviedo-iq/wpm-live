@@ -13,7 +13,10 @@ import {
   getPlayerTrophies,
 } from "@/lib/api-football";
 import { nationalityToIso } from "@/lib/flags";
-import { isFriendlyCompetition } from "@/lib/season-tally";
+import {
+  isFriendlyCompetition,
+  aggregateClubSeasonTotals,
+} from "@/lib/season-tally";
 import { resolvePersonAge } from "@/lib/person-age";
 import { rawTransferFeeFrom, resolveTransferFeeRaw } from "@/lib/transfer-fee";
 import { relinkPlayerNotesOnRead } from "@/lib/relink-player-notes";
@@ -288,16 +291,26 @@ export async function GET(
           withTimeout(getPlayerById(afId, season), 4000).catch(() => null),
         ]);
 
+      // Current-season AF only for headline afStats + APP/G/A patch.
+      // Prior-season fallback is bio-only — never write last club's season
+      // (Rafael Leão Milan 2025 = 30 apps onto Galatasaray mid-Sep 2026).
       let rows = curSeasonRes;
+      const hasCurrentSeason = Boolean(rows?.[0]?.statistics?.length);
+      let priorRows: typeof curSeasonRes = null;
       if (!rows?.[0]) {
-        rows = await withTimeout(getPlayerById(afId, season - 1), 3000).catch(() => null);
+        priorRows = await withTimeout(getPlayerById(afId, season - 1), 3000).catch(
+          () => null
+        );
       }
-      afStats = rows?.[0] || null;
+      afStats = hasCurrentSeason ? rows?.[0] || null : null;
 
       const profilePlayer = profileRes?.player || null;
-      const rowPlayer = (rows?.[0] as { player?: Record<string, unknown> } | null)?.player || null;
+      const rowPlayer =
+        ((hasCurrentSeason ? rows?.[0] : priorRows?.[0]) as {
+          player?: Record<string, unknown>;
+        } | null)?.player || null;
 
-      if (!afStats && !profilePlayer) {
+      if (!afStats && !profilePlayer && !priorRows?.[0]) {
         afStub = "Stats temporarily unavailable";
       } else {
         const patch: Record<string, unknown> = {};
@@ -336,7 +349,11 @@ export async function GET(
             "").trim() || null;
         let nt: string | null = null;
         let bestApps = 0;
-        for (const s of ((rows?.[0] as { statistics?: AfStatRow[] } | null)?.statistics || [])) {
+        const natStats =
+          ((hasCurrentSeason ? rows?.[0] : priorRows?.[0]) as {
+            statistics?: AfStatRow[];
+          } | null)?.statistics || [];
+        for (const s of natStats) {
           const teamName = s.team?.name?.trim();
           if (!teamName) continue;
           if (
@@ -373,37 +390,38 @@ export async function GET(
             null,
         });
         if (resolvedAge != null && resolvedAge !== player.age) patch.age = resolvedAge;
-        const statsAll =
-          ((rows?.[0] as { statistics?: AfStatRow[] } | null)?.statistics || []);
-        const clubStats = clubAf
-          ? statsAll.filter((s) => s.team?.id === clubAf)
-          : statsAll;
-        const pickPool = clubStats.length ? clubStats : statsAll;
-        // Prefer domestic league row for headline rating; else first club row
-        const af =
-          pickPool.find((s) =>
-            /premier league|la liga|serie a|bundesliga|ligue 1|championship|eredivisie|liga portugal|süper lig|super lig|scottish premiership/i.test(
-              s.league?.name || ""
-            )
-          ) || pickPool[0];
-        const rt = af?.games?.rating;
-        if (rt != null && rt !== "") {
-          const n = Number(rt);
-          if (Number.isFinite(n)) patch.rating = n;
-        }
-        // Season totals for current club across competitions (overwrite thin sync tallies).
-        // Exclude friendlies from headline season TOTAL.
-        if (pickPool.length) {
-          const competitive = pickPool.filter(
-            (s) => !isFriendlyCompetition(s.league?.name)
-          );
-          const pool = competitive.length ? competitive : pickPool;
-          const apps = pool.reduce((n, s) => n + (s.games?.appearences ?? 0), 0);
-          const goals = pool.reduce((n, s) => n + (s.goals?.total ?? 0), 0);
-          const assists = pool.reduce((n, s) => n + (s.goals?.assists ?? 0), 0);
-          if (apps > 0) patch.appearances = apps;
-          patch.goals = goals;
-          patch.assists = assists;
+
+        // Headline rating + season APP/G/A: current club, current season only.
+        // Never fall back to statsAll (other club / NT) when club rows are empty.
+        if (hasCurrentSeason) {
+          const statsAll =
+            ((rows?.[0] as { statistics?: AfStatRow[] } | null)?.statistics || []);
+          const clubStats = clubAf
+            ? statsAll.filter((s) => s.team?.id === clubAf)
+            : [];
+          const pickPool = clubStats;
+          const af =
+            pickPool.find((s) =>
+              /premier league|la liga|serie a|bundesliga|ligue 1|championship|eredivisie|liga portugal|süper lig|super lig|scottish premiership/i.test(
+                s.league?.name || ""
+              )
+            ) || pickPool[0];
+          const rt = af?.games?.rating;
+          if (rt != null && rt !== "") {
+            const n = Number(rt);
+            if (Number.isFinite(n)) patch.rating = n;
+          }
+          if (clubAf != null && pickPool.length) {
+            const totals = aggregateClubSeasonTotals(statsAll, clubAf);
+            // Club season apps (all comps, ex-friendlies) — truthful "this season"
+            if (totals.rowCount > 0) {
+              patch.appearances = totals.apps;
+              // Keep competition G/A on Player.* aligned with sync league rows when
+              // present; still refresh all-comp mirrors for dossier consumers.
+              patch.goalsAllComps = totals.goals;
+              patch.assistsAllComps = totals.assists;
+            }
+          }
         }
         if (Object.keys(patch).length) {
           player = await prisma.player.update({

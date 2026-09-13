@@ -1396,7 +1396,8 @@ async function syncSeasonScorers(
       assists: Math.max(agg.leagueAssists || 0, prev?.assists || 0),
       goalsAllComps: Math.max(agg.allGoals || 0, prev?.goalsAllComps || 0),
       assistsAllComps: Math.max(agg.allAssists || 0, prev?.assistsAllComps || 0),
-      apps: Math.max(agg.leagueApps || 0, prev?.apps || 0),
+      // Club season apps (all comps, ex-friendlies) — not league-only, not career
+      apps: Math.max(agg.allApps || 0, prev?.apps || 0),
       cleanSheets: prev?.cleanSheets || 0,
       saves: Math.max(saves || 0, prev?.saves || 0),
       conceded: Math.max(conceded || 0, prev?.conceded || 0),

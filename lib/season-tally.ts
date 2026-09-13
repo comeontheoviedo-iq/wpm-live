@@ -127,8 +127,8 @@ export function seasonOrdinal(
  * unless it still clearly lags (af < inMatch).
  *
  * Soft-fail: null/NaN AF → just inMatch (or 0).
- * forceExcludeToday: kept for callers that always want the live +inMatch path
- * while the match is ongoing (e.g. appearances).
+ * forceExcludeToday: while LIVE, treat AF as excluding today (APP +1 when on).
+ * Prematch: callers must pass inMatchCount=0 — Official XI must NOT +1 APP yet.
  */
 export function liveAdjustedSeasonStat(
   afTotal: number | null | undefined,
@@ -249,6 +249,44 @@ export async function fetchPlayerSeasonSplit(
     };
   }
   return splitSeasonStats(stats, leagueId, competitionName, teamAfId);
+}
+
+
+/** True when the desk match has kicked off (live or finished). Prematch = false. */
+export function matchHasStarted(matchStatus?: string | null): boolean {
+  const st = (matchStatus || "").trim();
+  if (!st) return false;
+  if (/^(assigned|scheduled|ns|not\s*started|tbd|postponed|cancelled|canceled|abandoned)$/i.test(st)) {
+    return false;
+  }
+  return (
+    st === "Live" ||
+    st === "Half Time" ||
+    st === "Full Time" ||
+    /^(1H|2H|LIVE|HT|FT|AET|PEN|ET|BT|P)$/i.test(st)
+  );
+}
+
+/**
+ * Club season totals (all non-friendly comps) for the given team.
+ * When teamAfId is set and AF has no rows for that club, returns zeros —
+ * never falls back to another club / NT (Leão Milan 2025 → Galatasaray APP=30).
+ */
+export function aggregateClubSeasonTotals(
+  statistics: AfTopScorer["statistics"] | undefined,
+  teamAfId?: number | null
+): { apps: number; goals: number; assists: number; rowCount: number } {
+  const rows = clubRows(statistics, teamAfId);
+  let apps = 0;
+  let goals = 0;
+  let assists = 0;
+  for (const s of rows) {
+    if (isFriendlyCompetition(s.league?.name)) continue;
+    apps += s.games?.appearences ?? 0;
+    goals += s.goals?.total ?? 0;
+    assists += s.goals?.assists ?? 0;
+  }
+  return { apps, goals, assists, rowCount: rows.length };
 }
 
 /** Aggregate goals/assists from an AF player statistics array for sync ingest. */

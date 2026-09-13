@@ -40,7 +40,7 @@ import {
   fitMarkerPctForContainer,
   resolveCardOverlaps,
 } from "@/lib/pitch-layout";
-import { liveAdjustedSeasonStat } from "@/lib/season-tally";
+import { liveAdjustedSeasonStat, matchHasStarted } from "@/lib/season-tally";
 import { cardKitAccent, type MatchKitColors } from "@/lib/kit-colors";
 
 export type PitchPlayer = {
@@ -309,11 +309,13 @@ function PitchCardToken({
   const matchA = player.matchAssists ?? 0;
   const matchApps = player.matchApps ?? 0;
   // Display-time live season totals. Player.* is AF snapshot (sync does not
-  // live-bump G/A); add today's match contribution while Live. Apps also
-  // force +1 while Live if they appeared today.
+  // live-bump G/A). Prematch: show season APP as-is (Official XI ≠ appearance).
+  // Live/FT: +1 APP when they are/were on for this match.
+  const inMatchApp =
+    matchHasStarted(matchStatus) && matchApps > 0 ? 1 : 0;
   const apps = liveAdjustedSeasonStat(
     player.appearances ?? 0,
-    matchApps > 0 ? 1 : 0,
+    inMatchApp,
     matchStatus,
     { forceExcludeToday: true }
   );

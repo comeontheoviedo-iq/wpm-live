@@ -290,7 +290,21 @@ export function PlayerDossier({
   });
   const notesList = data?.notes?.length ? data.notes : initialNotes;
   const afRows = data?.afStats?.statistics || [];
-  const af = afRows[0];
+  // Prefer current-club domestic row — never headline NT/wrong-club [0]
+  const clubName = (p?.club?.name || "").trim().toLowerCase();
+  const af =
+    afRows.find(
+      (s) =>
+        clubName &&
+        (s.team?.name || "").trim().toLowerCase() === clubName &&
+        /premier league|la liga|serie a|bundesliga|ligue 1|championship|eredivisie|liga portugal|süper lig|super lig|scottish premiership/i.test(
+          s.league?.name || ""
+        )
+    ) ||
+    afRows.find(
+      (s) => clubName && (s.team?.name || "").trim().toLowerCase() === clubName
+    ) ||
+    null;
   const photo =
     p?.photoUrl ||
     data?.afStats?.player?.photo ||
@@ -375,8 +389,6 @@ export function PlayerDossier({
   const activeCareerClub =
     careerClubs[Math.min(careerClubIdx, Math.max(careerClubs.length - 1, 0))] ||
     null;
-  const currentSeasonBlock = careerSeasons[0] || null;
-
   /** Seasons filtered to the active career club (by teamId or name). Soft-empty if none. */
   const clubSeasonBlocks = (() => {
     if (!activeCareerClub) return careerSeasons;
@@ -417,6 +429,9 @@ export function PlayerDossier({
     }
     return out;
   })();
+
+  // Overview "this season" = active club (usually current), not NT + all clubs.
+  const overviewSeasonBlock = clubSeasonBlocks[0] || null;
 
   const bioNotes = notesList.filter(
     (n) =>
@@ -818,8 +833,8 @@ export function PlayerDossier({
                             ? String(p.seasonKeeper.appearances)
                             : p.appearances
                               ? String(p.appearances)
-                              : af?.games?.appearences != null
-                                ? String(af.games.appearences)
+                              : overviewSeasonBlock?.total?.apps != null
+                                ? String(overviewSeasonBlock.total.apps)
                                 : "—"
                         }
                       />
@@ -883,8 +898,8 @@ export function PlayerDossier({
                         value={
                           p.appearances
                             ? String(p.appearances)
-                            : af?.games?.appearences != null
-                              ? String(af.games.appearences)
+                            : overviewSeasonBlock?.total?.apps != null
+                              ? String(overviewSeasonBlock.total.apps)
                               : "—"
                         }
                       />
@@ -917,25 +932,25 @@ export function PlayerDossier({
                         : "none in last 5"
                     }
                   />
-                  {currentSeasonBlock ? (
+                  {overviewSeasonBlock ? (
                     <div className="player-dossier-kv-block">
                       <div className="player-dossier-kv-label">
-                        Season {currentSeasonBlock.season}
+                        Season {overviewSeasonBlock.season}
                       </div>
-                      {currentSeasonBlock.total ? (
+                      {overviewSeasonBlock.total ? (
                         <div className="player-dossier-season-total mb-1">
                           <span className="font-semibold text-[#e2e8f0]">TOTAL</span>
                           <span className="tabular-nums text-[#94a3b8]">
-                            {currentSeasonBlock.total.apps ?? "—"} app
+                            {overviewSeasonBlock.total.apps ?? "—"} app
                             {isGk
                               ? ""
-                              : ` · ${currentSeasonBlock.total.goals ?? 0}G · ${currentSeasonBlock.total.assists ?? 0}A`}
-                            <span className="text-[#64748b]"> · ex-friendlies</span>
+                              : ` · ${overviewSeasonBlock.total.goals ?? 0}G · ${overviewSeasonBlock.total.assists ?? 0}A`}
+                            <span className="text-[#64748b]"> · club · ex-friendlies</span>
                           </span>
                         </div>
                       ) : null}
                       <ul className="player-dossier-comp-list">
-                        {currentSeasonBlock.competitions.slice(0, 5).map((row, i) => (
+                        {overviewSeasonBlock.competitions.slice(0, 5).map((row, i) => (
                           <li key={i}>
                             <span className="truncate">
                               {row.league}

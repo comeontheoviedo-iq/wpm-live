@@ -72,7 +72,7 @@ import { VerdictBlock } from "@/components/match/verdict-block";
 import { namesLooselyMatch, parseSubDescription } from "@/lib/player-name";
 import { cn } from "@/lib/utils";
 import { formatLiveClock } from "@/lib/live-clock";
-import { ordinal, seasonOrdinal } from "@/lib/season-tally";
+import { ordinal, seasonOrdinal, matchHasStarted } from "@/lib/season-tally";
 import { bindDeskHotkeys } from "@/lib/desk-hotkeys";
 import {
   loadDeskDensity,
@@ -284,7 +284,8 @@ function eventInvolvesPlayer(e: MatchEventRow, p: PitchPlayer): boolean {
 
 function enrichPlayers(
   players: PitchPlayer[],
-  events: MatchEventRow[]
+  events: MatchEventRow[],
+  matchStatus?: string | null
 ): PitchPlayer[] {
   const withMatchStats = players.map((p) => {
     const scored = selectScoredGoals(events);
@@ -326,8 +327,14 @@ function enrichPlayers(
   });
   const withSubs = applyLiveSubsToXi(withMatchStats, events);
   // Match minutes / apps from THIS fixture lineup + sub events (not season).
+  // Prematch (Official XI named, onPitch prep flags): matchApps stays 0 —
+  // season APP must NOT +1 until the desk is live and they are on.
   const matchEnd = 90;
+  const started = matchHasStarted(matchStatus);
   return withSubs.map((p) => {
+    if (!started) {
+      return { ...p, matchApps: 0, matchMinutes: null };
+    }
     // After applyLiveSubsToXi: starters who stayed have isStarter+onPitch;
     // subbed-off have subbedOff; sub-ons have subMinute + onPitch.
     const cameOn = p.subMinute != null && !p.subbedOff && Boolean(p.onPitch || p.isStarter);
@@ -1051,7 +1058,7 @@ export function MatchDesk({
 
   const homeEnriched = useMemo(
     () =>
-      enrichPlayers(homePlayers, events).map((p) => {
+      enrichPlayers(homePlayers, events, status).map((p) => {
         const o = overrideById.get(p.id);
         // Subbed-off: never re-apply slot/free coords (empty ST/LW wipe)
         const place = !p.subbedOff;
@@ -1071,11 +1078,11 @@ export function MatchDesk({
           pitchY: place ? o?.pitchY ?? null : null,
         };
       }),
-    [homePlayers, events, noteHookByPlayer, overrideById, notes]
+    [homePlayers, events, status, noteHookByPlayer, overrideById, notes]
   );
   const awayEnriched = useMemo(
     () =>
-      enrichPlayers(awayPlayers, events).map((p) => {
+      enrichPlayers(awayPlayers, events, status).map((p) => {
         const o = overrideById.get(p.id);
         const place = !p.subbedOff;
         return {
@@ -1093,7 +1100,7 @@ export function MatchDesk({
           pitchY: place ? o?.pitchY ?? null : null,
         };
       }),
-    [awayPlayers, events, noteHookByPlayer, overrideById, notes]
+    [awayPlayers, events, status, noteHookByPlayer, overrideById, notes]
   );
 
   const squad: SquadPlayer[] = useMemo(() => {

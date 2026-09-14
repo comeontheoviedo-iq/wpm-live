@@ -6,6 +6,7 @@
 
 import { prisma } from "./prisma";
 import { emailReplyTo, isEmailConfigured, sendEmail } from "./email";
+import { sendOwnerTrialAlert } from "./owner-trial-alert";
 
 export type WelcomePlanHint = "unlimited" | "match_pass" | null;
 
@@ -148,6 +149,7 @@ export async function maybeSendTrialWelcomeEmail(opts: {
         email: true,
         name: true,
         welcomeEmailSentAt: true,
+        matchPassCredits: true,
       },
     });
     if (!user?.email) {
@@ -197,6 +199,16 @@ export async function maybeSendTrialWelcomeEmail(opts: {
       "to",
       user.email
     );
+
+    // Same first-unlock claim — owner alert once; fail-soft, never blocks welcome.
+    await sendOwnerTrialAlert({
+      name: user.name,
+      email: user.email,
+      plan: opts.plan ?? null,
+      matchPassCredits: user.matchPassCredits,
+      unlockedAt: new Date(),
+    });
+
     return true;
   } catch (e) {
     console.warn(

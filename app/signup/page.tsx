@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Logo } from "@/components/layout/logo";
 import { Button } from "@/components/ui/button";
-import { Mic2, Check } from "lucide-react";
+import { Check } from "lucide-react";
+import { LogoMark } from "@/components/layout/logo-mark";
 
 type PlanChoice =
   | { kind: "unlimited" }
@@ -94,11 +95,11 @@ function SignupForm() {
   return (
     <div className="min-h-screen grid lg:grid-cols-2 bg-[#070b12]">
       <div className="relative hidden lg:flex flex-col justify-between p-10 bg-gradient-to-br from-[#0a1524] via-teal-950 to-[#070b12] text-white overflow-hidden">
-        <div className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_20%_20%,#2dd4bf55,transparent_40%),radial-gradient(circle_at_80%_70%,#f43f5e33,transparent_35%)]" />
+        <div className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_20%_20%,#f59e0b55,transparent_40%),radial-gradient(circle_at_80%_70%,#f43f5e33,transparent_35%)]" />
         <Logo href="/" />
         <div className="relative z-10 max-w-md">
           <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs mb-4 backdrop-blur">
-            <Mic2 className="h-3.5 w-3.5" />
+            <LogoMark className="h-3.5 w-3.5" />
             Choose Unlimited or Match Desk Pass at start
           </div>
           <h1 className="text-3xl font-bold tracking-tight mb-3">

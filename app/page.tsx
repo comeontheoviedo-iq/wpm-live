@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { Logo } from "@/components/layout/logo";
 import {
-  Mic2,
   Radio,
   NotebookPen,
   MonitorPlay,
@@ -9,6 +8,7 @@ import {
   ArrowRight,
   Check,
 } from "lucide-react";
+import { LogoMark } from "@/components/layout/logo-mark";
 
 const pillars = [
   {
@@ -40,7 +40,7 @@ export default function MarketingHome() {
     <div className="min-h-screen bg-[#05080f] text-slate-100 antialiased">
       {/* Broadcast top bar — craft TV, not SaaS ribbon */}
       <div className="border-b border-white/[0.08] bg-[#070b12]">
-        <div className="mx-auto flex h-8 max-w-6xl items-center justify-between px-4 font-[family-name:var(--font-plex-mono)] text-[10px] font-semibold uppercase tracking-[0.22em] text-teal-300/85">
+        <div className="mx-auto flex h-8 max-w-6xl items-center justify-between px-4 font-[family-name:var(--font-plex-mono)] text-[10px] font-semibold uppercase tracking-[0.22em] text-amber-300/85">
           <span className="inline-flex items-center gap-2">
             <span className="h-1.5 w-1.5 animate-pulse rounded-[1px] bg-[var(--live,#e11d48)]" />
             Matchday desk · CoComms
@@ -57,13 +57,13 @@ export default function MarketingHome() {
           <nav className="flex items-center gap-2 sm:gap-3 text-sm">
             <Link
               href="/faq"
-              className="hidden sm:inline text-slate-400 hover:text-teal-300"
+              className="hidden sm:inline text-slate-400 hover:text-amber-300"
             >
               FAQ
             </Link>
             <Link
               href="/pricing"
-              className="hidden sm:inline text-slate-400 hover:text-teal-300"
+              className="hidden sm:inline text-slate-400 hover:text-amber-300"
             >
               Pricing
             </Link>
@@ -75,7 +75,7 @@ export default function MarketingHome() {
             </Link>
             <Link
               href="/signup"
-              className="rounded-[2px] bg-teal-500 px-3 py-1.5 text-sm font-semibold text-slate-950 hover:bg-teal-400"
+              className="rounded-[2px] bg-amber-500 px-3 py-1.5 text-sm font-semibold text-slate-950 hover:bg-amber-400"
             >
               Start free trial
             </Link>
@@ -91,7 +91,7 @@ export default function MarketingHome() {
             aria-hidden
             style={{
               backgroundImage: `
-                radial-gradient(ellipse at 18% 0%, rgba(45,212,191,0.16), transparent 42%),
+                radial-gradient(ellipse at 18% 0%, rgba(245,158,11,0.16), transparent 42%),
                 radial-gradient(ellipse at 88% 12%, rgba(245,158,11,0.08), transparent 38%),
                 linear-gradient(180deg, #05080f 0%, #0a1220 55%, #070b12 100%)
               `,
@@ -111,17 +111,17 @@ export default function MarketingHome() {
                 "radial-gradient(ellipse at 50% 40%, black 20%, transparent 72%)",
             }}
           />
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-teal-500/45 to-transparent" />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-amber-500/45 to-transparent" />
 
           <div className="relative mx-auto grid max-w-6xl gap-12 px-4 py-16 sm:py-20 lg:grid-cols-[1.12fr_0.88fr] lg:items-center lg:gap-14 lg:py-24">
             <div>
-              <div className="mb-5 inline-flex items-center gap-2 rounded-[2px] border border-teal-500/35 bg-teal-500/[0.08] px-3 py-1 font-[family-name:var(--font-plex-mono)] text-[10px] font-bold uppercase tracking-[0.16em] text-teal-200">
-                <Mic2 className="h-3.5 w-3.5" />
+              <div className="mb-5 inline-flex items-center gap-2 rounded-[2px] border border-amber-500/35 bg-amber-500/[0.08] px-3 py-1 font-[family-name:var(--font-plex-mono)] text-[10px] font-bold uppercase tracking-[0.16em] text-amber-200">
+                <LogoMark className="h-3.5 w-3.5" />
                 Built for football commentators
               </div>
               <h1 className="max-w-[18ch] text-[2.35rem] font-bold leading-[1.05] tracking-[-0.035em] sm:text-5xl lg:text-[3.35rem]">
                 The match desk you wish you had{" "}
-                <span className="bg-gradient-to-r from-teal-300 to-teal-200 bg-clip-text text-transparent">
+                <span className="bg-gradient-to-r from-amber-300 to-amber-200 bg-clip-text text-transparent">
                   before kick-off
                 </span>
                 .
@@ -131,13 +131,13 @@ export default function MarketingHome() {
                 voice, CoComms takes care of everything else you need to make the
                 match comms seamless.
               </p>
-              <p className="mt-4 font-[family-name:var(--font-plex-mono)] text-[11px] font-medium uppercase tracking-[0.14em] text-teal-200/90">
+              <p className="mt-4 font-[family-name:var(--font-plex-mono)] text-[11px] font-medium uppercase tracking-[0.14em] text-amber-200/90">
                 Live feed · dynamic lineups · data viz · Scripts · pitch board
               </p>
               <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
                 <Link
                   href="/signup"
-                  className="inline-flex items-center justify-center gap-2 rounded-[2px] bg-teal-400 px-5 py-3 text-sm font-bold text-slate-950 shadow-[0_0_0_1px_rgba(45,212,191,0.35),0_12px_32px_rgba(13,148,136,0.28)] hover:bg-teal-300"
+                  className="inline-flex items-center justify-center gap-2 rounded-[2px] bg-amber-400 px-5 py-3 text-sm font-bold text-slate-950 shadow-[0_0_0_1px_rgba(245,158,11,0.35),0_12px_32px_rgba(217,119,6,0.28)] hover:bg-amber-300"
                 >
                   Start 14-day trial
                   <ArrowRight className="h-4 w-4" />
@@ -162,7 +162,7 @@ export default function MarketingHome() {
                 aria-hidden
                 style={{
                   background:
-                    "radial-gradient(ellipse at 50% 50%, rgba(45,212,191,0.18), transparent 65%)",
+                    "radial-gradient(ellipse at 50% 50%, rgba(245,158,11,0.18), transparent 65%)",
                 }}
               />
               <div className="relative overflow-hidden rounded-[3px] border border-white/12 bg-[#05080f] shadow-[0_24px_60px_rgba(0,0,0,0.65),0_0_0_1px_rgba(0,0,0,0.5)]">
@@ -184,19 +184,19 @@ export default function MarketingHome() {
                 <div className="relative aspect-video bg-[#03050a]">
                   {/* Corner ticks — broadcast plate */}
                   <span
-                    className="pointer-events-none absolute left-2 top-2 h-3 w-3 border-l border-t border-teal-400/50"
+                    className="pointer-events-none absolute left-2 top-2 h-3 w-3 border-l border-t border-amber-400/50"
                     aria-hidden
                   />
                   <span
-                    className="pointer-events-none absolute right-2 top-2 h-3 w-3 border-r border-t border-teal-400/50"
+                    className="pointer-events-none absolute right-2 top-2 h-3 w-3 border-r border-t border-amber-400/50"
                     aria-hidden
                   />
                   <span
-                    className="pointer-events-none absolute bottom-2 left-2 h-3 w-3 border-b border-l border-teal-400/50"
+                    className="pointer-events-none absolute bottom-2 left-2 h-3 w-3 border-b border-l border-amber-400/50"
                     aria-hidden
                   />
                   <span
-                    className="pointer-events-none absolute bottom-2 right-2 h-3 w-3 border-b border-r border-teal-400/50"
+                    className="pointer-events-none absolute bottom-2 right-2 h-3 w-3 border-b border-r border-amber-400/50"
                     aria-hidden
                   />
                   <video
@@ -228,7 +228,7 @@ export default function MarketingHome() {
         {/* Pillars */}
         <section className="mx-auto max-w-6xl px-4 py-16">
           <div className="mb-9 max-w-2xl">
-            <p className="font-[family-name:var(--font-plex-mono)] text-[10px] font-bold uppercase tracking-[0.2em] text-teal-400/90">
+            <p className="font-[family-name:var(--font-plex-mono)] text-[10px] font-bold uppercase tracking-[0.2em] text-amber-400/90">
               Why commentators use it
             </p>
             <h2 className="mt-2 text-2xl font-bold tracking-[-0.025em] sm:text-3xl">
@@ -241,8 +241,8 @@ export default function MarketingHome() {
                 key={p.title}
                 className="rounded-[3px] border border-white/10 bg-gradient-to-b from-white/[0.035] to-transparent p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
               >
-                <div className="flex h-8 w-8 items-center justify-center rounded-[2px] border border-teal-500/25 bg-teal-500/10">
-                  <p.icon className="h-4 w-4 text-teal-300" />
+                <div className="flex h-8 w-8 items-center justify-center rounded-[2px] border border-amber-500/25 bg-amber-500/10">
+                  <p.icon className="h-4 w-4 text-amber-300" />
                 </div>
                 <h3 className="mt-3 text-[15px] font-semibold tracking-tight">
                   {p.title}
@@ -259,7 +259,7 @@ export default function MarketingHome() {
         <section className="border-y border-white/[0.06] bg-[#080d16]">
           <div className="mx-auto grid max-w-6xl gap-8 px-4 py-16 lg:grid-cols-2 lg:items-center">
             <div>
-              <div className="inline-flex items-center gap-2 font-[family-name:var(--font-plex-mono)] text-[11px] font-bold uppercase tracking-[0.14em] text-teal-300">
+              <div className="inline-flex items-center gap-2 font-[family-name:var(--font-plex-mono)] text-[11px] font-bold uppercase tracking-[0.14em] text-amber-300">
                 <Timer className="h-3.5 w-3.5" />
                 Trial model
               </div>
@@ -278,19 +278,19 @@ export default function MarketingHome() {
                     key={t}
                     className="flex items-start gap-2 text-sm text-slate-300"
                   >
-                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-teal-400" />
+                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
                     {t}
                   </li>
                 ))}
               </ul>
             </div>
-            <div className="rounded-[3px] border border-teal-500/35 bg-gradient-to-br from-teal-500/12 via-[#0b1220] to-[#0b1220] p-6 shadow-[0_16px_40px_rgba(0,0,0,0.35)]">
-              <div className="font-[family-name:var(--font-plex-mono)] text-[10px] font-bold uppercase tracking-[0.18em] text-teal-300">
+            <div className="rounded-[3px] border border-amber-500/35 bg-gradient-to-br from-amber-500/12 via-[#0b1220] to-[#0b1220] p-6 shadow-[0_16px_40px_rgba(0,0,0,0.35)]">
+              <div className="font-[family-name:var(--font-plex-mono)] text-[10px] font-bold uppercase tracking-[0.18em] text-amber-300">
                 Choose at start
               </div>
               <div className="mt-3 space-y-3 text-sm">
                 <div className="rounded-[2px] border border-white/10 bg-black/25 px-3 py-2.5">
-                  <div className="font-semibold text-teal-200">
+                  <div className="font-semibold text-amber-200">
                     Unlimited · £22/mo
                   </div>
                   <div className="mt-0.5 text-xs text-slate-400">
@@ -308,14 +308,14 @@ export default function MarketingHome() {
               </div>
               <Link
                 href="/signup"
-                className="mt-6 flex w-full items-center justify-center gap-2 rounded-[2px] bg-teal-400 px-4 py-3 text-sm font-bold text-slate-950 hover:bg-teal-300"
+                className="mt-6 flex w-full items-center justify-center gap-2 rounded-[2px] bg-amber-400 px-4 py-3 text-sm font-bold text-slate-950 hover:bg-amber-300"
               >
                 Choose plan & start trial
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link
                 href="/pricing"
-                className="mt-3 block text-center text-xs text-slate-500 hover:text-teal-300"
+                className="mt-3 block text-center text-xs text-slate-500 hover:text-amber-300"
               >
                 Compare Unlimited vs Pass →
               </Link>
@@ -334,7 +334,7 @@ export default function MarketingHome() {
           <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link
               href="/signup"
-              className="inline-flex items-center gap-2 rounded-[2px] bg-teal-400 px-5 py-3 text-sm font-bold text-slate-950 hover:bg-teal-300"
+              className="inline-flex items-center gap-2 rounded-[2px] bg-amber-400 px-5 py-3 text-sm font-bold text-slate-950 hover:bg-amber-300"
             >
               Start 14-day trial
             </Link>

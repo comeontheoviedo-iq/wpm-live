@@ -4,7 +4,7 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Logo } from "@/components/layout/logo";
 import { Button } from "@/components/ui/button";
-import { Mic2 } from "lucide-react";
+import { LogoMark } from "@/components/layout/logo-mark";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -44,7 +44,7 @@ export default function LoginPage() {
         <Logo href="/" />
         <div className="relative z-10 max-w-md">
           <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs mb-4 backdrop-blur">
-            <Mic2 className="h-3.5 w-3.5" />
+            <LogoMark className="h-3.5 w-3.5" />
             Commentary desk
           </div>
           <h1 className="text-4xl font-bold tracking-tight mb-3">

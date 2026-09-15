@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import {
   ApiFootballError,
   isApiFootballConfigured,
+  rankTeamSearchHits,
   searchTeams,
 } from "@/lib/api-football";
 
@@ -16,12 +17,18 @@ export async function GET(req: Request) {
       message: "API_FOOTBALL_KEY missing",
     });
   }
-  const q = new URL(req.url).searchParams.get("q") || "";
+  const { searchParams } = new URL(req.url);
+  const q = searchParams.get("q") || "";
+  const limitRaw = Number(searchParams.get("limit") || 12);
+  const limit = Number.isFinite(limitRaw)
+    ? Math.min(Math.max(Math.floor(limitRaw), 1), 20)
+    : 12;
   if (q.trim().length < 2) {
     return NextResponse.json({ configured: true, teams: [] });
   }
   try {
-    const teams = await searchTeams(q.trim());
+    const raw = await searchTeams(q.trim());
+    const teams = rankTeamSearchHits(raw, q.trim(), limit);
     return NextResponse.json({ configured: true, teams });
   } catch (e) {
     const err = e as ApiFootballError;

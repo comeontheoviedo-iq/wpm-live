@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
 import { useRouter } from "next/navigation";
 import { AppHeader } from "@/components/layout/app-header";
 import { AppSidebar } from "@/components/layout/app-sidebar";
@@ -20,8 +27,18 @@ type AfFixture = {
   fixture: { id: number; date: string };
   league: { id: number; name: string; season: number };
   teams: {
-    home: { id: number; name: string };
-    away: { id: number; name: string };
+    home: { id: number; name: string; logo?: string };
+    away: { id: number; name: string; logo?: string };
+  };
+};
+
+type AfTeamHit = {
+  team: {
+    id: number;
+    name: string;
+    country?: string;
+    logo?: string;
+    national?: boolean;
   };
 };
 
@@ -72,6 +89,17 @@ export default function NewMatchDayPage() {
   const [findPending, setFindPending] = useState(false);
   const [findMsg, setFindMsg] = useState<string | null>(null);
   const [addPendingId, setAddPendingId] = useState<number | null>(null);
+
+  // Find-by-team typeahead
+  const [teamQuery, setTeamQuery] = useState("");
+  const [teamHits, setTeamHits] = useState<AfTeamHit[]>([]);
+  const [teamSuggestOpen, setTeamSuggestOpen] = useState(false);
+  const [teamSearchPending, setTeamSearchPending] = useState(false);
+  const [teamUpcomingPending, setTeamUpcomingPending] = useState(false);
+  const [selectedTeam, setSelectedTeam] = useState<AfTeamHit["team"] | null>(null);
+  const [highlightIdx, setHighlightIdx] = useState(0);
+  const teamSearchSeq = useRef(0);
+  const teamBoxRef = useRef<HTMLDivElement | null>(null);
 
   const effectiveCompetition = customCompetition.trim() || competition;
 
@@ -186,6 +214,125 @@ export default function NewMatchDayPage() {
     const res = await fetch(`/api/clubs?q=${encodeURIComponent(q)}`);
     const json = await res.json();
     setClubs(json.clubs || []);
+  }
+
+  // Debounced team typeahead (≈280ms, min 2 chars)
+  useEffect(() => {
+    const q = teamQuery.trim();
+    if (q.length < 2) {
+      setTeamHits([]);
+      setTeamSearchPending(false);
+      setHighlightIdx(0);
+      return;
+    }
+    const seq = ++teamSearchSeq.current;
+    setTeamSearchPending(true);
+    const t = window.setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `/api/football/teams?q=${encodeURIComponent(q)}&limit=12`
+        );
+        const json = await res.json();
+        if (seq !== teamSearchSeq.current) return;
+        const list: AfTeamHit[] = Array.isArray(json.teams) ? json.teams : [];
+        setTeamHits(list);
+        setHighlightIdx(0);
+        setTeamSuggestOpen(true);
+        if (!json.configured && json.message) {
+          setImportMsg(json.message);
+        }
+      } catch (e) {
+        if (seq !== teamSearchSeq.current) return;
+        setTeamHits([]);
+        setImportMsg(e instanceof Error ? e.message : "Team search failed");
+      } finally {
+        if (seq === teamSearchSeq.current) setTeamSearchPending(false);
+      }
+    }, 280);
+    return () => window.clearTimeout(t);
+  }, [teamQuery]);
+
+  // Close suggestions on outside click
+  useEffect(() => {
+    function onDoc(e: MouseEvent) {
+      if (!teamBoxRef.current) return;
+      if (!teamBoxRef.current.contains(e.target as Node)) {
+        setTeamSuggestOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+
+  const loadUpcomingForTeam = useCallback(async (team: AfTeamHit["team"]) => {
+    setImportMsg(null);
+    setTeamUpcomingPending(true);
+    setSelectedFixture(null);
+    // Team mode: league filter optional — clear so we don't hide cross-competition fixtures
+    setImportLeagueId("");
+    try {
+      const params = new URLSearchParams({
+        team: String(team.id),
+        next: "10",
+      });
+      const res = await fetch(`/api/football/fixtures?${params}`);
+      const json = await res.json();
+      if (!json.configured) {
+        setImportMsg(json.message || json.error || "API key missing");
+        setFixtures([]);
+        return;
+      }
+      const list: AfFixture[] = json.fixtures || [];
+      setFixtures(list);
+      if (!list.length) {
+        setImportMsg(
+          json.message ||
+            json.error ||
+            `No upcoming fixtures for ${team.name}.`
+        );
+      } else {
+        setImportMsg(
+          `Upcoming for ${team.name}${team.country ? ` · ${team.country}` : ""} — ${list.length} fixture(s). Click one to fill the desk.`
+        );
+      }
+    } catch (e) {
+      setFixtures([]);
+      setImportMsg(e instanceof Error ? e.message : "Upcoming fixtures failed");
+    } finally {
+      setTeamUpcomingPending(false);
+    }
+  }, []);
+
+  async function selectTeamHit(hit: AfTeamHit) {
+    setSelectedTeam(hit.team);
+    setTeamQuery(hit.team.name);
+    setTeamHits([]);
+    setTeamSuggestOpen(false);
+    await loadUpcomingForTeam(hit.team);
+  }
+
+  function onTeamQueryKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      setTeamSuggestOpen(false);
+      return;
+    }
+    if (!teamSuggestOpen || teamHits.length === 0) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlightIdx((i) => Math.min(i + 1, teamHits.length - 1));
+      return;
+    }
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlightIdx((i) => Math.max(i - 1, 0));
+      return;
+    }
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const hit = teamHits[highlightIdx] || teamHits[0];
+      if (hit) void selectTeamHit(hit);
+    }
   }
 
   const filteredClubs = useMemo(() => {
@@ -498,6 +645,92 @@ export default function NewMatchDayPage() {
                 server. You can still create a desk manually below.
               </div>
             )}
+            <div ref={teamBoxRef} className="relative space-y-1">
+              <label className="block text-xs font-medium text-slate-500">
+                Find by team
+                <input
+                  className="mt-1 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-transparent px-2 py-2 text-sm"
+                  placeholder="Type a club or country (e.g. Arsenal, England)…"
+                  value={teamQuery}
+                  onChange={(e) => {
+                    setTeamQuery(e.target.value);
+                    setSelectedTeam(null);
+                    setTeamSuggestOpen(true);
+                  }}
+                  onFocus={() => {
+                    if (teamHits.length) setTeamSuggestOpen(true);
+                  }}
+                  onKeyDown={onTeamQueryKeyDown}
+                  autoComplete="off"
+                  role="combobox"
+                  aria-expanded={teamSuggestOpen && teamHits.length > 0}
+                  aria-autocomplete="list"
+                />
+              </label>
+              {teamSearchPending && (
+                <p className="text-[11px] text-slate-500">Searching teams…</p>
+              )}
+              {teamSuggestOpen && teamHits.length > 0 && (
+                <ul
+                  className="absolute z-20 mt-0.5 max-h-56 w-full overflow-y-auto rounded-lg border border-slate-200 bg-[var(--background)] shadow-lg dark:border-slate-700"
+                  role="listbox"
+                >
+                  {teamHits.map((hit, idx) => (
+                    <li key={hit.team.id} role="option" aria-selected={idx === highlightIdx}>
+                      <button
+                        type="button"
+                        className={
+                          "flex w-full items-center gap-2 px-3 py-2 text-left text-sm " +
+                          (idx === highlightIdx
+                            ? "bg-amber-50 dark:bg-amber-950/40"
+                            : "hover:bg-amber-50/70 dark:hover:bg-amber-950/30")
+                        }
+                        onMouseEnter={() => setHighlightIdx(idx)}
+                        onClick={() => void selectTeamHit(hit)}
+                      >
+                        {hit.team.logo ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={hit.team.logo}
+                            alt=""
+                            className="h-5 w-5 shrink-0 object-contain"
+                          />
+                        ) : (
+                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-slate-100 text-[10px] dark:bg-slate-800">
+                            ?
+                          </span>
+                        )}
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-medium">
+                            {hit.team.name}
+                          </span>
+                          <span className="block truncate text-[11px] text-slate-500">
+                            {hit.team.country || "—"}
+                            {hit.team.national ? " · National" : " · Club"}
+                          </span>
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {(selectedTeam || teamUpcomingPending) && (
+                <p className="text-[11px] text-slate-500">
+                  {teamUpcomingPending
+                    ? `Loading upcoming for ${selectedTeam?.name || teamQuery}…`
+                    : selectedTeam
+                      ? `Upcoming for ${selectedTeam.name}`
+                      : null}
+                </p>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 text-[11px] text-slate-500">
+              <span className="h-px flex-1 bg-slate-200 dark:bg-slate-700" />
+              <span>or search by date</span>
+              <span className="h-px flex-1 bg-slate-200 dark:bg-slate-700" />
+            </div>
+
             <div className="grid sm:grid-cols-3 gap-2">
               <input
                 type="date"
@@ -521,7 +754,13 @@ export default function NewMatchDayPage() {
                   )
                 )}
               </select>
-              <Button type="button" onClick={searchFixtures}>
+              <Button
+                type="button"
+                onClick={() => {
+                  setSelectedTeam(null);
+                  void searchFixtures();
+                }}
+              >
                 Search fixtures
               </Button>
             </div>
@@ -534,7 +773,7 @@ export default function NewMatchDayPage() {
                   key={fx.fixture.id}
                   type="button"
                   onClick={() => applyFixture(fx)}
-                  className="w-full text-left rounded-lg border border-slate-100 dark:border-slate-800 px-3 py-2 text-sm hover:border-teal-400"
+                  className="w-full text-left rounded-lg border border-slate-100 dark:border-slate-800 px-3 py-2 text-sm hover:border-amber-400"
                 >
                   <div className="font-medium">
                     {fx.teams.home.name} vs {fx.teams.away.name}

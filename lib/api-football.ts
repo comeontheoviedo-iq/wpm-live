@@ -549,10 +549,41 @@ export async function getEvents(fixtureId: number) {
   return afFetch<AfEvent[]>("/fixtures/events", { fixture: fixtureId }, AF_LIVE_TTL_MS);
 }
 
+export type AfTeamSearchHit = {
+  team: {
+    id: number;
+    name: string;
+    code?: string;
+    country?: string;
+    logo?: string;
+    national?: boolean;
+  };
+  venue?: { id?: number | null; name?: string | null; city?: string | null } | null;
+};
+
 export async function searchTeams(search: string) {
-  return afFetch<
-    { team: { id: number; name: string; code?: string; country?: string; logo?: string } }[]
-  >("/teams", { search }, 60_000);
+  return afFetch<AfTeamSearchHit[]>("/teams", { search }, 60_000);
+}
+
+/** Rank team search hits: exact → starts-with → contains; prefer near-exact names. */
+export function rankTeamSearchHits(hits: AfTeamSearchHit[], query: string, limit = 12) {
+  const q = query.trim().toLowerCase();
+  if (!q) return hits.slice(0, limit);
+  const scored = hits.map((hit, idx) => {
+    const name = (hit.team?.name || "").toLowerCase();
+    const country = (hit.team?.country || "").toLowerCase();
+    let score = 1000 + idx;
+    if (name === q) score = 0;
+    else if (name.startsWith(q)) score = 10 + Math.max(0, name.length - q.length);
+    else if (name.includes(q)) score = 100 + name.indexOf(q);
+    else if (country.startsWith(q) || country === q) score = 200;
+    else score = 500 + idx;
+    // Slight preference for national sides when query looks like a country/national team name
+    if (hit.team?.national && (name === q || name.startsWith(q))) score -= 1;
+    return { hit, score };
+  });
+  scored.sort((a, b) => a.score - b.score);
+  return scored.slice(0, limit).map((s) => s.hit);
 }
 
 export async function searchLeagues(search: string) {

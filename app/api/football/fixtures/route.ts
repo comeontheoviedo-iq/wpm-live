@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import {
   ApiFootballError,
+  getTeamUpcoming,
   isApiFootballConfigured,
   searchFixturesSmart,
 } from "@/lib/api-football";
@@ -31,6 +32,10 @@ export async function GET(req: Request) {
   const homeTeam = searchParams.get("homeTeam") || searchParams.get("home");
   const awayTeam = searchParams.get("awayTeam") || searchParams.get("away");
   const id = searchParams.get("id");
+  const nextRaw = Number(searchParams.get("next") || 10);
+  const next = Number.isFinite(nextRaw)
+    ? Math.min(Math.max(Math.floor(nextRaw), 1), 30)
+    : 10;
 
   // Season hint only for smart fallback; primary path is date-only (Free-plan safe).
   const season =
@@ -41,6 +46,31 @@ export async function GET(req: Request) {
         : undefined;
 
   try {
+    // Team upcoming mode: team + optional next, no date required
+    if (team && !date && !id) {
+      const teamId = Number(team);
+      if (!Number.isFinite(teamId) || teamId <= 0) {
+        return NextResponse.json(
+          {
+            configured: true,
+            fixtures: [],
+            message: "Invalid team id",
+          },
+          { status: 200 }
+        );
+      }
+      const fixtures = await getTeamUpcoming(teamId, next);
+      return NextResponse.json({
+        configured: true,
+        fixtures,
+        strategy: "team_upcoming",
+        message:
+          fixtures.length === 0
+            ? `No upcoming fixtures for team ${teamId}`
+            : undefined,
+      });
+    }
+
     const result = await searchFixturesSmart({
       date,
       league: league ? Number(league) : undefined,

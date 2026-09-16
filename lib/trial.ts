@@ -64,10 +64,14 @@ function asBillingStatus(raw: string | null | undefined): BillingStatus {
   return "none";
 }
 
-/** Demo / operator accounts skip trial desk caps. */
+/** Demo / operator / complimentary accounts skip trial desk caps. */
 export function isUnlimitedAccount(email: string): boolean {
   const e = email.trim().toLowerCase();
-  return e === "demo@pitchline.app" || e.endsWith("@pitchline.app");
+  return (
+    e === "demo@pitchline.app" ||
+    e.endsWith("@pitchline.app") ||
+    e === "barryswain@live.co.uk"
+  );
 }
 
 export function computeTrialWindow(from = new Date()): {

@@ -4,6 +4,8 @@ import { playingColorsForMatch } from "@/lib/kit-colors";
 import { MatchDesk } from "@/components/match/match-desk";
 import { formatKickoff } from "@/lib/utils";
 import { prisma } from "@/lib/prisma";
+import { getSession } from "@/lib/auth";
+import { loadUserPlayerAliases } from "@/lib/player-aliases";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +20,64 @@ export default async function MatchOverviewPage({
 
   const { homeColor, awayColor, homeKit, awayKit } =
     playingColorsForMatch(match);
+
+  const session = await getSession();
+  const afIds = [
+    ...match.homeClub.players.map((p) => p.apiFootballPlayerId),
+    ...match.awayClub.players.map((p) => p.apiFootballPlayerId),
+  ].filter((n): n is number => typeof n === "number" && Number.isFinite(n));
+  const aliases = session
+    ? await loadUserPlayerAliases(session.id, afIds)
+    : new Map();
+
+  const mergePlayer = <T extends { id: string; apiFootballPlayerId: number | null; photoUrl: string | null; name: string }>(p: T) => {
+    const alias = p.apiFootballPlayerId != null ? aliases.get(p.apiFootballPlayerId) : null;
+    return {
+      ...p,
+      photoUrl: alias?.photoUrl || p.photoUrl,
+    };
+  };
+  const homePlayers = match.homeClub.players.map(mergePlayer);
+  const awayPlayers = match.awayClub.players.map(mergePlayer);
+
+  const overrideByPlayer = new Map(
+    match.playerOverrides.map((o) => [o.playerId, o])
+  );
+  // Seed match overrides from user aliases when desk has no displayName yet
+  const playerOverrides = [
+    ...match.playerOverrides.map((o) => ({
+      playerId: o.playerId,
+      displayName: o.displayName,
+      pronunciation: o.pronunciation,
+      pitchFlag: o.pitchFlag,
+      jerseyNumber: o.jerseyNumber,
+      formationSlot: o.formationSlot,
+      pitchX: o.pitchX,
+      pitchY: o.pitchY,
+    })),
+  ];
+  for (const p of [...homePlayers, ...awayPlayers]) {
+    if (p.apiFootballPlayerId == null) continue;
+    const alias = aliases.get(p.apiFootballPlayerId);
+    if (!alias?.displayName) continue;
+    const existing = overrideByPlayer.get(p.id);
+    if (existing?.displayName) continue;
+    if (existing) {
+      const row = playerOverrides.find((r) => r.playerId === p.id);
+      if (row && !row.displayName) row.displayName = alias.displayName;
+    } else {
+      playerOverrides.push({
+        playerId: p.id,
+        displayName: alias.displayName,
+        pronunciation: null,
+        pitchFlag: null,
+        jerseyNumber: null,
+        formationSlot: null,
+        pitchX: null,
+        pitchY: null,
+      });
+    }
+  }
 
   const refOfficial = match.officials.find((o) => o.role === "Referee")?.official;
   const referee = refOfficial?.name;
@@ -60,10 +120,12 @@ export default async function MatchOverviewPage({
       awayColor={awayColor}
       homeKit={homeKit}
       awayKit={awayKit}
+      homeClubPrimary={match.homeClub.primaryColor}
+      awayClubPrimary={match.awayClub.primaryColor}
       homeFormation={match.homeFormation}
       awayFormation={match.awayFormation}
-      homePlayers={match.homeClub.players}
-      awayPlayers={match.awayClub.players}
+      homePlayers={homePlayers}
+      awayPlayers={awayPlayers}
       homeCoach={match.homeClub.coaches[0]}
       awayCoach={match.awayClub.coaches[0]}
       referee={referee}
@@ -140,16 +202,7 @@ export default async function MatchOverviewPage({
       awayClubId={match.awayClubId}
       homeTeamAfId={match.homeClub.apiFootballTeamId}
       awayTeamAfId={match.awayClub.apiFootballTeamId}
-      playerOverrides={match.playerOverrides.map((o) => ({
-        playerId: o.playerId,
-        displayName: o.displayName,
-        pronunciation: o.pronunciation,
-        pitchFlag: o.pitchFlag,
-        jerseyNumber: o.jerseyNumber,
-        formationSlot: o.formationSlot,
-        pitchX: o.pitchX,
-        pitchY: o.pitchY,
-      }))}
+      playerOverrides={playerOverrides}
     />
   );
 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { clampPitchCoord } from "@/lib/player-overrides";
+import { upsertUserPlayerDisplayName } from "@/lib/player-aliases";
 import {
   clearAllPitchPlacements,
   mirrorAllFreePlaceCoords,
@@ -90,7 +91,7 @@ export async function PATCH(
 
   const player = await prisma.player.findUnique({
     where: { id: playerId },
-    select: { id: true, clubId: true },
+    select: { id: true, clubId: true, apiFootballPlayerId: true },
   });
   if (!player) return NextResponse.json({ error: "Player not found" }, { status: 404 });
   if (player.clubId !== match.homeClubId && player.clubId !== match.awayClubId) {
@@ -174,5 +175,15 @@ export async function PATCH(
     create: { matchId, playerId, ...data },
     update: data,
   });
+
+  // Persist phonetic/card name across matches for this commentator.
+  if ("displayName" in body && player.apiFootballPlayerId) {
+    await upsertUserPlayerDisplayName({
+      userId: session.id,
+      apiFootballPlayerId: player.apiFootballPlayerId,
+      displayName: data.displayName,
+    }).catch((e) => console.warn("[overrides] alias upsert failed", e));
+  }
+
   return NextResponse.json({ override });
 }

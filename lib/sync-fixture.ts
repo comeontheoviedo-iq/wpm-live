@@ -58,7 +58,8 @@ import {
   DEFAULT_CLUB_PRIMARY,
   normalizeHex,
   kitOverrideForFixture,
-  kitMatchesOverride
+  kitMatchesOverride,
+  isManualKitOverride,
 } from "./kit-colors";
 import { leagueIdForMatchDay } from "./competitions";
 import { resolveWeatherForVenue } from "./weather";
@@ -2068,10 +2069,14 @@ async function runSyncMatchFromApiFootball(
 
   // Kit colours: hydrate when missing / legacy empty even on live confirmed polls.
   // AF often omits colours on cup fixtures — fall back to last known strip.
+  const homeKitLocked = isManualKitOverride(match.homeKitJson);
+  const awayKitLocked = isManualKitOverride(match.awayKitJson);
   const needKitColors =
-    kitNeedsHydration(match.homeKitJson) ||
-    kitNeedsHydration(match.awayKitJson) ||
-    (kitsSharePrimary(match.homeKitJson, match.awayKitJson) &&
+    (!homeKitLocked && kitNeedsHydration(match.homeKitJson)) ||
+    (!awayKitLocked && kitNeedsHydration(match.awayKitJson)) ||
+    (!homeKitLocked &&
+      !awayKitLocked &&
+      kitsSharePrimary(match.homeKitJson, match.awayKitJson) &&
       !kitDistinctTried(match.awayKitJson));
 
   const lineups = needLineups || needKitColors
@@ -2171,7 +2176,7 @@ async function runSyncMatchFromApiFootball(
     });
   };
 
-  if (kitOverride) {
+  if (kitOverride && !homeKitLocked && !awayKitLocked) {
     const homeDone = kitMatchesOverride(homeKitJson, kitOverride.home);
     const awayDone = kitMatchesOverride(awayKitJson, kitOverride.away);
     if (!homeDone || !awayDone) {
@@ -2201,7 +2206,9 @@ async function runSyncMatchFromApiFootball(
       if (parsed) return serializeKit(parsed);
       return serializeCheckedEmptyKit();
     };
-    homeKitJson = await resolveSide(homeAfId, homeLu, true);
+    if (!homeKitLocked) {
+      homeKitJson = await resolveSide(homeAfId, homeLu, true);
+    }
     const homePrimary = parseAfTeamColors(
       (() => {
         try {
@@ -2211,15 +2218,21 @@ async function runSyncMatchFromApiFootball(
         }
       })()
     )?.player.primary;
-    awayKitJson = await resolveSide(awayAfId, awayLu, false, homePrimary);
-    if (kitsSharePrimary(homeKitJson, awayKitJson)) {
-      awayKitJson = markKitDistinctTried(awayKitJson);
+    if (!awayKitLocked) {
+      awayKitJson = await resolveSide(awayAfId, awayLu, false, homePrimary);
+      if (kitsSharePrimary(homeKitJson, awayKitJson)) {
+        awayKitJson = markKitDistinctTried(awayKitJson);
+      }
     }
     kitsResolvedThisSync = true;
 
     // Upgrade default teal club primaries from resolved kits (scorebug + fallback).
-    await bumpClubPrimary(match.homeClubId, homeKitJson).catch(() => null);
-    await bumpClubPrimary(match.awayClubId, awayKitJson).catch(() => null);
+    if (!homeKitLocked) {
+      await bumpClubPrimary(match.homeClubId, homeKitJson).catch(() => null);
+    }
+    if (!awayKitLocked) {
+      await bumpClubPrimary(match.awayClubId, awayKitJson).catch(() => null);
+    }
   }
 
   // Confirmed XI: lineup.coach is authoritative (may have id 0; search surname).

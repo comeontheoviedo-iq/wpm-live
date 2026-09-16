@@ -76,3 +76,4 @@ data/desk-posters/
 
 # local Resend API key — never commit
 .resend_key.env
+data/player-alias-photos/

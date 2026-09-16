@@ -26,7 +26,6 @@ import {
   Rows2,
 } from "lucide-react";
 import { PitchBoard, type PitchPlayer } from "@/components/match/pitch";
-import type { MatchKitColors } from "@/lib/kit-colors";
 import { SquadRail, type SquadPlayer } from "@/components/match/squad-rail";
 import {
   NotesPanel,
@@ -117,6 +116,10 @@ import {
   mirrorPitchCoord,
   type PlayerOverrideRow,
 } from "@/lib/player-overrides";
+import {
+  sidePlayingColor,
+  type MatchKitColors,
+} from "@/lib/kit-colors";
 import { isScoredGoalType, selectScoredGoals } from "@/lib/match-goals";
 
 type Coach = {
@@ -372,6 +375,8 @@ export function MatchDesk({
   awayColor,
   homeKit = null,
   awayKit = null,
+  homeClubPrimary,
+  awayClubPrimary,
   homeFormation,
   awayFormation,
   homePlayers,
@@ -429,6 +434,8 @@ export function MatchDesk({
   awayColor: string;
   homeKit?: MatchKitColors | null;
   awayKit?: MatchKitColors | null;
+  homeClubPrimary?: string;
+  awayClubPrimary?: string;
   homeFormation: string;
   awayFormation: string;
   homePlayers: PitchPlayer[];
@@ -725,7 +732,22 @@ export function MatchDesk({
     DEFAULT_FIELD_SETTINGS
   );
   const [fieldSettingsOpen, setFieldSettingsOpen] = useState(false);
+  const [deskHomeKit, setDeskHomeKit] = useState<MatchKitColors | null>(homeKit);
+  const [deskAwayKit, setDeskAwayKit] = useState<MatchKitColors | null>(awayKit);
+  const [deskHomeColor, setDeskHomeColor] = useState(homeColor);
+  const [deskAwayColor, setDeskAwayColor] = useState(awayColor);
+  const [homeManualKit, setHomeManualKit] = useState(false);
+  const [awayManualKit, setAwayManualKit] = useState(false);
+  const clubHomePrimary = homeClubPrimary || homeColor;
+  const clubAwayPrimary = awayClubPrimary || awayColor;
   const [deskDensity, setDeskDensity] = useState<DeskDensity>("compact");
+  useEffect(() => {
+    setDeskHomeKit(homeKit);
+    setDeskAwayKit(awayKit);
+    setDeskHomeColor(homeColor);
+    setDeskAwayColor(awayColor);
+  }, [homeKit, awayKit, homeColor, awayColor]);
+  const [aliasPhotoById, setAliasPhotoById] = useState<Record<string, string>>({});
   const [dossierTab, setDossierTab] = useState<"overview" | "notes">("overview");
   const [coachTab, setCoachTab] = useState<"overview" | "notes">("overview");
   const [refereeTab, setRefereeTab] = useState<"overview" | "notes">("overview");
@@ -1085,9 +1107,10 @@ export function MatchDesk({
           pitchX: place ? o?.pitchX ?? null : null,
           pitchY: place ? o?.pitchY ?? null : null,
           isCaptain: Boolean(p.isCaptain) || liveCaptainIds.includes(p.id),
+          photoUrl: aliasPhotoById[p.id] || p.photoUrl,
         };
       }),
-    [homePlayers, events, status, noteHookByPlayer, overrideById, notes, liveCaptainIds]
+    [homePlayers, events, status, noteHookByPlayer, overrideById, notes, liveCaptainIds, aliasPhotoById]
   );
   const awayEnriched = useMemo(
     () =>
@@ -1108,9 +1131,10 @@ export function MatchDesk({
           pitchX: place ? o?.pitchX ?? null : null,
           pitchY: place ? o?.pitchY ?? null : null,
           isCaptain: Boolean(p.isCaptain) || liveCaptainIds.includes(p.id),
+          photoUrl: aliasPhotoById[p.id] || p.photoUrl,
         };
       }),
-    [awayPlayers, events, status, noteHookByPlayer, overrideById, notes, liveCaptainIds]
+    [awayPlayers, events, status, noteHookByPlayer, overrideById, notes, liveCaptainIds, aliasPhotoById]
   );
 
   const squad: SquadPlayer[] = useMemo(() => {
@@ -2936,10 +2960,10 @@ export function MatchDesk({
               )}
               disabled={!leaguePosterExists}
               onClick={openLeaguePoster}
-              title={
+              data-fast-tip={
                 leaguePosterExists
-                  ? "LEAGUE poster (Esc to close)"
-                  : "Upload LEAGUE poster in Research"
+                  ? "League poster"
+                  : "Upload League poster in Research"
               }
               aria-label="LEAGUE poster"
             >
@@ -2956,10 +2980,10 @@ export function MatchDesk({
               )}
               disabled={!hooksPosterExists}
               onClick={openHooksPoster}
-              title={
+              data-fast-tip={
                 hooksPosterExists
-                  ? "HOOKS poster (Esc to close)"
-                  : "Upload HOOKS poster in Research"
+                  ? "Hooks poster"
+                  : "Upload Hooks poster in Research"
               }
               aria-label="HOOKS poster"
             >
@@ -2970,7 +2994,7 @@ export function MatchDesk({
               type="button"
               className="desk-btn font-bold tracking-[0.1em]"
               onClick={openDataVizFromNotes}
-              title="Reopen data visuals saved for this match"
+              data-fast-tip="Data visuals"
               aria-label="DATA VIZ"
             >
               <BarChart3 className="h-3 w-3" />
@@ -2985,9 +3009,9 @@ export function MatchDesk({
               )}
               disabled={!statistics.length && !events.length}
               onClick={() => setStatsOverlayOpen(true)}
-              title={
+              data-fast-tip={
                 statistics.length
-                  ? "Match statistics (Esc to close)"
+                  ? "Match statistics"
                   : "Sync to pull match statistics"
               }
               aria-label="STATS"
@@ -3406,10 +3430,21 @@ export function MatchDesk({
             <PitchBoard
               homeName={homeName}
               awayName={awayName}
-              homeColor={homeColor}
-              awayColor={awayColor}
-              homeKit={homeKit}
-              awayKit={awayKit}
+              homeColor={deskHomeColor}
+              awayColor={deskAwayColor}
+              homeKit={deskHomeKit}
+              awayKit={deskAwayKit}
+              matchId={matchId}
+              homeManualKit={homeManualKit}
+              awayManualKit={awayManualKit}
+              onKitsApplied={(next) => {
+                setDeskHomeKit(next.homeKit);
+                setDeskAwayKit(next.awayKit);
+                setHomeManualKit(next.homeManual);
+                setAwayManualKit(next.awayManual);
+                setDeskHomeColor(sidePlayingColor(next.homeKit, clubHomePrimary));
+                setDeskAwayColor(sidePlayingColor(next.awayKit, clubAwayPrimary));
+              }}
               homeFormation={homeForm}
               awayFormation={awayForm}
               homePlayers={homeEnriched}
@@ -4149,6 +4184,10 @@ export function MatchDesk({
           playerName={squad.find((s) => s.id === dossierId)?.name}
           initialOverride={overrideById.get(dossierId) || null}
           onOverrideChange={(row) => applyOverride(row, dossierId)}
+          onPhotoChange={(url) => {
+            if (!dossierId || !url) return;
+            setAliasPhotoById((m) => ({ ...m, [dossierId]: url }));
+          }}
           onClose={() => {
             setDossierId(null);
             setSelected(null);

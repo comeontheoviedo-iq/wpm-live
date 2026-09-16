@@ -197,6 +197,7 @@ export function PlayerDossier({
   playerName,
   initialOverride = null,
   onOverrideChange,
+  onPhotoChange,
 }: {
   matchId: string;
   playerId: string;
@@ -206,6 +207,7 @@ export function PlayerDossier({
   playerName?: string;
   initialOverride?: PlayerOverrideRow | null;
   onOverrideChange?: (row: PlayerOverrideRow | null) => void;
+  onPhotoChange?: (photoUrl: string | null) => void;
 }) {
   const mapInitial = (t: string): Tab => {
     if (t === "overview" || t === "profile") return "overview";
@@ -239,6 +241,8 @@ export function PlayerDossier({
   );
   const [ovSaving, setOvSaving] = useState(false);
   const [ovMsg, setOvMsg] = useState<string | null>(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [localPhotoUrl, setLocalPhotoUrl] = useState<string | null>(null);
   const [createNoteBusy, setCreateNoteBusy] = useState(false);
   const [createNoteMsg, setCreateNoteMsg] = useState<string | null>(null);
   const [expandedPreviewId, setExpandedPreviewId] = useState<string | null>(null);
@@ -258,6 +262,7 @@ export function PlayerDossier({
     );
     setGearOpen(false);
     setOvMsg(null);
+    setLocalPhotoUrl(null);
   }, [playerId, initialOverride]);
 
   useEffect(() => {
@@ -306,6 +311,7 @@ export function PlayerDossier({
     ) ||
     null;
   const photo =
+    localPhotoUrl ||
     p?.photoUrl ||
     data?.afStats?.player?.photo ||
     playerPhotoUrl({ apiFootballPlayerId: p?.apiFootballPlayerId ?? null });
@@ -359,7 +365,7 @@ export function PlayerDossier({
           pitchFlag: j.override.pitchFlag,
           jerseyNumber: j.override.jerseyNumber,
         });
-        setOvMsg("Saved for this match");
+        setOvMsg("Saved · follows this player for you");
       }
     } catch (e) {
       setOvMsg(e instanceof Error ? e.message : "Save failed");
@@ -375,6 +381,43 @@ export function PlayerDossier({
       speechLangFromNationality(p?.nationality)
     );
     if (!ok) setOvMsg("Speech not available in this browser");
+  }
+
+  async function uploadAliasPhoto(file: File | null) {
+    if (!file || !p?.apiFootballPlayerId) {
+      setOvMsg("Player feed id missing — cannot save photo");
+      return;
+    }
+    setPhotoUploading(true);
+    setOvMsg(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const r = await fetch(
+        `/api/player-aliases/photo?af=${p.apiFootballPlayerId}`,
+        { method: "POST", body: fd }
+      );
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || "Upload failed");
+      setLocalPhotoUrl(j.photoUrl || null);
+      onPhotoChange?.(j.photoUrl || null);
+      setOvMsg("Photo saved for you");
+      // Keep match override in sync for immediate desk refresh if parent cares
+      onOverrideChange?.({
+        playerId,
+        displayName: ovDisplayName.trim() || initialOverride?.displayName || null,
+        pronunciation: ovPronunciation.trim() || initialOverride?.pronunciation || null,
+        pitchFlag: ovPitchFlag || initialOverride?.pitchFlag || null,
+        jerseyNumber:
+          ovJersey.trim() === ""
+            ? initialOverride?.jerseyNumber ?? null
+            : Number(ovJersey),
+      });
+    } catch (e) {
+      setOvMsg(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setPhotoUploading(false);
+    }
   }
 
   const tabs: { key: Tab; label: string }[] = [
@@ -589,9 +632,23 @@ export function PlayerDossier({
               }}
             />
           ) : (
-            <div className="player-dossier-photo player-dossier-photo-fallback">
-              <User className="h-9 w-9 opacity-70" />
-            </div>
+            <label className="player-dossier-photo player-dossier-photo-fallback flex cursor-pointer flex-col items-center justify-center gap-1 text-center">
+              <User className="h-7 w-7 opacity-70" />
+              <span className="text-[9px] font-semibold uppercase tracking-wide text-[#F59E0B]">
+                {photoUploading ? "Uploading…" : "Add photo"}
+              </span>
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="sr-only"
+                disabled={photoUploading || !p?.apiFootballPlayerId}
+                onChange={(e) => {
+                  const f = e.target.files?.[0] || null;
+                  e.target.value = "";
+                  void uploadAliasPhoto(f);
+                }}
+              />
+            </label>
           )}
           <div className="min-w-0 flex-1">
             <div className="flex items-start gap-2 min-w-0">
@@ -636,6 +693,30 @@ export function PlayerDossier({
         </div>
       </div>
 
+      {/* Fast card-name edit (also in gear) */}
+      {!gearOpen && p ? (
+        <label className="mt-2 flex items-center gap-2 text-[11px]">
+          <span className="shrink-0 font-semibold text-[#94a3b8]">Card name</span>
+          <input
+            className="min-w-0 flex-1 rounded border border-white/10 bg-black/20 px-2 py-1 text-sm"
+            placeholder={lastNameOf(p.name)}
+            value={ovDisplayName}
+            onChange={(e) => setOvDisplayName(e.target.value)}
+            onBlur={() => {
+              if (ovDisplayName.trim() !== (initialOverride?.displayName || "")) {
+                void saveOverrides(false);
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void saveOverrides(false);
+              }
+            }}
+          />
+        </label>
+      ) : null}
+
       {createNoteMsg ? (
         <div className="player-dossier-msg">{createNoteMsg}</div>
       ) : null}
@@ -643,11 +724,11 @@ export function PlayerDossier({
       {gearOpen && (
         <div className="player-dossier-gear space-y-2.5">
           <div className="player-dossier-gear-title">
-            Pitch card overrides · this match only
+            Pitch card · saved for you across matches
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
             <label className="block text-[11px] space-y-1">
-              <span className="font-semibold">Name on field</span>
+              <span className="font-semibold">Card name</span>
               <input
                 className="w-full px-2 py-1.5 text-sm"
                 placeholder={p ? lastNameOf(p.name) : "Last name"}

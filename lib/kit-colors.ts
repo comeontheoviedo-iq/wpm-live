@@ -262,6 +262,42 @@ export function playingColorsForMatch(match: {
 }
 
 
+
+/** True when desk user locked kit colours (sync must not overwrite). */
+export function isManualKitOverride(json: string | null | undefined): boolean {
+  if (json == null) return false;
+  const t = json.trim();
+  if (!t) return false;
+  try {
+    const o = JSON.parse(t) as Record<string, unknown>;
+    return Boolean(o && o.manualOverride === true);
+  } catch {
+    return false;
+  }
+}
+
+/** Persist a desk kit override; sync will skip until Reset to feed. */
+export function serializeManualKit(kit: MatchKitColors): string {
+  const base = JSON.parse(serializeKit(kit) || "{}") as Record<string, unknown>;
+  return JSON.stringify({ ...base, manualOverride: true });
+}
+
+/** Strip manualOverride flag (used when clearing back toward feed hydrate). */
+export function stripManualKitFlag(json: string | null | undefined): string | null {
+  if (json == null) return null;
+  const t = json.trim();
+  if (!t) return null;
+  try {
+    const o = JSON.parse(t) as Record<string, unknown>;
+    if (!o || typeof o !== "object") return json;
+    if (!("manualOverride" in o)) return json;
+    const { manualOverride: _m, ...rest } = o;
+    return JSON.stringify(rest);
+  } catch {
+    return json;
+  }
+}
+
 /**
  * Match-night kit overrides when AF returns colors:null.
  * Prefer tonight's truth over wrong last-known domestic strips.

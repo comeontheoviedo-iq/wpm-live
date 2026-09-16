@@ -50,6 +50,7 @@ model User {
   matchDays            MatchDay[]
   notes                Note[]
   speaks               Speak[]
+  playerAliases        UserPlayerAlias[]
 }
 
 model Club {
@@ -368,6 +369,25 @@ model PackSection {
   updatedAt   DateTime @updatedAt
 
   @@unique([matchId, templateKey])
+}
+
+
+/// Per-user pitch-card alias keyed by API-Football player id.
+/// Survives club/country moves for that commentator only (display name + optional photo).
+model UserPlayerAlias {
+  id                  String   @id @default(cuid())
+  userId              String
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  apiFootballPlayerId Int
+  displayName         String?
+  /// User-scoped photo path (e.g. /api/player-aliases/photo?af=…&v=…)
+  photoUrl            String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([userId, apiFootballPlayerId])
+  @@index([userId])
+  @@index([apiFootballPlayerId])
 }
 
 model MatchPlayerOverride {

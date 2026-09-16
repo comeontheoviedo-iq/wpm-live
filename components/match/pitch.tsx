@@ -9,6 +9,7 @@ import {
   type DragEvent,
 } from "react";
 import { User, X, SlidersHorizontal, ArrowLeftRight } from "lucide-react";
+import { KitsPopover } from "@/components/match/kits-popover";
 import { slotsFor } from "@/lib/formations";
 import { cn } from "@/lib/utils";
 import { formatPitchClockBadge } from "@/lib/live-clock";
@@ -791,6 +792,10 @@ export function PitchBoard({
   onRefereeClick,
   hasCustomPlacements,
   onResetPlacements,
+  matchId,
+  homeManualKit = false,
+  awayManualKit = false,
+  onKitsApplied,
 }: {
   homeName: string;
   awayName: string;
@@ -856,6 +861,16 @@ export function PitchBoard({
   /** Home team on left of screen (kick L→R). False = home on right. */
   homeOnLeft?: boolean;
   onToggleHomeOnLeft?: () => void;
+  /** Match id for on-desk kit overrides. */
+  matchId?: string;
+  homeManualKit?: boolean;
+  awayManualKit?: boolean;
+  onKitsApplied?: (next: {
+    homeKit: MatchKitColors | null;
+    awayKit: MatchKitColors | null;
+    homeManual: boolean;
+    awayManual: boolean;
+  }) => void;
   /** LIVE: prefer smaller cards / less chrome. */
   liveCompact?: boolean;
   /** Desk fullscreen — skip LIVE compact crush so tokens can grow. */
@@ -1469,7 +1484,7 @@ export function PitchBoard({
                   type="button"
                   onClick={onLeagueLogoClick}
                   className="scorebug-league"
-                  title="League notes"
+                  data-fast-tip="League"
                   aria-label="Open league notes"
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -1664,7 +1679,7 @@ export function PitchBoard({
                         type="button"
                         onClick={onLeagueLogoClick}
                         className="pitch-prematch-league"
-                        title="League notes"
+                        data-fast-tip="League"
                         aria-label="Open league notes"
                       >
                         {leagueLogoUrl ? (
@@ -1752,32 +1767,45 @@ export function PitchBoard({
 
           {/* Compact tools: swap + field (clock lives in scorebug) */}
           <div className="pointer-events-auto flex items-center gap-0.5">
-            {(onToggleHomeOnLeft || onOpenFieldSettings) && !onAirMode && (
-              <div className="pitch-overlay-chip inline-flex items-center gap-px p-0.5">
+            {(onToggleHomeOnLeft || onOpenFieldSettings || (matchId && onKitsApplied)) && !onAirMode && (
+              <div className="pitch-overlay-chip inline-flex items-center gap-0.5 p-0.5">
                 {onToggleHomeOnLeft && (
                   <button
                     type="button"
                     onClick={onToggleHomeOnLeft}
-                    className="inline-flex h-5 w-5 items-center justify-center rounded-[2px] text-[var(--bug-fg)] hover:bg-white/10"
-                    title={
+                    className="inline-flex h-6 items-center gap-1 rounded-[2px] px-1.5 text-[9px] font-semibold uppercase tracking-wide text-[var(--bug-fg)] hover:bg-white/10"
+                    data-fast-tip={
                       homeOnLeft
-                        ? "Swap sides · home moves to right"
-                        : "Swap sides · home moves to left"
+                        ? "Home moves to right"
+                        : "Home moves to left"
                     }
-                    aria-label="Swap sides"
+                    aria-label="Swap ends"
                   >
-                    <ArrowLeftRight className="h-3 w-3" />
+                    <ArrowLeftRight className="h-3.5 w-3.5" />
+                    Swap ends
                   </button>
+                )}
+                {matchId && onKitsApplied && (
+                  <KitsPopover
+                    matchId={matchId}
+                    homeName={homeName}
+                    awayName={awayName}
+                    homeKit={homeKit || null}
+                    awayKit={awayKit || null}
+                    homeManual={homeManualKit}
+                    awayManual={awayManualKit}
+                    onApplied={onKitsApplied}
+                  />
                 )}
                 {onOpenFieldSettings && (
                   <button
                     type="button"
                     onClick={() => onOpenFieldSettings("player")}
-                    className="inline-flex h-5 w-5 items-center justify-center rounded-[2px] text-[var(--bug-fg)] hover:bg-white/10"
-                    title="Field Settings · Pitch Card"
+                    className="inline-flex h-6 w-6 items-center justify-center rounded-[2px] text-[var(--bug-fg)] hover:bg-white/10"
+                    data-fast-tip="Field Settings · Pitch Card"
                     aria-label="Field Settings"
                   >
-                    <SlidersHorizontal className="h-3 w-3" />
+                    <SlidersHorizontal className="h-3.5 w-3.5" />
                   </button>
                 )}
               </div>
@@ -1786,15 +1814,16 @@ export function PitchBoard({
               <button
                 type="button"
                 onClick={onToggleHomeOnLeft}
-                className="pitch-overlay-chip inline-flex h-5 w-5 items-center justify-center text-[var(--bug-fg)] hover:bg-white/10"
-                title={
+                className="pitch-overlay-chip inline-flex h-6 items-center gap-1 px-1.5 text-[9px] font-semibold uppercase tracking-wide text-[var(--bug-fg)] hover:bg-white/10"
+                data-fast-tip={
                   homeOnLeft
-                    ? "Swap sides · home moves to right"
-                    : "Swap sides · home moves to left"
+                    ? "Home moves to right"
+                    : "Home moves to left"
                 }
-                aria-label="Swap sides"
+                aria-label="Swap ends"
               >
-                <ArrowLeftRight className="h-3 w-3" />
+                <ArrowLeftRight className="h-3.5 w-3.5" />
+                Swap ends
               </button>
             )}
           </div>

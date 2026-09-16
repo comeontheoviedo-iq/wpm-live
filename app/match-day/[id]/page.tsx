@@ -30,15 +30,18 @@ export default async function MatchOverviewPage({
     ? await loadUserPlayerAliases(session.id, afIds)
     : new Map();
 
-  const mergePlayer = <T extends { id: string; apiFootballPlayerId: number | null; photoUrl: string | null; name: string }>(p: T) => {
-    const alias = p.apiFootballPlayerId != null ? aliases.get(p.apiFootballPlayerId) : null;
+  function mergePlayerPhoto<T extends { apiFootballPlayerId: number | null; photoUrl: string | null }>(
+    p: T
+  ): T {
+    const alias =
+      p.apiFootballPlayerId != null ? aliases.get(p.apiFootballPlayerId) : null;
     return {
       ...p,
       photoUrl: alias?.photoUrl || p.photoUrl,
     };
-  };
-  const homePlayers = match.homeClub.players.map(mergePlayer);
-  const awayPlayers = match.awayClub.players.map(mergePlayer);
+  }
+  const homePlayers = match.homeClub.players.map(mergePlayerPhoto);
+  const awayPlayers = match.awayClub.players.map(mergePlayerPhoto);
 
   const overrideByPlayer = new Map(
     match.playerOverrides.map((o) => [o.playerId, o])

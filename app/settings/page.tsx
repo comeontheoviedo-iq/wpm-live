@@ -23,6 +23,7 @@ import {
   Shield,
   Search,
   Camera,
+  KeyRound,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLocale } from "@/components/i18n/locale-provider";
@@ -98,6 +99,12 @@ export default function SettingsPage() {
   const [profileTimezone, setProfileTimezone] = useState("");
   const [profileBusy, setProfileBusy] = useState(false);
   const [profileMsg, setProfileMsg] = useState<string | null>(null);
+  const [pwCurrent, setPwCurrent] = useState("");
+  const [pwNew, setPwNew] = useState("");
+  const [pwConfirm, setPwConfirm] = useState("");
+  const [pwBusy, setPwBusy] = useState(false);
+  const [pwMsg, setPwMsg] = useState<string | null>(null);
+  const [pwErr, setPwErr] = useState<string | null>(null);
   const [avatarBusy, setAvatarBusy] = useState(false);
   const [apiFootball, setApiFootball] = useState(false);
   const [gemini, setGemini] = useState(false);
@@ -198,6 +205,44 @@ export default function SettingsPage() {
       setProfileMsg(err instanceof Error ? err.message : "Could not save profile");
     } finally {
       setProfileBusy(false);
+    }
+  }
+
+
+  async function changePassword(e?: React.FormEvent) {
+    e?.preventDefault();
+    setPwBusy(true);
+    setPwMsg(null);
+    setPwErr(null);
+    if (pwNew.length < 8) {
+      setPwErr("New password must be at least 8 characters");
+      setPwBusy(false);
+      return;
+    }
+    if (pwNew !== pwConfirm) {
+      setPwErr("New password and confirmation do not match");
+      setPwBusy(false);
+      return;
+    }
+    try {
+      const res = await fetch("/api/auth/password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          currentPassword: pwCurrent,
+          newPassword: pwNew,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(String(json.error || "Could not change password"));
+      setPwCurrent("");
+      setPwNew("");
+      setPwConfirm("");
+      setPwMsg("Password updated");
+    } catch (err) {
+      setPwErr(err instanceof Error ? err.message : "Could not change password");
+    } finally {
+      setPwBusy(false);
     }
   }
 
@@ -639,6 +684,70 @@ export default function SettingsPage() {
                       </div>
                       {profileMsg && (
                         <p className="text-xs text-slate-600 dark:text-slate-300">{profileMsg}</p>
+                      )}
+                    </form>
+                  </div>
+                  <div className="rounded-xl border border-amber-200 dark:border-amber-900/60 bg-amber-50/40 dark:bg-amber-950/20 p-4 space-y-3">
+                    <div className="flex items-center gap-2 font-medium">
+                      <KeyRound className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                      Security · Change password
+                    </div>
+                    <p className="text-xs text-slate-500 leading-relaxed">
+                      Passwords are hashed and cannot be resent. Enter your current password, then choose a new one (at least 8 characters).
+                    </p>
+                    <form onSubmit={changePassword} className="space-y-3 max-w-md">
+                      <div>
+                        <label className="text-xs text-slate-500" htmlFor="pw-current">Current password</label>
+                        <input
+                          id="pw-current"
+                          type="password"
+                          autoComplete="current-password"
+                          value={pwCurrent}
+                          onChange={(e) => setPwCurrent(e.target.value)}
+                          required
+                          className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm outline-none focus:border-amber-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-500" htmlFor="pw-new">New password</label>
+                        <input
+                          id="pw-new"
+                          type="password"
+                          autoComplete="new-password"
+                          value={pwNew}
+                          onChange={(e) => setPwNew(e.target.value)}
+                          required
+                          minLength={8}
+                          className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm outline-none focus:border-amber-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-500" htmlFor="pw-confirm">Confirm new password</label>
+                        <input
+                          id="pw-confirm"
+                          type="password"
+                          autoComplete="new-password"
+                          value={pwConfirm}
+                          onChange={(e) => setPwConfirm(e.target.value)}
+                          required
+                          minLength={8}
+                          className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm outline-none focus:border-amber-500"
+                        />
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        <Button
+                          type="submit"
+                          disabled={pwBusy}
+                          className="bg-amber-500 hover:bg-amber-600 text-white border-0"
+                        >
+                          {pwBusy ? "Saving…" : "Save password"}
+                        </Button>
+                      </div>
+                      {pwMsg && (
+                        <p className="text-xs text-teal-700 dark:text-teal-300">{pwMsg}</p>
+                      )}
+                      {pwErr && (
+                        <p className="text-xs text-rose-600 dark:text-rose-400">{pwErr}</p>
                       )}
                     </form>
                   </div>

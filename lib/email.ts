@@ -23,6 +23,8 @@ export type SendEmailResult = {
   ok: boolean;
   provider: "resend" | "smtp" | "none";
   error?: string;
+  /** Provider message id when available (e.g. Resend). */
+  id?: string;
 };
 
 const DEFAULT_FROM = "CoComms <help@cocomms.online>";
@@ -96,7 +98,8 @@ async function sendViaResend(input: SendEmailInput): Promise<SendEmailResult> {
         error: `Resend HTTP ${res.status}`,
       };
     }
-    return { ok: true, provider: "resend" };
+    const data = (await res.json().catch(() => ({}))) as { id?: string };
+    return { ok: true, provider: "resend", id: data.id };
   } catch (e) {
     console.warn(
       "[email] Resend error",

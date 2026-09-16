@@ -51,6 +51,7 @@ model User {
   notes                Note[]
   speaks               Speak[]
   playerAliases        UserPlayerAlias[]
+  passwordResetTokens PasswordResetToken[]
 }
 
 model Club {
@@ -500,4 +501,18 @@ model UrHandoffLog {
   createdAt   DateTime @default(now())
 
   @@index([urShowId])
+}
+
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([tokenHash])
+  @@index([userId])
 }

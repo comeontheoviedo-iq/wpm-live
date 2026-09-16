@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { jwtVerify } from "jose";
 
-const publicPaths = ["/login", "/signup", "/pricing", "/faq"];
+const publicPaths = ["/login", "/signup", "/pricing", "/faq", "/forgot-password", "/reset-password"];
 
 /** OBS Browser Source has no login cookie — allow transparent overlay pages. */
 function isObsOverlayPath(pathname: string) {

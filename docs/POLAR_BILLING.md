@@ -144,3 +144,16 @@ On first Polar trial unlock the webhook sends a one-shot CoComms welcome email
 Requires `RESEND_API_KEY` **or** `SMTP_HOST` + `SMTP_USER` + `SMTP_PASS` on
 Netlify. Without mail env the webhook still unlocks trial and only logs a skip.
 
+
+## Webhook signing (Standard Webhooks)
+
+Polar endpoints with `uses_standard_webhook_signature=true` (secrets generated
+after **2026-09-08**) sign with spec-compliant `whsec_` key derivation.
+
+`@polar-sh/nextjs` / `@polar-sh/sdk` `validateEvent` still verifies the **legacy**
+encoding (`base64(utf8(secret))`). Using that helper against a new endpoint
+returns **403** on every delivery and Polar auto-disables the webhook.
+
+Our route (`app/api/billing/polar/webhook`) verifies with `standardwebhooks`
+first, then falls back to the legacy encoding, and returns **2xx** after
+durable handling so poison events cannot re-disable the endpoint.

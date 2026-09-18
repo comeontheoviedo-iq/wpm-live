@@ -13,7 +13,7 @@ import {
 import { Logo } from "./logo";
 import { useTheme } from "@/components/theme-provider";
 import { useLocale } from "@/components/i18n/locale-provider";
-import { FeedbackWidget } from "@/components/feedback/feedback-widget";
+import { AskReportButton } from "@/components/feedback/ask-report-modal";
 
 export function AppHeader({
   user,
@@ -96,7 +96,7 @@ export function AppHeader({
           </div>
         </div>
       </header>
-      <FeedbackWidget matchId={matchId} />
+      <AskReportButton deskContext={matchId ? { matchId } : null} />
     </>
   );
 }

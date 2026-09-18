@@ -52,6 +52,7 @@ model User {
   speaks               Speak[]
   playerAliases        UserPlayerAlias[]
   passwordResetTokens PasswordResetToken[]
+  supportPings         SupportPing[]
 }
 
 model Club {
@@ -516,3 +517,24 @@ model PasswordResetToken {
   @@index([tokenHash])
   @@index([userId])
 }
+
+/// In-desk Ask / Report pings for CoComms Dev agent pickup.
+model SupportPing {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// ask | bug | xi_wrong | billing | other
+  type      String
+  message   String
+  /// Optional desk context JSON: matchTitle, afFixtureId, lineupSource, url, ...
+  context   String?
+  /// open | resolved
+  status    String    @default("open")
+  createdAt DateTime  @default(now())
+  resolvedAt DateTime?
+  resolvedBy String?
+
+  @@index([status, createdAt])
+  @@index([userId])
+}
+

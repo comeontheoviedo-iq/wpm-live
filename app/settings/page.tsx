@@ -7,7 +7,7 @@ import { AppSidebar } from "@/components/layout/app-sidebar";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/components/theme-provider";
-import { FeedbackWidget } from "@/components/feedback/feedback-widget";
+import { AskReportButton } from "@/components/feedback/ask-report-modal";
 import Link from "next/link";
 import {
   User,
@@ -536,7 +536,7 @@ export default function SettingsPage() {
     { id: "templates", label: "Templates", icon: <Mic2 className="h-4 w-4" /> },
     { id: "integrations", label: "Integrations", icon: <Plug className="h-4 w-4" /> },
     { id: "subscription", label: "Plan", icon: <CreditCard className="h-4 w-4" /> },
-    { id: "feedback", label: "Feedback", icon: <MessageSquarePlus className="h-4 w-4" /> },
+    { id: "feedback", label: "Ask / Report", icon: <MessageSquarePlus className="h-4 w-4" /> },
   ];
   return (
     <div className="min-h-dvh bg-[var(--background)] text-[var(--foreground)]">
@@ -1157,10 +1157,10 @@ export default function SettingsPage() {
             )}
             {tab === "feedback" && (
               <Card>
-                <CardHeader><CardTitle className="flex items-center gap-2"><MessageSquarePlus className="h-4 w-4" /> Bug / Improvement</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="flex items-center gap-2"><MessageSquarePlus className="h-4 w-4" /> Ask / Report</CardTitle></CardHeader>
                 <CardBody className="space-y-3 text-sm">
-                  <p className="text-slate-500">Send a bug or improvement note. Captures page URL and user agent. Sticky Feedback button also available on every page.</p>
-                  <FeedbackWidget compact />
+                  <p className="text-slate-500">Ask CoComms a question or report a bug, wrong XI, or billing issue. Optional desk context + owner alert email wakes the Dev agent.</p>
+                  <AskReportButton compact />
                 </CardBody>
               </Card>
             )}

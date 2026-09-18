@@ -17,7 +17,7 @@ export const runtime = "nodejs";
  * Dashboard: https://www.cocomms.online/api/billing/polar/webhook
  * Events: order.paid, subscription.created|active|updated|canceled|revoked, checkout.updated
  *
- * Uses @polar-sh/nextjs Webhooks when POLAR_WEBHOOK_SECRET is set.
+ * Verifies with Standard Webhooks (whsec_) + legacy Polar encoding fallback.
  */
 
 type Meta = Record<string, string | number | boolean | undefined | null>;
@@ -402,65 +402,87 @@ async function applyCheckoutUpdated(opts: {
   });
 }
 
-function buildWebhookHandler() {
+/**
+ * Verify Polar webhook signatures.
+ *
+ * Polar endpoints created after 2026-09-08 sign with Standard Webhooks
+ * (`whsec_…` key derivation). Older endpoints / @polar-sh/sdk validateEvent
+ * instead HMAC with UTF-8 bytes of the full secret string (via base64 round-trip).
+ * Try Standard Webhooks first, then the legacy Polar encoding so both work.
+ */
+function verifyPolarWebhook(
+  body: string,
+  headers: {
+    "webhook-id": string;
+    "webhook-timestamp": string;
+    "webhook-signature": string;
+  },
+  secret: string
+): { type?: string; data?: unknown } {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { Webhooks } = require("@polar-sh/nextjs");
-  const secret = process.env.POLAR_WEBHOOK_SECRET!.trim();
+  const { Webhook } = require("standardwebhooks") as {
+    Webhook: new (secret: string) => {
+      verify: (
+        payload: string,
+        headers: Record<string, string>
+      ) => { type?: string; data?: unknown };
+    };
+  };
 
-  return Webhooks({
-    webhookSecret: secret,
-    onPayload: async (payload: { type?: string }) => {
-      console.log("[polar/webhook]", payload?.type || "unknown");
-    },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    onOrderPaid: async (payload: any) => {
-      const order = payload?.data ?? payload;
-      await applyOrderPaid({ order });
-    },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    onCheckoutUpdated: async (payload: any) => {
-      const checkout = payload?.data ?? payload;
-      await applyCheckoutUpdated({ checkout });
-    },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    onSubscriptionCreated: async (payload: any) => {
-      await applySubscription({
-        subscription: payload?.data ?? payload,
-        eventType: "subscription.created",
-      });
-    },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    onSubscriptionActive: async (payload: any) => {
-      await applySubscription({
-        subscription: payload?.data ?? payload,
-        eventType: "subscription.active",
-      });
-    },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    onSubscriptionUpdated: async (payload: any) => {
-      await applySubscription({
-        subscription: payload?.data ?? payload,
-        eventType: "subscription.updated",
-      });
-    },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    onSubscriptionCanceled: async (payload: any) => {
-      await applySubscription({
-        subscription: payload?.data ?? payload,
-        eventType: "subscription.canceled",
-      });
-    },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    onSubscriptionRevoked: async (payload: any) => {
-      await applySubscription({
-        subscription: payload?.data ?? payload,
-        eventType: "subscription.revoked",
-      });
-    },
-  });
+  const hdrs = {
+    "webhook-id": headers["webhook-id"],
+    "webhook-timestamp": headers["webhook-timestamp"],
+    "webhook-signature": headers["webhook-signature"],
+  };
+
+  // 1) Spec-compliant Standard Webhooks (current Polar signing for new secrets)
+  try {
+    return new Webhook(secret).verify(body, hdrs) as {
+      type?: string;
+      data?: unknown;
+    };
+  } catch (stdErr) {
+    // 2) Legacy Polar SDK encoding: base64(utf8(secret))
+    try {
+      const legacyKey = Buffer.from(secret, "utf-8").toString("base64");
+      return new Webhook(legacyKey).verify(body, hdrs) as {
+        type?: string;
+        data?: unknown;
+      };
+    } catch {
+      throw stdErr;
+    }
+  }
 }
 
-let handler: ((req: Request) => Promise<Response>) | null = null;
+async function dispatchPolarEvent(payload: {
+  type?: string;
+  data?: unknown;
+}): Promise<void> {
+  const type = String(payload?.type || "");
+  console.log("[polar/webhook]", type || "unknown");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const data: any = payload?.data ?? payload;
+
+  switch (type) {
+    case "order.paid":
+      await applyOrderPaid({ order: data });
+      return;
+    case "checkout.updated":
+      await applyCheckoutUpdated({ checkout: data });
+      return;
+    case "subscription.created":
+    case "subscription.active":
+    case "subscription.updated":
+    case "subscription.canceled":
+    case "subscription.revoked":
+      await applySubscription({ subscription: data, eventType: type });
+      return;
+    default:
+      // Acknowledge unhandled types so Polar does not retry-disable the endpoint.
+      console.log("[polar/webhook] ignored event type", type || "(empty)");
+  }
+}
 
 export async function POST(req: Request) {
   const secret = process.env.POLAR_WEBHOOK_SECRET?.trim();
@@ -478,20 +500,37 @@ export async function POST(req: Request) {
     });
   }
 
+  const body = await req.text();
+  const webhookHeaders = {
+    "webhook-id": req.headers.get("webhook-id") ?? "",
+    "webhook-timestamp": req.headers.get("webhook-timestamp") ?? "",
+    "webhook-signature": req.headers.get("webhook-signature") ?? "",
+  };
+
+  let payload: { type?: string; data?: unknown };
   try {
-    if (!handler) handler = buildWebhookHandler();
-    const h = handler;
-    if (!h) {
-      return NextResponse.json({ error: "Webhook handler unavailable" }, { status: 503 });
-    }
-    return await h(req);
+    payload = verifyPolarWebhook(body, webhookHeaders, secret);
   } catch (e) {
-    console.error("[polar/webhook] handler error", e);
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : "Webhook handler failed" },
-      { status: 500 }
+    console.warn(
+      "[polar/webhook] signature verification failed",
+      e instanceof Error ? e.message : e
+    );
+    return NextResponse.json({ received: false }, { status: 403 });
+  }
+
+  // Prefer 2xx after durable work. Never 500-loop on poison/handler errors —
+  // Polar auto-disables after consecutive non-2xx.
+  try {
+    await dispatchPolarEvent(payload);
+  } catch (e) {
+    console.error(
+      "[polar/webhook] handler error (ack 200 to avoid disable loop)",
+      payload?.type,
+      e
     );
   }
+
+  return NextResponse.json({ received: true });
 }
 
 export async function GET() {

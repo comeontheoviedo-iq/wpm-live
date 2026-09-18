@@ -230,3 +230,19 @@ describe("assignSlotsFromStartXI — no array-order scramble", () => {
     }
   });
 });
+
+
+describe("planLineupApply — xiFeedFrozen", () => {
+  it("keeps board and status when feed is frozen even if Official arrives", () => {
+    const plan = planLineupApply({
+      homeOfficial: true,
+      awayOfficial: true,
+      currentStatus: "predicted",
+      isLiveSync: false,
+      isPreOrNs: true,
+      xiFeedFrozen: true,
+    });
+    assert.equal(plan.action, "keep");
+    assert.equal(plan.lineupStatus, "predicted");
+  });
+});

@@ -9,8 +9,8 @@ import { useLocale } from "@/components/i18n/locale-provider";
 
 function statusLabel(lineupStatus: string) {
   if (lineupStatus === "confirmed") return "Official";
-  if (lineupStatus === "predicted") return "Your predicted XI";
-  if (lineupStatus === "expected") return "Expected (last XI)";
+  if (lineupStatus === "predicted") return "Predicted";
+  if (lineupStatus === "expected") return "Last XI";
   return lineupStatus;
 }
 

@@ -136,6 +136,11 @@ export default async function MatchOverviewPage({
       refereeId={refereeId}
       refereeAge={refereeAge}
       lineupStatus={match.lineupStatus}
+      lineupSource={(match as { lineupSource?: string | null }).lineupSource ?? null}
+      lineupSourceMeta={(match as { lineupSourceMeta?: string | null }).lineupSourceMeta ?? null}
+      xiFeedFrozen={Boolean((match as { xiFeedFrozen?: boolean }).xiFeedFrozen)}
+      xiFeedFrozenReason={(match as { xiFeedFrozenReason?: string | null }).xiFeedFrozenReason ?? null}
+      isDeskOwner={Boolean(session && match.matchDay.userId === session.id)}
       apiFootballFixtureId={match.apiFootballFixtureId}
       lastFeedSyncAt={match.lastFeedSyncAt}
       status={match.status}

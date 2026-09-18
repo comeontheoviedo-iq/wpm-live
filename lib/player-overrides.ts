@@ -9,6 +9,8 @@ export type PlayerOverrideRow = {
   /** Free-move landscape % (0–100) */
   pitchX?: number | null;
   pitchY?: number | null;
+  /** When true, feed sync must not overwrite this player */
+  lockFromFeed?: boolean | null;
 };
 
 export function hasManualPlacement(o?: PlayerOverrideRow | null): boolean {

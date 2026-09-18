@@ -64,6 +64,11 @@ import { MatchStatisticsView } from "@/components/match/match-statistics";
 import { EventComposer } from "@/components/live/event-composer";
 import { Button } from "@/components/ui/button";
 import { AskReportButton } from "@/components/feedback/ask-report-modal";
+import {
+  LineupSourceBadge,
+  FixtureIdentityChip,
+  LineupFeedControls,
+} from "@/components/match/lineup-safeguards";
 import { FORMATIONS } from "@/lib/formations"
 import { summarizeSubWindows } from "@/lib/sub-windows";
 import { leagueIdForCompetition } from "@/lib/competitions";
@@ -389,6 +394,11 @@ export function MatchDesk({
   refereeId = null,
   refereeAge = null,
   lineupStatus,
+  lineupSource = null,
+  lineupSourceMeta = null,
+  xiFeedFrozen = false,
+  xiFeedFrozenReason = null,
+  isDeskOwner = true,
   apiFootballFixtureId,
   lastFeedSyncAt,
   status,
@@ -448,6 +458,11 @@ export function MatchDesk({
   refereeId?: string | null;
   refereeAge?: number | null;
   lineupStatus: string;
+  lineupSource?: string | null;
+  lineupSourceMeta?: string | null;
+  xiFeedFrozen?: boolean;
+  xiFeedFrozenReason?: string | null;
+  isDeskOwner?: boolean;
   apiFootballFixtureId: number | null;
   lastFeedSyncAt: string | Date | null;
   status: string;
@@ -2642,23 +2657,25 @@ export function MatchDesk({
                 {weatherTempC != null ? ` · ${weatherTempC}°C` : ""}
               </span>
             )}
-            <span
-              className={cn(
-                "rounded-full px-1.5 py-px font-semibold text-white text-[9px]",
-                lineupStatus === "confirmed"
-                  ? "bg-emerald-600"
-                  : lineupStatus === "predicted"
-                    ? "bg-sky-600"
-                    : "bg-amber-500"
-              )}
-              title={lineupHint(lineupStatus)}
-            >
-              {lineupStatus === "confirmed"
-                ? "Official"
-                : lineupStatus === "predicted"
-                  ? "Predicted"
-                  : "Expected"}
-            </span>
+            <LineupSourceBadge
+              lineupStatus={lineupStatus}
+              lineupSource={lineupSource}
+              lineupSourceMeta={lineupSourceMeta}
+            />
+            <FixtureIdentityChip
+              competition={competition}
+              kickoffAt={kickoffAt}
+              homeTeamAfId={homeTeamAfId}
+              awayTeamAfId={awayTeamAfId}
+              apiFootballFixtureId={apiFootballFixtureId}
+            />
+            <LineupFeedControls
+              matchId={matchId}
+              xiFeedFrozen={xiFeedFrozen}
+              xiFeedFrozenReason={xiFeedFrozenReason}
+              isOwner={isDeskOwner}
+              onChanged={() => router.refresh()}
+            />
             {injuryCount > 0 && (
               <span className="rounded-full border border-slate-200 dark:border-slate-700 px-1.5 py-px">
                 Inj {injuryCount}

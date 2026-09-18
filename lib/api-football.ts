@@ -1077,25 +1077,69 @@ export async function getLastKnownTeamColors(
   return fallback;
 }
 
-export async function getLastPlayedLineup(teamId: number): Promise<{
+export type LastPlayedLineupResult = {
   fixtureId: number;
   lineup: AfLineup;
-} | null> {
-  const recent = await getTeamRecentFinished(teamId, 10);
+  leagueId: number | null;
+  leagueName: string | null;
+  fixtureDate: string | null;
+  /** True when preferred league had no usable XI and we fell back to another competition */
+  competitionMismatch: boolean;
+};
+
+/**
+ * Most recent usable Official XI for a team.
+ * Prefers same leagueId as the desk fixture when provided — never silently
+ * present a domestic last XI as tonight's European side without a mismatch flag.
+ */
+export async function getLastPlayedLineup(
+  teamId: number,
+  opts?: { preferLeagueId?: number | null }
+): Promise<LastPlayedLineupResult | null> {
+  const preferLeagueId =
+    opts?.preferLeagueId != null &&
+    Number.isFinite(opts.preferLeagueId) &&
+    opts.preferLeagueId > 0
+      ? Number(opts.preferLeagueId)
+      : null;
+  const recent = await getTeamRecentFinished(teamId, 12);
+  let mismatchFallback: LastPlayedLineupResult | null = null;
+
   for (const fx of recent) {
     try {
       const lineups = await getLineups(fx.fixture.id);
       const mine = lineups.find((l) => l.team.id === teamId);
       // Last finished XI must itself be a usable Official (formation + grids).
       // A gridless FT dump must not become the NS expected board.
-      if (mine && isUsableOfficialLineup(mine)) {
-        return { fixtureId: fx.fixture.id, lineup: mine };
+      if (!(mine && isUsableOfficialLineup(mine))) continue;
+
+      const leagueId =
+        typeof fx.league?.id === "number" && Number.isFinite(fx.league.id)
+          ? fx.league.id
+          : null;
+      const row: LastPlayedLineupResult = {
+        fixtureId: fx.fixture.id,
+        lineup: mine,
+        leagueId,
+        leagueName: fx.league?.name ? String(fx.league.name) : null,
+        fixtureDate: fx.fixture?.date ? String(fx.fixture.date) : null,
+        competitionMismatch: false,
+      };
+
+      if (preferLeagueId == null) {
+        return row;
+      }
+      if (leagueId === preferLeagueId) {
+        return row;
+      }
+      if (!mismatchFallback) {
+        mismatchFallback = { ...row, competitionMismatch: true };
       }
     } catch {
       continue;
     }
   }
-  return null;
+  return mismatchFallback;
 }
 
 export function summarizeH2h(

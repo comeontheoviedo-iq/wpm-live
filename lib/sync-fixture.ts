@@ -43,6 +43,12 @@ import {
 } from "./api-football";
 import { planLineupApply } from "./lineup-gate";
 import {
+  deriveLineupSourceFromPlan,
+  stringifyLineupSourceMeta,
+  type LineupSourceMeta,
+} from "./lineup-source";
+
+import {
   afLineupCaptainPlayerIds,
   isAfLineupCaptain,
   planCaptainWrites,
@@ -61,7 +67,7 @@ import {
   kitMatchesOverride,
   isManualKitOverride,
 } from "./kit-colors";
-import { leagueIdForMatchDay } from "./competitions";
+import { broadcastLabelFor, leagueIdForMatchDay } from "./competitions";
 import { resolveWeatherForVenue } from "./weather";
 import { nationalityToIso } from "./flags";
 import { maybeAutoGenerateLineupPack } from "./pack-generate";
@@ -452,6 +458,44 @@ async function persistCaptainsFromAfFixture(opts: {
     rows,
     onlyClubId: opts.clubId,
   });
+}
+
+
+/** Re-assert commentator-locked players after a feed XI upsert. */
+async function restoreLockedFromFeedPlayers(matchId: string) {
+  const locked = await prisma.matchPlayerOverride.findMany({
+    where: { matchId, lockFromFeed: true },
+  });
+  if (!locked.length) return;
+  for (const row of locked) {
+    if (!row.formationSlot && row.pitchX == null && row.pitchY == null) continue;
+    const data: {
+      isStarter?: boolean;
+      onPitch?: boolean;
+      formationSlot?: string | null;
+    } = {};
+    if (row.formationSlot) {
+      data.formationSlot = row.formationSlot;
+      data.isStarter = row.formationSlot !== "BENCH";
+      data.onPitch = row.formationSlot !== "BENCH";
+      // Vacate anyone else claiming this slot on the same club
+      const player = await prisma.player.findUnique({ where: { id: row.playerId } });
+      if (player?.clubId && row.formationSlot !== "BENCH") {
+        await prisma.player.updateMany({
+          where: {
+            clubId: player.clubId,
+            formationSlot: row.formationSlot,
+            NOT: { id: row.playerId },
+          },
+          data: { isStarter: false, onPitch: false, formationSlot: null },
+        });
+      }
+    }
+    await prisma.player.update({
+      where: { id: row.playerId },
+      data,
+    });
+  }
 }
 
 async function upsertLineupSide(
@@ -2097,14 +2141,27 @@ async function runSyncMatchFromApiFootball(
 
   // Gate: see lib/lineup-gate.ts + docs/AF_LIVE_TRIGGERS.md
   // Empty-grid provisional dumps must not confirm Official or overwrite a good board.
+  const feedFrozen = Boolean(match.xiFeedFrozen);
   const plan = planLineupApply({
     homeOfficial,
     awayOfficial,
     currentStatus: match.lineupStatus || "expected",
     isLiveSync: isLive,
     isPreOrNs,
+    xiFeedFrozen: feedFrozen,
   });
   lineupStatus = plan.lineupStatus;
+
+  let lineupSource = match.lineupSource || null;
+  let lineupSourceMeta: LineupSourceMeta | null = null;
+  try {
+    lineupSourceMeta = match.lineupSourceMeta
+      ? (JSON.parse(match.lineupSourceMeta) as LineupSourceMeta)
+      : null;
+  } catch {
+    lineupSourceMeta = null;
+  }
+  let lastXiCompetitionMismatch = false;
 
   if (plan.action === "confirm") {
     homeFormation = await upsertLineupSide(match.homeClubId, homeLu!, "home", {
@@ -2119,9 +2176,19 @@ async function runSyncMatchFromApiFootball(
       await applyPredictedJson(match.awayClubId, match.predictedAwayJson);
     }
   } else if (plan.action === "fallback_last_xi") {
-    // NS / unconfirmed full sync only. Last XI itself must pass isUsableOfficialLineup.
-    const homeLast = await getLastPlayedLineup(homeAfId).catch(() => null);
-    const awayLast = await getLastPlayedLineup(awayAfId).catch(() => null);
+    // NS / unconfirmed full sync only. Prefer same-competition last XI.
+    // Domestic fallback is allowed only with lastXiCompetitionMismatch warning.
+    const preferLeagueId = expectedLeagueId;
+    const homeLast = await getLastPlayedLineup(homeAfId, {
+      preferLeagueId,
+    }).catch(() => null);
+    const awayLast = await getLastPlayedLineup(awayAfId, {
+      preferLeagueId,
+    }).catch(() => null);
+    lastXiCompetitionMismatch = Boolean(
+      (homeLast && homeLast.competitionMismatch) ||
+        (awayLast && awayLast.competitionMismatch)
+    );
     if (homeLast) {
       homeFormation = await upsertLineupSide(
         match.homeClubId,
@@ -2148,9 +2215,62 @@ async function runSyncMatchFromApiFootball(
         teamAfId: awayAfId,
       }).catch(() => null);
     }
-    lineupStatus = homeLast || awayLast ? "expected" : match.lineupStatus || "expected";
+    lineupStatus =
+      homeLast || awayLast ? "expected" : match.lineupStatus || "expected";
+
+    if (homeLast || awayLast) {
+      const metaDate =
+        homeLast?.fixtureDate || awayLast?.fixtureDate || null;
+      const metaComp =
+        (!homeLast?.competitionMismatch && homeLast?.leagueName) ||
+        (!awayLast?.competitionMismatch && awayLast?.leagueName) ||
+        homeLast?.leagueName ||
+        awayLast?.leagueName ||
+        null;
+      const short =
+        metaComp != null
+          ? broadcastLabelFor(String(metaComp))
+          : matchDay?.competition
+            ? broadcastLabelFor(matchDay.competition)
+            : null;
+      lineupSourceMeta = {
+        competitionShort: short,
+        dateIso: metaDate,
+        fixtureId: expectedFrom,
+        homeFixtureId: homeLast?.fixtureId ?? null,
+        awayFixtureId: awayLast?.fixtureId ?? null,
+        lastXiCompetitionMismatch,
+        warning: lastXiCompetitionMismatch
+          ? "Domestic last XI — not this competition"
+          : null,
+      };
+    }
   }
   // action "keep": leave prior placements + status (live confirmed / no Official yet)
+
+  // Persist source badge kind after apply (freeze keeps prior source).
+  if (!feedFrozen) {
+    const derived = deriveLineupSourceFromPlan({
+      action: plan.action,
+      lineupStatus,
+      appliedLastXi: plan.action === "fallback_last_xi",
+    });
+    lineupSource = derived.lineupSource;
+    if (derived.lineupSource === "official") {
+      lineupSourceMeta = {
+        ...(lineupSourceMeta || {}),
+        fixtureId: match.apiFootballFixtureId ?? null,
+        lastXiCompetitionMismatch: false,
+        warning: null,
+      };
+    } else if (derived.lineupSource === "predicted") {
+      lineupSourceMeta = {
+        ...(lineupSourceMeta || {}),
+        lastXiCompetitionMismatch: false,
+        warning: null,
+      };
+    }
+  }
 
   // Resolve strip colours: match-night override > this fixture > last-known.
   const kitOverride = kitOverrideForFixture(match.apiFootballFixtureId);
@@ -2227,10 +2347,10 @@ async function runSyncMatchFromApiFootball(
     kitsResolvedThisSync = true;
 
     // Upgrade default teal club primaries from resolved kits (scorebug + fallback).
-    if (!homeKitLocked) {
+    if (!homeKitLocked && homeKitJson) {
       await bumpClubPrimary(match.homeClubId, homeKitJson).catch(() => null);
     }
-    if (!awayKitLocked) {
+    if (!awayKitLocked && awayKitJson) {
       await bumpClubPrimary(match.awayClubId, awayKitJson).catch(() => null);
     }
   }
@@ -2620,6 +2740,9 @@ async function runSyncMatchFromApiFootball(
   await reapplyPitchPlacements(matchId).catch((err) =>
     console.error("[sync] reapply placements failed", matchId, err)
   );
+  await restoreLockedFromFeedPlayers(matchId).catch((err) =>
+    console.error("[sync] restore locked-from-feed failed", matchId, err)
+  );
 
   const updated = await prisma.match.update({
     where: { id: matchId },
@@ -2632,6 +2755,8 @@ async function runSyncMatchFromApiFootball(
       homeFormation,
       awayFormation,
       lineupStatus,
+      lineupSource: lineupSource,
+      lineupSourceMeta: stringifyLineupSourceMeta(lineupSourceMeta),
       lastFeedSyncAt: new Date(),
       ...(kitsResolvedThisSync
         ? {

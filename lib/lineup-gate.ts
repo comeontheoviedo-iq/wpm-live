@@ -57,8 +57,14 @@ export function planLineupApply(opts: {
   currentStatus: string;
   isLiveSync: boolean;
   isPreOrNs: boolean;
+  /** Commentator lock / "XI looks wrong" — feed must not rewrite the board */
+  xiFeedFrozen?: boolean;
 }): LineupApplyPlan {
   const current = opts.currentStatus || "expected";
+
+  if (opts.xiFeedFrozen) {
+    return { action: "keep", lineupStatus: current };
+  }
 
   if (opts.homeOfficial && opts.awayOfficial) {
     return { action: "confirm", lineupStatus: "confirmed" };

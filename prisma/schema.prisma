@@ -198,6 +198,18 @@ model Match {
   featured             Boolean         @default(false)
   apiFootballFixtureId Int?
   lineupStatus         String          @default("expected")
+
+  /// official | predicted | last_xi — drives desk badge (never style predicted/last like Official)
+  lineupSource         String?
+  /// JSON meta for badge: competitionShort, dateIso, fixtureId, lastXiCompetitionMismatch, ...
+  lineupSourceMeta     String?
+  /// When true, feed must not re-apply Official / Predicted / Last XI onto the board (events/score still update)
+  xiFeedFrozen         Boolean         @default(false)
+  xiFeedFrozenAt       DateTime?
+  xiFeedFrozenByUserId String?
+  /// lock | looks_wrong
+  xiFeedFrozenReason   String?
+  xiFeedFrozenNote     String?
   lastFeedSyncAt       DateTime?
   preKickoffHardSyncAt DateTime?
   /// Per-match strip colours from feed lineups (JSON); empty string = checked none.
@@ -408,6 +420,8 @@ model MatchPlayerOverride {
   /// Free-move landscape coords (0–100). When set, overrides slot snap geometry.
   pitchX        Float?
   pitchY        Float?
+  /// When true, feed sync must not overwrite this player's placement/selection
+  lockFromFeed  Boolean  @default(false)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

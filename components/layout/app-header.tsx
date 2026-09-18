@@ -14,6 +14,7 @@ import { Logo } from "./logo";
 import { useTheme } from "@/components/theme-provider";
 import { useLocale } from "@/components/i18n/locale-provider";
 import { AskReportButton } from "@/components/feedback/ask-report-modal";
+import { WhatsNewButton } from "@/components/whats-new/whats-new-button";
 
 export function AppHeader({
   user,
@@ -66,6 +67,7 @@ export function AppHeader({
                 <Moon className="h-3.5 w-3.5" />
               )}
             </IconBtn>
+            <WhatsNewButton />
             <Link
               href="/settings"
               className="focus-ring interactive-press rounded-[2px] p-1.5 text-[var(--muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--foreground)]"

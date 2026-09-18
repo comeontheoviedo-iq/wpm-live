@@ -53,6 +53,8 @@ model User {
   playerAliases        UserPlayerAlias[]
   passwordResetTokens PasswordResetToken[]
   supportPings         SupportPing[]
+  productUpdatesCreated ProductUpdate[]
+  productUpdateRead    UserProductUpdateRead?
 }
 
 model Club {
@@ -550,5 +552,24 @@ model SupportPing {
 
   @@index([status, createdAt])
   @@index([userId])
+}
+
+/// Product “What’s New” notes for commentators (not git commits).
+model ProductUpdate {
+  id              String   @id @default(cuid())
+  title           String
+  body            String
+  createdAt       DateTime @default(now())
+  createdByUserId String?
+  createdBy       User?    @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+}
+
+/// Per-user last-read watermark for What’s New (v1).
+model UserProductUpdateRead {
+  userId     String   @id
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastReadAt DateTime @default(now())
 }
 

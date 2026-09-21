@@ -170,6 +170,24 @@ export function deriveLineupSourceFromPlan(opts: {
   };
 }
 
+/** FotMob-style pitch grass: Official/Live = green; Predicted/Last XI = distinct non-green. */
+export const PITCH_GRASS_OFFICIAL =
+  "linear-gradient(180deg, rgba(0,0,0,0.12), transparent 18%, transparent 82%, rgba(0,0,0,0.14)), linear-gradient(90deg, rgba(0,0,0,0.08), transparent 10%, transparent 90%, rgba(0,0,0,0.08)), repeating-linear-gradient(90deg, #176f38 0 7.5%, #1c8240 7.5% 15%)";
+
+/** Slate-blue stripes — clearly not matchday grass (Predicted / Last XI). */
+export const PITCH_GRASS_PREDICTED =
+  "linear-gradient(180deg, rgba(0,0,0,0.18), transparent 18%, transparent 82%, rgba(0,0,0,0.22)), linear-gradient(90deg, rgba(0,0,0,0.1), transparent 10%, transparent 90%, rgba(0,0,0,0.1)), repeating-linear-gradient(90deg, #1a3a5c 0 7.5%, #234b73 7.5% 15%)";
+
+export function pitchGrassBackground(kind: LineupSourceKind): string {
+  if (kind === "predicted" || kind === "last_xi") return PITCH_GRASS_PREDICTED;
+  return PITCH_GRASS_OFFICIAL;
+}
+
+export function pitchFrameClass(kind: LineupSourceKind): string {
+  if (kind === "predicted" || kind === "last_xi") return "border-slate-800/50";
+  return "border-emerald-900/40";
+}
+
 /** Search URLs for human FotMob / SofaScore verify (no scrapers). */
 export function buildLineupVerifyUrls(opts: {
   homeName: string;

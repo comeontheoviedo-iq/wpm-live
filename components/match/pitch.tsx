@@ -34,6 +34,11 @@ import {
   formatHeightValue,
   formatMarketValue,
 } from "@/lib/field-settings";
+import {
+  pitchFrameClass,
+  pitchGrassBackground,
+  resolveLineupSourceKind,
+} from "@/lib/lineup-source";
 import { SpeakNameButton } from "@/components/match/speak-name-button";
 import {
   CARD_GAP_PX,
@@ -897,6 +902,8 @@ export function PitchBoard({
   const resolvedSettings = cardSettings || DEFAULT_FIELD_SETTINGS;
   const resolvedMarkerPct = markerPct ?? resolvedSettings.markerSizePct;
   const badge = lineupBadgeLabel(lineupStatus);
+  /** FotMob-style: Predicted/Last XI → non-green pitch; Official/Live → green. */
+  const pitchSourceKind = resolveLineupSourceKind({ lineupStatus });
   const [dragOverSlot, setDragOverSlot] = useState<string | null>(null);
   const pitchRef = useRef<HTMLDivElement | null>(null);
   const [pitchSize, setPitchSize] = useState({ w: 0, h: 0 });
@@ -1335,7 +1342,8 @@ export function PitchBoard({
   return (
     <div
       className={cn(
-        "relative w-full overflow-hidden rounded-xl border border-emerald-900/40 shadow-inner",
+        "relative w-full overflow-hidden rounded-xl border shadow-inner",
+        pitchFrameClass(pitchSourceKind),
         compact ? "h-full min-h-[300px]" : "",
         placing && "ring-2 ring-sky-400/70"
       )}
@@ -1345,12 +1353,11 @@ export function PitchBoard({
         className={cn(
           "relative w-full",
           // Prefer enough height at normal desktop widths so the XI is not
-          // crammed onto a thin green strip under desk chrome.
+          // crammed onto a thin strip under desk chrome.
           compact ? "h-full min-h-[max(300px,32vh)]" : "aspect-[16/9]"
         )}
         style={{
-          background:
-            "linear-gradient(180deg, rgba(0,0,0,0.12), transparent 18%, transparent 82%, rgba(0,0,0,0.14)), linear-gradient(90deg, rgba(0,0,0,0.08), transparent 10%, transparent 90%, rgba(0,0,0,0.08)), repeating-linear-gradient(90deg, #176f38 0 7.5%, #1c8240 7.5% 15%)",
+          background: pitchGrassBackground(pitchSourceKind),
         }}
        onDragOver={(e) => { if (!locked && onFreePlace) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; } }} onDrop={handlePitchFreeDrop} title={onFreePlace ? "Drag to nudge — drop sticks immediately · drop on another card to swap" : undefined}>
         {/* Loud incomplete XI warning */}

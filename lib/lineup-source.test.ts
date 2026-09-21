@@ -5,6 +5,9 @@ import {
   lineupSourceBadgeLabel,
   lineupSourceBadgeClass,
   deriveLineupSourceFromPlan,
+  pitchGrassBackground,
+  PITCH_GRASS_OFFICIAL,
+  PITCH_GRASS_PREDICTED,
 } from "./lineup-source";
 
 describe("lineup source badge", () => {
@@ -82,5 +85,21 @@ describe("lineup source badge", () => {
       lineupSourceBadgeClass("live"),
       lineupSourceBadgeClass("official")
     );
+  });
+});
+
+describe("pitch grass by lineup source", () => {
+  it("Official and Live use green grass", () => {
+    assert.equal(pitchGrassBackground("official"), PITCH_GRASS_OFFICIAL);
+    assert.equal(pitchGrassBackground("live"), PITCH_GRASS_OFFICIAL);
+    assert.match(PITCH_GRASS_OFFICIAL, /#176f38/);
+  });
+
+  it("Predicted and Last XI use distinct non-green pitch", () => {
+    assert.equal(pitchGrassBackground("predicted"), PITCH_GRASS_PREDICTED);
+    assert.equal(pitchGrassBackground("last_xi"), PITCH_GRASS_PREDICTED);
+    assert.notEqual(PITCH_GRASS_PREDICTED, PITCH_GRASS_OFFICIAL);
+    assert.doesNotMatch(PITCH_GRASS_PREDICTED, /#176f38|#1c8240/);
+    assert.match(PITCH_GRASS_PREDICTED, /#1a3a5c/);
   });
 });

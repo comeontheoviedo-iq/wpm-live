@@ -12,3 +12,9 @@ Commentators compare CoComms XI to trusted public sources via **Verify** on the 
 
 - **Official** = kickoff named XI from API-Football startXI.
 - **Live** = current pitch after substitutions (kickoff was Official). Live sync resets to kickoff Official then replays subst chronologically so repeated polls do not scramble slots.
+
+## Pitch colour (FotMob-style)
+
+- **Official / Live** → green striped pitch (matchday grass).
+- **Predicted / Last XI** → distinct slate-blue striped pitch (not grass), so commentators never mistake a predicted XI for Official.
+

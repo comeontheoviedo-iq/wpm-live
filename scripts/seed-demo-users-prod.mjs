@@ -18,12 +18,7 @@ function resolveUrl() {
 }
 
 const users = [
-  {
-    email: "demo@pitchline.app",
-    password: "demo1234",
-    name: "Chris Beaumont",
-    avatarInitials: "CB",
-  },
+  // demo@pitchline.app removed 2026-09-21 (prod delete migration 20260921081500)
   {
     email: "tester@cocomms.online",
     password: "cocommsDemo1",

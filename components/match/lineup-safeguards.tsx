@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Lock, LockOpen, AlertTriangle } from "lucide-react";
+import { Lock, LockOpen, AlertTriangle, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   resolveLineupSourceKind,
@@ -95,6 +95,30 @@ export function FixtureIdentityChip({
   );
 }
 
+/** Loud incomplete XI chip for desk header when starters &lt; 11. */
+export function IncompleteXiWarning({
+  homeStarters,
+  awayStarters,
+  homeName,
+  awayName,
+}: {
+  homeStarters: number;
+  awayStarters: number;
+  homeName: string;
+  awayName: string;
+}) {
+  if (homeStarters >= 11 && awayStarters >= 11) return null;
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-md border-2 border-amber-400 bg-rose-700 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-amber-100 shadow"
+      title="Formation has empty slots or fewer than 11 starters mapped"
+    >
+      <AlertTriangle className="h-3 w-3 shrink-0" />
+      Incomplete XI · {homeName} {homeStarters}/11 · {awayName} {awayStarters}/11
+    </span>
+  );
+}
+
 export function LineupFeedControls({
   matchId,
   xiFeedFrozen,
@@ -127,6 +151,22 @@ export function LineupFeedControls({
         setMsg(json.error || "Failed");
         return;
       }
+      if (action === "repull_official") {
+        const before = json.before?.starters;
+        const after = json.after?.starters;
+        const applied = json.lineupApplied;
+        if (before != null && after != null) {
+          setMsg(
+            applied
+              ? `Re-pulled Official · starters ${before} → ${after}`
+              : `Unlocked + synced · starters ${after} (Official not both-sides usable yet)`
+          );
+        } else {
+          setMsg(applied ? "Re-pulled Official XI" : "Unlocked + synced");
+        }
+      } else if (action === "report_wrong") {
+        setMsg("Frozen — owner alerted (does not refresh XI)");
+      }
       setNoteOpen(false);
       setNote("");
       onChanged?.();
@@ -139,14 +179,16 @@ export function LineupFeedControls({
 
   const frozenLabel = useMemo(() => {
     if (!xiFeedFrozen) return null;
-    if (xiFeedFrozenReason === "looks_wrong") return "Frozen · XI reported wrong";
-    return "XI locked from feed";
+    if (xiFeedFrozenReason === "looks_wrong")
+      return "FROZEN · XI reported wrong — Sync will not fill blanks";
+    if (xiFeedFrozenReason === "lock") return "FROZEN · XI locked from feed";
+    return "FROZEN · Official sync blocked";
   }, [xiFeedFrozen, xiFeedFrozenReason]);
 
   return (
     <span className="inline-flex items-center gap-1 flex-wrap">
       {frozenLabel && (
-        <span className="rounded-full border border-amber-400/80 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-px text-[9px] font-semibold text-amber-800 dark:text-amber-200">
+        <span className="rounded-md border-2 border-amber-400 bg-amber-100 dark:bg-amber-950/70 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-amber-950 dark:text-amber-100 shadow">
           {frozenLabel}
         </span>
       )}
@@ -165,30 +207,54 @@ export function LineupFeedControls({
             type="button"
             className="desk-btn text-[9px] px-1.5 py-0.5 inline-flex items-center gap-0.5 text-amber-800 dark:text-amber-200"
             disabled={busy}
-            title="Report bad Official XI — freezes feed apply + alerts owner"
+            title="Freeze Official sync and alert owner — does NOT refresh or re-pull the XI"
             onClick={() => setNoteOpen((v) => !v)}
           >
-            <AlertTriangle className="h-3 w-3" /> XI looks wrong
+            <AlertTriangle className="h-3 w-3" /> Report wrong XI
           </button>
+          {isOwner && (
+            <button
+              type="button"
+              className="desk-btn text-[9px] px-1.5 py-0.5 inline-flex items-center gap-0.5 text-emerald-800 dark:text-emerald-200"
+              disabled={busy}
+              title="Force re-apply Official XI from the live feed"
+              onClick={() => void post("repull_official")}
+            >
+              <RefreshCw className="h-3 w-3" /> Re-pull Official XI
+            </button>
+          )}
         </>
       ) : isOwner ? (
-        <button
-          type="button"
-          className="desk-btn text-[9px] px-1.5 py-0.5 inline-flex items-center gap-0.5"
-          disabled={busy}
-          title="Unlock — allow Official/Predicted/Last XI feed apply again"
-          onClick={() => void post("unlock")}
-        >
-          <LockOpen className="h-3 w-3" /> Unlock feed
-        </button>
+        <>
+          <button
+            type="button"
+            className="desk-btn text-[9px] px-1.5 py-0.5 inline-flex items-center gap-0.5"
+            disabled={busy}
+            title="Unlock — allow Official/Predicted/Last XI feed apply again"
+            onClick={() => void post("unlock")}
+          >
+            <LockOpen className="h-3 w-3" /> Unlock feed
+          </button>
+          <button
+            type="button"
+            className="desk-btn text-[9px] px-1.5 py-0.5 inline-flex items-center gap-0.5 border border-emerald-500/60 text-emerald-800 dark:text-emerald-200 font-bold"
+            disabled={busy}
+            title="Unlock freeze + force Official XI re-apply from AF"
+            onClick={() => void post("repull_official")}
+          >
+            <RefreshCw className="h-3 w-3" /> Re-pull Official XI
+          </button>
+        </>
       ) : (
-        <span className="text-[9px] text-slate-500">Owner can unlock</span>
+        <span className="text-[9px] font-semibold text-amber-800 dark:text-amber-200">
+          Owner can Unlock / Re-pull Official
+        </span>
       )}
       {noteOpen && (
-        <span className="inline-flex items-center gap-1">
+        <span className="inline-flex items-center gap-1 flex-wrap">
           <input
-            className="h-6 w-40 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-[10px]"
-            placeholder="Optional note"
+            className="h-6 w-44 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 text-[10px]"
+            placeholder="What’s wrong? (optional)"
             value={note}
             onChange={(e) => setNote(e.target.value)}
           />
@@ -196,13 +262,21 @@ export function LineupFeedControls({
             type="button"
             className="desk-btn text-[9px] px-1.5 py-0.5"
             disabled={busy}
+            title="Freezes feed apply + emails owner + SupportPing — does not refresh XI"
             onClick={() => void post("report_wrong", { note: note || undefined })}
           >
-            Freeze + alert
+            Freeze + alert owner
           </button>
+          <span className="text-[9px] text-slate-500 max-w-[14rem]">
+            Freezes Official sync — does not re-pull. Owner: use Re-pull Official XI.
+          </span>
         </span>
       )}
-      {msg && <span className="text-[9px] text-rose-600">{msg}</span>}
+      {msg && (
+        <span className="text-[9px] font-semibold text-emerald-700 dark:text-emerald-300">
+          {msg}
+        </span>
+      )}
     </span>
   );
 }

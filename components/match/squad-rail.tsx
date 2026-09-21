@@ -147,7 +147,7 @@ export function SquadRail({
                 {p.shirtNumber || "–"}
               </span>
               <div className="min-w-0 flex-1">
-                <div className="truncate font-medium leading-tight">{p.name}</div>
+                <div className="truncate font-medium leading-tight">{p.displayName || p.name}</div>
                 <div className="text-[9px] text-slate-400 truncate">
                   {p.position || "—"}
                   {onXi ? ` · ${p.formationSlot}` : ""}

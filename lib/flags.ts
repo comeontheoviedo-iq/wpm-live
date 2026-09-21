@@ -333,6 +333,47 @@ export function lastNameOf(fullName: string): string {
   return parts[parts.length - 1].replace(/\./g, "");
 }
 
+/**
+ * Pitch / teamsheet card name. Default = first + last (or full short form).
+ * Surname-only remains available via Field Settings.
+ * displayName alias still wins at the call site.
+ */
+export function pitchCardName(
+  fullName: string,
+  style: "full" | "surname" = "full"
+): string {
+  const raw = (fullName || "").trim();
+  if (!raw) return "";
+  if (style === "surname") return lastNameOf(raw);
+  const parts = raw.split(/\s+/).filter(Boolean);
+  if (parts.length <= 2) return raw;
+  // "Barış Alper Yılmaz" → "Barış Yılmaz" (first + last significant)
+  return `${parts[0]} ${parts[parts.length - 1]}`;
+}
+
+/** Prefer AF profile firstname+lastname over short lineup forms ("R. Cherki"). */
+export function preferAfFullName(
+  current: string | null | undefined,
+  firstname?: string | null,
+  lastname?: string | null
+): string {
+  const cur = (current || "").trim();
+  const full = [firstname, lastname]
+    .map((s) => (s || "").trim())
+    .filter(Boolean)
+    .join(" ");
+  if (!full) return cur;
+  if (!cur) return full;
+  // Initialised short form → expand
+  if (/^[A-Za-z]\.?\s+\S/.test(cur) && full.split(/\s+/).length >= 2) {
+    return full;
+  }
+  // Single-token surname on board, profile has first+last
+  if (!cur.includes(" ") && full.includes(" ")) return full;
+  if (full.length > cur.length + 2) return full;
+  return cur;
+}
+
 export function formatHeight(cm?: number | null): string {
   if (cm == null || !Number.isFinite(cm)) return "—";
   return String(Math.round(cm));

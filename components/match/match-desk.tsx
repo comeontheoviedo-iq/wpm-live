@@ -68,6 +68,7 @@ import {
   LineupSourceBadge,
   FixtureIdentityChip,
   LineupFeedControls,
+  IncompleteXiWarning,
 } from "@/components/match/lineup-safeguards";
 import { FORMATIONS } from "@/lib/formations"
 import { summarizeSubWindows } from "@/lib/sub-windows";
@@ -1250,9 +1251,13 @@ export function MatchDesk({
     });
   }, [toggleHomeOnLeft, squad]);
 
-  const starterCount =
-    homeEnriched.filter((p) => p.isStarter || p.onPitch).length +
-    awayEnriched.filter((p) => p.isStarter || p.onPitch).length;
+  const homeStarterCount = homeEnriched.filter(
+    (p) => p.isStarter || p.onPitch
+  ).length;
+  const awayStarterCount = awayEnriched.filter(
+    (p) => p.isStarter || p.onPitch
+  ).length;
+  const starterCount = homeStarterCount + awayStarterCount;
 
   const fetchAdvancedViz = useCallback(async () => {
     const cached = advStatsCacheRef.current;
@@ -2589,7 +2594,9 @@ export function MatchDesk({
       data-desk-mode={deskMode}
       data-desk-density={deskDensity}
       className={cn(
-        "relative flex flex-col gap-1.5 overflow-hidden bg-[var(--background)] text-[var(--foreground)]",
+        "relative flex flex-col gap-1.5 bg-[var(--background)] text-[var(--foreground)]",
+        // Full mode must scroll — large tokens were clipped with nowhere to go.
+        isFullscreen ? "overflow-y-auto overflow-x-hidden" : "overflow-hidden",
         deskMode === "onair" && "onair-desk",
         deskMode === "scan" && "scan-desk",
         isFullscreen
@@ -2675,6 +2682,12 @@ export function MatchDesk({
               xiFeedFrozenReason={xiFeedFrozenReason}
               isOwner={isDeskOwner}
               onChanged={() => router.refresh()}
+            />
+            <IncompleteXiWarning
+              homeStarters={homeStarterCount}
+              awayStarters={awayStarterCount}
+              homeName={homeName}
+              awayName={awayName}
             />
             {injuryCount > 0 && (
               <span className="rounded-full border border-slate-200 dark:border-slate-700 px-1.5 py-px">
@@ -3443,7 +3456,8 @@ export function MatchDesk({
       {/* Main landscape: pitch | squad (notes live on player/coach profiles) */}
       <div
         className={cn(
-          "relative min-h-0 flex-1 grid grid-cols-1 gap-1.5 overflow-hidden",
+          "relative min-h-0 flex-1 grid grid-cols-1 gap-1.5",
+          isFullscreen ? "overflow-y-auto overflow-x-hidden" : "overflow-hidden",
           onAirMode
             ? "lg:grid-cols-[minmax(0,1fr)]"
             : hideSquadRail
@@ -3453,9 +3467,19 @@ export function MatchDesk({
       >
         <section
           data-desk-primary="pitch"
-          className="relative min-h-0 flex flex-col overflow-hidden order-1 onair-primary"
+          className={cn(
+            "relative min-h-0 flex flex-col order-1 onair-primary",
+            isFullscreen ? "overflow-y-auto overflow-x-hidden" : "overflow-hidden"
+          )}
         >
-          <div className="min-h-[max(300px,32vh)] flex-1">
+          <div
+            className={cn(
+              "flex-1",
+              isFullscreen
+                ? "min-h-[max(420px,min(72dvh,920px))]"
+                : "min-h-[max(300px,32vh)]"
+            )}
+          >
             <PitchBoard
               homeName={homeName}
               awayName={awayName}

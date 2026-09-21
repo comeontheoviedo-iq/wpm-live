@@ -19,7 +19,7 @@ import {
   formatFoot,
   formatRating,
   formatWeight,
-  lastNameOf,
+  pitchCardName,
   playerPhotoUrl,
   posCode,
 } from "@/lib/flags";
@@ -292,7 +292,10 @@ function PitchCardToken({
   const isGk =
     posCode(player.position, slotLabel) === "GK" ||
     (player.position || "").toUpperCase() === "GK";
-  const fieldName = (player.displayName || lastNameOf(player.name)).toUpperCase();
+  const nameStyle = cardSettings.pitchNameStyle === "surname" ? "surname" : "full";
+  const fieldName = (
+    player.displayName || pitchCardName(player.name, nameStyle)
+  ).toUpperCase();
   const pos = posCode(player.position, slotLabel);
   const flagNats = resolvePitchFlags(player);
   const flagTitle = flagNats.length
@@ -1350,6 +1353,29 @@ export function PitchBoard({
             "linear-gradient(180deg, rgba(0,0,0,0.12), transparent 18%, transparent 82%, rgba(0,0,0,0.14)), linear-gradient(90deg, rgba(0,0,0,0.08), transparent 10%, transparent 90%, rgba(0,0,0,0.08)), repeating-linear-gradient(90deg, #176f38 0 7.5%, #1c8240 7.5% 15%)",
         }}
        onDragOver={(e) => { if (!locked && onFreePlace) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; } }} onDrop={handlePitchFreeDrop} title={onFreePlace ? "Drag to nudge — drop sticks immediately · drop on another card to swap" : undefined}>
+        {/* Loud incomplete XI warning */}
+        {(() => {
+          const homeMapped = homePlayers.filter((p) => p.isStarter || p.onPitch).length;
+          const awayMapped = awayPlayers.filter((p) => p.isStarter || p.onPitch).length;
+          const homeEmpty = Math.max(0, homeSlots.length - homeMapped);
+          const awayEmpty = Math.max(0, awaySlots.length - awayMapped);
+          if (homeEmpty + awayEmpty <= 0 && homeMapped >= 11 && awayMapped >= 11) return null;
+          const bits: string[] = [];
+          if (homeMapped < 11 || homeEmpty > 0)
+            bits.push(`${homeName}: ${homeMapped}/11 starters${homeEmpty ? ` · ${homeEmpty} empty` : ""}`);
+          if (awayMapped < 11 || awayEmpty > 0)
+            bits.push(`${awayName}: ${awayMapped}/11 starters${awayEmpty ? ` · ${awayEmpty} empty` : ""}`);
+          if (!bits.length) return null;
+          return (
+            <div className="pointer-events-none absolute left-1/2 top-8 z-30 max-w-[90%] -translate-x-1/2 rounded-md border-2 border-amber-400 bg-rose-900/95 px-2.5 py-1.5 text-center shadow-lg">
+              <div className="text-[10px] font-black uppercase tracking-wide text-amber-200">
+                Incomplete XI — blank slots on pitch
+              </div>
+              <div className="text-[10px] font-semibold text-white/95">{bits.join(" · ")}</div>
+            </div>
+          );
+        })()}
+
         {/* S / M legend — season vs match card stats */}
         {!onAirMode && (
           <div className="pointer-events-none absolute bottom-1.5 right-1.5 z-20 rounded bg-black/45 px-1.5 py-0.5 text-[7px] font-semibold tracking-wide text-white/80 whitespace-nowrap">
@@ -2041,11 +2067,16 @@ export function PitchBoard({
                 ) : (
                   <span
                     className={cn(
-                      "flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-md text-[8px] font-bold text-white/80 shadow ring-1 ring-white/30 border border-dashed border-white/40 bg-black/25",
-                      highlightPlace && "ring-sky-200/80"
+                      "flex min-h-[2.5rem] min-w-[2.75rem] flex-col items-center justify-center gap-0.5 rounded-md px-1 py-0.5 text-center shadow ring-2",
+                      "border-2 border-dashed border-amber-300 bg-rose-700/85 text-amber-50 ring-rose-400/70",
+                      highlightPlace && "ring-sky-200/90 border-sky-200"
                     )}
+                    title={`EMPTY ${slot.label} — drop a player or Re-pull Official XI`}
                   >
-                    {slot.label}
+                    <span className="text-[7px] font-black uppercase tracking-wide leading-none text-amber-200">
+                      Empty
+                    </span>
+                    <span className="text-[9px] font-bold leading-none">{slot.label}</span>
                   </span>
                 )}
               </button>

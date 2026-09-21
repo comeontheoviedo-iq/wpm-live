@@ -69,7 +69,7 @@ import {
 } from "./kit-colors";
 import { broadcastLabelFor, leagueIdForMatchDay } from "./competitions";
 import { resolveWeatherForVenue } from "./weather";
-import { nationalityToIso } from "./flags";
+import { nationalityToIso, preferAfFullName } from "./flags";
 import { maybeAutoGenerateLineupPack } from "./pack-generate";
 import { maybeReconcileNotesOnXiConfirm } from "./reconcile-notes-on-xi";
 import { namesLooselyMatch } from "./player-name";
@@ -165,6 +165,8 @@ async function upsertPlayerBioFromAf(
   row: {
     apiId: number;
     name: string;
+    firstname?: string | null;
+    lastname?: string | null;
     nationality?: string;
     birthCountry?: string | null;
     nationalTeam?: string | null;
@@ -182,9 +184,10 @@ async function upsertPlayerBioFromAf(
     apps?: number;
   }
 ) {
+  const resolvedName = preferAfFullName(row.name, row.firstname, row.lastname);
   const existing = await findClubPlayer(clubId, {
     apiId: row.apiId,
-    name: row.name,
+    name: resolvedName || row.name,
   });
   const afNat = row.nationality?.trim() || null;
   const nt = row.nationalTeam?.trim() || null;
@@ -199,7 +202,7 @@ async function upsertPlayerBioFromAf(
     await prisma.player.create({
       data: {
         clubId,
-        name: row.name,
+        name: resolvedName || row.name,
         shirtNumber: 0,
         position: posGuess(row.position),
         apiFootballPlayerId: row.apiId,
@@ -221,6 +224,13 @@ async function upsertPlayerBioFromAf(
     return;
   }
   const data: Record<string, unknown> = {};
+  if (
+    resolvedName &&
+    resolvedName !== existing.name &&
+    preferAfFullName(existing.name, row.firstname, row.lastname) === resolvedName
+  ) {
+    data.name = resolvedName;
+  }
   if (nat && (isUnsetNationality(existing.nationality) || existing.nationality !== nat)) {
     data.nationality = nat;
   }
@@ -1478,6 +1488,8 @@ async function syncSeasonScorers(
     clubId: string;
     apiId: number;
     name: string;
+    firstname?: string | null;
+    lastname?: string | null;
     goals: number;
     assists: number;
     goalsAllComps: number;
@@ -1524,7 +1536,13 @@ async function syncSeasonScorers(
     byApi.set(row.player.id, {
       clubId,
       apiId: row.player.id,
-      name: row.player.name,
+      name: preferAfFullName(
+        row.player.name,
+        row.player.firstname,
+        row.player.lastname
+      ),
+      firstname: row.player.firstname || null,
+      lastname: row.player.lastname || null,
       // Competition (desk league) — do not take statistics[0] cup/UCL row alone
       goals: Math.max(agg.leagueGoals || 0, prev?.goals || 0),
       assists: Math.max(agg.leagueAssists || 0, prev?.assists || 0),
@@ -1582,7 +1600,13 @@ async function syncSeasonScorers(
     if (!row?.player) return false;
     await upsertPlayerBioFromAf(clubId, {
       apiId: row.player.id,
-      name: row.player.name || fallbackName,
+      name: preferAfFullName(
+        row.player.name || fallbackName,
+        row.player.firstname,
+        row.player.lastname
+      ),
+      firstname: row.player.firstname || null,
+      lastname: row.player.lastname || null,
       nationality: row.player.nationality || prev?.nationality,
       birthCountry: row.player.birth?.country || prev?.birthCountry || null,
       nationalTeam: nt,
@@ -1879,6 +1903,11 @@ export type SyncMatchOpts = {
   mode?: SyncMode;
   /** Internal: sibling apply after fixture fan-in leader — no further fan-out. */
   fromFanIn?: boolean;
+  /**
+   * Owner Re-pull Official XI: ignore freeze + always fetch lineups and
+   * re-apply Official when both sides are usable.
+   */
+  forceOfficialLineup?: boolean;
 };
 
 async function freshLiveSkipPayload(matchId: string) {
@@ -1967,6 +1996,7 @@ export async function syncMatchFromApiFootball(
   const run = runSyncMatchFromApiFootball(matchId, {
     resetPlacements: opts?.resetPlacements,
     mode,
+    forceOfficialLineup: opts?.forceOfficialLineup,
   }).finally(() => {
     if (syncInflight.get(fanKey) === run) syncInflight.delete(fanKey);
   });
@@ -2000,10 +2030,15 @@ export async function syncMatchFromApiFootball(
 
 async function runSyncMatchFromApiFootball(
   matchId: string,
-  opts: { resetPlacements?: boolean; mode: SyncMode }
+  opts: {
+    resetPlacements?: boolean;
+    mode: SyncMode;
+    forceOfficialLineup?: boolean;
+  }
 ) {
   const mode = opts.mode;
   const isLive = mode === "live";
+  const forceOfficial = Boolean(opts.forceOfficialLineup);
 
   const match = await prisma.match.findUnique({
     where: { id: matchId },
@@ -2107,6 +2142,7 @@ async function runSyncMatchFromApiFootball(
       match.status
     );
   const needLineups =
+    forceOfficial ||
     !isLive ||
     match.lineupStatus !== "confirmed" ||
     isPreOrNs;
@@ -2141,7 +2177,8 @@ async function runSyncMatchFromApiFootball(
 
   // Gate: see lib/lineup-gate.ts + docs/AF_LIVE_TRIGGERS.md
   // Empty-grid provisional dumps must not confirm Official or overwrite a good board.
-  const feedFrozen = Boolean(match.xiFeedFrozen);
+  // forceOfficial (owner Re-pull) bypasses freeze for this pass only
+  const feedFrozen = forceOfficial ? false : Boolean(match.xiFeedFrozen);
   const plan = planLineupApply({
     homeOfficial,
     awayOfficial,

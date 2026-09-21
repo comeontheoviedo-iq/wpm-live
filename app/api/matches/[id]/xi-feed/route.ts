@@ -3,13 +3,32 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { assertMatchOwned } from "@/lib/tenancy";
 import { sendOwnerXiWrongAlert } from "@/lib/owner-xi-wrong-alert";
+import { sendSupportPingAlert } from "@/lib/support-ping-alert";
+import { syncMatchFromApiFootball } from "@/lib/sync-fixture";
+import { isApiFootballConfigured } from "@/lib/api-football";
+
+async function countStarters(matchId: string): Promise<number> {
+  const match = await prisma.match.findUnique({
+    where: { id: matchId },
+    select: { homeClubId: true, awayClubId: true },
+  });
+  if (!match) return 0;
+  return prisma.player.count({
+    where: {
+      clubId: { in: [match.homeClubId, match.awayClubId] },
+      OR: [{ isStarter: true }, { onPitch: true }],
+      NOT: { formationSlot: "BENCH" },
+    },
+  });
+}
 
 /**
  * PATCH /api/matches/[id]/xi-feed
- * Body: { action: "lock" | "unlock" | "report_wrong", note?: string, playerId?: string, lockPlayer?: boolean }
+ * Body: { action: "lock" | "unlock" | "report_wrong" | "repull_official", note?: string, playerId?: string, lockPlayer?: boolean }
  *
  * lock / report_wrong → freeze Official/Predicted/Last XI feed apply (events/score still sync)
  * unlock → desk owner only
+ * repull_official → owner only: unlock freeze + forced Official lineup re-apply
  * lockPlayer → per-player MatchPlayerOverride.lockFromFeed
  */
 export async function PATCH(
@@ -102,12 +121,62 @@ export async function PATCH(
       frozenAt,
     });
 
+    // Also write SupportPing so Ask/Report pickup routine sees it
+    let supportPingId: string | null = null;
+    try {
+      const message =
+        note?.trim() ||
+        `XI looks wrong reported on ${title}. Official feed sync frozen. Does not re-pull — owner should Re-pull Official XI.`;
+      const ping = await prisma.supportPing.create({
+        data: {
+          userId: session.id,
+          type: "xi_wrong",
+          message: message.slice(0, 8000),
+          context: JSON.stringify({
+            matchTitle: title,
+            matchId,
+            afFixtureId: match.apiFootballFixtureId,
+            lineupSource: match.lineupSource,
+            competition: match.matchDay.competition,
+            status: match.status,
+            frozenAt: frozenAt.toISOString(),
+            source: "report_wrong",
+          }),
+          status: "open",
+        },
+        select: { id: true, createdAt: true },
+      });
+      supportPingId = ping.id;
+      void sendSupportPingAlert({
+        pingId: ping.id,
+        type: "xi_wrong",
+        message,
+        userName: session.name || "",
+        userEmail: session.email || "",
+        context: {
+          matchTitle: title,
+          matchId,
+          afFixtureId: match.apiFootballFixtureId,
+          lineupSource: match.lineupSource,
+          competition: match.matchDay.competition,
+          status: match.status,
+        },
+        createdAt: ping.createdAt,
+      });
+    } catch (e) {
+      console.warn(
+        "[xi-feed] SupportPing create failed",
+        e instanceof Error ? e.message : e
+      );
+    }
+
     return NextResponse.json({
       ok: true,
       xiFeedFrozen: updated.xiFeedFrozen,
       xiFeedFrozenReason: updated.xiFeedFrozenReason,
       xiFeedFrozenAt: updated.xiFeedFrozenAt,
       alertQueued: true,
+      supportPingId,
     });
   }
 
@@ -134,8 +203,77 @@ export async function PATCH(
     });
   }
 
+  if (action === "repull_official") {
+    if (!isOwner) {
+      return NextResponse.json(
+        { error: "Only the desk owner can Re-pull Official XI" },
+        { status: 403 }
+      );
+    }
+    if (!isApiFootballConfigured()) {
+      return NextResponse.json(
+        { error: "API_FOOTBALL_KEY is not set" },
+        { status: 503 }
+      );
+    }
+    if (!match.apiFootballFixtureId) {
+      return NextResponse.json(
+        { error: "Match has no AF fixture linked" },
+        { status: 400 }
+      );
+    }
+
+    const beforeStarters = await countStarters(matchId);
+
+    // Unlock freeze first so subsequent polls can also apply
+    await prisma.match.update({
+      where: { id: matchId },
+      data: {
+        xiFeedFrozen: false,
+        xiFeedFrozenAt: null,
+        xiFeedFrozenByUserId: null,
+        xiFeedFrozenReason: null,
+        xiFeedFrozenNote: null,
+      },
+    });
+
+    let syncResult: Awaited<ReturnType<typeof syncMatchFromApiFootball>>;
+    try {
+      syncResult = await syncMatchFromApiFootball(matchId, {
+        mode: "full",
+        forceOfficialLineup: true,
+        resetPlacements: true,
+      });
+    } catch (e) {
+      const raw = e instanceof Error ? e.message : String(e || "Sync failed");
+      console.error("[xi-feed/repull_official]", raw);
+      return NextResponse.json(
+        { error: raw.length <= 160 ? raw : "Re-pull Official failed" },
+        { status: 400 }
+      );
+    }
+
+    const afterStarters = await countStarters(matchId);
+    const lineupApplied =
+      syncResult.lineupStatus === "confirmed" ||
+      (syncResult.lineupCount ?? 0) > 0;
+
+    return NextResponse.json({
+      ok: true,
+      xiFeedFrozen: false,
+      lineupApplied,
+      lineupStatus: syncResult.lineupStatus,
+      previousLineupStatus: syncResult.previousLineupStatus,
+      before: { starters: beforeStarters },
+      after: { starters: afterStarters },
+    });
+  }
+
   return NextResponse.json(
-    { error: "action must be lock | unlock | report_wrong | lockPlayer | unlockPlayer" },
+    {
+      error:
+        "action must be lock | unlock | report_wrong | repull_official | lockPlayer | unlockPlayer",
+    },
     { status: 400 }
   );
 }

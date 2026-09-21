@@ -39,11 +39,15 @@ export type RefereeCardSettings = {
   nameSizePct: number;
 };
 
+export type PitchNameStyle = "full" | "surname";
+
 export type FieldSettings = {
   /** Marker size percent offset: -40 … +40 */
   markerSizePct: number;
   /** Name text size percent offset: -40 … +40 (player + keeper cards) */
   nameSizePct: number;
+  /** Pitch card name: first+last (default) or surname-only */
+  pitchNameStyle: PitchNameStyle;
   /** Stat rows under the name */
   dataRows: 1 | 2;
   /** Stat cells per row */
@@ -61,7 +65,8 @@ export type FieldSettings = {
 };
 
 /** Bumped to v4 for keeper/coach/referee card chrome. */
-export const FIELD_SETTINGS_STORAGE_KEY = "pitchline.fieldSettings.v4";
+export const FIELD_SETTINGS_STORAGE_KEY = "pitchline.fieldSettings.v5";
+const FIELD_SETTINGS_STORAGE_KEY_V4 = "pitchline.fieldSettings.v4";
 const FIELD_SETTINGS_STORAGE_KEY_V3 = "pitchline.fieldSettings.v3";
 const FIELD_SETTINGS_STORAGE_KEY_V2 = "pitchline.fieldSettings.v2";
 const FIELD_SETTINGS_STORAGE_KEY_V1 = "pitchline.fieldSettings.v1";
@@ -129,6 +134,7 @@ export const DEFAULT_REFEREE_CARD: RefereeCardSettings = {
 export const DEFAULT_FIELD_SETTINGS: FieldSettings = {
   markerSizePct: -18,
   nameSizePct: 0,
+  pitchNameStyle: "full",
   dataRows: 2,
   fieldsPerRow: 4,
   userAdjusted: false,
@@ -287,9 +293,12 @@ export function normalizeFieldSettings(
           DEFAULT_KEEPER_VISIBLE_FIELDS
         )
       : deriveKeeperFieldsFromLegacy(visibleFields);
+  const pitchNameStyle: PitchNameStyle =
+    raw.pitchNameStyle === "surname" ? "surname" : "full";
   return {
     markerSizePct: clampPct(Number(raw.markerSizePct ?? base.markerSizePct)),
     nameSizePct: clampPct(Number(raw.nameSizePct ?? base.nameSizePct)),
+    pitchNameStyle,
     dataRows: rows === 1 ? 1 : 2,
     fieldsPerRow: cols === 3 || cols === 5 ? (cols as 3 | 5) : 4,
     userAdjusted: Boolean(raw.userAdjusted),
@@ -326,12 +335,22 @@ export function loadFieldSettings(): FieldSettings {
     };
   }
   try {
-    const rawV4 = window.localStorage.getItem(FIELD_SETTINGS_STORAGE_KEY);
-    if (rawV4) {
-      return normalizeFieldSettings(JSON.parse(rawV4) as Partial<FieldSettings>);
+    const rawV5 = window.localStorage.getItem(FIELD_SETTINGS_STORAGE_KEY);
+    if (rawV5) {
+      return normalizeFieldSettings(JSON.parse(rawV5) as Partial<FieldSettings>);
     }
 
-    // Migrate v3 → v4 (keep player prefs; add keeper/coach/ref defaults)
+    // Migrate v4 → v5 (default pitch names to first+last)
+    const rawV4 = window.localStorage.getItem(FIELD_SETTINGS_STORAGE_KEY_V4);
+    if (rawV4) {
+      const migrated = normalizeFieldSettings({
+        ...(JSON.parse(rawV4) as Partial<FieldSettings>),
+        pitchNameStyle: "full",
+      });
+      return persistFresh(migrated);
+    }
+
+    // Migrate v3 → v5 (keep player prefs; add keeper/coach/ref defaults)
     const rawV3 = window.localStorage.getItem(FIELD_SETTINGS_STORAGE_KEY_V3);
     if (rawV3) {
       const migrated = normalizeFieldSettings(

@@ -53,7 +53,7 @@ export function buildOwnerXiWrongAlertEmail(opts: {
     `Note: ${note}`,
     `Frozen at (ISO): ${frozenAt}`,
     "",
-    "Desk owner can unlock from the lineup badge controls.",
+    "Does NOT refresh XI. Desk owner: Unlock feed or Re-pull Official XI from lineup controls.",
   ].join("\n");
 
   const html = `<!DOCTYPE html>
@@ -70,7 +70,7 @@ export function buildOwnerXiWrongAlertEmail(opts: {
     <li><strong>Note:</strong> ${escapeHtml(note)}</li>
     <li><strong>Frozen at (ISO):</strong> ${escapeHtml(frozenAt)}</li>
   </ul>
-  <p style="color:#555;font-size:13px;">Desk owner can unlock from the lineup badge controls.</p>
+  <p style="color:#555;font-size:13px;">Does NOT refresh XI. Desk owner: Unlock feed or Re-pull Official XI from lineup controls.</p>
 </body>
 </html>`;
 

@@ -240,7 +240,15 @@ function applyLiveSubsToXi(
     const { outName, inName } = parseSubDescription(e.description || "");
     const outP = findPlayerLoose(list(), { id: e.playerId, name: outName });
     if (!outP) continue;
-    const inheritedSlot = outP.formationSlot;
+    // Idempotent: DB sync already applied this subst (out off / bench).
+    // Re-applying would inherit BENCH/null and scramble the ON player.
+    if (!outP.onPitch || outP.subbedOff || outP.formationSlot === "BENCH") {
+      continue;
+    }
+    const inheritedSlot =
+      outP.formationSlot && outP.formationSlot !== "BENCH"
+        ? outP.formationSlot
+        : null;
     const outNext = {
       ...byId.get(outP.id)!,
       subbedOff: true,
@@ -2668,6 +2676,8 @@ export function MatchDesk({
               lineupStatus={lineupStatus}
               lineupSource={lineupSource}
               lineupSourceMeta={lineupSourceMeta}
+              matchStatus={status}
+              hasSubEvents={events.some((e) => e.type === "sub")}
             />
             <FixtureIdentityChip
               competition={competition}
@@ -2682,6 +2692,16 @@ export function MatchDesk({
               xiFeedFrozenReason={xiFeedFrozenReason}
               isOwner={isDeskOwner}
               onChanged={() => router.refresh()}
+              homeName={homeName}
+              awayName={awayName}
+              kickoffAt={kickoffAt}
+              apiFootballFixtureId={apiFootballFixtureId}
+              lineupStatus={lineupStatus}
+              lineupSource={lineupSource}
+              lineupSourceMeta={lineupSourceMeta}
+              lastFeedSyncAt={lastFeedSyncAt}
+              homeStarters={homeStarterCount}
+              awayStarters={awayStarterCount}
             />
             <IncompleteXiWarning
               homeStarters={homeStarterCount}

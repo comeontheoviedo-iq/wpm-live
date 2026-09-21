@@ -58,4 +58,29 @@ describe("lineup source badge", () => {
       "last_xi"
     );
   });
+
+  it("shows Live when official + liveAfterSubs meta", () => {
+    assert.equal(
+      resolveLineupSourceKind({
+        lineupSource: "official",
+        lineupStatus: "confirmed",
+        meta: { liveAfterSubs: true },
+      }),
+      "live"
+    );
+    assert.equal(
+      deriveLineupSourceFromPlan({
+        action: "confirm",
+        lineupStatus: "confirmed",
+        liveAfterSubs: true,
+      }).lineupSource,
+      "live"
+    );
+    assert.equal(lineupSourceBadgeLabel({ kind: "live" }), "Live");
+    assert.match(lineupSourceBadgeClass("live"), /violet/);
+    assert.notEqual(
+      lineupSourceBadgeClass("live"),
+      lineupSourceBadgeClass("official")
+    );
+  });
 });

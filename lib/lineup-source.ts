@@ -1,9 +1,10 @@
 /**
  * Lineup source badge + meta helpers for commentator desk chrome.
- * Official | Predicted | Last XI — never style Predicted/Last like Official.
+ * Official | Live | Predicted | Last XI — never style Predicted/Last like Official.
+ * Official = kickoff named XI. Live = current pitch after substitutions.
  */
 
-export type LineupSourceKind = "official" | "predicted" | "last_xi";
+export type LineupSourceKind = "official" | "live" | "predicted" | "last_xi";
 
 export type LineupSourceMeta = {
   competitionShort?: string | null;
@@ -13,6 +14,14 @@ export type LineupSourceMeta = {
   awayFixtureId?: number | null;
   lastXiCompetitionMismatch?: boolean;
   warning?: string | null;
+  /** ISO when kickoff Official XI was captured / last confirmed from AF */
+  officialCapturedAt?: string | null;
+  /** True when board shape includes at least one applied substitution */
+  liveAfterSubs?: boolean;
+  /** Starter counts at last apply (verify panel) */
+  homeStarters?: number | null;
+  awayStarters?: number | null;
+  emptySlotWarning?: string | null;
 };
 
 export function parseLineupSourceMeta(
@@ -40,15 +49,42 @@ export function stringifyLineupSourceMeta(meta: LineupSourceMeta | null | undefi
 export function resolveLineupSourceKind(opts: {
   lineupSource?: string | null;
   lineupStatus?: string | null;
+  matchStatus?: string | null;
+  hasSubEvents?: boolean;
+  meta?: LineupSourceMeta | null;
 }): LineupSourceKind {
   const src = String(opts.lineupSource || "").trim().toLowerCase();
-  if (src === "official" || src === "predicted" || src === "last_xi") {
-    return src;
+  if (src === "live") return "live";
+  if (src === "predicted" || src === "last_xi") return src;
+  if (src === "official") {
+    return shouldShowLiveBadge(opts) ? "live" : "official";
   }
   const st = String(opts.lineupStatus || "").trim().toLowerCase();
-  if (st === "confirmed") return "official";
   if (st === "predicted") return "predicted";
+  if (st === "confirmed") {
+    return shouldShowLiveBadge(opts) ? "live" : "official";
+  }
   return "last_xi";
+}
+
+function shouldShowLiveBadge(opts: {
+  matchStatus?: string | null;
+  hasSubEvents?: boolean;
+  meta?: LineupSourceMeta | null;
+}): boolean {
+  if (opts.meta?.liveAfterSubs) return true;
+  if (!opts.hasSubEvents) return false;
+  const ms = String(opts.matchStatus || "").toLowerCase();
+  return (
+    ms.includes("live") ||
+    ms === "1h" ||
+    ms === "2h" ||
+    ms.includes("half") ||
+    ms.includes("full") ||
+    ms === "ft" ||
+    ms === "aet" ||
+    ms === "pen"
+  );
 }
 
 /** Europe/London short date e.g. Sun 13 Sep */
@@ -64,12 +100,13 @@ export function formatLastXiDate(dateIso: string | Date | null | undefined): str
   }).format(d);
 }
 
-/** Badge label: Official | Predicted | Last XI · Serie A · Sun 13 Sep */
+/** Badge label: Official | Live | Predicted | Last XI · Serie A · Sun 13 Sep */
 export function lineupSourceBadgeLabel(opts: {
   kind: LineupSourceKind;
   meta?: LineupSourceMeta | null;
 }): string {
   if (opts.kind === "official") return "Official";
+  if (opts.kind === "live") return "Live";
   if (opts.kind === "predicted") return "Predicted";
   const parts = ["Last XI"];
   const comp = (opts.meta?.competitionShort || "").trim();
@@ -79,19 +116,43 @@ export function lineupSourceBadgeLabel(opts: {
   return parts.join(" · ");
 }
 
-/** Tailwind classes — Official emerald; Predicted sky; Last XI amber. Never style non-Official like Official. */
+/** Tailwind — Official emerald; Live violet; Predicted sky; Last XI amber. Never style non-Official like Official. */
 export function lineupSourceBadgeClass(kind: LineupSourceKind): string {
   if (kind === "official") return "bg-emerald-600 text-white";
+  if (kind === "live") return "bg-violet-600 text-white";
   if (kind === "predicted") return "bg-sky-600 text-white";
   return "bg-amber-500 text-white";
+}
+
+export function lineupSourceBadgeTitle(opts: {
+  kind: LineupSourceKind;
+  meta?: LineupSourceMeta | null;
+}): string {
+  if (opts.kind === "official") {
+    return "Official kickoff named XI from the live feed";
+  }
+  if (opts.kind === "live") {
+    return "Current pitch after substitutions — kickoff XI was Official (not a fresh Official dump)";
+  }
+  if (opts.kind === "predicted") {
+    return "Predicted XI — NOT Official. Re-pull Official when both sides are named.";
+  }
+  if (opts.meta?.lastXiCompetitionMismatch) {
+    return "Domestic last XI — not this competition. NOT tonight's Official.";
+  }
+  return "Last played XI — NOT tonight's Official.";
 }
 
 export function deriveLineupSourceFromPlan(opts: {
   action: string;
   lineupStatus: string;
   appliedLastXi?: boolean;
+  liveAfterSubs?: boolean;
 }): { lineupSource: LineupSourceKind; lineupStatus: string } {
   if (opts.action === "confirm" || opts.lineupStatus === "confirmed") {
+    if (opts.liveAfterSubs) {
+      return { lineupSource: "live", lineupStatus: "confirmed" };
+    }
     return { lineupSource: "official", lineupStatus: "confirmed" };
   }
   if (opts.action === "keep_predicted" || opts.lineupStatus === "predicted") {
@@ -100,9 +161,44 @@ export function deriveLineupSourceFromPlan(opts: {
   if (opts.action === "fallback_last_xi" || opts.appliedLastXi) {
     return { lineupSource: "last_xi", lineupStatus: "expected" };
   }
-  // keep — preserve caller status mapping
   return {
-    lineupSource: resolveLineupSourceKind({ lineupStatus: opts.lineupStatus }),
+    lineupSource: resolveLineupSourceKind({
+      lineupStatus: opts.lineupStatus,
+      meta: opts.liveAfterSubs ? { liveAfterSubs: true } : null,
+    }),
     lineupStatus: opts.lineupStatus,
+  };
+}
+
+/** Search URLs for human FotMob / SofaScore verify (no scrapers). */
+export function buildLineupVerifyUrls(opts: {
+  homeName: string;
+  awayName: string;
+  kickoffAt?: string | Date | null;
+  apiFootballFixtureId?: number | null;
+}): { fotmob: string; sofascore: string; query: string } {
+  const home = (opts.homeName || "Home").trim();
+  const away = (opts.awayName || "Away").trim();
+  let dateBit = "";
+  if (opts.kickoffAt) {
+    const d =
+      typeof opts.kickoffAt === "string"
+        ? new Date(opts.kickoffAt)
+        : opts.kickoffAt;
+    if (!Number.isNaN(d.getTime())) {
+      dateBit = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Europe/London",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(d);
+    }
+  }
+  const query = [home, "vs", away, dateBit].filter(Boolean).join(" ");
+  const q = encodeURIComponent(query);
+  return {
+    query,
+    fotmob: `https://www.fotmob.com/search?q=${q}`,
+    sofascore: `https://www.sofascore.com/search?q=${q}`,
   };
 }

@@ -47,6 +47,10 @@ import {
   stringifyLineupSourceMeta,
   type LineupSourceMeta,
 } from "./lineup-source";
+import {
+  isSubAlreadyApplied,
+  resolveInheritedSlot,
+} from "./sub-apply";
 
 import {
   afLineupCaptainPlayerIds,
@@ -1030,58 +1034,79 @@ async function applySubEvent(
 
   const formation = (isHome ? homeFormation : awayFormation) || "4-3-3";
   const validSlots = slotsFor(formation);
+  const validIds = validSlots.map((s) => s.id);
 
   const outName = ev.player?.name;
   const inName = ev.assist?.name;
 
-  let inheritedSlot: string | null = null;
-  if (outName || ev.player?.id) {
-    const outP = await findClubPlayer(clubId, {
-      apiId: ev.player?.id,
-      name: outName,
-    });
-    if (outP) {
-      inheritedSlot = outP.formationSlot;
-      await prisma.player.update({
-        where: { id: outP.id },
-        data: { onPitch: false, isStarter: false, formationSlot: "BENCH" },
-      });
-      // Drop stale ST/LW override so reapplyPitchPlacements cannot resurrect them
-      await clearPlacementAfterSub(_matchId, outP.id).catch(() => null);
-    }
+  const outP =
+    outName || ev.player?.id
+      ? await findClubPlayer(clubId, {
+          apiId: ev.player?.id,
+          name: outName,
+        })
+      : null;
+  const inP =
+    inName || ev.assist?.id
+      ? await findClubPlayer(clubId, {
+          apiId: ev.assist?.id ?? null,
+          name: inName,
+        })
+      : null;
+
+  // Idempotent: live sync re-plays every subst each poll. If out is already
+  // off and in already holds a real pitch slot, do nothing — never inherit
+  // BENCH and scramble into the first free slot ("Official looks wrong").
+  if (
+    outP &&
+    isSubAlreadyApplied({
+      outOnPitch: Boolean(outP.onPitch),
+      outSlot: outP.formationSlot,
+      inOnPitch: inP ? Boolean(inP.onPitch) : undefined,
+      inSlot: inP?.formationSlot,
+      validSlotIds: validIds,
+    })
+  ) {
+    return;
   }
-  if (inName || ev.assist?.id) {
-    const inP = await findClubPlayer(clubId, {
-      apiId: ev.assist?.id ?? null,
-      name: inName,
+
+  let inheritedSlot: string | null = null;
+  if (outP) {
+    inheritedSlot = resolveInheritedSlot(outP.formationSlot, validIds);
+    await prisma.player.update({
+      where: { id: outP.id },
+      data: { onPitch: false, isStarter: false, formationSlot: "BENCH" },
     });
-    if (inP) {
-      let slot = inheritedSlot || inP.formationSlot;
-      if (!slot || !validSlots.some((s) => s.id === slot)) {
-        const used = new Set(
-          (
-            await prisma.player.findMany({
-              where: { clubId, OR: [{ isStarter: true }, { onPitch: true }] },
-              select: { formationSlot: true },
-            })
-          )
-            .map((p) => p.formationSlot)
-            .filter(Boolean) as string[]
-        );
-        slot =
-          validSlots.find((s) => !used.has(s.id))?.id ||
-          validSlots[validSlots.length - 1]?.id ||
-          null;
-      }
-      await prisma.player.update({
-        where: { id: inP.id },
-        data: {
-          onPitch: true,
-          isStarter: true,
-          formationSlot: slot,
-        },
-      });
+    // Drop stale ST/LW override so reapplyPitchPlacements cannot resurrect them
+    await clearPlacementAfterSub(_matchId, outP.id).catch(() => null);
+  }
+  if (inP) {
+    let slot =
+      inheritedSlot || resolveInheritedSlot(inP.formationSlot, validIds);
+    if (!slot || !validIds.includes(slot)) {
+      const used = new Set(
+        (
+          await prisma.player.findMany({
+            where: { clubId, OR: [{ isStarter: true }, { onPitch: true }] },
+            select: { formationSlot: true },
+          })
+        )
+          .map((p) => p.formationSlot)
+          .filter((s): s is string => Boolean(s) && s !== "BENCH")
+      );
+      slot =
+        validSlots.find((s) => !used.has(s.id))?.id ||
+        validSlots[validSlots.length - 1]?.id ||
+        null;
     }
+    await prisma.player.update({
+      where: { id: inP.id },
+      data: {
+        onPitch: true,
+        isStarter: true,
+        formationSlot: slot,
+      },
+    });
   }
 }
 
@@ -2299,6 +2324,8 @@ async function runSyncMatchFromApiFootball(
         fixtureId: match.apiFootballFixtureId ?? null,
         lastXiCompetitionMismatch: false,
         warning: null,
+        officialCapturedAt: new Date().toISOString(),
+        liveAfterSubs: false,
       };
     } else if (derived.lineupSource === "predicted") {
       lineupSourceMeta = {
@@ -2531,7 +2558,53 @@ async function runSyncMatchFromApiFootball(
   const matchGoalCountByAf = new Map<number, number>();
   const matchAssistCountByAf = new Map<number, number>();
 
-  for (const ev of events) {
+  
+  // P0: reset to kickoff Official XI then replay subst chronologically.
+  // Live polls used to re-apply every subst onto an already-subbed board;
+  // out-player on BENCH → inheritedSlot=BENCH → first-free scramble, still
+  // labelled Official. AF startXI stays the named kickoff XI after KO.
+  let liveAfterSubs = false;
+  const subEventCount = events.filter((e) => mapEventType(e) === "sub").length;
+  if (
+    lineupStatus === "confirmed" &&
+    !feedFrozen &&
+    subEventCount > 0
+  ) {
+    let homeLuReset = homeLu;
+    let awayLuReset = awayLu;
+    if (!isUsableOfficialLineup(homeLuReset) || !isUsableOfficialLineup(awayLuReset)) {
+      const fresh = await getLineups(match.apiFootballFixtureId).catch(() => []);
+      homeLuReset = fresh.find((l) => l.team.id === homeAfId) || homeLuReset;
+      awayLuReset = fresh.find((l) => l.team.id === awayAfId) || awayLuReset;
+    }
+    if (
+      isUsableOfficialLineup(homeLuReset) &&
+      isUsableOfficialLineup(awayLuReset)
+    ) {
+      homeFormation = await upsertLineupSide(
+        match.homeClubId,
+        homeLuReset!,
+        "home",
+        { clearCaptainsIfNone: true }
+      );
+      awayFormation = await upsertLineupSide(
+        match.awayClubId,
+        awayLuReset!,
+        "away",
+        { clearCaptainsIfNone: true }
+      );
+      if (!lineupSourceMeta) lineupSourceMeta = {};
+      lineupSourceMeta = {
+        ...lineupSourceMeta,
+        officialCapturedAt: new Date().toISOString(),
+        liveAfterSubs: false,
+        fixtureId: match.apiFootballFixtureId ?? lineupSourceMeta.fixtureId ?? null,
+      };
+    }
+    liveAfterSubs = true;
+  }
+
+for (const ev of events) {
     const elapsed = ev.time?.elapsed ?? 0;
     const desc = `${ev.detail}${ev.player?.name ? ` — ${ev.player.name}` : ""}${
       ev.assist?.name ? ` (${ev.assist.name})` : ""
@@ -2758,7 +2831,44 @@ async function runSyncMatchFromApiFootball(
   // (liveAdjustedSeasonStat). Writing seasonOrdinal bumps caused
   // double-count (e.g. Mbeumo DB=2 + card +1 → 3).
 
-  await pruneStaleGoals(matchId, events, homeAfId, awayAfId).catch((err) =>
+  
+  if (liveAfterSubs && lineupStatus === "confirmed" && !feedFrozen) {
+    const derivedLive = deriveLineupSourceFromPlan({
+      action: "confirm",
+      lineupStatus: "confirmed",
+      liveAfterSubs: true,
+    });
+    lineupSource = derivedLive.lineupSource;
+    const homeStarters = await prisma.player.count({
+      where: {
+        clubId: match.homeClubId,
+        OR: [{ isStarter: true }, { onPitch: true }],
+        NOT: { formationSlot: "BENCH" },
+      },
+    });
+    const awayStarters = await prisma.player.count({
+      where: {
+        clubId: match.awayClubId,
+        OR: [{ isStarter: true }, { onPitch: true }],
+        NOT: { formationSlot: "BENCH" },
+      },
+    });
+    lineupSourceMeta = {
+      ...(lineupSourceMeta || {}),
+      liveAfterSubs: true,
+      officialCapturedAt:
+        lineupSourceMeta?.officialCapturedAt || new Date().toISOString(),
+      fixtureId: match.apiFootballFixtureId ?? lineupSourceMeta?.fixtureId ?? null,
+      homeStarters,
+      awayStarters,
+      emptySlotWarning:
+        homeStarters < 11 || awayStarters < 11
+          ? `Incomplete XI · home ${homeStarters}/11 · away ${awayStarters}/11`
+          : null,
+    };
+  }
+
+await pruneStaleGoals(matchId, events, homeAfId, awayAfId).catch((err) =>
     console.error("[sync] prune stale goals failed", matchId, err)
   );
 

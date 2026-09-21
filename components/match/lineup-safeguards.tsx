@@ -1,13 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Lock, LockOpen, AlertTriangle, RefreshCw } from "lucide-react";
+import { Lock, LockOpen, AlertTriangle, RefreshCw, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   resolveLineupSourceKind,
   lineupSourceBadgeLabel,
   lineupSourceBadgeClass,
+  lineupSourceBadgeTitle,
   parseLineupSourceMeta,
+  buildLineupVerifyUrls,
   type LineupSourceKind,
 } from "@/lib/lineup-source";
 
@@ -29,29 +31,46 @@ export function LineupSourceBadge({
   lineupStatus,
   lineupSource,
   lineupSourceMeta,
+  matchStatus,
+  hasSubEvents,
   className,
 }: {
   lineupStatus: string;
   lineupSource?: string | null;
   lineupSourceMeta?: string | null;
+  matchStatus?: string | null;
+  hasSubEvents?: boolean;
   className?: string;
 }) {
-  const kind = resolveLineupSourceKind({ lineupSource, lineupStatus });
   const meta = parseLineupSourceMeta(lineupSourceMeta);
+  const kind = resolveLineupSourceKind({
+    lineupSource,
+    lineupStatus,
+    matchStatus,
+    hasSubEvents,
+    meta,
+  });
   const label = lineupSourceBadgeLabel({ kind, meta });
-  const title =
-    kind === "official"
-      ? "Official XI from live feed"
-      : kind === "predicted"
-        ? "Predicted XI — not Official"
-        : meta?.lastXiCompetitionMismatch
-          ? "Domestic last XI — not this competition"
-          : "Last played XI — not tonight's Official";
+  const title = lineupSourceBadgeTitle({ kind, meta });
+  const loud = kind === "predicted" || kind === "last_xi";
+  let display = label;
+  if (kind === "predicted") display = "PREDICTED — NOT OFFICIAL";
+  else if (kind === "last_xi") {
+    const comp = (meta?.competitionShort || "").trim();
+    display = comp
+      ? `LAST XI — NOT OFFICIAL · ${comp}`
+      : "LAST XI — NOT OFFICIAL";
+  }
 
   return (
     <span
       className={cn(
-        "rounded-full px-1.5 py-px font-semibold text-[9px]",
+        "inline-flex items-center rounded-full",
+        loud
+          ? "px-2 py-0.5 text-[10px] font-black uppercase tracking-wide shadow ring-2 ring-black/25"
+          : kind === "live"
+            ? "px-2 py-0.5 text-[10px] font-bold shadow"
+            : "rounded-full px-1.5 py-px font-semibold text-[9px]",
         lineupSourceBadgeClass(kind),
         kind !== "official" && "ring-1 ring-black/10",
         className
@@ -59,7 +78,7 @@ export function LineupSourceBadge({
       title={title}
       data-lineup-source={kind}
     >
-      {label}
+      {display}
     </span>
   );
 }
@@ -125,12 +144,32 @@ export function LineupFeedControls({
   xiFeedFrozenReason,
   isOwner,
   onChanged,
+  homeName,
+  awayName,
+  kickoffAt,
+  apiFootballFixtureId,
+  lineupStatus,
+  lineupSource,
+  lineupSourceMeta,
+  lastFeedSyncAt,
+  homeStarters,
+  awayStarters,
 }: {
   matchId: string;
   xiFeedFrozen: boolean;
   xiFeedFrozenReason?: string | null;
   isOwner: boolean;
   onChanged?: () => void;
+  homeName?: string;
+  awayName?: string;
+  kickoffAt?: string | Date | null;
+  apiFootballFixtureId?: number | null;
+  lineupStatus?: string | null;
+  lineupSource?: string | null;
+  lineupSourceMeta?: string | null;
+  lastFeedSyncAt?: string | Date | null;
+  homeStarters?: number;
+  awayStarters?: number;
 }) {
   const [busy, setBusy] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
@@ -180,9 +219,9 @@ export function LineupFeedControls({
   const frozenLabel = useMemo(() => {
     if (!xiFeedFrozen) return null;
     if (xiFeedFrozenReason === "looks_wrong")
-      return "FROZEN · XI reported wrong — Sync will not fill blanks";
-    if (xiFeedFrozenReason === "lock") return "FROZEN · XI locked from feed";
-    return "FROZEN · Official sync blocked";
+      return "FROZEN · blocks Official updates until Unlock / Re-pull";
+    if (xiFeedFrozenReason === "lock") return "FROZEN · blocks Official updates until Unlock";
+    return "FROZEN · blocks Official updates until Unlock / Re-pull";
   }, [xiFeedFrozen, xiFeedFrozenReason]);
 
   return (
@@ -207,7 +246,7 @@ export function LineupFeedControls({
             type="button"
             className="desk-btn text-[9px] px-1.5 py-0.5 inline-flex items-center gap-0.5 text-amber-800 dark:text-amber-200"
             disabled={busy}
-            title="Freeze Official sync and alert owner — does NOT refresh or re-pull the XI"
+            title="Blocks Official updates until Unlock / Re-pull — does NOT refresh XI; alerts owner"
             onClick={() => setNoteOpen((v) => !v)}
           >
             <AlertTriangle className="h-3 w-3" /> Report wrong XI
@@ -217,7 +256,7 @@ export function LineupFeedControls({
               type="button"
               className="desk-btn text-[9px] px-1.5 py-0.5 inline-flex items-center gap-0.5 text-emerald-800 dark:text-emerald-200"
               disabled={busy}
-              title="Force re-apply Official XI from the live feed"
+              title="Force re-apply Official XI from the live feed (works pre-KO; clears freeze)"
               onClick={() => void post("repull_official")}
             >
               <RefreshCw className="h-3 w-3" /> Re-pull Official XI
@@ -239,7 +278,7 @@ export function LineupFeedControls({
             type="button"
             className="desk-btn text-[9px] px-1.5 py-0.5 inline-flex items-center gap-0.5 border border-emerald-500/60 text-emerald-800 dark:text-emerald-200 font-bold"
             disabled={busy}
-            title="Unlock freeze + force Official XI re-apply from AF"
+            title="Unlock freeze + force Official XI re-apply from AF (works pre-KO)"
             onClick={() => void post("repull_official")}
           >
             <RefreshCw className="h-3 w-3" /> Re-pull Official XI
@@ -268,15 +307,112 @@ export function LineupFeedControls({
             Freeze + alert owner
           </button>
           <span className="text-[9px] text-slate-500 max-w-[14rem]">
-            Freezes Official sync — does not re-pull. Owner: use Re-pull Official XI.
+            Blocks Official feed updates until Unlock / Re-pull. Does not refresh XI.
           </span>
         </span>
       )}
+      <LineupVerifyPanel
+        homeName={homeName || "Home"}
+        awayName={awayName || "Away"}
+        kickoffAt={kickoffAt}
+        apiFootballFixtureId={apiFootballFixtureId}
+        lineupStatus={lineupStatus}
+        lineupSource={lineupSource}
+        lineupSourceMeta={lineupSourceMeta}
+        lastFeedSyncAt={lastFeedSyncAt}
+        homeStarters={homeStarters}
+        awayStarters={awayStarters}
+      />
       {msg && (
         <span className="text-[9px] font-semibold text-emerald-700 dark:text-emerald-300">
           {msg}
         </span>
       )}
+    </span>
+  );
+}
+
+/** Human FotMob / SofaScore verify — opens search tabs; no scrapers. */
+export function LineupVerifyPanel({
+  homeName,
+  awayName,
+  kickoffAt,
+  apiFootballFixtureId,
+  lineupStatus,
+  lineupSource,
+  lineupSourceMeta,
+  lastFeedSyncAt,
+  homeStarters,
+  awayStarters,
+}: {
+  homeName: string;
+  awayName: string;
+  kickoffAt?: string | Date | null;
+  apiFootballFixtureId?: number | null;
+  lineupStatus?: string | null;
+  lineupSource?: string | null;
+  lineupSourceMeta?: string | null;
+  lastFeedSyncAt?: string | Date | null;
+  homeStarters?: number;
+  awayStarters?: number;
+}) {
+  const meta = parseLineupSourceMeta(lineupSourceMeta);
+  const kind = resolveLineupSourceKind({ lineupSource, lineupStatus, meta });
+  const urls = buildLineupVerifyUrls({
+    homeName,
+    awayName,
+    kickoffAt,
+    apiFootballFixtureId,
+  });
+  const synced = lastFeedSyncAt
+    ? formatKickoffLondon(lastFeedSyncAt)
+    : meta?.officialCapturedAt
+      ? formatKickoffLondon(meta.officialCapturedAt)
+      : "—";
+  const homeN = homeStarters ?? meta?.homeStarters ?? null;
+  const awayN = awayStarters ?? meta?.awayStarters ?? null;
+  const emptyWarn =
+    (homeN != null && homeN < 11) || (awayN != null && awayN < 11);
+
+  return (
+    <span className="inline-flex items-center gap-1 flex-wrap rounded border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/50 px-1.5 py-0.5">
+      <button
+        type="button"
+        className="desk-btn text-[9px] px-1.5 py-0.5 inline-flex items-center gap-0.5 font-bold"
+        title={`Open FotMob + SofaScore search for "${urls.query}" — human compare (no scraper)`}
+        onClick={() => {
+          window.open(urls.fotmob, "_blank", "noopener,noreferrer");
+          window.open(urls.sofascore, "_blank", "noopener,noreferrer");
+        }}
+      >
+        <ExternalLink className="h-3 w-3" /> Verify
+      </button>
+      <a
+        href={urls.fotmob}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-[9px] font-semibold text-slate-600 dark:text-slate-300 underline-offset-2 hover:underline"
+      >
+        FotMob
+      </a>
+      <a
+        href={urls.sofascore}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-[9px] font-semibold text-slate-600 dark:text-slate-300 underline-offset-2 hover:underline"
+      >
+        SofaScore
+      </a>
+      <span
+        className="text-[9px] text-slate-600 dark:text-slate-300 tabular-nums"
+        title="Our side: source · last sync · starter counts"
+      >
+        Ours: {lineupSourceBadgeLabel({ kind, meta })}
+        {" · "}
+        synced {synced} Lon
+        {homeN != null && awayN != null ? ` · XI ${homeN}/${awayN}` : ""}
+        {emptyWarn ? " · empty slots" : ""}
+      </span>
     </span>
   );
 }

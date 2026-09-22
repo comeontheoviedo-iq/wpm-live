@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Lock, LockOpen, AlertTriangle, RefreshCw, ExternalLink } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Lock, LockOpen, AlertTriangle, RefreshCw, ExternalLink, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   resolveLineupSourceKind,
@@ -154,6 +154,7 @@ export function LineupFeedControls({
   lastFeedSyncAt,
   homeStarters,
   awayStarters,
+  matchStatus,
 }: {
   matchId: string;
   xiFeedFrozen: boolean;
@@ -170,6 +171,7 @@ export function LineupFeedControls({
   lastFeedSyncAt?: string | Date | null;
   homeStarters?: number;
   awayStarters?: number;
+  matchStatus?: string | null;
 }) {
   const [busy, setBusy] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
@@ -218,6 +220,8 @@ export function LineupFeedControls({
 
   const frozenLabel = useMemo(() => {
     if (!xiFeedFrozen) return null;
+    if (xiFeedFrozenReason === "fotmob_apply")
+      return "FROZEN · FotMob Apply — Unlock / Re-pull to let AF overwrite";
     if (xiFeedFrozenReason === "looks_wrong")
       return "FROZEN · blocks Official updates until Unlock / Re-pull";
     if (xiFeedFrozenReason === "lock") return "FROZEN · blocks Official updates until Unlock";
@@ -312,6 +316,7 @@ export function LineupFeedControls({
         </span>
       )}
       <LineupVerifyPanel
+        matchId={matchId}
         homeName={homeName || "Home"}
         awayName={awayName || "Away"}
         kickoffAt={kickoffAt}
@@ -322,6 +327,8 @@ export function LineupFeedControls({
         lastFeedSyncAt={lastFeedSyncAt}
         homeStarters={homeStarters}
         awayStarters={awayStarters}
+        matchStatus={matchStatus}
+        onChanged={onChanged}
       />
       {msg && (
         <span className="text-[9px] font-semibold text-emerald-700 dark:text-emerald-300">
@@ -332,8 +339,9 @@ export function LineupFeedControls({
   );
 }
 
-/** Human FotMob / SofaScore verify — opens search tabs; no scrapers. */
+/** Human Verify tabs + silent FotMob auto-verify badge / Apply. */
 export function LineupVerifyPanel({
+  matchId,
   homeName,
   awayName,
   kickoffAt,
@@ -344,7 +352,10 @@ export function LineupVerifyPanel({
   lastFeedSyncAt,
   homeStarters,
   awayStarters,
+  matchStatus,
+  onChanged,
 }: {
+  matchId?: string;
   homeName: string;
   awayName: string;
   kickoffAt?: string | Date | null;
@@ -355,9 +366,16 @@ export function LineupVerifyPanel({
   lastFeedSyncAt?: string | Date | null;
   homeStarters?: number;
   awayStarters?: number;
+  matchStatus?: string | null;
+  onChanged?: () => void;
 }) {
   const meta = parseLineupSourceMeta(lineupSourceMeta);
-  const kind = resolveLineupSourceKind({ lineupSource, lineupStatus, meta });
+  const kind = resolveLineupSourceKind({
+    lineupSource,
+    lineupStatus,
+    matchStatus,
+    meta,
+  });
   const urls = buildLineupVerifyUrls({
     homeName,
     awayName,
@@ -379,7 +397,7 @@ export function LineupVerifyPanel({
       <button
         type="button"
         className="desk-btn text-[9px] px-1.5 py-0.5 inline-flex items-center gap-0.5 font-bold"
-        title={`Open FotMob + SofaScore search for "${urls.query}" — human compare (no scraper)`}
+        title={`Open FotMob + SofaScore search for "${urls.query}" — human compare`}
         onClick={() => {
           window.open(urls.fotmob, "_blank", "noopener,noreferrer");
           window.open(urls.sofascore, "_blank", "noopener,noreferrer");
@@ -413,8 +431,224 @@ export function LineupVerifyPanel({
         {homeN != null && awayN != null ? ` · XI ${homeN}/${awayN}` : ""}
         {emptyWarn ? " · empty slots" : ""}
       </span>
+      {matchId ? (
+        <FotMobSilentVerify
+          matchId={matchId}
+          kickoffAt={kickoffAt}
+          matchStatus={matchStatus}
+          onChanged={onChanged}
+        />
+      ) : null}
     </span>
   );
 }
+
+type FotMobVerifyPayload = {
+  status: string;
+  statusLabel: string;
+  fotmobConfirmed: boolean;
+  minutesToKickoff: number | null;
+  canApply: boolean;
+  error?: string | null;
+  fotmobMatchId?: number | null;
+  deskActive?: boolean;
+};
+
+function fotmobBadgeClass(status: string): string {
+  switch (status) {
+    case "matches":
+      return "bg-emerald-600 text-white";
+    case "fotmob_official_ours_predicted":
+      return "bg-amber-500 text-black";
+    case "mismatch":
+      return "bg-rose-600 text-white";
+    case "fotmob_unavailable":
+      return "bg-slate-500 text-white";
+    case "fotmob_pending":
+      return "bg-sky-700 text-white";
+    default:
+      return "bg-slate-400 text-white";
+  }
+}
+
+/** Silent poll — commentator does nothing. Apply only when canApply. */
+function FotMobSilentVerify({
+  matchId,
+  kickoffAt,
+  matchStatus,
+  onChanged,
+}: {
+  matchId: string;
+  kickoffAt?: string | Date | null;
+  matchStatus?: string | null;
+  onChanged?: () => void;
+}) {
+  const [payload, setPayload] = useState<FotMobVerifyPayload | null>(null);
+  const [busyApply, setBusyApply] = useState(false);
+  const [applyMsg, setApplyMsg] = useState<string | null>(null);
+  const [unmappedWarn, setUnmappedWarn] = useState<string | null>(null);
+  const alive = useRef(true);
+
+  const shouldPoll = useMemo(() => {
+    if (!kickoffAt) return false;
+    const d = typeof kickoffAt === "string" ? new Date(kickoffAt) : kickoffAt;
+    if (Number.isNaN(d.getTime())) return false;
+    const mins = (d.getTime() - Date.now()) / 60_000;
+    // Within ~3h of KO through shortly after
+    if (mins > 180 || mins < -15) return false;
+    const s = String(matchStatus || "");
+    if (/full time|cancel|postpone|abandon/i.test(s)) return false;
+    return (
+      !s ||
+      /Assigned|Preparation|Ready|Live|Half Time|Not Started|Scheduled|1H|2H/i.test(
+        s
+      )
+    );
+  }, [kickoffAt, matchStatus]);
+
+  const poll = useCallback(async () => {
+    if (!shouldPoll) return;
+    try {
+      const res = await fetch(`/api/matches/${matchId}/fotmob-verify`, {
+        method: "GET",
+        cache: "no-store",
+      });
+      const json = (await res.json().catch(() => null)) as FotMobVerifyPayload | null;
+      if (!alive.current || !json) return;
+      setPayload(json);
+    } catch {
+      if (!alive.current) return;
+      setPayload({
+        status: "fotmob_unavailable",
+        statusLabel: "FotMob unavailable",
+        fotmobConfirmed: false,
+        minutesToKickoff: null,
+        canApply: false,
+        error: "poll failed",
+      });
+    }
+  }, [matchId, shouldPoll]);
+
+  useEffect(() => {
+    alive.current = true;
+    if (!shouldPoll) {
+      setPayload(null);
+      return () => {
+        alive.current = false;
+      };
+    }
+    void poll();
+    // 75s — within 60–90s product band
+    const id = window.setInterval(() => void poll(), 75_000);
+    return () => {
+      alive.current = false;
+      window.clearInterval(id);
+    };
+  }, [poll, shouldPoll]);
+
+  async function applyFotMob() {
+    setBusyApply(true);
+    setApplyMsg(null);
+    setUnmappedWarn(null);
+    try {
+      const res = await fetch(`/api/matches/${matchId}/fotmob-apply`, {
+        method: "POST",
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setApplyMsg(json.error || "Apply failed");
+        if (json.home?.unmapped || json.away?.unmapped) {
+          const hu = (json.home?.unmapped || [])
+            .map((u: { fotmobName: string }) => u.fotmobName)
+            .join(", ");
+          const au = (json.away?.unmapped || [])
+            .map((u: { fotmobName: string }) => u.fotmobName)
+            .join(", ");
+          setUnmappedWarn(
+            [hu && `Home unmapped: ${hu}`, au && `Away unmapped: ${au}`]
+              .filter(Boolean)
+              .join(" · ")
+          );
+        }
+        return;
+      }
+      const hu = (json.home?.unmapped || []) as { fotmobName: string }[];
+      const au = (json.away?.unmapped || []) as { fotmobName: string }[];
+      if (hu.length || au.length) {
+        setUnmappedWarn(
+          [
+            hu.length
+              ? `Home unmapped: ${hu.map((u) => u.fotmobName).join(", ")}`
+              : "",
+            au.length
+              ? `Away unmapped: ${au.map((u) => u.fotmobName).join(", ")}`
+              : "",
+          ]
+            .filter(Boolean)
+            .join(" · ")
+        );
+      }
+      setApplyMsg(
+        `Applied FotMob Official · ${json.home?.mapped?.length ?? "?"}/${json.away?.mapped?.length ?? "?"} · feed frozen`
+      );
+      if (json.verify) setPayload(json.verify as FotMobVerifyPayload);
+      onChanged?.();
+    } catch {
+      setApplyMsg("Apply failed");
+    } finally {
+      setBusyApply(false);
+    }
+  }
+
+  if (!shouldPoll && !payload) return null;
+
+  const label = payload?.statusLabel || "FotMob…";
+  const status = payload?.status || "fotmob_pending";
+
+  return (
+    <span className="inline-flex items-center gap-1 flex-wrap">
+      <span
+        className={cn(
+          "inline-flex items-center rounded-full px-1.5 py-px text-[9px] font-bold",
+          fotmobBadgeClass(status)
+        )}
+        title={
+          payload?.error
+            ? String(payload.error)
+            : "Silent FotMob XI verify (server poll) — no commentator action"
+        }
+        data-fotmob-verify={status}
+      >
+        {label}
+      </span>
+      {payload?.canApply ? (
+        <button
+          type="button"
+          className="desk-btn text-[9px] px-1.5 py-0.5 inline-flex items-center gap-0.5 font-black border border-emerald-500/70 text-emerald-900 dark:text-emerald-100"
+          disabled={busyApply}
+          title="Import confirmed FotMob Official XI (T−30 only). Explicit click — AF remains default spine."
+          onClick={() => void applyFotMob()}
+        >
+          <Download className="h-3 w-3" />
+          {busyApply ? "Applying…" : "Apply FotMob XI"}
+        </button>
+      ) : null}
+      {applyMsg && (
+        <span className="text-[9px] font-semibold text-emerald-700 dark:text-emerald-300">
+          {applyMsg}
+        </span>
+      )}
+      {unmappedWarn && (
+        <span
+          className="text-[9px] font-semibold text-amber-800 dark:text-amber-200 max-w-[18rem]"
+          title={unmappedWarn}
+        >
+          Unmapped: {unmappedWarn}
+        </span>
+      )}
+    </span>
+  );
+}
+
 
 export type { LineupSourceKind };

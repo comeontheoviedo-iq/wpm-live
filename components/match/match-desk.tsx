@@ -2702,6 +2702,7 @@ export function MatchDesk({
               lastFeedSyncAt={lastFeedSyncAt}
               homeStarters={homeStarterCount}
               awayStarters={awayStarterCount}
+              matchStatus={status}
             />
             <IncompleteXiWarning
               homeStarters={homeStarterCount}

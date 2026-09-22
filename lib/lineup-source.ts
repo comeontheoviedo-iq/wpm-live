@@ -22,6 +22,13 @@ export type LineupSourceMeta = {
   homeStarters?: number | null;
   awayStarters?: number | null;
   emptySlotWarning?: string | null;
+  /** ISO when commentator applied confirmed FotMob Official XI */
+  fotmobAppliedAt?: string | null;
+  fotmobMatchId?: number | null;
+  /** "fotmob" when Official came from Apply FotMob XI */
+  fotmobApplySource?: string | null;
+  fotmobLineupType?: string | null;
+  fotmobSource?: string | null;
 };
 
 export function parseLineupSourceMeta(
@@ -188,7 +195,7 @@ export function pitchFrameClass(kind: LineupSourceKind): string {
   return "border-emerald-900/40";
 }
 
-/** Search URLs for human FotMob / SofaScore verify (no scrapers). */
+/** Search URLs for human FotMob / SofaScore verify (kept alongside silent auto-verify). */
 export function buildLineupVerifyUrls(opts: {
   homeName: string;
   awayName: string;

@@ -199,6 +199,8 @@ model Match {
   attendance           Int?
   featured             Boolean         @default(false)
   apiFootballFixtureId Int?
+  /// FotMob match id for silent XI verify/apply (resolved via date+teams when missing)
+  fotmobMatchId        Int?
   lineupStatus         String          @default("expected")
 
   /// official | predicted | last_xi — drives desk badge (never style predicted/last like Official)

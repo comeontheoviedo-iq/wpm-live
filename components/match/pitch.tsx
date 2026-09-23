@@ -758,6 +758,7 @@ export function PitchBoard({
   referee,
   refereeNationality,
   lineupStatus,
+  lineupSource,
   onPlayerClick,
   onSlotDrop,
   onSlotClick,
@@ -820,6 +821,7 @@ export function PitchBoard({
   referee?: string;
   refereeNationality?: string | null;
   lineupStatus?: string;
+  lineupSource?: string | null;
   onPlayerClick?: (player: PitchPlayer) => void;
   onSlotDrop?: (args: {
     side: "home" | "away";
@@ -903,7 +905,7 @@ export function PitchBoard({
   const resolvedMarkerPct = markerPct ?? resolvedSettings.markerSizePct;
   const badge = lineupBadgeLabel(lineupStatus);
   /** FotMob-style: Predicted/Last XI → non-green pitch; Official/Live → green. */
-  const pitchSourceKind = resolveLineupSourceKind({ lineupStatus });
+  const pitchSourceKind = resolveLineupSourceKind({ lineupStatus, lineupSource });
   const [dragOverSlot, setDragOverSlot] = useState<string | null>(null);
   const pitchRef = useRef<HTMLDivElement | null>(null);
   const [pitchSize, setPitchSize] = useState({ w: 0, h: 0 });

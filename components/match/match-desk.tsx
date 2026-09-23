@@ -3544,7 +3544,9 @@ export function MatchDesk({
               formationBusy={busy}
               lineupHintText={
                 starterCount === 0
-                  ? "Empty pitch — Sync, then click player → slot"
+                  ? lineupSource === "manual" || xiFeedFrozenReason === "blank_canvas"
+                    ? "Blank canvas — click squad player → empty slot (feed frozen)"
+                    : "Empty pitch — Sync, then click player → slot"
                   : lineupHint(lineupStatus)
               }
               onResetOfficial={
@@ -3745,6 +3747,11 @@ export function MatchDesk({
                   if (placing?.id === p.id) setPlacing(null);
                 })
               }
+              matchId={matchId}
+              manualMode={
+                lineupSource === "manual" || xiFeedFrozenReason === "blank_canvas"
+              }
+              onPlayerAdded={() => router.refresh()}
             />
           </aside>
         )}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Lock, LockOpen, AlertTriangle, RefreshCw, ExternalLink, Download } from "lucide-react";
+import { Lock, LockOpen, AlertTriangle, RefreshCw, ExternalLink, Download, LayoutTemplate } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   resolveLineupSourceKind,
@@ -52,9 +52,10 @@ export function LineupSourceBadge({
   });
   const label = lineupSourceBadgeLabel({ kind, meta });
   const title = lineupSourceBadgeTitle({ kind, meta });
-  const loud = kind === "predicted" || kind === "last_xi";
+  const loud = kind === "predicted" || kind === "last_xi" || kind === "manual";
   let display = label;
   if (kind === "predicted") display = "PREDICTED — NOT OFFICIAL";
+  else if (kind === "manual") display = "MANUAL — BLANK CANVAS";
   else if (kind === "last_xi") {
     const comp = (meta?.competitionShort || "").trim();
     display = comp
@@ -207,6 +208,8 @@ export function LineupFeedControls({
         }
       } else if (action === "report_wrong") {
         setMsg("Frozen — owner alerted (does not refresh XI)");
+      } else if (action === "blank_canvas") {
+        setMsg("Blank canvas on — place players from squad; feed frozen");
       }
       setNoteOpen(false);
       setNote("");
@@ -218,8 +221,19 @@ export function LineupFeedControls({
     }
   }
 
+  const isBlankCanvas = xiFeedFrozenReason === "blank_canvas";
+
+  function confirmExitBlankCanvas(actionLabel: string): boolean {
+    if (!isBlankCanvas) return true;
+    return window.confirm(
+      `${actionLabel} will re-enable the feed and may wipe your Manual XI board.\n\nContinue?`
+    );
+  }
+
   const frozenLabel = useMemo(() => {
     if (!xiFeedFrozen) return null;
+    if (xiFeedFrozenReason === "blank_canvas")
+      return "BLANK CANVAS · Manual XI — feed frozen until Unlock & pull";
     if (xiFeedFrozenReason === "fotmob_apply")
       return "FROZEN · FotMob Apply — Unlock / Re-pull to let AF overwrite";
     if (xiFeedFrozenReason === "looks_wrong")
@@ -248,6 +262,20 @@ export function LineupFeedControls({
           </button>
           <button
             type="button"
+            className="desk-btn text-[9px] px-1.5 py-0.5 inline-flex items-center gap-0.5 text-fuchsia-800 dark:text-fuchsia-200"
+            disabled={busy}
+            title="Clear pitch to empty slots, keep squad, freeze feed — build Manual XI by hand"
+            onClick={() => {
+              const ok = window.confirm(
+                "Start Blank canvas?\n\nThis clears both XIs from the pitch (squad list stays). AF/FotMob will not overwrite until you Unlock & pull."
+              );
+              if (ok) void post("blank_canvas");
+            }}
+          >
+            <LayoutTemplate className="h-3 w-3" /> Blank canvas
+          </button>
+          <button
+            type="button"
             className="desk-btn text-[9px] px-1.5 py-0.5 inline-flex items-center gap-0.5 text-amber-800 dark:text-amber-200"
             disabled={busy}
             title="Blocks Official updates until Unlock / Re-pull — does NOT refresh XI; alerts owner"
@@ -261,20 +289,26 @@ export function LineupFeedControls({
               className="desk-btn text-[9px] px-1.5 py-0.5 inline-flex items-center gap-0.5 text-emerald-800 dark:text-emerald-200"
               disabled={busy}
               title="Force re-apply Official XI from the live feed (works pre-KO; clears freeze)"
-              onClick={() => void post("repull_official")}
+              onClick={() => {
+              if (!confirmExitBlankCanvas("Re-pull Official XI")) return;
+              void post("repull_official");
+            }}
             >
               <RefreshCw className="h-3 w-3" /> Re-pull Official XI
             </button>
           )}
         </>
-      ) : isOwner ? (
+      ) : isOwner || isBlankCanvas ? (
         <>
           <button
             type="button"
             className="desk-btn text-[9px] px-1.5 py-0.5 inline-flex items-center gap-0.5"
             disabled={busy}
             title="Unlock — allow Official/Predicted/Last XI feed apply again"
-            onClick={() => void post("unlock")}
+            onClick={() => {
+              if (!confirmExitBlankCanvas("Unlock feed")) return;
+              void post("unlock");
+            }}
           >
             <LockOpen className="h-3 w-3" /> Unlock feed
           </button>
@@ -283,7 +317,10 @@ export function LineupFeedControls({
             className="desk-btn text-[9px] px-1.5 py-0.5 inline-flex items-center gap-0.5 border border-emerald-500/60 text-emerald-800 dark:text-emerald-200 font-bold"
             disabled={busy}
             title="Unlock freeze + force Official XI re-apply from AF (works pre-KO)"
-            onClick={() => void post("repull_official")}
+            onClick={() => {
+              if (!confirmExitBlankCanvas("Re-pull Official XI")) return;
+              void post("repull_official");
+            }}
           >
             <RefreshCw className="h-3 w-3" /> Re-pull Official XI
           </button>

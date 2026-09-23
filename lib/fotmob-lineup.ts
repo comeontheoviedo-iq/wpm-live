@@ -17,6 +17,7 @@ import {
   significantNameTokens,
 } from "./player-name";
 import { coerceValidSlotIds, normalizeFormation, slotsFor } from "./formations";
+import type { LineupSourceKind } from "./lineup-source";
 
 export const FOTMOB_APPLY_WINDOW_MIN = 30;
 /** Poll window for silent verify badge (not Apply). */
@@ -276,7 +277,7 @@ export function verifyStatusLabel(status: FotMobVerifyStatus): string {
 export function buildVerifyResult(opts: {
   deskActive: boolean;
   kickoff: Date | string | null | undefined;
-  ourLineupSourceKind: "official" | "live" | "predicted" | "last_xi";
+  ourLineupSourceKind: LineupSourceKind;
   ourHomeStarters: string[];
   ourAwayStarters: string[];
   ourHomeFormation?: string | null;

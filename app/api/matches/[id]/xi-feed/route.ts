@@ -6,6 +6,12 @@ import { sendOwnerXiWrongAlert } from "@/lib/owner-xi-wrong-alert";
 import { sendSupportPingAlert } from "@/lib/support-ping-alert";
 import { syncMatchFromApiFootball } from "@/lib/sync-fixture";
 import { isApiFootballConfigured } from "@/lib/api-football";
+import {
+  BLANK_CANVAS_FREEZE_REASON,
+  stringifyLineupSourceMeta,
+  type LineupSourceMeta,
+} from "@/lib/lineup-source";
+import { clearAllPitchPlacements } from "@/lib/pitch-placement";
 
 async function countStarters(matchId: string): Promise<number> {
   const match = await prisma.match.findUnique({
@@ -24,10 +30,11 @@ async function countStarters(matchId: string): Promise<number> {
 
 /**
  * PATCH /api/matches/[id]/xi-feed
- * Body: { action: "lock" | "unlock" | "report_wrong" | "repull_official", note?: string, playerId?: string, lockPlayer?: boolean }
+ * Body: { action: "lock" | "unlock" | "report_wrong" | "repull_official" | "blank_canvas" | "blank_canvas", note?: string, playerId?: string, lockPlayer?: boolean }
  *
  * lock / report_wrong → freeze Official/Predicted/Last XI feed apply (events/score still sync)
- * unlock → desk owner only
+ * blank_canvas → clear pitch slots, set Manual source, freeze feed (squad list kept)
+ * unlock → desk owner only (blank_canvas: any desk member may unlock)
  * repull_official → owner only: unlock freeze + forced Official lineup re-apply
  * lockPlayer → per-player MatchPlayerOverride.lockFromFeed
  */
@@ -180,8 +187,65 @@ export async function PATCH(
     });
   }
 
+
+  if (action === "blank_canvas") {
+    const now = new Date();
+    const note = body.note ? String(body.note).slice(0, 500) : null;
+
+    // Clear pitch for both clubs — keep squad rows available for placement.
+    await prisma.player.updateMany({
+      where: { clubId: { in: [match.homeClubId, match.awayClubId] } },
+      data: { isStarter: false, onPitch: false, formationSlot: null },
+    });
+    await clearAllPitchPlacements(matchId);
+
+    const prevMeta = (() => {
+      try {
+        return match.lineupSourceMeta
+          ? (JSON.parse(match.lineupSourceMeta) as LineupSourceMeta)
+          : {};
+      } catch {
+        return {} as LineupSourceMeta;
+      }
+    })();
+    const nextMeta: LineupSourceMeta = {
+      ...prevMeta,
+      blankCanvasAt: now.toISOString(),
+      liveAfterSubs: false,
+      warning: "Blank canvas — Manual XI. Feed frozen until Unlock & pull.",
+    };
+
+    const updated = await prisma.match.update({
+      where: { id: matchId },
+      data: {
+        xiFeedFrozen: true,
+        xiFeedFrozenAt: now,
+        xiFeedFrozenByUserId: session.id,
+        xiFeedFrozenReason: BLANK_CANVAS_FREEZE_REASON,
+        xiFeedFrozenNote: note || "Blank canvas / Manual XI",
+        lineupSource: "manual",
+        lineupStatus: "expected",
+        lineupSourceMeta: stringifyLineupSourceMeta(nextMeta),
+        predictedHomeJson: null,
+        predictedAwayJson: null,
+      },
+    });
+
+    return NextResponse.json({
+      ok: true,
+      blankCanvas: true,
+      xiFeedFrozen: updated.xiFeedFrozen,
+      xiFeedFrozenReason: updated.xiFeedFrozenReason,
+      xiFeedFrozenAt: updated.xiFeedFrozenAt,
+      lineupSource: updated.lineupSource,
+      lineupStatus: updated.lineupStatus,
+    });
+  }
+
   if (action === "unlock") {
-    if (!isOwner) {
+    const blankCanvas =
+      match.xiFeedFrozenReason === BLANK_CANVAS_FREEZE_REASON;
+    if (!isOwner && !blankCanvas) {
       return NextResponse.json(
         { error: "Only the desk owner can unlock feed sync" },
         { status: 403 }
@@ -272,7 +336,7 @@ export async function PATCH(
   return NextResponse.json(
     {
       error:
-        "action must be lock | unlock | report_wrong | repull_official | lockPlayer | unlockPlayer",
+        "action must be lock | unlock | report_wrong | repull_official | blank_canvas | lockPlayer | unlockPlayer",
     },
     { status: 400 }
   );

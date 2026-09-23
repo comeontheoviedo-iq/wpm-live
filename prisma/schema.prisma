@@ -211,7 +211,7 @@ model Match {
   xiFeedFrozen         Boolean         @default(false)
   xiFeedFrozenAt       DateTime?
   xiFeedFrozenByUserId String?
-  /// lock | looks_wrong
+    /// lock | looks_wrong | fotmob_apply | blank_canvas
   xiFeedFrozenReason   String?
   xiFeedFrozenNote     String?
   lastFeedSyncAt       DateTime?

@@ -37,7 +37,17 @@ export async function PATCH(
 
   // Place / clear a single player on a slot (DnD drop)
   if (body.action === "place" || body.action === "clear" || body.action === "freePlace") {
-    const match = await prisma.match.findUnique({ where: { id } });
+    const match = await prisma.match.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        homeClubId: true,
+        awayClubId: true,
+        lineupStatus: true,
+        lineupSource: true,
+        xiFeedFrozenReason: true,
+      },
+    });
     if (!match) return NextResponse.json({ error: "Not found" }, { status: 404 });
     // Official boards stay editable for commentary; Sync restores AF XI.
 
@@ -142,10 +152,22 @@ export async function PATCH(
     );
     // Keep Official badge when commentary-editing a confirmed board
     const keepOfficial = match.lineupStatus === "confirmed";
+    const keepManual =
+      match.lineupSource === "manual" ||
+      match.xiFeedFrozenReason === "blank_canvas";
     const updated = await prisma.match.update({
       where: { id },
       data: {
-        lineupStatus: keepOfficial ? "confirmed" : "predicted",
+        lineupStatus: keepOfficial
+          ? "confirmed"
+          : keepManual
+            ? "expected"
+            : "predicted",
+        ...(keepManual
+          ? { lineupSource: "manual" }
+          : keepOfficial
+            ? {}
+            : { lineupSource: "predicted" }),
         ...(side === "home" ? { predictedHomeJson: json } : { predictedAwayJson: json }),
         ...(body.formation
           ? side === "home"

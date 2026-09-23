@@ -8,6 +8,7 @@ import {
   pitchGrassBackground,
   PITCH_GRASS_OFFICIAL,
   PITCH_GRASS_PREDICTED,
+  PITCH_GRASS_MANUAL,
 } from "./lineup-source";
 
 describe("lineup source badge", () => {
@@ -101,5 +102,34 @@ describe("pitch grass by lineup source", () => {
     assert.notEqual(PITCH_GRASS_PREDICTED, PITCH_GRASS_OFFICIAL);
     assert.doesNotMatch(PITCH_GRASS_PREDICTED, /#176f38|#1c8240/);
     assert.match(PITCH_GRASS_PREDICTED, /#1a3a5c/);
+  });
+});
+
+describe("manual / blank canvas source", () => {
+  it("resolves manual from lineupSource", () => {
+    assert.equal(
+      resolveLineupSourceKind({ lineupSource: "manual" }),
+      "manual"
+    );
+    assert.equal(
+      resolveLineupSourceKind({ lineupSource: "blank_canvas" }),
+      "manual"
+    );
+  });
+
+  it("never styles manual like official", () => {
+    assert.notEqual(
+      lineupSourceBadgeClass("manual"),
+      lineupSourceBadgeClass("official")
+    );
+    assert.match(lineupSourceBadgeClass("manual"), /fuchsia/);
+    assert.equal(lineupSourceBadgeLabel({ kind: "manual" }), "Manual");
+  });
+
+  it("Manual pitch grass is distinct non-green", () => {
+    assert.equal(pitchGrassBackground("manual"), PITCH_GRASS_MANUAL);
+    assert.notEqual(PITCH_GRASS_MANUAL, PITCH_GRASS_OFFICIAL);
+    assert.notEqual(PITCH_GRASS_MANUAL, PITCH_GRASS_PREDICTED);
+    assert.doesNotMatch(PITCH_GRASS_MANUAL, /#176f38|#1c8240/);
   });
 });

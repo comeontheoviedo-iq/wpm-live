@@ -1,10 +1,19 @@
 /**
  * Lineup source badge + meta helpers for commentator desk chrome.
- * Official | Live | Predicted | Last XI — never style Predicted/Last like Official.
+ * Official | Live | Predicted | Last XI | Manual — never style Predicted/Last/Manual like Official.
  * Official = kickoff named XI. Live = current pitch after substitutions.
+ * Manual / blank canvas = commentator-built XI; feed must not overwrite.
  */
 
-export type LineupSourceKind = "official" | "live" | "predicted" | "last_xi";
+/** xiFeedFrozenReason when desk entered Blank canvas / Manual XI mode */
+export const BLANK_CANVAS_FREEZE_REASON = "blank_canvas";
+
+export type LineupSourceKind =
+  | "official"
+  | "live"
+  | "predicted"
+  | "last_xi"
+  | "manual";
 
 export type LineupSourceMeta = {
   competitionShort?: string | null;
@@ -29,6 +38,8 @@ export type LineupSourceMeta = {
   fotmobApplySource?: string | null;
   fotmobLineupType?: string | null;
   fotmobSource?: string | null;
+  /** ISO when Blank canvas / Manual XI mode started */
+  blankCanvasAt?: string | null;
 };
 
 export function parseLineupSourceMeta(
@@ -43,7 +54,9 @@ export function parseLineupSourceMeta(
   }
 }
 
-export function stringifyLineupSourceMeta(meta: LineupSourceMeta | null | undefined): string | null {
+export function stringifyLineupSourceMeta(
+  meta: LineupSourceMeta | null | undefined
+): string | null {
   if (!meta) return null;
   try {
     return JSON.stringify(meta);
@@ -61,12 +74,16 @@ export function resolveLineupSourceKind(opts: {
   meta?: LineupSourceMeta | null;
 }): LineupSourceKind {
   const src = String(opts.lineupSource || "").trim().toLowerCase();
+  if (src === "manual" || src === "blank" || src === "blank_canvas") {
+    return "manual";
+  }
   if (src === "live") return "live";
   if (src === "predicted" || src === "last_xi") return src;
   if (src === "official") {
     return shouldShowLiveBadge(opts) ? "live" : "official";
   }
   const st = String(opts.lineupStatus || "").trim().toLowerCase();
+  if (st === "manual") return "manual";
   if (st === "predicted") return "predicted";
   if (st === "confirmed") {
     return shouldShowLiveBadge(opts) ? "live" : "official";
@@ -95,7 +112,9 @@ function shouldShowLiveBadge(opts: {
 }
 
 /** Europe/London short date e.g. Sun 13 Sep */
-export function formatLastXiDate(dateIso: string | Date | null | undefined): string | null {
+export function formatLastXiDate(
+  dateIso: string | Date | null | undefined
+): string | null {
   if (!dateIso) return null;
   const d = typeof dateIso === "string" ? new Date(dateIso) : dateIso;
   if (Number.isNaN(d.getTime())) return null;
@@ -107,7 +126,7 @@ export function formatLastXiDate(dateIso: string | Date | null | undefined): str
   }).format(d);
 }
 
-/** Badge label: Official | Live | Predicted | Last XI · Serie A · Sun 13 Sep */
+/** Badge label: Official | Live | Predicted | Manual | Last XI · Serie A · Sun 13 Sep */
 export function lineupSourceBadgeLabel(opts: {
   kind: LineupSourceKind;
   meta?: LineupSourceMeta | null;
@@ -115,6 +134,7 @@ export function lineupSourceBadgeLabel(opts: {
   if (opts.kind === "official") return "Official";
   if (opts.kind === "live") return "Live";
   if (opts.kind === "predicted") return "Predicted";
+  if (opts.kind === "manual") return "Manual";
   const parts = ["Last XI"];
   const comp = (opts.meta?.competitionShort || "").trim();
   if (comp) parts.push(comp);
@@ -123,11 +143,12 @@ export function lineupSourceBadgeLabel(opts: {
   return parts.join(" · ");
 }
 
-/** Tailwind — Official emerald; Live violet; Predicted sky; Last XI amber. Never style non-Official like Official. */
+/** Tailwind — Official emerald; Live violet; Predicted sky; Manual fuchsia; Last XI amber. */
 export function lineupSourceBadgeClass(kind: LineupSourceKind): string {
   if (kind === "official") return "bg-emerald-600 text-white";
   if (kind === "live") return "bg-violet-600 text-white";
   if (kind === "predicted") return "bg-sky-600 text-white";
+  if (kind === "manual") return "bg-fuchsia-700 text-white";
   return "bg-amber-500 text-white";
 }
 
@@ -140,6 +161,9 @@ export function lineupSourceBadgeTitle(opts: {
   }
   if (opts.kind === "live") {
     return "Current pitch after substitutions — kickoff XI was Official (not a fresh Official dump)";
+  }
+  if (opts.kind === "manual") {
+    return "Blank canvas / Manual XI — commentator-built board. Feed will not overwrite until Unlock & pull.";
   }
   if (opts.kind === "predicted") {
     return "Predicted XI — NOT Official. Re-pull Official when both sides are named.";
@@ -185,12 +209,18 @@ export const PITCH_GRASS_OFFICIAL =
 export const PITCH_GRASS_PREDICTED =
   "linear-gradient(180deg, rgba(0,0,0,0.18), transparent 18%, transparent 82%, rgba(0,0,0,0.22)), linear-gradient(90deg, rgba(0,0,0,0.1), transparent 10%, transparent 90%, rgba(0,0,0,0.1)), repeating-linear-gradient(90deg, #1a3a5c 0 7.5%, #234b73 7.5% 15%)";
 
+/** Plum / charcoal stripes — Blank canvas Manual XI (distinct from Official green + Predicted blue). */
+export const PITCH_GRASS_MANUAL =
+  "linear-gradient(180deg, rgba(0,0,0,0.22), transparent 18%, transparent 82%, rgba(0,0,0,0.26)), linear-gradient(90deg, rgba(0,0,0,0.12), transparent 10%, transparent 90%, rgba(0,0,0,0.12)), repeating-linear-gradient(90deg, #3b1f4a 0 7.5%, #4a295c 7.5% 15%)";
+
 export function pitchGrassBackground(kind: LineupSourceKind): string {
+  if (kind === "manual") return PITCH_GRASS_MANUAL;
   if (kind === "predicted" || kind === "last_xi") return PITCH_GRASS_PREDICTED;
   return PITCH_GRASS_OFFICIAL;
 }
 
 export function pitchFrameClass(kind: LineupSourceKind): string {
+  if (kind === "manual") return "border-fuchsia-900/50";
   if (kind === "predicted" || kind === "last_xi") return "border-slate-800/50";
   return "border-emerald-900/40";
 }

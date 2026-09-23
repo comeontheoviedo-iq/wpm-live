@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import type { PitchPlayer } from "@/components/match/pitch";
-import { Search } from "lucide-react";
+import { Search, Plus } from "lucide-react";
 
 export type SquadPlayer = PitchPlayer & {
   side: "home" | "away";
@@ -22,6 +22,9 @@ export function SquadRail({
   placingId,
   onPlayerClick,
   onRemoveFromXi,
+  matchId,
+  manualMode = false,
+  onPlayerAdded,
 }: {
   players: SquadPlayer[];
   homeName: string;
@@ -33,9 +36,48 @@ export function SquadRail({
   placingId?: string | null;
   onPlayerClick?: (p: SquadPlayer) => void;
   onRemoveFromXi?: (p: SquadPlayer) => void;
+  matchId?: string;
+  /** Blank canvas / Manual XI — show add-player form for thin squads */
+  manualMode?: boolean;
+  onPlayerAdded?: () => void;
 }) {
   const [q, setQ] = useState("");
   const [side, setSide] = useState<"all" | "home" | "away">("all");
+  const [addSide, setAddSide] = useState<"home" | "away">("home");
+  const [addName, setAddName] = useState("");
+  const [addNumber, setAddNumber] = useState("");
+  const [addBusy, setAddBusy] = useState(false);
+  const [addMsg, setAddMsg] = useState<string | null>(null);
+
+  async function addManualPlayer() {
+    if (!matchId || !addName.trim()) return;
+    setAddBusy(true);
+    setAddMsg(null);
+    try {
+      const res = await fetch(`/api/matches/${matchId}/manual-player`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          side: addSide,
+          name: addName.trim(),
+          shirtNumber: addNumber.trim() ? Number(addNumber) : undefined,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setAddMsg(json.error || "Add failed");
+        return;
+      }
+      setAddMsg(json.created ? "Added to squad" : "Found in squad");
+      setAddName("");
+      setAddNumber("");
+      onPlayerAdded?.();
+    } catch {
+      setAddMsg("Add failed");
+    } finally {
+      setAddBusy(false);
+    }
+  }
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -182,6 +224,64 @@ export function SquadRail({
           );
         })}
       </div>
+      {manualMode && matchId && !locked && (
+        <div className="shrink-0 border-t border-slate-100 dark:border-slate-800 px-2 py-2 space-y-1.5 bg-fuchsia-50/60 dark:bg-fuchsia-950/30">
+          <div className="text-[9px] font-black uppercase tracking-wide text-fuchsia-800 dark:text-fuchsia-200">
+            Add player · Manual XI
+          </div>
+          <div className="flex gap-1">
+            {(["home", "away"] as const).map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setAddSide(s)}
+                className={cn(
+                  "rounded-full px-2 py-0.5 text-[10px] border",
+                  addSide === s
+                    ? "bg-fuchsia-700 text-white border-fuchsia-700"
+                    : "border-slate-200 dark:border-slate-700"
+                )}
+              >
+                {s === "home" ? homeName : awayName}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-1">
+            <input
+              value={addNumber}
+              onChange={(e) => setAddNumber(e.target.value.replace(/\D/g, "").slice(0, 2))}
+              placeholder="#"
+              className="w-10 rounded-lg border border-slate-200 dark:border-slate-700 bg-transparent px-1.5 py-1 text-xs tabular-nums"
+            />
+            <input
+              value={addName}
+              onChange={(e) => setAddName(e.target.value)}
+              placeholder="Type name / search club roster"
+              className="min-w-0 flex-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-transparent px-2 py-1 text-xs"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void addManualPlayer();
+                }
+              }}
+            />
+            <button
+              type="button"
+              disabled={addBusy || !addName.trim()}
+              onClick={() => void addManualPlayer()}
+              className="inline-flex items-center gap-0.5 rounded-lg bg-fuchsia-700 px-2 py-1 text-[10px] font-bold text-white disabled:opacity-50"
+              title="Add to this club squad (reuses name match if already in DB)"
+            >
+              <Plus className="h-3 w-3" /> Add
+            </button>
+          </div>
+          {addMsg && (
+            <div className="text-[9px] font-semibold text-fuchsia-800 dark:text-fuchsia-200">
+              {addMsg}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

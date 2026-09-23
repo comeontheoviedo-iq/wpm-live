@@ -12,6 +12,7 @@ import {
   withinFotMobApplyWindow,
 } from "@/lib/fotmob-lineup";
 import {
+  BLANK_CANVAS_FREEZE_REASON,
   parseLineupSourceMeta,
   resolveLineupSourceKind,
   stringifyLineupSourceMeta,
@@ -57,6 +58,20 @@ export async function POST(
     return NextResponse.json(
       { error: "Apply only on prep/live desks", code: "desk_inactive" },
       { status: 400 }
+    );
+  }
+  if (
+    match.xiFeedFrozen &&
+    (match.xiFeedFrozenReason === BLANK_CANVAS_FREEZE_REASON ||
+      match.lineupSource === "manual")
+  ) {
+    return NextResponse.json(
+      {
+        error:
+          "Blank canvas / Manual XI is active — Unlock & pull before applying FotMob XI",
+        code: "blank_canvas_frozen",
+      },
+      { status: 409 }
     );
   }
   if (!withinFotMobApplyWindow(match.kickoff)) {

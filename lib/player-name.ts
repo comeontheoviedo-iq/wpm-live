@@ -212,3 +212,49 @@ export function parseSubDescription(description: string): {
     inName: inM?.[1]?.trim() || null,
   };
 }
+
+/** Desk Field Settings: how pitch tokens render a player's name. */
+export type NameFormat = "surname" | "initial_last" | "first_last";
+
+/**
+ * Format a full name for pitch cards.
+ * - surname: last token (current historic default)
+ * - initial_last: "J. SILVA" from "João Silva" / "João Pedro Silva"
+ * - first_last: first token + last token ("João Silva")
+ */
+export function formatNameByFormat(
+  fullName: string,
+  nameFormat: NameFormat = "surname"
+): string {
+  const parts = (fullName || "").trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "";
+  const first = parts[0];
+  const last = parts[parts.length - 1].replace(/\.+$/g, "");
+  if (!last) return first.replace(/\.+$/g, "") || first;
+
+  if (nameFormat === "surname") return last;
+
+  if (nameFormat === "initial_last") {
+    const initialSrc = first.replace(/\.+$/g, "");
+    const initial = initialSrc.charAt(0);
+    if (!initial) return last;
+    return `${initial.toUpperCase()}. ${last}`;
+  }
+
+  // first_last
+  if (parts.length === 1) return first.replace(/\.+$/g, "") || first;
+  return `${first} ${last}`;
+}
+
+/**
+ * Pitch token name: manual Card name (displayName) always wins;
+ * otherwise format `name` per desk nameFormat.
+ */
+export function formatPitchCardName(
+  player: { name?: string | null; displayName?: string | null },
+  nameFormat: NameFormat = "surname"
+): string {
+  const override = (player.displayName ?? "").trim();
+  if (override) return override;
+  return formatNameByFormat(player.name || "", nameFormat);
+}

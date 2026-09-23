@@ -104,7 +104,17 @@ function PreviewCard({
               className="mt-0.5 w-full truncate text-center font-extrabold uppercase leading-tight tracking-wide"
               style={{ fontSize: `${9 * nameScale}px` }}
             >
-              {kind === "gk" ? "POPE" : "SAMPLE"}
+              {kind === "gk"
+                ? settings.nameFormat === "first_last"
+                  ? "NICK POPE"
+                  : settings.nameFormat === "initial_last"
+                    ? "N. POPE"
+                    : "POPE"
+                : settings.nameFormat === "first_last"
+                  ? "JOÃO SILVA"
+                  : settings.nameFormat === "initial_last"
+                    ? "J. SILVA"
+                    : "SILVA"}
             </span>
             <span className="mt-px text-[6.5px] font-semibold leading-none tabular-nums tracking-wide text-slate-500">
               27 y/o
@@ -389,22 +399,23 @@ export function FieldSettingsModal({
                 />
                 <div className="space-y-1.5">
                   <div className="text-xs font-semibold text-slate-700 dark:text-slate-200">
-                    Pitch name style
+                    Card name format
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     {(
                       [
-                        ["full", "First + last"],
-                        ["surname", "Surname only"],
+                        ["surname", "Surname"],
+                        ["initial_last", "F. Last"],
+                        ["first_last", "First Last"],
                       ] as const
                     ).map(([id, label]) => (
                       <button
                         key={id}
                         type="button"
-                        onClick={() => patch({ pitchNameStyle: id })}
+                        onClick={() => patch({ nameFormat: id })}
                         className={cn(
                           "rounded-md border px-3 py-1.5 text-[11px] font-semibold",
-                          settings.pitchNameStyle === id
+                          settings.nameFormat === id
                             ? "border-teal-600 bg-teal-50 text-teal-800 dark:bg-teal-950 dark:text-teal-200"
                             : "border-slate-200 dark:border-slate-700 text-slate-600"
                         )}
@@ -414,7 +425,7 @@ export function FieldSettingsModal({
                     ))}
                   </div>
                   <p className="text-[10px] text-slate-500">
-                    Alias displayName still overrides. Default is first + last.
+                    Manual Card name still overrides. Default is surname.
                   </p>
                 </div>
                 <div className="space-y-1.5">

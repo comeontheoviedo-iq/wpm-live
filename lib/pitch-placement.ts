@@ -4,6 +4,7 @@
  */
 import { prisma } from "./prisma";
 import { clampPitchCoord, mirrorPitchCoord } from "./player-overrides";
+import { resolveSlotOverrideAssignments } from "./pitch-swap";
 
 export type PlacementInput = {
   matchId: string;
@@ -120,11 +121,7 @@ export async function reapplyPitchPlacements(matchId: string) {
   const rows = await prisma.matchPlayerOverride.findMany({
     where: {
       matchId,
-      OR: [
-        { formationSlot: { not: null } },
-        { pitchX: { not: null } },
-        { pitchY: { not: null } },
-      ],
+      formationSlot: { not: null },
     },
   });
   if (!rows.length) return { applied: 0 };
@@ -135,81 +132,70 @@ export async function reapplyPitchPlacements(matchId: string) {
   });
   if (!match) return { applied: 0 };
 
+  const clubIds = [match.homeClubId, match.awayClubId];
   let applied = 0;
-  for (const row of rows) {
-    if (!row.formationSlot) continue;
-    const player = await prisma.player.findUnique({
-      where: { id: row.playerId },
+
+  for (const clubId of clubIds) {
+    const clubRows = rows.filter((r) => r.formationSlot);
+    // Load every on-pitch / starter for this club so displacement targets exist
+    const clubPlayers = await prisma.player.findMany({
+      where: {
+        clubId,
+        OR: [{ isStarter: true }, { onPitch: true }],
+      },
       select: {
         id: true,
-        clubId: true,
         formationSlot: true,
         onPitch: true,
         isStarter: true,
       },
     });
-    if (!player) continue;
-    if (
-      player.clubId !== match.homeClubId &&
-      player.clubId !== match.awayClubId
-    )
-      continue;
+    if (!clubPlayers.length) continue;
 
-    // Live subs park leavers on BENCH / off-pitch. Never resurrect them into
-    // ST/LW (etc.) from a stale override — that wiped the sub-on and left
-    // empty dashed slots on the Venezia–Fiorentina desk.
-    if (player.formationSlot === "BENCH") continue;
-    if (!player.onPitch && !player.isStarter) continue;
+    const playerById = new Map(clubPlayers.map((p) => [p.id, p]));
+    const current = new Map<string, string | null>(
+      clubPlayers.map((p) => [p.id, p.formationSlot])
+    );
+    const intended = new Map<string, string>();
+    for (const row of clubRows) {
+      const p = playerById.get(row.playerId);
+      if (!p) continue;
+      // Live subs park leavers on BENCH / off-pitch — never resurrect
+      if (p.formationSlot === "BENCH") continue;
+      if (!p.onPitch && !p.isStarter) continue;
+      if (row.formationSlot) intended.set(row.playerId, row.formationSlot);
+    }
+    if (!intended.size) continue;
 
-    const occupant = await prisma.player.findFirst({
-      where: {
-        clubId: player.clubId,
-        formationSlot: row.formationSlot,
-        NOT: { id: player.id },
-        OR: [{ isStarter: true }, { onPitch: true }],
-      },
-    });
-    if (occupant) {
-      // Prefer keeping the live occupant when the override player is the same
-      // slot already — only swap when both are active on-pitch commentary moves.
-      const prev = player.formationSlot;
-      if (prev && prev !== row.formationSlot && (player.onPitch || player.isStarter)) {
+    const resolved = resolveSlotOverrideAssignments(current, intended);
+
+    for (const [playerId, nextSlot] of resolved) {
+      const prevSlot = current.get(playerId) ?? null;
+      if (prevSlot === nextSlot) continue;
+      if (nextSlot) {
         await prisma.player.update({
-          where: { id: occupant.id },
+          where: { id: playerId },
           data: {
-            formationSlot: prev,
-            isStarter: true,
-            onPitch: true,
-          },
-        });
-      } else if (prev && prev !== row.formationSlot) {
-        await prisma.player.update({
-          where: { id: occupant.id },
-          data: {
-            formationSlot: prev,
+            formationSlot: nextSlot,
             isStarter: true,
             onPitch: true,
           },
         });
       } else {
-        // Occupant already holds this slot for a live XI — do not clear them
-        // just to re-stamp the same override player.
-        if (occupant.id !== player.id) {
-          continue;
-        }
+        // Strict 2-way refused a cascade — bench rather than rotate a third body
+        await prisma.player.update({
+          where: { id: playerId },
+          data: {
+            formationSlot: null,
+            isStarter: false,
+            onPitch: false,
+          },
+        });
       }
+      if (intended.has(playerId)) applied++;
     }
-
-    await prisma.player.update({
-      where: { id: player.id },
-      data: {
-        formationSlot: row.formationSlot,
-        isStarter: true,
-        onPitch: true,
-      },
-    });
-    applied++;
   }
+
   return { applied };
 }
 

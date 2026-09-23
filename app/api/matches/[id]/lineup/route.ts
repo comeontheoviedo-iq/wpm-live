@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { savePredictedLineup, snapshotPredictedSide } from "@/lib/sync-fixture";
 import { upsertPitchPlacement } from "@/lib/pitch-placement";
+import { planDirectSlotSwap } from "@/lib/pitch-swap";
 
 /** Manual override / DnD predicted XI slot assignment. */
 export async function PATCH(
@@ -101,49 +102,88 @@ export async function PATCH(
       if (!slot) {
         return NextResponse.json({ error: "formationSlot required" }, { status: 400 });
       }
-      // Vacate anyone already in this slot on the same club (swap)
+      // Strict 2-way Direct swap: placer ↔ sole occupant only (never rotate a third)
       const occupant = await prisma.player.findFirst({
         where: { clubId: player.clubId, formationSlot: slot, NOT: { id: playerId } },
       });
-      const prevSlot = player.formationSlot;
-      if (occupant && prevSlot) {
-        // Swap: occupant takes placer's old slot
+      const plan = planDirectSlotSwap({
+        placerId: playerId,
+        targetSlot: slot,
+        placerPrevSlot: player.formationSlot,
+        occupantId: occupant?.id ?? null,
+      });
+
+      if (plan.occupantId && plan.occupantToSlot) {
         await prisma.player.update({
-          where: { id: occupant.id },
-          data: { isStarter: true, onPitch: true, formationSlot: prevSlot },
+          where: { id: plan.occupantId },
+          data: {
+            isStarter: true,
+            onPitch: true,
+            formationSlot: plan.occupantToSlot,
+          },
         });
-      } else if (occupant) {
+      } else if (plan.occupantId) {
         await prisma.player.update({
-          where: { id: occupant.id },
+          where: { id: plan.occupantId },
           data: { isStarter: false, onPitch: false, formationSlot: null },
         });
       }
       await prisma.player.update({
         where: { id: playerId },
-        data: { isStarter: true, onPitch: true, formationSlot: slot },
+        data: { isStarter: true, onPitch: true, formationSlot: plan.targetSlot },
       });
-      // Persist match-scoped slot so AF sync cannot wipe commentary DnD
+
+      // Match-scoped overrides: clear free-place coords on both so reapply
+      // cannot cascade via stale pitchX/Y + slot claims.
       await upsertPitchPlacement({
         matchId: id,
         playerId,
-        formationSlot: slot,
+        formationSlot: plan.targetSlot,
         pitchX: null,
         pitchY: null,
       });
-      if (occupant && prevSlot) {
+      if (plan.occupantId && plan.occupantToSlot) {
         await upsertPitchPlacement({
           matchId: id,
-          playerId: occupant.id,
-          formationSlot: prevSlot,
+          playerId: plan.occupantId,
+          formationSlot: plan.occupantToSlot,
           pitchX: null,
           pitchY: null,
         });
-      } else if (occupant && !prevSlot) {
+      } else if (plan.occupantId) {
         await upsertPitchPlacement({
           matchId: id,
-          playerId: occupant.id,
+          playerId: plan.occupantId,
           clearPlacement: true,
         });
+      }
+
+      // Drop any third-party override still claiming either swap slot — that
+      // stale claim is what rotated CM→CD→LB on reapply after free-place.
+      const claimed = [plan.targetSlot, plan.occupantToSlot].filter(
+        (s): s is string => Boolean(s)
+      );
+      if (claimed.length) {
+        const keep = new Set(
+          [playerId, plan.occupantId].filter(Boolean) as string[]
+        );
+        const stale = await prisma.matchPlayerOverride.findMany({
+          where: {
+            matchId: id,
+            formationSlot: { in: claimed },
+            playerId: { notIn: [...keep] },
+          },
+          select: { playerId: true },
+        });
+        for (const row of stale) {
+          await upsertPitchPlacement({
+            matchId: id,
+            playerId: row.playerId,
+            formationSlot: null,
+            pitchX: null,
+            pitchY: null,
+          });
+        }
       }
     }
 

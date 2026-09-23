@@ -19,7 +19,6 @@ import {
   formatFoot,
   formatRating,
   formatWeight,
-  pitchCardName,
   playerPhotoUrl,
   posCode,
 } from "@/lib/flags";
@@ -34,6 +33,10 @@ import {
   formatHeightValue,
   formatMarketValue,
 } from "@/lib/field-settings";
+import {
+  formatPitchCardName,
+  type NameFormat,
+} from "@/lib/player-name";
 import {
   pitchFrameClass,
   pitchGrassBackground,
@@ -297,9 +300,9 @@ function PitchCardToken({
   const isGk =
     posCode(player.position, slotLabel) === "GK" ||
     (player.position || "").toUpperCase() === "GK";
-  const nameStyle = cardSettings.pitchNameStyle === "surname" ? "surname" : "full";
-  const fieldName = (
-    player.displayName || pitchCardName(player.name, nameStyle)
+  const fieldName = formatPitchCardName(
+    player,
+    (cardSettings.nameFormat || "surname") as NameFormat
   ).toUpperCase();
   const pos = posCode(player.position, slotLabel);
   const flagNats = resolvePitchFlags(player);
@@ -1891,9 +1894,9 @@ export function PitchBoard({
               {hasCustomPlacements && (
                 <span
                   className="rounded-md bg-amber-500/90 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-white shadow-sm"
-                  title="Manual pitch positions — survive Sync until Reset"
+                  title="Direct swap placements — survive Sync until Reset"
                 >
-                  Custom positions
+                  Direct swap
                 </span>
               )}
               {hasCustomPlacements && onResetPlacements && (

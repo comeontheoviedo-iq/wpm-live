@@ -26,6 +26,22 @@ import {
   unlimitedPriceId,
   type MatchPassCredits,
 } from "@/lib/stripe";
+import {
+  countryFromHeaders,
+  currencyForCountry,
+  FOUNDING_CODE,
+  FOUNDING_DISCOUNT_ID,
+  isFoundingOpen,
+  normalizePromo,
+} from "@/lib/region-pricing";
+
+function promoFromRequest(req: Request, body: Record<string, unknown>): string | null {
+  const fromBody = normalizePromo(body?.promo);
+  if (fromBody) return fromBody;
+  const cookie = req.headers.get("cookie") || "";
+  const m = cookie.match(/(?:^|;\s*)cocomms_promo=([^;]+)/);
+  return m ? normalizePromo(decodeURIComponent(m[1])) : null;
+}
 
 /**
  * POST /api/billing/checkout
@@ -64,7 +80,13 @@ export async function POST(req: Request) {
 
   const provider = getBillingProvider();
   if (provider === "polar") {
-    return createPolarUnlimitedCheckout({ session, successUrl, cancelUrl, req });
+    return createPolarUnlimitedCheckout({
+      session,
+      successUrl,
+      cancelUrl,
+      req,
+      promo: promoFromRequest(req, body),
+    });
   }
   if (provider === "stripe") {
     return createStripeUnlimitedCheckout({ session, successUrl, cancelUrl });
@@ -85,10 +107,14 @@ async function createPolarUnlimitedCheckout(opts: {
   successUrl: string;
   cancelUrl: string;
   req: Request;
+  promo?: string | null;
 }) {
   const { session, successUrl, cancelUrl, req } = opts;
   const polar = await getPolar();
   const productId = unlimitedProductId();
+  const currency = currencyForCountry(countryFromHeaders(req.headers));
+  const foundingDiscountId =
+    opts.promo === FOUNDING_CODE && isFoundingOpen() ? FOUNDING_DISCOUNT_ID : null;
   if (!polar || !productId) {
     return NextResponse.json(
       { error: "Polar SDK or Unlimited product missing", status: polarPublicStatus() },
@@ -131,12 +157,28 @@ async function createPolarUnlimitedCheckout(opts: {
         userId: session.id,
         plan: "unlimited",
       },
+      currency,
     };
+    if (foundingDiscountId) {
+      createBody.discountId = foundingDiscountId;
+      createBody.metadata.promo = FOUNDING_CODE;
+    }
     if (userRow?.polarCustomerId) {
       createBody.customerId = userRow.polarCustomerId;
     }
 
-    const checkout = await polar.checkouts.create(createBody);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let checkout: any;
+    try {
+      checkout = await polar.checkouts.create(createBody);
+    } catch (e) {
+      // Code exhausted / expired, or currency rejected: fall back to the plain GBP-default checkout.
+      console.warn("[checkout] unlimited retry without promo/currency:", e instanceof Error ? e.message : e);
+      delete createBody.discountId;
+      delete createBody.currency;
+      delete createBody.metadata.promo;
+      checkout = await polar.checkouts.create(createBody);
+    }
     if (!checkout?.url) {
       return NextResponse.json({ error: "Polar checkout missing URL" }, { status: 500 });
     }

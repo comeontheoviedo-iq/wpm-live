@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Logo } from "@/components/layout/logo";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,33 @@ export default function PricingPage() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [selectedPass, setSelectedPass] = useState<1 | 5 | 10>(5);
+  const [region, setRegion] = useState<{
+    currency: "gbp" | "usd" | "eur";
+    symbol: string;
+    unlimited: number;
+    founding: { code: string; price: number; months: number } | null;
+  }>({ currency: "gbp", symbol: "£", unlimited: 22, founding: null });
+  const [promo, setPromo] = useState<string | null>(null);
+
+  useEffect(() => {
+    const qs = new URLSearchParams(window.location.search);
+    const raw = (qs.get("promo") || qs.get("code") || "").trim().toUpperCase();
+    if (/^[A-Z0-9]{3,64}$/.test(raw)) {
+      document.cookie = `cocomms_promo=${encodeURIComponent(raw)}; path=/; max-age=${60 * 60 * 24 * 30}; samesite=lax`;
+      setPromo(raw);
+    } else {
+      const m = document.cookie.match(/(?:^|;\s*)cocomms_promo=([^;]+)/);
+      if (m) setPromo(decodeURIComponent(m[1]));
+    }
+    fetch("/api/billing/region")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (j && j.currency) setRegion(j);
+      })
+      .catch(() => {});
+  }, []);
+
+  const foundingActive = Boolean(region.founding && promo === region.founding.code);
 
   async function startUnlimitedCheckout() {
     setBusy(true);
@@ -33,7 +60,7 @@ export default function PricingPage() {
       const res = await fetch("/api/billing/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan: "unlimited" }),
+        body: JSON.stringify({ plan: "unlimited", promo }),
       });
       const json = await res.json().catch(() => ({}));
       if (res.status === 401) {
@@ -122,7 +149,7 @@ export default function PricingPage() {
           </h1>
           <p className="mt-3 text-slate-400">
             Both include a 14-day trial with max 3 match desks and card-upfront
-            Checkout. Unlimited converts to £22/mo unless cancelled. Pass pays
+            Checkout. Unlimited converts to {region.symbol}{region.unlimited}/mo unless cancelled. Pass pays
             for 1 / 5 / 10 credits up front — after trial you keep those credits
             (not Unlimited).
           </p>
@@ -134,12 +161,40 @@ export default function PricingPage() {
               <span className="ml-2 text-xs font-normal text-slate-500">also called Basic</span>
             </div>
             <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-3xl font-bold">£22</span>
-              <span className="text-sm text-slate-400">/mo after trial</span>
+              {foundingActive && region.founding ? (
+                <>
+                  <span className="text-3xl font-bold">
+                    {region.symbol}
+                    {region.founding.price}
+                  </span>
+                  <span className="text-lg text-slate-500 line-through">
+                    {region.symbol}
+                    {region.unlimited}
+                  </span>
+                  <span className="text-sm text-slate-400">/mo after trial</span>
+                </>
+              ) : (
+                <>
+                  <span className="text-3xl font-bold">
+                    {region.symbol}
+                    {region.unlimited}
+                  </span>
+                  <span className="text-sm text-slate-400">/mo after trial</span>
+                </>
+              )}
             </div>
-            <p className="mt-2 text-sm text-slate-400">
-              Subscription Checkout · trial_period_days=14 · payment_method_collection=always
-            </p>
+            {foundingActive && region.founding ? (
+              <p className="mt-2 rounded-lg border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-sm text-amber-200">
+                Founding Commentator rate applied ({region.founding.code}): {region.symbol}
+                {region.founding.price}/mo locked for {region.founding.months} months, then{" "}
+                {region.symbol}
+                {region.unlimited}/mo. First 50 seats, until 31 Oct 2026.
+              </p>
+            ) : (
+              <p className="mt-2 text-sm text-slate-400">
+                14-day trial · card upfront · cancel anytime. Have a code? Enter it at checkout.
+              </p>
+            )}
             <ul className="mt-4 space-y-2 flex-1">
               {unlimitedFeatures.map((f) => (
                 <li key={f} className="flex items-start gap-2 text-sm">

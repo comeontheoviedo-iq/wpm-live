@@ -269,6 +269,56 @@ export default function PricingPage() {
             </p>
           </div>
         </div>
+        <section className="mt-12 max-w-3xl mx-auto">
+          <h2 className="text-center text-xl font-semibold">For stations and clubs</h2>
+          <p className="mt-2 text-center text-sm text-slate-400">
+            Shared Unlimited seats for a commentary team, billed monthly in GBP. After purchase,
+            reply to your receipt with your commentators&apos; emails and we set up the seats,
+            usually the same day.
+          </p>
+          <div className="mt-6 grid gap-6 md:grid-cols-2">
+            {[
+              {
+                name: "Station",
+                price: "£49",
+                seats: 3,
+                who: "Hospital, community and student radio sport desks",
+                href: "https://buy.polar.sh/polar_cl_4JgIFonlIyLs8hFzhZKzbpGlC92B0xYlBWM8s2eYTOP",
+              },
+              {
+                name: "Club",
+                price: "£99",
+                seats: 5,
+                who: "Club media teams and small productions",
+                href: "https://buy.polar.sh/polar_cl_7b6b7iCdFHobdlTinPApsKNk3AyupLl81EDgV47zEdp",
+              },
+            ].map((t) => (
+              <div key={t.name} className="rounded-2xl border border-white/15 bg-[#0d1524] p-6 flex flex-col">
+                <div className="text-sm font-semibold text-slate-200">{t.name}</div>
+                <div className="mt-2 flex items-baseline gap-2">
+                  <span className="text-3xl font-bold">{t.price}</span>
+                  <span className="text-sm text-slate-400">/mo · {t.seats} seats</span>
+                </div>
+                <p className="mt-2 text-sm text-slate-400 flex-1">{t.who}</p>
+                <div className="mt-6 space-y-2">
+                  <a href={t.href} className="block" target="_blank" rel="noopener noreferrer">
+                    <Button className="w-full" variant="primary">
+                      Buy {t.name}
+                    </Button>
+                  </a>
+                  <a
+                    href={`mailto:chris@ronniedogmedia.com?subject=${encodeURIComponent(`CoComms ${t.name} plan`)}`}
+                    className="block"
+                  >
+                    <Button className="w-full" variant="outline">
+                      Talk to us
+                    </Button>
+                  </a>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
         {msg && (
           <p className="mt-6 text-center text-xs text-slate-400 whitespace-pre-wrap max-w-xl mx-auto">
             {msg}

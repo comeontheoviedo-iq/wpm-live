@@ -798,6 +798,7 @@ export function PitchBoard({
   onToggleHomeOnLeft,
   liveCompact,
   isFullscreen = false,
+  fitToBox = false,
   onAirMode,
   onFreePlace,
   onCoachClick,
@@ -888,6 +889,11 @@ export function PitchBoard({
   liveCompact?: boolean;
   /** Desk fullscreen — skip LIVE compact crush so tokens can grow. */
   isFullscreen?: boolean;
+  /**
+   * Desk "Fit pitch to screen": parent sizes the frame to the viewport, so
+   * drop the height floors that pushed the bottom of the pitch off-screen.
+   */
+  fitToBox?: boolean;
   /** On-air presentation: hide secondary pitch badges / tools. */
   onAirMode?: boolean;
   /** Drop anywhere on pitch (free-move, not slot snap). */
@@ -1349,17 +1355,23 @@ export function PitchBoard({
       className={cn(
         "relative w-full overflow-hidden rounded-xl border shadow-inner",
         pitchFrameClass(pitchSourceKind),
-        compact ? "h-full min-h-[300px]" : "",
+        fitToBox ? "h-full" : compact ? "h-full min-h-[300px]" : "",
         placing && "ring-2 ring-sky-400/70"
       )}
     >
       <div
         ref={pitchRef}
+        data-pitch-board="1"
         className={cn(
           "relative w-full",
           // Prefer enough height at normal desktop widths so the XI is not
-          // crammed onto a thin strip under desk chrome.
-          compact ? "h-full min-h-[max(300px,32vh)]" : "aspect-[16/9]"
+          // crammed onto a thin strip under desk chrome. Fit mode: the desk
+          // already sized the frame to the viewport — fill it exactly.
+          fitToBox
+            ? "h-full"
+            : compact
+              ? "h-full min-h-[max(300px,32vh)]"
+              : "aspect-[16/9]"
         )}
         style={{
           background: pitchGrassBackground(pitchSourceKind),

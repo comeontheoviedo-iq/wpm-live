@@ -63,6 +63,12 @@ export type FieldSettings = {
   currency: CurrencyCode;
   coach: CoachCardSettings;
   referee: RefereeCardSettings;
+  /**
+   * Desk view: size the pitch to the space between the desk header and the
+   * bottom of the viewport (no page scroll). Default ON; OFF restores the
+   * older tall pitch that may need scrolling (mainly useful in Full mode).
+   */
+  fitPitchToScreen: boolean;
 };
 
 /** Bumped to v6 for nameFormat (surname / initial_last / first_last). */
@@ -146,6 +152,7 @@ export const DEFAULT_FIELD_SETTINGS: FieldSettings = {
   currency: "EUR",
   coach: { ...DEFAULT_COACH_CARD },
   referee: { ...DEFAULT_REFEREE_CARD },
+  fitPitchToScreen: true,
 };
 
 /**
@@ -325,6 +332,7 @@ export function normalizeFieldSettings(
     currency,
     coach: normalizeCoach(raw.coach),
     referee: normalizeReferee(raw.referee),
+    fitPitchToScreen: raw.fitPitchToScreen !== false,
   };
 }
 

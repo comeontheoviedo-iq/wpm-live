@@ -796,6 +796,46 @@ export function MatchDesk({
   /** Prep only: click-to-place rail. LIVE/FT → Squad tab instead. */
   const hideSquadRail =
     status === "Live" || status === "Half Time" || status === "Full Time";
+  /** Field Settings → "Fit pitch to screen" (default ON). */
+  const fitPitch = fieldSettings.fitPitchToScreen !== false;
+
+  // Fit-to-screen: the desk fills exactly the space from its own top edge to
+  // the viewport bottom. Measured (not a magic rem) because the app header,
+  // match strip and desk chrome wrap to different heights per viewport / UI
+  // scale / Full mode. Written as a CSS var so the big desk tree never
+  // re-renders on resize.
+  useEffect(() => {
+    const el = deskRootRef.current;
+    if (!el || !fitPitch) return;
+    let raf = 0;
+    const measure = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const r = el.getBoundingClientRect();
+        const parent = el.parentElement;
+        const padBottom = parent
+          ? parseFloat(getComputedStyle(parent).paddingBottom) || 0
+          : 0;
+        const top = Math.max(0, Math.round(r.top + window.scrollY + padBottom));
+        const next = `${top}px`;
+        if (el.style.getPropertyValue("--desk-top") !== next) {
+          el.style.setProperty("--desk-top", next);
+        }
+      });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(document.body);
+    window.addEventListener("resize", measure);
+    document.addEventListener("fullscreenchange", measure);
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+      document.removeEventListener("fullscreenchange", measure);
+      el.style.removeProperty("--desk-top");
+    };
+  }, [fitPitch, isFullscreen]);
 
   useEffect(() => {
     const onFs = () => {
@@ -2601,15 +2641,24 @@ export function MatchDesk({
       ref={deskRootRef}
       data-desk-mode={deskMode}
       data-desk-density={deskDensity}
+      data-desk-fit={fitPitch ? "1" : undefined}
       className={cn(
         "relative flex flex-col gap-1.5 bg-[var(--background)] text-[var(--foreground)]",
-        // Full mode must scroll — large tokens were clipped with nowhere to go.
-        isFullscreen ? "overflow-y-auto overflow-x-hidden" : "overflow-hidden",
         deskMode === "onair" && "onair-desk",
         deskMode === "scan" && "scan-desk",
-        isFullscreen
-          ? "h-[calc(100dvh-7.75rem)] max-h-[100dvh] min-h-0 p-1.5"
-          : "h-[calc(100dvh-10.25rem)] max-h-[100dvh] min-h-[380px]"
+        fitPitch
+          ? cn(
+              // Fit: header→viewport bottom, never scrolls; pitch flexes.
+              "overflow-hidden h-[calc(100dvh-var(--desk-top,10.25rem))] max-h-[100dvh] min-h-[240px]",
+              isFullscreen && "p-1.5"
+            )
+          : cn(
+              // Fit OFF (legacy): Full mode scrolls so big tokens stay reachable.
+              isFullscreen ? "overflow-y-auto overflow-x-hidden" : "overflow-hidden",
+              isFullscreen
+                ? "h-[calc(100dvh-7.75rem)] max-h-[100dvh] min-h-0 p-1.5"
+                : "h-[calc(100dvh-10.25rem)] max-h-[100dvh] min-h-[380px]"
+            )
       )}
     >
       {/* Slim top bar — score / meta / stats / actions · broadcast desk chrome */}
@@ -2635,7 +2684,10 @@ export function MatchDesk({
             ))}
           </nav>
         ) : null}
-        <div className="min-w-0 flex-1">
+        {/* basis keeps match meta + XI controls wide: when space is short the
+            toolbar wraps to its own row instead of squeezing this block into
+            a tall ~120px column that ate the pitch's height. */}
+        <div className="min-w-0 flex-1 basis-[min(100%,30rem)]">
           <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0">
             <span className="font-semibold text-[12px] truncate tracking-tight text-slate-200">
               {homeName}{" "}
@@ -2761,7 +2813,10 @@ export function MatchDesk({
           </div>
         </div>
 
-        <div className="flex items-center gap-1 flex-wrap shrink-0">
+        {/* max-w-full + min-w-0 (was shrink-0): on narrow / zoomed laptops the
+            toolbar wraps its buttons instead of running off the right edge
+            (which hid Full / Ask / Report / Sync). */}
+        <div className="flex min-w-0 max-w-full items-center gap-1 flex-wrap">
           <div className="relative">
             <button
               type="button"
@@ -3478,29 +3533,42 @@ export function MatchDesk({
       <div
         className={cn(
           "relative min-h-0 flex-1 grid grid-cols-1 gap-1.5",
-          isFullscreen ? "overflow-y-auto overflow-x-hidden" : "overflow-hidden",
+          isFullscreen && !fitPitch ? "overflow-y-auto overflow-x-hidden" : "overflow-hidden",
           onAirMode
             ? "lg:grid-cols-[minmax(0,1fr)]"
             : hideSquadRail
               ? "lg:grid-cols-[minmax(0,1fr)]"
-              : "lg:grid-cols-[minmax(0,1.6fr)_minmax(145px,170px)] xl:grid-cols-[minmax(0,1.7fr)_minmax(150px,180px)]"
+              : cn(
+                  "lg:grid-cols-[minmax(0,1.6fr)_minmax(145px,170px)] xl:grid-cols-[minmax(0,1.7fr)_minmax(150px,180px)]",
+                  // Fit: keep squad beside the pitch on small/zoomed laptops
+                  // (<1024 CSS px) instead of stacking it under the pitch.
+                  fitPitch && "md:grid-cols-[minmax(0,1fr)_minmax(130px,150px)]"
+                ),
+          fitPitch && "grid-rows-[minmax(0,1fr)]",
+          // Phones (<768): rail stacks under the pitch with a capped share.
+          fitPitch && !onAirMode && !hideSquadRail && "max-md:grid-rows-[minmax(0,1fr)_minmax(0,38%)]"
         )}
       >
         <section
           data-desk-primary="pitch"
           className={cn(
             "relative min-h-0 flex flex-col order-1 onair-primary",
-            isFullscreen ? "overflow-y-auto overflow-x-hidden" : "overflow-hidden"
+            isFullscreen && !fitPitch ? "overflow-y-auto overflow-x-hidden" : "overflow-hidden"
           )}
         >
           <div
             className={cn(
               "flex-1",
-              isFullscreen
-                ? "min-h-[max(420px,min(72dvh,920px))]"
-                : "min-h-[max(300px,32vh)]"
+              fitPitch
+                ? // Fit: size container; pitch frame is sized from its cq units
+                  // (width- or height-limited, aspect clamped) — see globals.css.
+                  "pitch-fit-box min-h-0"
+                : isFullscreen
+                  ? "min-h-[max(420px,min(72dvh,920px))]"
+                  : "min-h-[max(300px,32vh)]"
             )}
           >
+            <div className={fitPitch ? "pitch-fit-frame" : "contents"}>
             <PitchBoard
               homeName={homeName}
               awayName={awayName}
@@ -3626,7 +3694,9 @@ export function MatchDesk({
               liveCompact={isLive}
               isFullscreen={isFullscreen}
               onAirMode={onAirMode}
+              fitToBox={fitPitch}
             />
+            </div>
           </div>
 
           {/* On-air drawer — overlays pitch, does not steal permanent height */}

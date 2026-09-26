@@ -385,6 +385,28 @@ export function FieldSettingsModal({
 
         <div className="grid gap-4 p-4 sm:grid-cols-[1fr_150px] overflow-y-auto min-h-0">
           <div className="space-y-4">
+            <label
+              className="flex items-start gap-2 rounded-md border border-slate-200 px-2 py-1.5 text-xs text-slate-700 dark:border-slate-700 dark:text-slate-200"
+              data-fit-pitch-toggle="1"
+            >
+              <input
+                type="checkbox"
+                className="mt-0.5 rounded border-slate-400 text-teal-600 focus:ring-teal-500"
+                checked={settings.fitPitchToScreen !== false}
+                // Desk view preference, not a card-size tweak: keep marker
+                // auto-fit (userAdjusted) untouched.
+                onChange={(e) =>
+                  onChange({ ...settings, fitPitchToScreen: e.target.checked })
+                }
+              />
+              <span>
+                <span className="font-semibold">Fit pitch to screen</span>
+                <span className="block text-[10px] text-slate-500">
+                  Whole pitch visible without scrolling (normal and Full). Off
+                  = taller pitch that may need scrolling.
+                </span>
+              </span>
+            </label>
             {isPlayerLike && (
               <>
                 <SliderRow

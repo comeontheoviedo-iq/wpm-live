@@ -2855,3 +2855,30 @@ body.obs-overlay-active {
   transform: translateX(-50%) translateY(0);
   transition-delay: 40ms;
 }
+
+/* ── Desk "Fit pitch to screen" (default ON) ───────────────────────────────
+   .pitch-fit-box is the flex-1/min-h-0 slot left between desk chrome and the
+   viewport bottom. The frame is width- OR height-limited so the whole pitch
+   (both keepers + back lines) is always visible, with a pitch-like landscape
+   aspect clamped to 3:2 … 2.25:1 (letterboxed/centred outside that range). */
+.pitch-fit-box {
+  container-type: size;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pitch-fit-frame {
+  width: min(100cqw, 100cqh * 2.25);
+  height: min(100cqh, 100cqw / 1.5);
+}
+/* On the fitted desk the sticky match rail must not be taller than the desk
+   (it was 100dvh-2.75rem from a lower start → ~76px of page scroll). Size
+   containment stops its nav list from growing the row; it stretches to the
+   desk height and scrolls its own nav if needed. Width stays explicit. */
+body:has([data-desk-fit]) [data-match-sidebar],
+body:has([data-desk-fit]) [data-match-sidebar-mobile] {
+  height: auto;
+  max-height: calc(100dvh - 2.75rem);
+  align-self: stretch;
+  contain: size;
+}

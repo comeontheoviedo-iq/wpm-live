@@ -138,6 +138,13 @@ export function AskReportButton({
     </button>
   );
 
+  // The match desk has its own in-flow Ask / Report button in the desk
+  // toolbar (top-right, next to Full/Exit). The floating bottom-right pill sat
+  // over the pitch / squad rail there, so don't render it on the desk route.
+  const floatingOnDesk =
+    !deskBtn && !compact && /^\/match-day\/(?!new\/?$)[^/]+\/?$/.test(pathname || "");
+  if (floatingOnDesk) return null;
+
   return (
     <>
       {trigger}

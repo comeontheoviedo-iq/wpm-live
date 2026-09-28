@@ -27,7 +27,7 @@ const MIN_MAPPED_PER_SIDE = 9;
  * Never auto-called — explicit user click only.
  *
  * Freeze choice: set xiFeedFrozen reason=fotmob_apply so pre-KO AF sync
- * cannot fallback_last_xi over the applied board. Unlock / Re-pull clears it.
+ * cannot fallback_last_xi over the applied board. Unlock / Reset to Official clears it.
  */
 export async function POST(
   _req: Request,
@@ -254,7 +254,7 @@ export async function POST(
       lineupSourceMeta: stringifyLineupSourceMeta(nextMeta),
       fotmobMatchId: resolved.fotmobMatchId,
       lastFeedSyncAt: appliedAt,
-      // Freeze AF overwrite until Unlock / Re-pull Official
+      // Freeze AF overwrite until Unlock / Reset to Official
       xiFeedFrozen: true,
       xiFeedFrozenAt: appliedAt,
       xiFeedFrozenByUserId: session.id,

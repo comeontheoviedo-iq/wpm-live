@@ -97,7 +97,7 @@ export async function upsertPitchPlacement(input: PlacementInput) {
   });
 }
 
-/** Clear all pitch placement overrides for a match (Reset official). */
+/** Clear all pitch placement overrides for a match (Reset to Official XI). */
 export async function clearAllPitchPlacements(matchId: string) {
   const rows = await prisma.matchPlayerOverride.findMany({ where: { matchId } });
   for (const row of rows) {

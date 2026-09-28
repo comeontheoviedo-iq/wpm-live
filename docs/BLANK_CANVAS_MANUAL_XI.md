@@ -25,6 +25,6 @@ On Match Desk (prep/live), click **Blank canvas**.
 ## Exit
 
 - **Unlock feed** — re-enables AF apply on next sync (confirm: may wipe Manual XI)
-- **Re-pull Official XI** — owner: unlock + force Official re-apply (confirm)
+- **Reset to Official XI** — owner: unlock + force Official re-apply (confirm)
 
 Normal desks are unchanged: Official sync still works when not in blank canvas.

@@ -1159,7 +1159,7 @@ export function MatchDesk({
         const place = !p.subbedOff;
         return {
           ...p,
-          // Slot override wins for display until Reset official
+          // Slot override wins for display until Reset to Official XI
           formationSlot: place
             ? o?.formationSlot || p.formationSlot
             : p.formationSlot,

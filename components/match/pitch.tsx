@@ -1928,8 +1928,9 @@ export function PitchBoard({
                   className="pitch-overlay-chip px-1.5 py-0.5 text-[8px] font-semibold text-[var(--bug-fg)] hover:bg-white/10"
                   disabled={formationBusy}
                   onClick={onResetOfficial}
+                  title="Clear placements and restore Official XI from the live feed"
                 >
-                  Reset official
+                  Reset to Official XI
                 </button>
               )}
             </div>
@@ -2095,7 +2096,7 @@ export function PitchBoard({
                       "border-2 border-dashed border-amber-300 bg-rose-700/85 text-amber-50 ring-rose-400/70",
                       highlightPlace && "ring-sky-200/90 border-sky-200"
                     )}
-                    title={`EMPTY ${slot.label} — drop a player or Re-pull Official XI`}
+                    title={`EMPTY ${slot.label} — drop a player or Reset to Official XI`}
                   >
                     <span className="text-[7px] font-black uppercase tracking-wide leading-none text-amber-200">
                       Empty

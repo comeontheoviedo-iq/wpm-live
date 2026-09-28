@@ -4,7 +4,7 @@ export type PlayerOverrideRow = {
   pronunciation?: string | null;
   pitchFlag?: string | null;
   jerseyNumber?: number | null;
-  /** Manual slot — survives AF sync until Reset official */
+  /** Manual slot — survives AF sync until Reset to Official XI */
   formationSlot?: string | null;
   /** Free-move landscape % (0–100) */
   pitchX?: number | null;

@@ -35,7 +35,7 @@ async function countStarters(matchId: string): Promise<number> {
  * lock / report_wrong → freeze Official/Predicted/Last XI feed apply (events/score still sync)
  * blank_canvas → clear pitch slots, set Manual source, freeze feed (squad list kept)
  * unlock → desk owner only (blank_canvas: any desk member may unlock)
- * repull_official → owner only: unlock freeze + forced Official lineup re-apply
+ * repull_official → owner only: unlock freeze + forced Official lineup re-apply (Reset to Official XI)
  * lockPlayer → per-player MatchPlayerOverride.lockFromFeed
  */
 export async function PATCH(
@@ -133,7 +133,7 @@ export async function PATCH(
     try {
       const message =
         note?.trim() ||
-        `XI looks wrong reported on ${title}. Official feed sync frozen. Does not re-pull — owner should Re-pull Official XI.`;
+        `XI looks wrong reported on ${title}. Official feed sync frozen. Does not refresh XI — owner should Reset to Official XI.`;
       const ping = await prisma.supportPing.create({
         data: {
           userId: session.id,
@@ -270,7 +270,7 @@ export async function PATCH(
   if (action === "repull_official") {
     if (!isOwner) {
       return NextResponse.json(
-        { error: "Only the desk owner can Re-pull Official XI" },
+        { error: "Only the desk owner can Reset to Official XI" },
         { status: 403 }
       );
     }
@@ -312,15 +312,27 @@ export async function PATCH(
       const raw = e instanceof Error ? e.message : String(e || "Sync failed");
       console.error("[xi-feed/repull_official]", raw);
       return NextResponse.json(
-        { error: raw.length <= 160 ? raw : "Re-pull Official failed" },
+        { error: raw.length <= 160 ? raw : "Reset to Official XI failed" },
         { status: 400 }
       );
     }
 
     const afterStarters = await countStarters(matchId);
+    const homeOfficial = Boolean(syncResult.homeOfficial);
+    const awayOfficial = Boolean(syncResult.awayOfficial);
+    const publishedTeams = (homeOfficial ? 1 : 0) + (awayOfficial ? 1 : 0);
+    const lineupsPublished = homeOfficial && awayOfficial;
+    // Confirmed only when both sides are usable Official — empty/provisional AF
+    // dumps must not look like a successful Reset to Official XI.
     const lineupApplied =
-      syncResult.lineupStatus === "confirmed" ||
-      (syncResult.lineupCount ?? 0) > 0;
+      syncResult.lineupStatus === "confirmed" || lineupsPublished;
+    const showingSource =
+      syncResult.match?.lineupSource ||
+      (syncResult.lineupStatus === "predicted"
+        ? "predicted"
+        : syncResult.lineupStatus === "confirmed"
+          ? "official"
+          : "last_xi");
 
     return NextResponse.json({
       ok: true,
@@ -330,6 +342,14 @@ export async function PATCH(
       previousLineupStatus: syncResult.previousLineupStatus,
       before: { starters: beforeStarters },
       after: { starters: afterStarters },
+      lineupsPublished,
+      publishedTeams,
+      homeOfficial,
+      awayOfficial,
+      showingSource,
+      homeName: match.homeClub.shortName,
+      awayName: match.awayClub.shortName,
+      lineupCount: syncResult.lineupCount ?? 0,
     });
   }
 

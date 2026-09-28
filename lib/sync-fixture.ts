@@ -1929,7 +1929,7 @@ export type SyncMatchOpts = {
   /** Internal: sibling apply after fixture fan-in leader — no further fan-out. */
   fromFanIn?: boolean;
   /**
-   * Owner Re-pull Official XI: ignore freeze + always fetch lineups and
+   * Owner Reset to Official XI: ignore freeze + always fetch lineups and
    * re-apply Official when both sides are usable.
    */
   forceOfficialLineup?: boolean;
@@ -1945,6 +1945,8 @@ async function freshLiveSkipPayload(matchId: string) {
     skipReason: "fixture-fan-in-fresh" as const,
     fanIn: true as const,
     lineupCount: 0,
+    homeOfficial: false,
+    awayOfficial: false,
     eventCount: 0,
     newEvents: [] as {
       type: string;
@@ -2202,7 +2204,7 @@ async function runSyncMatchFromApiFootball(
 
   // Gate: see lib/lineup-gate.ts + docs/AF_LIVE_TRIGGERS.md
   // Empty-grid provisional dumps must not confirm Official or overwrite a good board.
-  // forceOfficial (owner Re-pull) bypasses freeze for this pass only
+  // forceOfficial (owner Reset to Official) bypasses freeze for this pass only
   const feedFrozen = forceOfficial ? false : Boolean(match.xiFeedFrozen);
   const plan = planLineupApply({
     homeOfficial,
@@ -2981,6 +2983,8 @@ await pruneStaleGoals(matchId, events, homeAfId, awayAfId).catch((err) =>
     match: updated,
     mode,
     lineupCount: lineups.length,
+    homeOfficial,
+    awayOfficial,
     eventCount: events.length,
     newEvents,
     lineupStatus,

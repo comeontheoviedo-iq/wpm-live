@@ -7,7 +7,7 @@
  *
  * After Apply we set Official + xiFeedFrozen reason=fotmob_apply so the next
  * AF sync cannot wipe pre-KO (planLineupApply would otherwise fallback_last_xi).
- * Unlock / Re-pull Official clears freeze as usual.
+ * Unlock / Reset to Official clears freeze as usual.
  */
 
 import {

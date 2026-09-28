@@ -197,14 +197,40 @@ export function LineupFeedControls({
         const before = json.before?.starters;
         const after = json.after?.starters;
         const applied = json.lineupApplied;
-        if (before != null && after != null) {
+        const lineupsPublished = json.lineupsPublished === true;
+        const publishedTeams = Number(json.publishedTeams ?? 0);
+        const homeOfficial = json.homeOfficial === true;
+        const awayOfficial = json.awayOfficial === true;
+        const homeName = String(json.homeName || "Home");
+        const awayName = String(json.awayName || "Away");
+        const src = String(json.showingSource || "");
+        const showingLabel =
+          src === "predicted"
+            ? "Predicted"
+            : src === "manual"
+              ? "Manual"
+              : src === "official" || src === "live"
+                ? "Official"
+                : "Last";
+        if (applied || lineupsPublished) {
+          if (before != null && after != null) {
+            setMsg(`Reset to Official XI · starters ${before} → ${after}`);
+          } else {
+            setMsg("Reset to Official XI");
+          }
+        } else if (publishedTeams === 1) {
+          const which = homeOfficial
+            ? `${homeName} only`
+            : awayOfficial
+              ? `${awayName} only`
+              : "one side only";
           setMsg(
-            applied
-              ? `Re-pulled Official · starters ${before} → ${after}`
-              : `Unlocked + synced · starters ${after} (Official not both-sides usable yet)`
+            `Only ${which} Official XI published so far by the data provider. Showing ${showingLabel} XI. Try again closer to kick-off; lineups usually land about 60 minutes before.`
           );
         } else {
-          setMsg(applied ? "Re-pulled Official XI" : "Unlocked + synced");
+          setMsg(
+            `Official XIs not published yet by the data provider. Showing ${showingLabel} XI. Try again closer to kick-off; lineups usually land about 60 minutes before.`
+          );
         }
       } else if (action === "report_wrong") {
         setMsg("Frozen — owner alerted (does not refresh XI)");
@@ -235,11 +261,11 @@ export function LineupFeedControls({
     if (xiFeedFrozenReason === "blank_canvas")
       return "BLANK CANVAS · Manual XI — feed frozen until Unlock & pull";
     if (xiFeedFrozenReason === "fotmob_apply")
-      return "FROZEN · FotMob Apply — Unlock / Re-pull to let AF overwrite";
+      return "FROZEN · FotMob Apply — Unlock / Reset to Official to let AF overwrite";
     if (xiFeedFrozenReason === "looks_wrong")
-      return "FROZEN · blocks Official updates until Unlock / Re-pull";
+      return "FROZEN · blocks Official updates until Unlock / Reset to Official";
     if (xiFeedFrozenReason === "lock") return "FROZEN · blocks Official updates until Unlock";
-    return "FROZEN · blocks Official updates until Unlock / Re-pull";
+    return "FROZEN · blocks Official updates until Unlock / Reset to Official";
   }, [xiFeedFrozen, xiFeedFrozenReason]);
 
   return (
@@ -278,7 +304,7 @@ export function LineupFeedControls({
             type="button"
             className="desk-btn text-[9px] px-1.5 py-0.5 inline-flex items-center gap-0.5 text-amber-800 dark:text-amber-200"
             disabled={busy}
-            title="Blocks Official updates until Unlock / Re-pull — does NOT refresh XI; alerts owner"
+            title="Blocks Official updates until Unlock / Reset to Official — does NOT refresh XI; alerts owner"
             onClick={() => setNoteOpen((v) => !v)}
           >
             <AlertTriangle className="h-3 w-3" /> Report wrong XI
@@ -288,13 +314,13 @@ export function LineupFeedControls({
               type="button"
               className="desk-btn text-[9px] px-1.5 py-0.5 inline-flex items-center gap-0.5 text-emerald-800 dark:text-emerald-200"
               disabled={busy}
-              title="Force re-apply Official XI from the live feed (works pre-KO; clears freeze)"
+              title="Reset to Official XI from the live feed (works pre-KO; clears freeze). If the provider has not published yet, you will stay on Predicted/Last XI."
               onClick={() => {
-              if (!confirmExitBlankCanvas("Re-pull Official XI")) return;
+              if (!confirmExitBlankCanvas("Reset to Official XI")) return;
               void post("repull_official");
             }}
             >
-              <RefreshCw className="h-3 w-3" /> Re-pull Official XI
+              <RefreshCw className="h-3 w-3" /> Reset to Official XI
             </button>
           )}
         </>
@@ -316,18 +342,18 @@ export function LineupFeedControls({
             type="button"
             className="desk-btn text-[9px] px-1.5 py-0.5 inline-flex items-center gap-0.5 border border-emerald-500/60 text-emerald-800 dark:text-emerald-200 font-bold"
             disabled={busy}
-            title="Unlock freeze + force Official XI re-apply from AF (works pre-KO)"
+            title="Unlock freeze + Reset to Official XI from AF (works pre-KO). If not published yet, you stay on Predicted/Last XI."
             onClick={() => {
-              if (!confirmExitBlankCanvas("Re-pull Official XI")) return;
+              if (!confirmExitBlankCanvas("Reset to Official XI")) return;
               void post("repull_official");
             }}
           >
-            <RefreshCw className="h-3 w-3" /> Re-pull Official XI
+            <RefreshCw className="h-3 w-3" /> Reset to Official XI
           </button>
         </>
       ) : (
         <span className="text-[9px] font-semibold text-amber-800 dark:text-amber-200">
-          Owner can Unlock / Re-pull Official
+          Owner can Unlock / Reset to Official
         </span>
       )}
       {noteOpen && (
@@ -348,7 +374,7 @@ export function LineupFeedControls({
             Freeze + alert owner
           </button>
           <span className="text-[9px] text-slate-500 max-w-[14rem]">
-            Blocks Official feed updates until Unlock / Re-pull. Does not refresh XI.
+            Blocks Official feed updates until Unlock / Reset to Official. Does not refresh XI.
           </span>
         </span>
       )}
@@ -368,7 +394,14 @@ export function LineupFeedControls({
         onChanged={onChanged}
       />
       {msg && (
-        <span className="text-[9px] font-semibold text-emerald-700 dark:text-emerald-300">
+        <span
+          className={
+            msg.startsWith("Official XIs not published") ||
+            msg.startsWith("Only ")
+              ? "text-[9px] font-semibold text-amber-800 dark:text-amber-200 max-w-[28rem]"
+              : "text-[9px] font-semibold text-emerald-700 dark:text-emerald-300"
+          }
+        >
           {msg}
         </span>
       )}

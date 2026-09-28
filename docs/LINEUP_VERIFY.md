@@ -38,7 +38,7 @@ After Apply:
 
 - Lineup stamped **Official** (`lineupStatus=confirmed`, `lineupSource=official`)
 - `lineupSourceMeta` records `fotmobAppliedAt`, `fotmobMatchId`, `fotmobApplySource=fotmob`
-- Feed freeze: `xiFeedFrozen=true` with reason `fotmob_apply` so the next pre-KO AF sync cannot `fallback_last_xi` wipe the board. **Unlock** / **Re-pull Official** clears freeze as usual.
+- Feed freeze: `xiFeedFrozen=true` with reason `fotmob_apply` so the next pre-KO AF sync cannot `fallback_last_xi` wipe the board. **Unlock** / **Reset to Official** clears freeze as usual.
 - Player matching: fuzzy name (+ shirt when helpful) to existing AF-linked club players. Unmatched starters are returned in an **unmapped** list — we do **not** invent AF ids. Apply requires ≥9 mapped per side.
 
 ## APIs

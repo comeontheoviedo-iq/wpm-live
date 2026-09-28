@@ -166,7 +166,7 @@ export function lineupSourceBadgeTitle(opts: {
     return "Blank canvas / Manual XI — commentator-built board. Feed will not overwrite until Unlock & pull.";
   }
   if (opts.kind === "predicted") {
-    return "Predicted XI — NOT Official. Re-pull Official when both sides are named.";
+    return "Predicted XI — NOT Official. Reset to Official XI when both sides are named.";
   }
   if (opts.meta?.lastXiCompetitionMismatch) {
     return "Domestic last XI — not this competition. NOT tonight's Official.";

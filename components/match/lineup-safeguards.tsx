@@ -220,10 +220,10 @@ export function LineupFeedControls({
           }
         } else if (publishedTeams === 1) {
           const which = homeOfficial
-            ? `${homeName} only`
+            ? `${homeName}'s`
             : awayOfficial
-              ? `${awayName} only`
-              : "one side only";
+              ? `${awayName}'s`
+              : "one side's";
           setMsg(
             `Only ${which} Official XI published so far by the data provider. Showing ${showingLabel} XI. Try again closer to kick-off; lineups usually land about 60 minutes before.`
           );

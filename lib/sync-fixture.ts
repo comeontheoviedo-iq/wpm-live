@@ -83,6 +83,7 @@ import {
   buildGoalSeasonLines,
   fetchPlayerSeasonSplit,
   isInternationalCompetition,
+  teamStatPageLimit,
 } from "./season-tally";
 import { mapAfFixturePlayersToRows } from "./live-stat-triggers";
 
@@ -188,6 +189,10 @@ async function upsertPlayerBioFromAf(
     goalsAllComps?: number;
     assistsAllComps?: number;
     apps?: number;
+  },
+  opts?: {
+    /** Intl career caps — write exact apps/G/A (do not sticky-max prior club dumps). */
+    replaceStats?: boolean;
   }
 ) {
   const resolvedName = preferAfFullName(row.name, row.firstname, row.lastname);
@@ -258,19 +263,31 @@ async function upsertPlayerBioFromAf(
   }
   if (row.rating != null) data.rating = row.rating;
   if (typeof row.apps === "number") data.appearances = row.apps;
-  if (row.goals != null && row.goals > (existing.goals || 0)) data.goals = row.goals;
-  if (row.assists != null && row.assists > (existing.assists || 0)) data.assists = row.assists;
-  if (
-    row.goalsAllComps != null &&
-    row.goalsAllComps > ((existing as { goalsAllComps?: number }).goalsAllComps || 0)
-  ) {
-    data.goalsAllComps = row.goalsAllComps;
-  }
-  if (
-    row.assistsAllComps != null &&
-    row.assistsAllComps > ((existing as { assistsAllComps?: number }).assistsAllComps || 0)
-  ) {
-    data.assistsAllComps = row.assistsAllComps;
+  if (opts?.replaceStats) {
+    if (typeof row.goals === "number") data.goals = row.goals;
+    if (typeof row.assists === "number") data.assists = row.assists;
+    if (typeof row.goalsAllComps === "number") data.goalsAllComps = row.goalsAllComps;
+    if (typeof row.assistsAllComps === "number") {
+      data.assistsAllComps = row.assistsAllComps;
+    }
+  } else {
+    if (row.goals != null && row.goals > (existing.goals || 0)) data.goals = row.goals;
+    if (row.assists != null && row.assists > (existing.assists || 0)) {
+      data.assists = row.assists;
+    }
+    if (
+      row.goalsAllComps != null &&
+      row.goalsAllComps > ((existing as { goalsAllComps?: number }).goalsAllComps || 0)
+    ) {
+      data.goalsAllComps = row.goalsAllComps;
+    }
+    if (
+      row.assistsAllComps != null &&
+      row.assistsAllComps >
+        ((existing as { assistsAllComps?: number }).assistsAllComps || 0)
+    ) {
+      data.assistsAllComps = row.assistsAllComps;
+    }
   }
   if (Object.keys(data).length) {
     await prisma.player.update({ where: { id: existing.id }, data });
@@ -1487,7 +1504,8 @@ async function syncSeasonScorers(
   awayAfId: number,
   leagueId: number,
   season: number,
-  leagueMeta?: { name?: string | null; country?: string | null }
+  leagueMeta?: { name?: string | null; country?: string | null },
+  matchId?: string | null
 ) {
   const internationalDesk = isInternationalCompetition({
     name: leagueMeta?.name,
@@ -1498,6 +1516,21 @@ async function syncSeasonScorers(
     [awayAfId, awayClubId],
   ]);
 
+  // Manual career overrides (lockFromFeed on this desk) — do not clobber.
+  const lockedApiIds = new Set<number>();
+  if (matchId) {
+    const locks = await prisma.matchPlayerOverride.findMany({
+      where: { matchId, lockFromFeed: true },
+      select: {
+        player: { select: { apiFootballPlayerId: true } },
+      },
+    });
+    for (const row of locks) {
+      const id = row.player?.apiFootballPlayerId;
+      if (id != null) lockedApiIds.add(id);
+    }
+  }
+
   await prisma.seasonScorer.deleteMany({
     where: { clubId: { in: [homeClubId, awayClubId] } },
   });
@@ -1507,8 +1540,9 @@ async function syncSeasonScorers(
 
   const tops = await getTopScorers(leagueId, season).catch(() => []);
   const teamPages: Awaited<ReturnType<typeof getPlayersByTeam>> = [];
+  const currentPageCap = teamStatPageLimit({ internationalDesk });
   for (const teamId of [homeAfId, awayAfId]) {
-    for (let page = 1; page <= 4; page++) {
+    for (let page = 1; page <= currentPageCap; page++) {
       const rows = await getPlayersByTeam(teamId, season, page).catch(() => []);
       if (!rows.length) break;
       teamPages.push(...rows);
@@ -1652,25 +1686,25 @@ async function syncSeasonScorers(
       season - 6,
       season - 7,
     ].filter((y) => y >= 2000);
+    const priorPageCap = teamStatPageLimit({
+      internationalDesk: true,
+      priorSeason: true,
+    });
     for (const teamId of [homeAfId, awayAfId]) {
       for (const y of priorYears) {
-        const rows = await getPlayersByTeam(teamId, y, 1).catch(() => []);
-        if (!rows.length) continue;
-        // One page usually covers the NT squad depth we care about
-        for (const row of rows) {
-          if (!row.player?.id) continue;
-          addBlock(teamId, row.player.id, row.statistics);
-        }
-        if (rows.length >= 20) {
-          const page2 = await getPlayersByTeam(teamId, y, 2).catch(() => []);
-          for (const row of page2) {
+        for (let page = 1; page <= priorPageCap; page++) {
+          const rows = await getPlayersByTeam(teamId, y, page).catch(() => []);
+          if (!rows.length) break;
+          for (const row of rows) {
             if (!row.player?.id) continue;
             addBlock(teamId, row.player.id, row.statistics);
           }
+          if (rows.length < 20) break;
         }
       }
     }
     for (const [apiId, entry] of blocksByPlayer) {
+      if (lockedApiIds.has(apiId)) continue;
       const career = aggregateInternationalCareerTotals(entry.blocks, entry.teamId);
       const prev = byApi.get(apiId);
       if (!prev) continue;
@@ -1738,7 +1772,10 @@ async function syncSeasonScorers(
   // Enrich EVERY squad player from team /players pages first.
   let bios = 0;
   for (const row of byApi.values()) {
-    await upsertPlayerBioFromAf(row.clubId, row);
+    if (lockedApiIds.has(row.apiId)) continue;
+    await upsertPlayerBioFromAf(row.clubId, row, {
+      replaceStats: internationalDesk,
+    });
     bios++;
   }
 
@@ -2615,7 +2652,8 @@ async function runSyncMatchFromApiFootball(
         {
           name: fixture.league?.name,
           country: fixture.league?.country,
-        }
+        },
+        match.id
       ).catch(() => ({ scorers: 0, keepers: 0 }));
 
   const events = await getEvents(match.apiFootballFixtureId).catch(() => []);

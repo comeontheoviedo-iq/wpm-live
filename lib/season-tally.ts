@@ -413,6 +413,20 @@ export function aggregateTeamSeasonTotals(
  * for this international match, liveAdjustedSeasonStat bumps +1 — same spirit
  * as the locked club APP rule.
  */
+/**
+ * AF `/players?team=` pages are 20-wide. Club desks rarely need more than 4
+ * pages; international squad dumps are deeper (Brazil Friendlies/WC 2026 = 5
+ * pages — Rayan was on page 5 and missed by a page≤4 cap).
+ */
+export function teamStatPageLimit(opts: {
+  internationalDesk: boolean;
+  /** Prior-season scan on intl desks — still needs depth (Irankunda Aus 2025 = page 3). */
+  priorSeason?: boolean;
+}): number {
+  if (!opts.internationalDesk) return 4;
+  return opts.priorSeason ? 8 : 12;
+}
+
 export function aggregateInternationalCareerTotals(
   seasonBlocks: {
     statistics?: AfTopScorer["statistics"];

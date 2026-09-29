@@ -10,6 +10,7 @@ import {
   aggregateTeamSeasonTotals,
   aggregateInternationalCareerTotals,
   looksLikeClubTeamName,
+  teamStatPageLimit,
 } from "./season-tally";
 
 type Stat = Parameters<typeof aggregateClubSeasonTotals>[0];
@@ -205,5 +206,61 @@ describe("international caps aggregation (incl. friendlies)", () => {
     assert.equal(liveAdjustedSeasonStat(42, 0, "Assigned", { forceExcludeToday: true }), 42);
     // Live + on: career + 1
     assert.equal(liveAdjustedSeasonStat(42, 1, "Live", { forceExcludeToday: true }), 43);
+  });
+});
+
+describe("teamStatPageLimit — NT squad depth", () => {
+  it("club desks stay at 4 pages", () => {
+    assert.equal(teamStatPageLimit({ internationalDesk: false }), 4);
+  });
+  it("intl current season goes past Brazil 2026 page 5 (Rayan)", () => {
+    assert.ok(teamStatPageLimit({ internationalDesk: true }) >= 5);
+  });
+  it("intl prior seasons go past Australia 2025 page 3 (Irankunda)", () => {
+    assert.ok(
+      teamStatPageLimit({ internationalDesk: true, priorSeason: true }) >= 3
+    );
+  });
+});
+
+describe("Rayan Brazil career shape (AF 407806)", () => {
+  it("sums World Cup + Friendlies across season blocks incl. friendlies", () => {
+    // AF raw 2026 for Brazil senior: WC 4/0 + Friendlies 3/2 = 7/2
+    const blocks = [
+      {
+        statistics: [
+          row(6, "Brazil", 1, "World Cup", 4, 0, 1),
+          row(6, "Brazil", 10, "Friendlies", 3, 2, 0),
+          row(133, "Vasco DA Gama", 71, "Serie A", 34, 14, 1),
+        ] as Stat,
+      },
+    ];
+    const career = aggregateInternationalCareerTotals(blocks, 6);
+    assert.equal(career.apps, 7);
+    assert.equal(career.goals, 2);
+    assert.equal(career.assists, 1);
+  });
+});
+
+describe("Irankunda Australia career shape (AF 338014)", () => {
+  it("sums multi-season NT rows incl. friendlies", () => {
+    const blocks = [
+      {
+        statistics: [
+          row(20, "Australia", 10, "Friendlies", 4, 1, 0),
+        ] as Stat,
+      },
+      {
+        statistics: [
+          row(20, "Australia", 30, "World Cup - Qualification Asia", 5, 1, 1),
+          row(20, "Australia", 1222, "FIFA Series", 2, 2, 0),
+          row(20, "Australia", 1, "World Cup", 4, 1, 0),
+          row(20, "Australia", 10, "Friendlies", 3, 1, 0),
+        ] as Stat,
+      },
+    ];
+    const career = aggregateInternationalCareerTotals(blocks, 20);
+    assert.equal(career.apps, 18);
+    assert.equal(career.goals, 6);
   });
 });

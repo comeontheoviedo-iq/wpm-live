@@ -98,6 +98,85 @@ export async function PATCH(
     return NextResponse.json({ error: "Player not in this match" }, { status: 400 });
   }
 
+  // Manual intl career caps when AF is incomplete / wrong.
+  const hasCareer =
+    "careerApps" in body || "careerGoals" in body || "careerAssists" in body;
+  if (hasCareer || "lockFromFeed" in body) {
+    const playerPatch: {
+      appearances?: number;
+      goals?: number;
+      assists?: number;
+      goalsAllComps?: number;
+      assistsAllComps?: number;
+    } = {};
+    const asNonNegInt = (v: unknown): number | null => {
+      if (v === null || v === undefined || v === "") return null;
+      const n = Number(v);
+      if (!Number.isFinite(n)) return null;
+      return Math.max(0, Math.round(n));
+    };
+    if ("careerApps" in body) {
+      const n = asNonNegInt(body.careerApps);
+      if (n != null) playerPatch.appearances = n;
+    }
+    if ("careerGoals" in body) {
+      const n = asNonNegInt(body.careerGoals);
+      if (n != null) {
+        playerPatch.goals = n;
+        playerPatch.goalsAllComps = n;
+      }
+    }
+    if ("careerAssists" in body) {
+      const n = asNonNegInt(body.careerAssists);
+      if (n != null) {
+        playerPatch.assists = n;
+        playerPatch.assistsAllComps = n;
+      }
+    }
+    let updatedPlayer = player;
+    if (Object.keys(playerPatch).length) {
+      updatedPlayer = await prisma.player.update({
+        where: { id: playerId },
+        data: playerPatch,
+        select: { id: true, clubId: true, apiFootballPlayerId: true },
+      });
+    }
+    const lock =
+      "lockFromFeed" in body
+        ? Boolean(body.lockFromFeed)
+        : hasCareer
+          ? true
+          : undefined;
+    let override = await prisma.matchPlayerOverride.findUnique({
+      where: { matchId_playerId: { matchId, playerId } },
+    });
+    if (lock != null) {
+      override = await prisma.matchPlayerOverride.upsert({
+        where: { matchId_playerId: { matchId, playerId } },
+        create: { matchId, playerId, lockFromFeed: lock },
+        update: { lockFromFeed: lock },
+      });
+    }
+    // Career-only / lock-only request — return without requiring other fields
+    if (
+      hasCareer ||
+      ("lockFromFeed" in body &&
+        !("displayName" in body) &&
+        !("pronunciation" in body) &&
+        !("pitchFlag" in body) &&
+        !("jerseyNumber" in body) &&
+        !("formationSlot" in body) &&
+        !("pitchX" in body) &&
+        !("pitchY" in body))
+    ) {
+      return NextResponse.json({
+        override,
+        player: updatedPlayer,
+        careerApplied: Object.keys(playerPatch).length > 0,
+      });
+    }
+  }
+
   if (body.clear === true) {
     await prisma.matchPlayerOverride.deleteMany({
       where: { matchId, playerId },
@@ -154,6 +233,10 @@ export async function PATCH(
       "pitchX" in body ? clampPitchCoord(body.pitchX) : existing?.pitchX ?? null,
     pitchY:
       "pitchY" in body ? clampPitchCoord(body.pitchY) : existing?.pitchY ?? null,
+    lockFromFeed:
+      "lockFromFeed" in body
+        ? Boolean(body.lockFromFeed)
+        : existing?.lockFromFeed ?? false,
   };
 
   const empty =
@@ -163,7 +246,8 @@ export async function PATCH(
     data.jerseyNumber == null &&
     !data.formationSlot &&
     data.pitchX == null &&
-    data.pitchY == null;
+    data.pitchY == null &&
+    !data.lockFromFeed;
 
   if (empty) {
     await prisma.matchPlayerOverride.deleteMany({ where: { matchId, playerId } });

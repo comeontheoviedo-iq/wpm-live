@@ -2553,6 +2553,17 @@ export function MatchDesk({
   );
   const corners = statistics.find((s) => /corner/i.test(s.label));
   const fouls = statistics.find((s) => /^fouls$/i.test(s.label) || /fouls committed/i.test(s.label));
+  /** Compact Full-Live key line (Shots · SOT · Corners · Poss) — not shown in normal mode. */
+  const fullLiveStatParts = [
+    shots ? `Shots ${shots.homeValue}–${shots.awayValue}` : null,
+    shotsOnTarget
+      ? `SOT ${shotsOnTarget.homeValue}–${shotsOnTarget.awayValue}`
+      : null,
+    corners ? `Corners ${corners.homeValue}–${corners.awayValue}` : null,
+    possession
+      ? `Poss ${possession.homeValue}–${possession.awayValue}`
+      : null,
+  ].filter((p): p is string => Boolean(p));
   const penalties = events.filter((e) =>
     ["penalty_goal", "penalty_miss"].includes(e.type)
   );
@@ -3649,6 +3660,28 @@ export function MatchDesk({
           </>
         )}
       </header>
+
+      {/* Full Live only: one thin (~20–24px) key-stats row under the slim toolbar */}
+      {isFullscreen &&
+      (status === "Live" || status === "Half Time") &&
+      fullLiveStatParts.length > 0 ? (
+        <div
+          className="desk-full-live-stats shrink-0 flex h-5 max-h-6 items-center overflow-hidden px-2 text-[10px] tabular-nums text-slate-300"
+          data-full-live-stats="1"
+          title="Live match stats (open Stats for full table)"
+        >
+          {fullLiveStatParts.map((part, i) => (
+            <span key={part} className="inline-flex shrink-0 items-center">
+              {i > 0 ? (
+                <span className="mx-1.5 text-slate-600" aria-hidden>
+                  ·
+                </span>
+              ) : null}
+              {part}
+            </span>
+          ))}
+        </div>
+      ) : null}
 
       <DeskLiveExtras
         matchId={matchId}

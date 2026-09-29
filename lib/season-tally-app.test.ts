@@ -12,6 +12,7 @@ import {
   looksLikeClubTeamName,
   teamStatPageLimit,
 } from "./season-tally";
+import { buildOverviewCareerBlock } from "./overview-career";
 
 type Stat = Parameters<typeof aggregateClubSeasonTotals>[0];
 
@@ -262,5 +263,90 @@ describe("Irankunda Australia career shape (AF 338014)", () => {
     const career = aggregateInternationalCareerTotals(blocks, 20);
     assert.equal(career.apps, 18);
     assert.equal(career.goals, 6);
+  });
+});
+
+
+describe("profile Career == pitch card (canonical Player.*)", () => {
+  it("Rayan Brazil: aggregateInternationalCareerTotals 7/2 matches Overview Player.*", () => {
+    const blocks = [
+      {
+        statistics: [
+          row(6, "Brazil", 1, "World Cup", 4, 0, 1),
+          row(6, "Brazil", 10, "Friendlies", 3, 2, 0),
+        ] as Stat,
+      },
+    ];
+    const career = aggregateInternationalCareerTotals(blocks, 6);
+    assert.equal(career.apps, 7);
+    assert.equal(career.goals, 2);
+    const overview = buildOverviewCareerBlock({
+      internationalDesk: true,
+      clubs: [
+        {
+          teamId: 6,
+          name: "Brazil",
+          seasons: [2026],
+          apps: 4,
+          goals: 0,
+          assists: 1,
+          nationalTeam: true,
+        },
+      ],
+      playerFallback: {
+        appearances: career.apps,
+        goals: career.goals,
+        assists: career.assists,
+      },
+    });
+    assert.equal(overview.apps, career.apps);
+    assert.equal(overview.goals, career.goals);
+    assert.equal(overview.assists, career.assists);
+    assert.equal(overview.apps, 7);
+    assert.equal(overview.goals, 2);
+  });
+
+  it("Irankunda Australia: aggregateInternationalCareerTotals 18/6 matches Overview Player.*", () => {
+    const blocks = [
+      {
+        statistics: [
+          row(20, "Australia", 10, "Friendlies", 4, 1, 0),
+        ] as Stat,
+      },
+      {
+        statistics: [
+          row(20, "Australia", 30, "World Cup - Qualification Asia", 5, 1, 1),
+          row(20, "Australia", 1222, "FIFA Series", 2, 2, 0),
+          row(20, "Australia", 1, "World Cup", 4, 1, 0),
+          row(20, "Australia", 10, "Friendlies", 3, 1, 0),
+        ] as Stat,
+      },
+    ];
+    const career = aggregateInternationalCareerTotals(blocks, 20);
+    assert.equal(career.apps, 18);
+    assert.equal(career.goals, 6);
+    const overview = buildOverviewCareerBlock({
+      internationalDesk: true,
+      clubs: [
+        {
+          teamId: 20,
+          name: "Australia",
+          seasons: [2026, 2025],
+          apps: 18,
+          goals: 4,
+          assists: 2,
+          nationalTeam: true,
+        },
+      ],
+      playerFallback: {
+        appearances: career.apps,
+        goals: career.goals,
+        assists: career.assists,
+      },
+    });
+    assert.equal(overview.apps, 18);
+    assert.equal(overview.goals, 6);
+    assert.equal(overview.apps, career.apps);
+    assert.equal(overview.goals, career.goals);
   });
 });

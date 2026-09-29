@@ -70,3 +70,20 @@ That writes `Player.appearances` / `goals` / `assists` and sets
 `lockFromFeed` so the next fixture sync will not overwrite those stats.
 Clear with `"lockFromFeed": false` (and omit career* fields) when AF
 catches up and you want feed totals again.
+
+## Overview profile == pitch card (canonical source)
+
+On intl desks, **one** source owns CAPS / CAPS G / CAPS A:
+
+1. Sync writes `Player.appearances` / `goals` / `assists` via
+   `aggregateInternationalCareerTotals` (team pages, all senior comps **incl.
+   friendlies**, filtered to the desk NT `teamAfId`).
+2. Pitch cards read those `Player.*` fields.
+3. Overview Career block reads the **same** `Player.*` fields
+   (`playerFallback` in `buildOverviewCareerBlock`) — never sums
+   `career.clubs` NT stints (youth/other NTs double-count; `/players?id=`
+   rows can diverge from team-page tallies).
+
+Verified shapes: **Rayan (Brazil) 7 caps / 2 goals**; **Irankunda (Australia)
+18 caps / 6 goals**.
+

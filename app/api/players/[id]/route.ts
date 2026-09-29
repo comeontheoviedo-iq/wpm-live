@@ -447,25 +447,10 @@ export async function GET(
               // AF row shapes vary; helper only reads league.name/country
               pickPool as Parameters<typeof isNationalTeamCareerStint>[1]
             );
-            if (ntStint) {
-              // International stint: Player.appearances/G/A = career NT caps
-              // (all comps incl. friendlies). seasonRows filled later — apply
-              // after career aggregation below when available; for now use
-              // current-season NT incl. friendlies as a floor.
-              let apps = 0, goals = 0, assists = 0;
-              for (const s of pickPool) {
-                apps += s.games?.appearences ?? 0;
-                goals += s.goals?.total ?? 0;
-                assists += s.goals?.assists ?? 0;
-              }
-              if (apps > 0 || pickPool.length > 0) {
-                patch.appearances = apps;
-                patch.goals = goals;
-                patch.assists = assists;
-                patch.goalsAllComps = goals;
-                patch.assistsAllComps = assists;
-              }
-            } else {
+            // Intl NT: Player.appearances/G/A stay as sync career caps
+            // (aggregateInternationalCareerTotals). Never write current-season-only
+            // here — that diverged from pitch (e.g. Rayan WC 4 vs career 7).
+            if (!ntStint) {
               const totals = aggregateClubSeasonTotals(
                 statsAll as Parameters<typeof aggregateClubSeasonTotals>[0],
                 clubAf
@@ -659,12 +644,17 @@ export async function GET(
       }
 
       careerClubs = aggregateCareer(teams || [], seasonRows);
-      // Refresh Player.* from full career NT caps when this club is a national team
+      // Player.* career NT caps are canonical from sync (team-page
+      // aggregateInternationalCareerTotals). Only fill gaps when empty —
+      // never overwrite sync tallies with /players?id= seasonRows (can miss
+      // friendlies / diverge from pitch CAPS/G/A).
       if (clubAf != null) {
         const ntClub = careerClubs.find(
           (c) => c.teamId === clubAf && c.nationalTeam
         );
-        if (ntClub) {
+        const emptyCaps =
+          !player.appearances && !player.goals && !player.assists;
+        if (ntClub && emptyCaps) {
           const career = aggregateInternationalCareerTotals(
             seasonRows.map((b) => ({
               statistics: b.statistics as Parameters<
@@ -673,7 +663,7 @@ export async function GET(
             })),
             clubAf
           );
-          if (career.seasons > 0) {
+          if (career.seasons > 0 && (career.apps > 0 || career.goals > 0 || career.assists > 0)) {
             player = await prisma.player.update({
               where: { id: player.id },
               data: {

@@ -2,8 +2,15 @@
  * Overview Career block — surface existing career rows (apps/G/A + club history)
  * on the player dossier Overview tab for both club and international desks.
  *
- * Does not invent stats. Uses career.clubs from the player API (already
- * aggregated: NT stints include friendlies; club stints exclude them).
+ * Does not invent stats.
+ *
+ * International desks: CAPS/G/A come from ONE canonical source — Player.appearances /
+ * goals / assists (written by sync via aggregateInternationalCareerTotals: all senior
+ * NT comps incl. friendlies). Same numbers as pitch cards. Never sum career.clubs NT
+ * stints (youth/other NTs double-count; /players?id= rows can diverge from team-page
+ * career tallies).
+ *
+ * Club desks: sum non-NT career.clubs (ex-friendlies).
  * Overview notes stay Verdict-only; editing stays on Notes.
  */
 
@@ -46,14 +53,14 @@ function sumRows(rows: OverviewCareerClubRow[]): {
 }
 
 /**
- * Build the Overview Career summary from existing career club rows.
- * Intl desks → NT caps (friendlies already in row totals); club desks → club career.
- * Optional playerFallback is only used on intl desks when no NT stint rows exist
- * (Player.appearances/G/A are career caps there per INTL_CAPS).
+ * Build the Overview Career summary.
+ * Intl desks → Player.* career NT caps (identical to pitch CAPS/G/A).
+ * Club desks → sum club career stints.
  */
 export function buildOverviewCareerBlock(opts: {
   clubs: OverviewCareerClubRow[] | null | undefined;
   internationalDesk: boolean;
+  /** Canonical pitch/card totals — required path on intl desks. */
   playerFallback?: {
     appearances: number;
     goals: number;
@@ -61,33 +68,20 @@ export function buildOverviewCareerBlock(opts: {
   } | null;
 }): OverviewCareerBlock {
   const clubs = opts.clubs || [];
-  const ntRows = clubs.filter((c) => c.nationalTeam);
   const clubRows = clubs.filter((c) => !c.nationalTeam);
 
   if (opts.internationalDesk) {
-    const fromNt = ntRows.length > 0 ? sumRows(ntRows) : null;
     const fb = opts.playerFallback;
-    const useFb =
-      !fromNt &&
-      fb != null &&
-      (fb.appearances > 0 || fb.goals > 0 || fb.assists > 0);
-    const totals = fromNt
-      ? fromNt
-      : useFb
-        ? {
-            apps: fb!.appearances,
-            goals: fb!.goals,
-            assists: fb!.assists,
-          }
-        : null;
-    const hasTotals = totals != null;
+    // Always prefer Player.* when provided — even zeros — so profile == pitch card.
+    // Do not sum ntRows from career.clubs (divergent / double-counting).
+    const hasFb = fb != null;
     return {
-      hasData: hasTotals || clubRows.length > 0,
+      hasData: hasFb || clubRows.length > 0,
       appsLabel: "Caps",
       scopeHint: "international · incl. friendlies",
-      apps: hasTotals ? totals!.apps : null,
-      goals: hasTotals ? totals!.goals : null,
-      assists: hasTotals ? totals!.assists : null,
+      apps: hasFb ? fb!.appearances : null,
+      goals: hasFb ? fb!.goals : null,
+      assists: hasFb ? fb!.assists : null,
       clubHistory: clubRows,
     };
   }

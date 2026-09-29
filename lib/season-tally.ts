@@ -276,24 +276,17 @@ export function aggregateClubSeasonTotals(
   statistics: AfTopScorer["statistics"] | undefined,
   teamAfId?: number | null
 ): { apps: number; goals: number; assists: number; rowCount: number } {
-  const rows = clubRows(statistics, teamAfId);
-  let apps = 0;
-  let goals = 0;
-  let assists = 0;
-  for (const s of rows) {
-    if (isFriendlyCompetition(s.league?.name)) continue;
-    apps += s.games?.appearences ?? 0;
-    goals += s.goals?.total ?? 0;
-    assists += s.goals?.assists ?? 0;
-  }
-  return { apps, goals, assists, rowCount: rows.length };
+  return aggregateTeamSeasonTotals(statistics, teamAfId, {
+    includeFriendlies: false,
+  });
 }
 
 /** Aggregate goals/assists from an AF player statistics array for sync ingest. */
 export function aggregateForIngest(
   statistics: AfTopScorer["statistics"] | undefined,
   leagueId: number,
-  teamAfId?: number | null
+  teamAfId?: number | null,
+  opts?: { includeFriendlies?: boolean }
 ): {
   leagueGoals: number;
   leagueAssists: number;
@@ -313,11 +306,12 @@ export function aggregateForIngest(
     )[0] ||
     null;
 
+  const includeFriendlies = Boolean(opts?.includeFriendlies);
   let allGoals = 0;
   let allAssists = 0;
   let allApps = 0;
   for (const s of rows) {
-    if (isFriendlyCompetition(s.league?.name)) continue;
+    if (!includeFriendlies && isFriendlyCompetition(s.league?.name)) continue;
     allGoals += s.goals?.total ?? 0;
     allAssists += s.goals?.assists ?? 0;
     allApps += s.games?.appearences ?? 0;
@@ -332,4 +326,139 @@ export function aggregateForIngest(
     allApps,
     position: primary?.games?.position || rows[0]?.games?.position || null,
   };
+}
+
+/**
+ * Club European comps AF parks under country=World — never treat as international desks.
+ */
+const CLUB_WORLD_COMPETITION =
+  /champions\s*league|europa\s*league|conference\s*league|uefa\s*super\s*cup|fifa\s*club\s*world|club\s*world\s*cup|libertadores|sudamericana|recopa|leagues\s*cup|campeones\s*cup|emirates\s*cup/i;
+
+/**
+ * Named international tournaments / NT competitions (Nations League, World Cup,
+ * Euro, AFCON, Copa América, NT friendlies, etc.).
+ */
+const INTERNATIONAL_COMPETITION_NAME =
+  /world\s*cup|uefa\s*nations|nations\s*league|africa\s*cup|afcon|\beuro\b|european\s*championship|copa\s*am[eé]rica|asian\s*cup|gold\s*cup|olympics|olympic\s*games|confederations|african\s*nations|concacaf\s*nations|arab\s*cup|nations?\s*cup|qualification/i;
+
+/**
+ * Detect an INTERNATIONAL desk / fixture from AF league (or MatchDay competition).
+ * Club desks (domestic + UCL/UEL/etc.) stay false.
+ *
+ * Signals: named NT tournament; pure "Friendlies" (not "Friendlies Clubs");
+ * AF country World/International only when the name is not a club-world comp.
+ */
+export function isInternationalCompetition(opts: {
+  name?: string | null;
+  country?: string | null;
+  type?: string | null;
+}): boolean {
+  const name = (opts.name || "").trim();
+  if (!name) return false;
+  if (CLUB_WORLD_COMPETITION.test(name)) return false;
+  if (/friendlies\s*clubs/i.test(name)) return false;
+  if (INTERNATIONAL_COMPETITION_NAME.test(name)) return true;
+  // AF id ~10: "Friendlies" between national teams
+  if (/^friendl(?:y|ies)$/i.test(name)) return true;
+  const country = (opts.country || "").trim().toLowerCase();
+  if (
+    (country === "world" || country === "international") &&
+    !CLUB_WORLD_COMPETITION.test(name)
+  ) {
+    // World + Cup/League type with no club keywords — still require NT-ish name
+    // cues so random World cups for clubs don't slip through.
+    if (/nation|international|friendly|world\s*cup|\beuro\b|copa|afcon|gold\s*cup|asian/i.test(name)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Club-sounding tokens — used to avoid treating "Manchester United" as a country. */
+export function looksLikeClubTeamName(teamName?: string | null): boolean {
+  return /\b(fc|cf|sc|afc|united|city|athletic|rovers|wanderers|albion|hotspur|town|borough|sporting|racing|dynamo|lokomotiv)\b/i.test(
+    teamName || ""
+  );
+}
+
+/**
+ * Club season totals with optional friendlies.
+ * Default (includeFriendlies=false) preserves club-desk behaviour.
+ */
+export function aggregateTeamSeasonTotals(
+  statistics: AfTopScorer["statistics"] | undefined,
+  teamAfId?: number | null,
+  opts?: { includeFriendlies?: boolean }
+): { apps: number; goals: number; assists: number; rowCount: number } {
+  const rows = clubRows(statistics, teamAfId);
+  const includeFriendlies = Boolean(opts?.includeFriendlies);
+  let apps = 0;
+  let goals = 0;
+  let assists = 0;
+  for (const s of rows) {
+    if (!includeFriendlies && isFriendlyCompetition(s.league?.name)) continue;
+    apps += s.games?.appearences ?? 0;
+    goals += s.goals?.total ?? 0;
+    assists += s.goals?.assists ?? 0;
+  }
+  return { apps, goals, assists, rowCount: rows.length };
+}
+
+/**
+ * Sum career international caps / goals / assists across season blocks for one NT.
+ * INCLUDES friendlies. Only counts rows for teamAfId (required).
+ *
+ * Live +1 contract (intl desks): Player.* stores career caps so far (this match
+ * not yet counted). Prematch APP/CAPS = career; once LIVE and the player is on
+ * for this international match, liveAdjustedSeasonStat bumps +1 — same spirit
+ * as the locked club APP rule.
+ */
+export function aggregateInternationalCareerTotals(
+  seasonBlocks: {
+    statistics?: AfTopScorer["statistics"];
+  }[],
+  teamAfId: number
+): { apps: number; goals: number; assists: number; seasons: number } {
+  let apps = 0;
+  let goals = 0;
+  let assists = 0;
+  let seasons = 0;
+  for (const block of seasonBlocks) {
+    const t = aggregateTeamSeasonTotals(block.statistics, teamAfId, {
+      includeFriendlies: true,
+    });
+    if (t.rowCount <= 0) continue;
+    apps += t.apps;
+    goals += t.goals;
+    assists += t.assists;
+    seasons += 1;
+  }
+  return { apps, goals, assists, seasons };
+}
+
+/**
+ * Whether a career stint (team) should include friendlies in totals.
+ * True for national-team sides: team name maps like a country (and not a club
+ * token), or any of its rows are international competitions.
+ */
+export function isNationalTeamCareerStint(
+  teamName: string | null | undefined,
+  rows: {
+    league?: { name?: string | null; country?: string | null } | null;
+  }[]
+): boolean {
+  const name = (teamName || "").trim();
+  if (!name) return false;
+  if (looksLikeClubTeamName(name)) return false;
+  for (const r of rows) {
+    if (
+      isInternationalCompetition({
+        name: r.league?.name,
+        country: r.league?.country,
+      })
+    ) {
+      return true;
+    }
+  }
+  return false;
 }

@@ -282,6 +282,7 @@ function PitchCardToken({
   cardSettings = DEFAULT_FIELD_SETTINGS,
   markerPct = 0,
   matchStatus,
+  internationalDesk = false,
 }: {
   player: PitchPlayer;
   side: "home" | "away";
@@ -295,6 +296,8 @@ function PitchCardToken({
   markerPct?: number;
   /** Desk match status — used for live-adjusted season APP/G/A display. */
   matchStatus?: string;
+  /** International desk: APP/G/A show career caps (incl. friendlies). */
+  internationalDesk?: boolean;
 }) {
   const isHome = side === "home";
   const isGk =
@@ -377,27 +380,53 @@ function PitchCardToken({
   const valueFor = (id: CardStatField): StatTuple => {
     switch (id) {
       case "APP":
-        return [
-          "APP",
-          apps || "—",
-          matchApps > 0
-            ? "Season appearances (incl. today)"
-            : "Season appearances",
-        ];
+        return internationalDesk
+          ? [
+              "CAPS",
+              apps || "—",
+              matchApps > 0
+                ? "Career international caps (incl. today)"
+                : "Career international caps",
+            ]
+          : [
+              "APP",
+              apps || "—",
+              matchApps > 0
+                ? "Season appearances (incl. today)"
+                : "Season appearances",
+            ];
       case "S_GOL":
-        return [
-          "S GOL",
-          seasonG,
-          matchG > 0 ? "Season goals (incl. today)" : "Season goals",
-          matchG > 0,
-        ];
+        return internationalDesk
+          ? [
+              "CAPS G",
+              seasonG,
+              matchG > 0
+                ? "Career international goals (incl. today)"
+                : "Career international goals",
+              matchG > 0,
+            ]
+          : [
+              "S GOL",
+              seasonG,
+              matchG > 0 ? "Season goals (incl. today)" : "Season goals",
+              matchG > 0,
+            ];
       case "S_AST":
-        return [
-          "S AST",
-          seasonA,
-          matchA > 0 ? "Season assists (incl. today)" : "Season assists",
-          matchA > 0,
-        ];
+        return internationalDesk
+          ? [
+              "CAPS A",
+              seasonA,
+              matchA > 0
+                ? "Career international assists (incl. today)"
+                : "Career international assists",
+              matchA > 0,
+            ]
+          : [
+              "S AST",
+              seasonA,
+              matchA > 0 ? "Season assists (incl. today)" : "Season assists",
+              matchA > 0,
+            ];
       case "M_APP": {
         const mApp = player.matchApps ?? 0;
         return ["M APP", mApp || "—", "Appeared this match", mApp > 0];
@@ -783,6 +812,7 @@ export function PitchBoard({
   minute,
   minuteExtra,
   matchStatus,
+  internationalDesk = false,
   homeAbbr,
   awayAbbr,
   homeLogoUrl,
@@ -861,6 +891,8 @@ export function PitchBoard({
   /** AF stoppage/injury time (status.extra) when provided */
   minuteExtra?: number | null;
   matchStatus?: string;
+  /** When true, pitch APP/G/A labels become CAPS / CAPS G / CAPS A (career intl). */
+  internationalDesk?: boolean;
   homeAbbr?: string;
   awayAbbr?: string;
   homeLogoUrl?: string | null;
@@ -2088,6 +2120,7 @@ export function PitchBoard({
                     cardSettings={liveSettings}
                     markerPct={fittedMarkerPct}
                     matchStatus={matchStatus}
+                    internationalDesk={internationalDesk}
                   />
                 ) : (
                   <span

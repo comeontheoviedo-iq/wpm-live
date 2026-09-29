@@ -79,8 +79,10 @@ import { maybeReconcileNotesOnXiConfirm } from "./reconcile-notes-on-xi";
 import { namesLooselyMatch } from "./player-name";
 import {
   aggregateForIngest,
+  aggregateInternationalCareerTotals,
   buildGoalSeasonLines,
   fetchPlayerSeasonSplit,
+  isInternationalCompetition,
 } from "./season-tally";
 import { mapAfFixturePlayersToRows } from "./live-stat-triggers";
 
@@ -1484,8 +1486,13 @@ async function syncSeasonScorers(
   homeAfId: number,
   awayAfId: number,
   leagueId: number,
-  season: number
+  season: number,
+  leagueMeta?: { name?: string | null; country?: string | null }
 ) {
+  const internationalDesk = isInternationalCompetition({
+    name: leagueMeta?.name,
+    country: leagueMeta?.country,
+  });
   const clubByAf = new Map<number, string>([
     [homeAfId, homeClubId],
     [awayAfId, awayClubId],
@@ -1542,7 +1549,9 @@ async function syncSeasonScorers(
         ?.id ?? row.statistics?.[0]?.team?.id;
     const clubId = teamId && clubByAf.has(teamId) ? clubByAf.get(teamId)! : null;
     if (!clubId || !row.player?.id) return;
-    const agg = aggregateForIngest(row.statistics, leagueId, teamId);
+    const agg = aggregateForIngest(row.statistics, leagueId, teamId, {
+      includeFriendlies: internationalDesk,
+    });
     const saves = row.statistics?.find((s) => s.league?.id === leagueId)?.goals
       ?.saves ?? row.statistics?.[0]?.goals?.saves ?? 0;
     const conceded =
@@ -1568,12 +1577,19 @@ async function syncSeasonScorers(
       ),
       firstname: row.player.firstname || null,
       lastname: row.player.lastname || null,
-      // Competition (desk league) — do not take statistics[0] cup/UCL row alone
-      goals: Math.max(agg.leagueGoals || 0, prev?.goals || 0),
-      assists: Math.max(agg.leagueAssists || 0, prev?.assists || 0),
+      // Competition (desk league) — do not take statistics[0] cup/UCL row alone.
+      // International desks: APP/G/A are career NT caps (incl. friendlies); pitch
+      // live +1 still applies via liveAdjustedSeasonStat once LIVE and on.
+      goals: internationalDesk
+        ? Math.max(agg.allGoals || 0, prev?.goals || 0)
+        : Math.max(agg.leagueGoals || 0, prev?.goals || 0),
+      assists: internationalDesk
+        ? Math.max(agg.allAssists || 0, prev?.assists || 0)
+        : Math.max(agg.leagueAssists || 0, prev?.assists || 0),
       goalsAllComps: Math.max(agg.allGoals || 0, prev?.goalsAllComps || 0),
       assistsAllComps: Math.max(agg.allAssists || 0, prev?.assistsAllComps || 0),
-      // Club season apps (all comps, ex-friendlies). Prefer fresh AF — do not
+      // Club: season apps (all comps, ex-friendlies). Intl: NT apps incl. friendlies
+      // (career sum applied after prior-season scan). Prefer fresh AF — do not
       // Math.max with a sticky prior (that locked Leão/Nakamura prior-club dumps).
       apps: agg.allApps || 0,
       cleanSheets: prev?.cleanSheets || 0,
@@ -1598,6 +1614,74 @@ async function syncSeasonScorers(
 
   for (const row of tops) ingest(row);
   for (const row of teamPages) ingest(row);
+
+  // International desks: pitch APP/G/A = TOTAL CAREER international caps/goals
+  // (all comps incl. friendlies). Scan prior seasons via team pages (far fewer
+  // AF calls than per-player /players?id=).
+  if (internationalDesk) {
+    type SeasonBlock = { statistics: (typeof teamPages)[number]["statistics"] };
+    const blocksByPlayer = new Map<
+      number,
+      { teamId: number; blocks: SeasonBlock[] }
+    >();
+    function addBlock(
+      teamId: number,
+      playerId: number,
+      statistics: SeasonBlock["statistics"]
+    ) {
+      let entry = blocksByPlayer.get(playerId);
+      if (!entry) {
+        entry = { teamId, blocks: [] };
+        blocksByPlayer.set(playerId, entry);
+      }
+      entry.blocks.push({ statistics });
+    }
+    for (const row of teamPages) {
+      const teamId =
+        row.statistics?.find((s) => s.team?.id && clubByAf.has(s.team.id))?.team
+          ?.id ?? row.statistics?.[0]?.team?.id;
+      if (teamId == null || !row.player?.id) continue;
+      addBlock(teamId, row.player.id, row.statistics);
+    }
+    const priorYears = [
+      season - 1,
+      season - 2,
+      season - 3,
+      season - 4,
+      season - 5,
+      season - 6,
+      season - 7,
+    ].filter((y) => y >= 2000);
+    for (const teamId of [homeAfId, awayAfId]) {
+      for (const y of priorYears) {
+        const rows = await getPlayersByTeam(teamId, y, 1).catch(() => []);
+        if (!rows.length) continue;
+        // One page usually covers the NT squad depth we care about
+        for (const row of rows) {
+          if (!row.player?.id) continue;
+          addBlock(teamId, row.player.id, row.statistics);
+        }
+        if (rows.length >= 20) {
+          const page2 = await getPlayersByTeam(teamId, y, 2).catch(() => []);
+          for (const row of page2) {
+            if (!row.player?.id) continue;
+            addBlock(teamId, row.player.id, row.statistics);
+          }
+        }
+      }
+    }
+    for (const [apiId, entry] of blocksByPlayer) {
+      const career = aggregateInternationalCareerTotals(entry.blocks, entry.teamId);
+      const prev = byApi.get(apiId);
+      if (!prev) continue;
+      // Career caps so far (this match not counted — live +1 handles kickoff)
+      prev.apps = career.apps;
+      prev.goals = career.goals;
+      prev.assists = career.assists;
+      prev.goalsAllComps = career.goals;
+      prev.assistsAllComps = career.assists;
+    }
+  }
 
   // Team /players pages omit national-team rows; fetch /players?id= when we still
   // need NT detection (England-listed dual nationals) or missing birth country.
@@ -2527,7 +2611,11 @@ async function runSyncMatchFromApiFootball(
         homeAfId,
         awayAfId,
         fixture.league.id,
-        fixture.league.season
+        fixture.league.season,
+        {
+          name: fixture.league?.name,
+          country: fixture.league?.country,
+        }
       ).catch(() => ({ scorers: 0, keepers: 0 }));
 
   const events = await getEvents(match.apiFootballFixtureId).catch(() => []);

@@ -16,6 +16,9 @@ import { nationalityToIso } from "@/lib/flags";
 import {
   isFriendlyCompetition,
   aggregateClubSeasonTotals,
+  aggregateInternationalCareerTotals,
+  isInternationalCompetition,
+  isNationalTeamCareerStint,
 } from "@/lib/season-tally";
 import { resolvePersonAge } from "@/lib/person-age";
 import { rawTransferFeeFrom, resolveTransferFeeRaw } from "@/lib/transfer-fee";
@@ -78,6 +81,8 @@ type CareerClub = {
   apps: number;
   goals: number;
   assists: number;
+  /** True when this stint is a national team (friendlies counted in totals). */
+  nationalTeam?: boolean;
 };
 
 function aggregateCareer(
@@ -85,6 +90,7 @@ function aggregateCareer(
   seasonRows: { season: number; statistics: AfStatRow[] }[]
 ): CareerClub[] {
   const byId = new Map<number, CareerClub>();
+  const rowsByTeam = new Map<number, AfStatRow[]>();
   for (const t of teams) {
     byId.set(t.team.id, {
       teamId: t.team.id,
@@ -94,7 +100,9 @@ function aggregateCareer(
       apps: 0,
       goals: 0,
       assists: 0,
+      nationalTeam: false,
     });
+    rowsByTeam.set(t.team.id, []);
   }
   for (const block of seasonRows) {
     for (const s of block.statistics || []) {
@@ -112,16 +120,37 @@ function aggregateCareer(
           apps: 0,
           goals: 0,
           assists: 0,
+          nationalTeam: false,
         };
         if (id != null) byId.set(id, row);
         else byId.set(key, row);
+      }
+      if (id != null) {
+        const list = rowsByTeam.get(id) || [];
+        list.push(s);
+        rowsByTeam.set(id, list);
       }
       if (block.season && !row.seasons.includes(block.season)) {
         row.seasons.push(block.season);
         row.seasons.sort((a, b) => b - a);
       }
-      // Season club totals exclude friendlies
-      if (isFriendlyCompetition(s.league?.name)) continue;
+    }
+  }
+  // Mark NT stints, then sum (NT includes friendlies; clubs exclude).
+  for (const row of byId.values()) {
+    const tid = row.teamId;
+    const collected = tid != null ? rowsByTeam.get(tid) || [] : [];
+    row.nationalTeam = isNationalTeamCareerStint(row.name, collected);
+  }
+  for (const block of seasonRows) {
+    for (const s of block.statistics || []) {
+      const id = s.team?.id;
+      const name = s.team?.name?.trim();
+      if (!name) continue;
+      const key = id ?? -Math.abs(hashName(name));
+      const row = (id != null ? byId.get(id) : byId.get(key)) || null;
+      if (!row) continue;
+      if (isFriendlyCompetition(s.league?.name) && !row.nationalTeam) continue;
       row.apps += s.games?.appearences ?? 0;
       row.goals += s.goals?.total ?? 0;
       row.assists += s.goals?.assists ?? 0;
@@ -209,6 +238,7 @@ export async function GET(
   let afStats: unknown = null;
   let afStub: string | null = null;
   let careerClubs: CareerClub[] = [];
+  let internationalDesk = false;
   let careerSeasons: {
     season: number;
     competitions: {
@@ -412,14 +442,42 @@ export async function GET(
             if (Number.isFinite(n)) patch.rating = n;
           }
           if (clubAf != null && pickPool.length) {
-            const totals = aggregateClubSeasonTotals(statsAll, clubAf);
-            // Club season apps (all comps, ex-friendlies) — truthful "this season"
-            if (totals.rowCount > 0) {
-              patch.appearances = totals.apps;
-              // Keep competition G/A on Player.* aligned with sync league rows when
-              // present; still refresh all-comp mirrors for dossier consumers.
-              patch.goalsAllComps = totals.goals;
-              patch.assistsAllComps = totals.assists;
+            const ntStint = isNationalTeamCareerStint(
+              pickPool[0]?.team?.name || player.club?.name,
+              // AF row shapes vary; helper only reads league.name/country
+              pickPool as Parameters<typeof isNationalTeamCareerStint>[1]
+            );
+            if (ntStint) {
+              // International stint: Player.appearances/G/A = career NT caps
+              // (all comps incl. friendlies). seasonRows filled later — apply
+              // after career aggregation below when available; for now use
+              // current-season NT incl. friendlies as a floor.
+              let apps = 0, goals = 0, assists = 0;
+              for (const s of pickPool) {
+                apps += s.games?.appearences ?? 0;
+                goals += s.goals?.total ?? 0;
+                assists += s.goals?.assists ?? 0;
+              }
+              if (apps > 0 || pickPool.length > 0) {
+                patch.appearances = apps;
+                patch.goals = goals;
+                patch.assists = assists;
+                patch.goalsAllComps = goals;
+                patch.assistsAllComps = assists;
+              }
+            } else {
+              const totals = aggregateClubSeasonTotals(
+                statsAll as Parameters<typeof aggregateClubSeasonTotals>[0],
+                clubAf
+              );
+              // Club season apps (all comps, ex-friendlies) — truthful "this season"
+              if (totals.rowCount > 0) {
+                patch.appearances = totals.apps;
+                // Keep competition G/A on Player.* aligned with sync league rows when
+                // present; still refresh all-comp mirrors for dossier consumers.
+                patch.goalsAllComps = totals.goals;
+                patch.assistsAllComps = totals.assists;
+              }
             }
           }
         }
@@ -561,9 +619,17 @@ export async function GET(
         try {
           const m = await prisma.match.findUnique({
             where: { id: matchId },
-            include: { homeClub: true, awayClub: true },
+            include: {
+              homeClub: true,
+              awayClub: true,
+              matchDay: { select: { competition: true } },
+            },
           });
           if (m) {
+            internationalDesk = isInternationalCompetition({
+              name: (m as { matchDay?: { competition?: string } }).matchDay
+                ?.competition,
+            });
             const isHome = m.homeClubId === player.clubId;
             opponentClub = {
               id: isHome ? m.awayClub.id : m.homeClub.id,
@@ -593,6 +659,39 @@ export async function GET(
       }
 
       careerClubs = aggregateCareer(teams || [], seasonRows);
+      // Refresh Player.* from full career NT caps when this club is a national team
+      if (clubAf != null) {
+        const ntClub = careerClubs.find(
+          (c) => c.teamId === clubAf && c.nationalTeam
+        );
+        if (ntClub) {
+          const career = aggregateInternationalCareerTotals(
+            seasonRows.map((b) => ({
+              statistics: b.statistics as Parameters<
+                typeof aggregateInternationalCareerTotals
+              >[0][number]["statistics"],
+            })),
+            clubAf
+          );
+          if (career.seasons > 0) {
+            player = await prisma.player.update({
+              where: { id: player.id },
+              data: {
+                appearances: career.apps,
+                goals: career.goals,
+                assists: career.assists,
+                goalsAllComps: career.goals,
+                assistsAllComps: career.assists,
+              },
+              include: {
+                club: true,
+                scorers: { orderBy: { rank: "asc" }, take: 5 },
+                keepers: { orderBy: { rank: "asc" }, take: 5 },
+              },
+            });
+          }
+        }
+      }
       careerSeasons = seasonRows
         .map((block) => {
           const competitions = (block.statistics || []).map((s) => {
@@ -741,6 +840,7 @@ export async function GET(
     matchPlayerStats,
     trophies,
     opponentClub,
+    internationalDesk,
     clubLogoUrl: player.club.apiFootballTeamId
       ? `https://media.api-sports.io/football/teams/${player.club.apiFootballTeamId}.png`
       : null,

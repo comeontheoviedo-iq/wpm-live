@@ -269,7 +269,7 @@ function classifySection(heading: string): {
     return { kind: "skip" };
   }
   if (
-    /\bmanagers?\b|manager\s*profile|touchline|head\s+coaches?|dugout|co-?coaches?|\bmanager\s*[:—–-]/i.test(
+    /\bmanagers?\b|manager\s*profile|touchline|head\s+coach(?:es)?|dugout|co-?coaches?|\bmanager\s*[:—–-]/i.test(
       h
     )
   ) {
@@ -491,9 +491,13 @@ export function splitHookBullets(text: string): { title: string; body: string }[
 function clubSideFromHeading(
   heading: string,
   homeName: string,
-  awayName: string
+  awayName: string,
+  body?: string | null
 ): "home" | "away" | null {
-  const h = normalizePlayerKey(heading);
+  const h = normalizePlayerKey(
+    body ? `${heading}
+${String(body).slice(0, 500)}` : heading
+  );
   const homeN = normalizePlayerKey(homeName);
   const awayN = normalizePlayerKey(awayName);
   const homeHit =
@@ -505,6 +509,28 @@ function clubSideFromHeading(
   if (homeHit && !awayHit) return "home";
   if (awayHit && !homeHit) return "away";
   return null;
+}
+
+/** Person-shaped heading (e.g. Tony Popovic) — used when Manager Profiles children omit "manager". */
+function looksLikePersonNameHeading(heading: string): boolean {
+  const cleaned = cleanPlayerHeading(heading);
+  if (!cleaned || cleaned.length < 4 || cleaned.length > 60) return false;
+  if (/\b(manager|coach|profile|part\s+[ivx]+|section)\b/i.test(cleaned)) {
+    // Still allow "Manager Profile: Name" — handled by classify; here we want bare names
+    if (!/manager\s+profile\s*:/i.test(heading)) return false;
+  }
+  // Two+ name tokens, no long tactical sentence
+  const tokens = cleaned.split(/\s+/).filter(Boolean);
+  if (tokens.length < 2 || tokens.length > 5) return false;
+  if (/[,:;]/.test(cleaned)) return false;
+  return /^[\p{L}.'’-]+(?:\s+[\p{L}.'’-]+)+$/u.test(cleaned);
+}
+
+function bodyMentionsManagerRole(heading: string, body: string): boolean {
+  // coach(?:es)? — NOT coaches? (that is "coache" + optional s)
+  return /\b(managers?|head\s+coach(?:es)?|touchline|dugout|coaching\s+staff|tecnico|seleccionador)\b/i.test(
+    `${heading}\n${body.slice(0, 400)}`
+  );
 }
 
 export type OrganiseArgs = {
@@ -673,6 +699,35 @@ export function organiseNotebookPack(args: OrganiseArgs): OrganisedPack {
     ) {
       if (/lineup|team sheets|sidelined/i.test(heading)) kind = "lineup";
     }
+    // International / Notebook: "Manager Profiles" container is skipped, then
+    // children are bare coach names ("Tony Popovic") with no "manager" keyword.
+    // Promote those to manager so they attach like player bios — club desks too.
+    if (kind === "other" || kind === "skip" || kind === "player") {
+      const probeSide = clubSideFromHeading(
+        heading,
+        homeClub.name,
+        awayClub.name,
+        body
+      );
+      const coachProbe = matchAllCoaches(
+        heading,
+        body,
+        coaches,
+        probeSide,
+        homeClub.id,
+        awayClub.id
+      );
+      if (coachProbe.length && body.length >= 40) {
+        kind = "manager";
+      } else if (
+        body.length >= 40 &&
+        (looksLikePersonNameHeading(heading) || bodyMentionsManagerRole(heading, body)) &&
+        bodyMentionsManagerRole(heading, body)
+      ) {
+        kind = "manager";
+      }
+    }
+
     const chunk = `## ${heading}\n${body}`.trim();
 
     switch (kind) {
@@ -705,7 +760,12 @@ export function organiseNotebookPack(args: OrganiseArgs): OrganisedPack {
         if (body.length >= 20) refereeChunks.push(chunk);
         break;
       case "manager": {
-        const side = clubSideFromHeading(heading, homeClub.name, awayClub.name);
+        const side = clubSideFromHeading(
+          heading,
+          homeClub.name,
+          awayClub.name,
+          body
+        );
         const hits = matchAllCoaches(
           heading,
           body,
@@ -729,20 +789,9 @@ export function organiseNotebookPack(args: OrganiseArgs): OrganisedPack {
         } else if (body.length >= 40) {
           // Fall back when coach row missing — prefer side synthetic coach id
           // so desk cards with home-coach / away-coach still resolve.
-          let resolvedSide: "home" | "away" | null = side;
-          if (!resolvedSide) {
-            const bn = normalizePlayerKey(`${heading}\n${body.slice(0, 400)}`);
-            const homeTok = normalizePlayerKey(homeClub.name)
-              .split(" ")
-              .filter((t) => t.length >= 4);
-            const awayTok = normalizePlayerKey(awayClub.name)
-              .split(" ")
-              .filter((t) => t.length >= 4);
-            const homeHit = homeTok.some((t) => bn.includes(t));
-            const awayHit = awayTok.some((t) => bn.includes(t));
-            if (awayHit && !homeHit) resolvedSide = "away";
-            else if (homeHit && !awayHit) resolvedSide = "home";
-          }
+          let resolvedSide: "home" | "away" | null =
+            side ||
+            clubSideFromHeading(heading, homeClub.name, awayClub.name, body);
           const club =
             resolvedSide === "away"
               ? awayClub
@@ -750,9 +799,15 @@ export function organiseNotebookPack(args: OrganiseArgs): OrganisedPack {
                 ? homeClub
                 : homeClub;
           const synthSide = resolvedSide || "home";
-          const label = cleanPlayerHeading(heading).slice(0, 60) || club.name;
+          const person = cleanPlayerHeading(heading).slice(0, 60);
+          const label = person || club.name;
+          // Title leads with person name so noteMatchesCoachCard nameHit works
+          // when desk later gains a real Coach row (Popovic / Ancelotti).
+          const title = person
+            ? `${person} — Coach`
+            : `Manager — ${label}`;
           notes.push({
-            title: `Manager — ${label}`,
+            title,
             body,
             category: "Bio",
             entityType: "coach",
@@ -760,7 +815,7 @@ export function organiseNotebookPack(args: OrganiseArgs): OrganisedPack {
           });
           // Also keep a club-linked copy for MANAGERS / club dossier
           notes.push({
-            title: `Manager — ${label}`,
+            title,
             body,
             category: "Bio",
             entityType: "club",

@@ -112,6 +112,7 @@ type DossierPayload = {
       apps: number;
       goals: number;
       assists: number;
+      nationalTeam?: boolean;
     }[];
     seasons: {
       season: number;
@@ -169,6 +170,7 @@ type DossierPayload = {
   trophies?: { league: string; season?: string | null; place?: string | null }[];
   opponentClub?: { id: string; name: string; shortName: string; apiFootballTeamId: number | null } | null;
   clubLogoUrl?: string | null;
+  internationalDesk?: boolean;
 };
 
 /** Craft tabs — map legacy Profile/Today/Statistics/Bio/… into these four. */
@@ -437,6 +439,7 @@ export function PlayerDossier({
     if (!activeCareerClub) return careerSeasons;
     const tid = activeCareerClub.teamId;
     const name = (activeCareerClub.name || "").trim().toLowerCase();
+    const includeFriendlies = Boolean(activeCareerClub.nationalTeam);
     const out: typeof careerSeasons = [];
     for (const block of careerSeasons) {
       const competitions = block.competitions.filter((c) => {
@@ -444,11 +447,14 @@ export function PlayerDossier({
         return (c.team || "").trim().toLowerCase() === name;
       });
       if (!competitions.length) continue;
-      const competitive = competitions.filter((c) => !c.friendly);
+      // NT stints: caps include friendlies. Club stints: ex-friendlies.
+      const counted = includeFriendlies
+        ? competitions
+        : competitions.filter((c) => !c.friendly);
       const sum = (key: "apps" | "goals" | "assists" | "minutes") => {
         let n = 0;
         let any = false;
-        for (const c of competitive) {
+        for (const c of counted) {
           const v = c[key];
           if (v != null) {
             n += v;
@@ -460,7 +466,7 @@ export function PlayerDossier({
       out.push({
         ...block,
         competitions,
-        total: competitive.length
+        total: counted.length
           ? {
               apps: sum("apps"),
               goals: sum("goals"),
@@ -475,6 +481,12 @@ export function PlayerDossier({
 
   // Overview "this season" = active club (usually current), not NT + all clubs.
   const overviewSeasonBlock = clubSeasonBlocks[0] || null;
+  const intlCapsView =
+    Boolean(data?.internationalDesk) || Boolean(activeCareerClub?.nationalTeam);
+  const appsLabel = intlCapsView ? "Caps" : "Apps";
+  const seasonTotalHint = intlCapsView
+    ? " · international · incl. friendlies"
+    : " · club · ex-friendlies";
 
   const bioNotes = notesList.filter(
     (n) =>
@@ -908,7 +920,7 @@ export function PlayerDossier({
                   {isGk ? (
                     <>
                       <Kv
-                        label="Apps"
+                        label={appsLabel}
                         value={
                           p.seasonKeeper?.appearances != null
                             ? String(p.seasonKeeper.appearances)
@@ -975,7 +987,7 @@ export function PlayerDossier({
                         }
                       />
                       <Kv
-                        label="Apps"
+                        label={appsLabel}
                         value={
                           p.appearances
                             ? String(p.appearances)
@@ -1026,7 +1038,7 @@ export function PlayerDossier({
                             {isGk
                               ? ""
                               : ` · ${overviewSeasonBlock.total.goals ?? 0}G · ${overviewSeasonBlock.total.assists ?? 0}A`}
-                            <span className="text-[#64748b]"> · club · ex-friendlies</span>
+                            <span className="text-[#64748b]">{seasonTotalHint}</span>
                           </span>
                         </div>
                       ) : null}
@@ -1205,6 +1217,7 @@ export function PlayerDossier({
                         competitions={block.competitions}
                         total={block.total ?? null}
                         isGk={isGk}
+                        includeFriendlies={Boolean(activeCareerClub?.nationalTeam)}
                       />
                     </Section>
                   ))
@@ -1590,6 +1603,7 @@ function SeasonCompTable({
   competitions,
   total,
   isGk,
+  includeFriendlies = false,
 }: {
   competitions: CompRow[];
   total: {
@@ -1599,6 +1613,7 @@ function SeasonCompTable({
     minutes: number | null;
   } | null;
   isGk: boolean;
+  includeFriendlies?: boolean;
 }) {
   if (!competitions.length) {
     return (
@@ -1612,7 +1627,7 @@ function SeasonCompTable({
           <tr>
             <th>Comp</th>
             <th>Team</th>
-            <th>App</th>
+            <th>{includeFriendlies ? "Caps" : "App"}</th>
             {!isGk ? <th>G</th> : null}
             {!isGk ? <th>A</th> : null}
             <th>Min</th>
@@ -1644,7 +1659,9 @@ function SeasonCompTable({
           {total ? (
             <tr className="season-total-row" data-season-total="1">
               <td className="font-bold text-[#e2e8f0]">TOTAL</td>
-              <td className="muted text-[10px]">ex-friendlies</td>
+              <td className="muted text-[10px]">
+                {includeFriendlies ? "incl. friendlies" : "ex-friendlies"}
+              </td>
               <td className="font-bold">{total.apps ?? "—"}</td>
               {!isGk ? (
                 <td className="font-bold">{total.goals ?? "—"}</td>

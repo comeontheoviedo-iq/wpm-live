@@ -78,7 +78,12 @@ import { VerdictBlock } from "@/components/match/verdict-block";
 import { namesLooselyMatch, parseSubDescription } from "@/lib/player-name";
 import { cn } from "@/lib/utils";
 import { formatLiveClock } from "@/lib/live-clock";
-import { ordinal, seasonOrdinal, matchHasStarted } from "@/lib/season-tally";
+import {
+  ordinal,
+  seasonOrdinal,
+  matchHasStarted,
+  isInternationalCompetition,
+} from "@/lib/season-tally";
 import { bindDeskHotkeys } from "@/lib/desk-hotkeys";
 import {
   loadDeskDensity,
@@ -512,6 +517,7 @@ export function MatchDesk({
   playerOverrides?: PlayerOverrideRow[];
 }) {
   const router = useRouter();
+  const internationalDesk = isInternationalCompetition({ name: competition });
   const [selected, setSelected] = useState<SquadPlayer | null>(null);
   const [placing, setPlacing] = useState<SquadPlayer | null>(null);
   const [busy, setBusy] = useState(false);
@@ -2051,11 +2057,19 @@ export function MatchDesk({
                 const seasonBits = onP
                   ? [
                       onP.appearances != null
-                        ? `${onP.appearances} season apps`
+                        ? internationalDesk
+                          ? `${onP.appearances} caps`
+                          : `${onP.appearances} season apps`
                         : null,
-                      onP.goals != null ? `${onP.goals} season goals` : null,
+                      onP.goals != null
+                        ? internationalDesk
+                          ? `${onP.goals} international goals`
+                          : `${onP.goals} season goals`
+                        : null,
                       onP.assists != null
-                        ? `${onP.assists} season assists`
+                        ? internationalDesk
+                          ? `${onP.assists} international assists`
+                          : `${onP.assists} season assists`
                         : null,
                     ].filter(Boolean)
                   : [];
@@ -3672,6 +3686,7 @@ export function MatchDesk({
               minute={liveMinute}
               minuteExtra={liveMinuteExtra}
               matchStatus={status}
+              internationalDesk={internationalDesk}
               homeAbbr={homeAbbr || homeName}
               awayAbbr={awayAbbr || awayName}
               homeLogoUrl={homeLogoUrl}

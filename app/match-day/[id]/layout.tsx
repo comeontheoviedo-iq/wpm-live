@@ -41,7 +41,10 @@ export default async function MatchDayLayout({
   return (
     <div className="min-h-dvh bg-[var(--background)] pb-0 text-[var(--foreground)]">
       <AppHeader user={user} matchId={match.id} />
-      <div className="desk-chrome relative overflow-hidden bg-[var(--surface)]">
+      <div
+        data-match-lifecycle
+        className="desk-chrome relative overflow-hidden bg-[var(--surface)]"
+      >
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(20,184,166,0.06),transparent_45%),radial-gradient(ellipse_at_top_right,rgba(225,29,72,0.04),transparent_40%)]"
@@ -87,7 +90,12 @@ export default async function MatchDayLayout({
       </div>
       <div className="flex min-h-0 w-full items-stretch">
         <MatchSidebar matchId={match.id} />
-        <div className="min-w-0 flex-1 px-2 py-1.5 sm:px-3">{children}</div>
+        <div
+          data-match-desk-pad
+          className="min-w-0 flex-1 px-2 py-1.5 sm:px-3"
+        >
+          {children}
+        </div>
       </div>
     </div>
   );

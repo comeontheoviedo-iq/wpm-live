@@ -15,6 +15,7 @@ import {
   Info,
   Maximize2,
   Minimize2,
+  MoreHorizontal,
   X,
   Pin,
   SlidersHorizontal,
@@ -758,6 +759,7 @@ export function MatchDesk({
   const [intelOpen, setIntelOpen] = useState(false);
   const [flashEventIds, setFlashEventIds] = useState<string[]>([]);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [fullMoreOpen, setFullMoreOpen] = useState(false);
   const deskRootRef = useRef<HTMLDivElement>(null);
   const [fieldSettings, setFieldSettings] = useState<FieldSettings>(
     DEFAULT_FIELD_SETTINGS
@@ -864,6 +866,21 @@ export function MatchDesk({
       );
     };
   }, []);
+
+  // Stamp html so page chrome (AppHeader / lifecycle / left nav) can hide via CSS
+  // while Compact density stays independent of Full.
+  useEffect(() => {
+    const root = document.documentElement;
+    if (isFullscreen) {
+      root.dataset.deskFullscreen = "1";
+    } else {
+      delete root.dataset.deskFullscreen;
+      setFullMoreOpen(false);
+    }
+    return () => {
+      delete root.dataset.deskFullscreen;
+    };
+  }, [isFullscreen]);
 
   useEffect(() => {
     setFieldSettings(loadFieldSettings());
@@ -2653,9 +2670,11 @@ export function MatchDesk({
   return (
     <div
       ref={deskRootRef}
+      data-desk-root
       data-desk-mode={deskMode}
       data-desk-density={deskDensity}
       data-desk-fit={fitPitch ? "1" : undefined}
+      data-desk-fullscreen={isFullscreen ? "1" : undefined}
       className={cn(
         "relative flex flex-col gap-1.5 bg-[var(--background)] text-[var(--foreground)]",
         deskMode === "onair" && "onair-desk",
@@ -2664,40 +2683,412 @@ export function MatchDesk({
           ? cn(
               // Fit: header→viewport bottom, never scrolls; pitch flexes.
               "overflow-hidden h-[calc(100dvh-var(--desk-top,10.25rem))] max-h-[100dvh] min-h-[240px]",
-              isFullscreen && "p-1.5"
+              isFullscreen && "p-1 gap-1 h-dvh max-h-dvh min-h-0"
             )
           : cn(
               // Fit OFF (legacy): Full mode scrolls so big tokens stay reachable.
               isFullscreen ? "overflow-y-auto overflow-x-hidden" : "overflow-hidden",
               isFullscreen
-                ? "h-[calc(100dvh-7.75rem)] max-h-[100dvh] min-h-0 p-1.5"
+                ? "h-dvh max-h-dvh min-h-0 p-1 gap-1"
                 : "h-[calc(100dvh-10.25rem)] max-h-[100dvh] min-h-[380px]"
             )
       )}
     >
-      {/* Slim top bar — score / meta / stats / actions · broadcast desk chrome */}
-      <header className="desk-header shrink-0 flex flex-wrap items-center gap-x-2 gap-y-0.5 px-2 py-1" data-desk-chrome="1">
+      {/* Slim top bar — immersive Full = one ~44px row; normal keeps full chrome */}
+      <header
+        className={cn(
+          "desk-header shrink-0 flex items-center gap-x-2 px-2",
+          isFullscreen
+            ? "h-11 flex-nowrap gap-y-0 overflow-visible py-0"
+            : "flex-wrap gap-y-0.5 py-1"
+        )}
+        data-desk-chrome="1"
+      >
         {isFullscreen ? (
-          <nav className="flex w-full flex-wrap items-center gap-1 border-b border-white/10 pb-1 mb-0.5" aria-label="Match sections">
-            {[
-              ["", "Desk"],
-              ["packs", "Research"],
-              ["scripts", "Scripts"],
-              ["notes", "Notes"],
-              ["league", "League"],
-              ["news", "News"],
-              ["stats", "Stats"],
-            ].map(([slug, label]) => (
-              <Link
-                key={slug || "desk"}
-                href={slug ? `/match-day/${matchId}/${slug}` : `/match-day/${matchId}`}
-                className="rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-300 hover:bg-white/10 hover:text-white"
+          <>
+            <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+              <span className="truncate text-[13px] font-semibold tracking-tight text-slate-100">
+                {homeName}{" "}
+                <span className="font-normal text-slate-500">vs</span>{" "}
+                {awayName}
+              </span>
+              <span
+                className={cn(
+                  "shrink-0 font-black tabular-nums text-[13px] tracking-tight",
+                  status === "Live" ? "text-[var(--live)]" : "text-slate-100"
+                )}
               >
-                {label}
-              </Link>
-            ))}
-          </nav>
-        ) : null}
+                {status === "Live" && clockLabel ? `${clockLabel} ` : ""}
+                {homeScore}–{awayScore}
+              </span>
+              {status === "Live" ? (
+                <span className="shrink-0 rounded-sm bg-[var(--live)] px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-white">
+                  LIVE
+                </span>
+              ) : status === "Half Time" ? (
+                <span className="shrink-0 rounded-sm bg-amber-500/90 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-black">
+                  HT
+                </span>
+              ) : (
+                <span className="shrink-0 truncate text-[10px] font-medium text-slate-500">
+                  {status}
+                </span>
+              )}
+            </div>
+            <div className="relative flex shrink-0 items-center gap-1">
+              <button
+                type="button"
+                className="desk-btn border-amber-400/50 text-amber-100"
+                onClick={() => void toggleFullscreen()}
+                title="Exit fullscreen (Esc)"
+                aria-pressed={true}
+              >
+                <Minimize2 className="h-3 w-3" />
+                Exit Full
+              </button>
+              <AskReportButton
+                deskBtn
+                deskContext={{
+                  matchId,
+                  matchTitle: `${homeName} vs ${awayName}`,
+                  afFixtureId: apiFootballFixtureId,
+                  lineupSource: lineupStatus,
+                  competition,
+                  status,
+                }}
+              />
+              <Button
+                size="sm"
+                variant="secondary"
+                className="h-7 px-2 text-[11px]"
+                disabled={busy || !apiFootballFixtureId}
+                onClick={() => sync(false)}
+              >
+                <RefreshCw className={cn("h-3 w-3 mr-1", busy && "animate-spin")} />
+                Sync
+              </Button>
+              <button
+                type="button"
+                className={cn(
+                  "desk-btn",
+                  fullMoreOpen && "border-amber-400/60 bg-amber-500/10"
+                )}
+                onClick={() => setFullMoreOpen((v) => !v)}
+                aria-expanded={fullMoreOpen}
+                aria-haspopup="menu"
+                title="More desk actions"
+              >
+                <MoreHorizontal className="h-3 w-3" />
+                More
+              </button>
+              {fullMoreOpen ? (
+                <>
+                  <button
+                    type="button"
+                    className="fixed inset-0 z-40 cursor-default"
+                    aria-label="Close more menu"
+                    onClick={() => setFullMoreOpen(false)}
+                  />
+                  <div
+                    role="menu"
+                    className="absolute right-0 top-full z-50 mt-1 max-h-[min(80vh,32rem)] w-[min(92vw,22rem)] overflow-y-auto rounded-md border border-white/10 bg-[#10141a] p-2 shadow-xl"
+                  >
+                    <div className="mb-1.5 px-1 text-[9px] font-bold uppercase tracking-wider text-slate-500">
+                      Lineup
+                    </div>
+                    <div className="mb-2 flex flex-wrap gap-1 px-0.5">
+                      <LineupFeedControls
+                        matchId={matchId}
+                        xiFeedFrozen={xiFeedFrozen}
+                        xiFeedFrozenReason={xiFeedFrozenReason}
+                        isOwner={isDeskOwner}
+                        onChanged={() => {
+                          setFullMoreOpen(false);
+                          router.refresh();
+                        }}
+                        homeName={homeName}
+                        awayName={awayName}
+                        kickoffAt={kickoffAt}
+                        apiFootballFixtureId={apiFootballFixtureId}
+                        lineupStatus={lineupStatus}
+                        lineupSource={lineupSource}
+                        lineupSourceMeta={lineupSourceMeta}
+                        lastFeedSyncAt={lastFeedSyncAt}
+                        homeStarters={homeStarterCount}
+                        awayStarters={awayStarterCount}
+                        matchStatus={status}
+                      />
+                    </div>
+                    <div className="mb-1.5 border-t border-white/10 pt-1.5 px-1 text-[9px] font-bold uppercase tracking-wider text-slate-500">
+                      Desk tools
+                    </div>
+                    <div className="flex flex-col gap-0.5">
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="desk-btn w-full justify-start"
+                        onClick={() => {
+                          setFullMoreOpen(false);
+                          setIntelOpen(true);
+                        }}
+                      >
+                        <Info className="h-3 w-3" /> Intel
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="desk-btn w-full justify-start"
+                        onClick={() => {
+                          setFullMoreOpen(false);
+                          setIntelHistoryOpen((v) => !v);
+                        }}
+                      >
+                        <History className="h-3 w-3" /> History
+                        {intelHistory.length > 0 ? (
+                          <span className="tabular-nums text-slate-500">{intelHistory.length}</span>
+                        ) : null}
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className={cn(
+                          "desk-btn desk-btn-live w-full justify-start",
+                          onAirMode && "is-active"
+                        )}
+                        onClick={() => {
+                          setFullMoreOpen(false);
+                          setOnAirMode((v) => !v);
+                        }}
+                      >
+                        <Radio className="h-3 w-3" />
+                        {onAirMode ? "On-air ON" : "On-air"}
+                        <span className="tabular-nums">{events.length}</span>
+                      </button>
+                      <Link
+                        href={`/match-day/${matchId}/packs`}
+                        role="menuitem"
+                        className="desk-btn desk-btn-accent w-full justify-start"
+                        onClick={() => setFullMoreOpen(false)}
+                      >
+                        <Sparkles className="h-3 w-3" />
+                        Research{packCount ? ` (${packCount})` : ""}
+                      </Link>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="desk-btn w-full justify-start"
+                        disabled={!leaguePosterExists}
+                        onClick={() => {
+                          setFullMoreOpen(false);
+                          openLeaguePoster();
+                        }}
+                      >
+                        <Trophy className="h-3 w-3" /> LEAGUE
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="desk-btn w-full justify-start"
+                        disabled={!hooksPosterExists}
+                        onClick={() => {
+                          setFullMoreOpen(false);
+                          openHooksPoster();
+                        }}
+                      >
+                        <LayoutTemplate className="h-3 w-3" /> HOOKS
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="desk-btn w-full justify-start"
+                        onClick={() => {
+                          setFullMoreOpen(false);
+                          openDataVizFromNotes();
+                        }}
+                      >
+                        <BarChart3 className="h-3 w-3" /> DATA VIZ
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="desk-btn w-full justify-start"
+                        disabled={!statistics.length && !events.length}
+                        onClick={() => {
+                          setFullMoreOpen(false);
+                          setStatsOverlayOpen(true);
+                        }}
+                      >
+                        <Target className="h-3 w-3" /> STATS
+                      </button>
+                      {!apiFootballFixtureId ? (
+                        <Link
+                          href={`/match-day/${matchId}/prep`}
+                          role="menuitem"
+                          className="desk-btn w-full justify-start"
+                          onClick={() => setFullMoreOpen(false)}
+                        >
+                          <Link2 className="h-3 w-3" /> Link
+                        </Link>
+                      ) : null}
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="desk-btn w-full justify-start"
+                        onClick={() => {
+                          setFullMoreOpen(false);
+                          openFieldSettings("player");
+                        }}
+                      >
+                        <SlidersHorizontal className="h-3 w-3" /> Field
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className={cn(
+                          "desk-btn desk-btn-secondary-accent w-full justify-start",
+                          deskDensity === "comfortable" && "is-active"
+                        )}
+                        onClick={() => {
+                          const next = toggleDeskDensity(deskDensity);
+                          setDeskDensity(next);
+                          saveDeskDensity(next);
+                        }}
+                      >
+                        <Rows2 className="h-3 w-3" />
+                        {deskDensity === "compact" ? "Compact" : "Comfy"}
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="desk-btn w-full justify-start"
+                        onClick={() => {
+                          setFullMoreOpen(false);
+                          setHotkeyHelpOpen(true);
+                        }}
+                      >
+                        ? Hotkeys
+                      </button>
+                    </div>
+                  </div>
+                </>
+              ) : null}
+              {/* Intel / History panels when opened from More */}
+              {intelOpen ? (
+                <>
+                  <button
+                    type="button"
+                    className="fixed inset-0 z-30 cursor-default"
+                    aria-label="Close intel"
+                    onClick={() => setIntelOpen(false)}
+                  />
+                  <div className="absolute right-0 top-full mt-1 z-40 w-56 rounded-lg border border-slate-200 dark:border-slate-700 bg-[var(--surface)] shadow-lg p-2 text-[11px]">
+                    <div className="font-semibold text-slate-500 uppercase tracking-wide px-1 mb-1">
+                      Match intel
+                    </div>
+                    <Link
+                      href={`/match-day/${matchId}/stats`}
+                      className="block rounded-md px-2 py-1.5 hover:bg-[var(--surface-muted)] font-semibold text-teal-700 dark:text-teal-300"
+                      onClick={() => setIntelOpen(false)}
+                    >
+                      Match Statistics
+                    </Link>
+                    <Link
+                      href={`/match-day/${matchId}/league`}
+                      className="block rounded-md px-2 py-1.5 hover:bg-[var(--surface-muted)] font-semibold text-teal-700 dark:text-teal-300"
+                      onClick={() => setIntelOpen(false)}
+                    >
+                      League table & fixtures
+                    </Link>
+                    <Link
+                      href={`/match-day/${matchId}/league`}
+                      className="block rounded-md px-2 py-1.5 hover:bg-[var(--surface-muted)]"
+                      onClick={() => setIntelOpen(false)}
+                    >
+                      League leaders {scorers.length ? `(${scorers.length})` : ""}
+                    </Link>
+                    <Link
+                      href={`/match-day/${matchId}/keepers`}
+                      className="block rounded-md px-2 py-1.5 hover:bg-[var(--surface-muted)]"
+                      onClick={() => setIntelOpen(false)}
+                    >
+                      Keepers {keepers.length ? `(${keepers.length})` : ""}
+                    </Link>
+                    <Link
+                      href={`/match-day/${matchId}/penalties`}
+                      className="block rounded-md px-2 py-1.5 hover:bg-[var(--surface-muted)]"
+                      onClick={() => setIntelOpen(false)}
+                    >
+                      Penalties {penalties.length ? `(${penalties.length})` : ""}
+                    </Link>
+                    <Link
+                      href={`/match-day/${matchId}/injuries`}
+                      className="block rounded-md px-2 py-1.5 hover:bg-[var(--surface-muted)]"
+                      onClick={() => setIntelOpen(false)}
+                    >
+                      Injuries ({injuryCount})
+                    </Link>
+                    {h2hSummary ? (
+                      <p className="mt-1 px-2 py-1 text-slate-500 border-t border-slate-100 dark:border-slate-800">
+                        {h2hSummary}
+                      </p>
+                    ) : null}
+                  </div>
+                </>
+              ) : null}
+              {intelHistoryOpen ? (
+                <>
+                  <button
+                    type="button"
+                    className="fixed inset-0 z-30 cursor-default"
+                    aria-label="Close history"
+                    onClick={() => setIntelHistoryOpen(false)}
+                  />
+                  <div
+                    className="absolute right-0 top-full mt-1 z-40 w-[min(92vw,22rem)] max-h-[min(70vh,28rem)] overflow-y-auto rounded-[2px] border border-white/10 bg-[#10141a] p-2 shadow-lg"
+                    role="list"
+                    aria-label="Live intel history"
+                  >
+                    <div className="sticky top-0 mb-1 flex items-center justify-between gap-2 border-b border-white/[0.06] bg-[#10141a] px-1 pb-1">
+                      <div className="live-flash-meta">Live intel history</div>
+                      <span className="live-flash-time">
+                        {intelHistory.length}/{INTEL_HISTORY_CAP}
+                      </span>
+                    </div>
+                    {intelHistory.length === 0 ? (
+                      <p className="px-2 py-3 text-[11px] text-slate-500">
+                        Dismissed goals, facts, and viz flashes land here for this
+                        match session. Tap one to reopen.
+                      </p>
+                    ) : (
+                      <ul className="space-y-1.5">
+                        {intelHistory.map((item) => (
+                          <li key={item.id}>
+                            <button
+                              type="button"
+                              role="listitem"
+                              className="live-flash-history live-flash-fact w-full px-2.5 py-1.5 text-left transition-colors"
+                              onClick={() => reopenIntelHistory(item)}
+                            >
+                              <div className="live-flash-headline line-clamp-2 text-[12px]">
+                                {item.title}
+                              </div>
+                              {item.lines[0] ? (
+                                <div className="live-flash-body mt-0.5 line-clamp-2">
+                                  {item.lines[0]}
+                                </div>
+                              ) : null}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </>
+              ) : null}
+            </div>
+          </>
+        ) : (
+          <>
         {/* basis keeps match meta + XI controls wide: when space is short the
             toolbar wraps to its own row instead of squeezing this block into
             a tall ~120px column that ate the pitch's height. */}
@@ -3215,6 +3606,9 @@ export function MatchDesk({
             Sync
           </Button>
         </div>
+      
+          </>
+        )}
       </header>
 
       <DeskLiveExtras
@@ -3259,10 +3653,11 @@ export function MatchDesk({
           const p = squad.find((s) => s.id === pid);
           if (p) openPlayer(p);
         }}
+        immersive={isFullscreen}
       />
 
-      {/* Live action ticker — fed by SSR events + sync newEvents */}
-      {(status === "Live" || status === "Half Time") && (
+      {/* Live action ticker — hide in Full (full row ate pitch height) */}
+      {!isFullscreen && (status === "Live" || status === "Half Time") && (
         <div className="mx-0.5">
           <ActionTicker
             items={tickerItems}
@@ -3273,8 +3668,8 @@ export function MatchDesk({
         </div>
       )}
 
-      {/* Hide at FT — reclaim vertical room for the pitch board */}
-      {status !== "Full Time" && status !== "Finished" ? (
+      {/* Hide at FT / Full — reclaim vertical room for the pitch board */}
+      {!isFullscreen && status !== "Full Time" && status !== "Finished" ? (
         <CompetitionScoresStrip matchId={matchId} className="mx-0.5" />
       ) : null}
 

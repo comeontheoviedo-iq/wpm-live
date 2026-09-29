@@ -2882,3 +2882,38 @@ body:has([data-desk-fit]) [data-match-sidebar-mobile] {
   align-self: stretch;
   contain: size;
 }
+
+/* ── Immersive Full mode ───────────────────────────────────────────────────
+   Hide page chrome so the desk pitch fills the viewport. Compact density is
+   unchanged — this only applies while the desk is in native fullscreen. */
+html[data-desk-fullscreen="1"] .app-topbar,
+html:fullscreen .app-topbar,
+html:-webkit-full-screen .app-topbar {
+  display: none !important;
+}
+html[data-desk-fullscreen="1"] [data-match-lifecycle],
+html:fullscreen [data-match-lifecycle],
+html:-webkit-full-screen [data-match-lifecycle] {
+  display: none !important;
+}
+html[data-desk-fullscreen="1"] [data-match-sidebar],
+html[data-desk-fullscreen="1"] [data-match-sidebar-mobile],
+html:fullscreen [data-match-sidebar],
+html:fullscreen [data-match-sidebar-mobile],
+html:-webkit-full-screen [data-match-sidebar],
+html:-webkit-full-screen [data-match-sidebar-mobile] {
+  display: none !important;
+}
+html[data-desk-fullscreen="1"] [data-match-desk-pad],
+html:fullscreen [data-match-desk-pad],
+html:-webkit-full-screen [data-match-desk-pad] {
+  padding: 0 !important;
+}
+html[data-desk-fullscreen="1"] [data-desk-root],
+html:fullscreen [data-desk-root],
+html:-webkit-full-screen [data-desk-root] {
+  /* Fill viewport once page chrome is gone; --desk-top measure stays as fallback */
+  height: 100dvh !important;
+  max-height: 100dvh !important;
+  min-height: 0 !important;
+}

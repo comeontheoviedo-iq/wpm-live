@@ -60,6 +60,7 @@ export function DeskLiveExtras({
   onOpenEvents,
   onPlayerClick,
   notesDirty: _notesDirty,
+  immersive = false,
 }: {
   matchId: string;
   status: string;
@@ -82,6 +83,8 @@ export function DeskLiveExtras({
   onOpenEvents: () => void;
   onPlayerClick?: (playerId: string) => void;
   notesDirty?: boolean;
+  /** Full/immersive desk — drop sync/H2H rows that steal pitch height. */
+  immersive?: boolean;
 }) {
   const [dismissedIds, setDismissedIds] = useState<string[]>([]);
   const seenBannerAtRef = useRef<Map<string, number>>(new Map());
@@ -192,13 +195,15 @@ export function DeskLiveExtras({
 
   return (
     <>
-      <div className="shrink-0 flex items-center gap-2 px-1">
-        <SyncAgeChip lastFeedSyncAt={lastFeedSyncAt} pollError={pollError} />
-        <span className="text-[10px] text-slate-400">
-          Press <kbd className="font-mono">?</kbd> for hotkeys ·{" "}
-          <kbd className="font-mono">O</kbd> On-air mode
-        </span>
-      </div>
+      {!immersive ? (
+        <div className="shrink-0 flex items-center gap-2 px-1">
+          <SyncAgeChip lastFeedSyncAt={lastFeedSyncAt} pollError={pollError} />
+          <span className="text-[10px] text-slate-400">
+            Press <kbd className="font-mono">?</kbd> for hotkeys ·{" "}
+            <kbd className="font-mono">O</kbd> On-air mode
+          </span>
+        </div>
+      ) : null}
 
       <LiveBannersBar
         banners={banners}
@@ -206,13 +211,15 @@ export function DeskLiveExtras({
         onDismiss={dismissBanner}
       />
 
-      <FormH2HStrip
-        matchId={matchId}
-        h2hSummary={h2hSummary}
-        homeName={homeName}
-        awayName={awayName}
-        visible={status === "Live" || status === "Half Time"}
-      />
+      {!immersive ? (
+        <FormH2HStrip
+          matchId={matchId}
+          h2hSummary={h2hSummary}
+          homeName={homeName}
+          awayName={awayName}
+          visible={status === "Live" || status === "Half Time"}
+        />
+      ) : null}
 
       <FtPackOffer
         matchId={matchId}

@@ -2694,19 +2694,19 @@ export function MatchDesk({
             )
       )}
     >
-      {/* Slim top bar — immersive Full = one ~44px row; normal keeps full chrome */}
+      {/* Slim top bar — immersive Full = one ~44–52px row (identity+venue+tools); normal keeps full chrome */}
       <header
         className={cn(
           "desk-header shrink-0 flex items-center gap-x-2 px-2",
           isFullscreen
-            ? "h-11 flex-nowrap gap-y-0 overflow-visible py-0"
+            ? "h-11 max-h-[52px] flex-nowrap gap-y-0 overflow-visible py-0"
             : "flex-wrap gap-y-0.5 py-1"
         )}
         data-desk-chrome="1"
       >
         {isFullscreen ? (
           <>
-            <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+            <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
               <span className="truncate text-[13px] font-semibold tracking-tight text-slate-100">
                 {homeName}{" "}
                 <span className="font-normal text-slate-500">vs</span>{" "}
@@ -2734,8 +2734,82 @@ export function MatchDesk({
                   {status}
                 </span>
               )}
+              {(venueName || venueCity || weatherSummary || weatherTempC != null) ? (
+                <span
+                  className="min-w-0 truncate text-[10px] text-slate-500"
+                  title={[
+                    deskVenueName(venueName) || venueName || null,
+                    venueCity || null,
+                    weatherTempC != null ? `${weatherTempC}°C` : null,
+                    weatherSummary || null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                >
+                  {[
+                    deskVenueName(venueName) || venueName || null,
+                    [
+                      weatherTempC != null ? `${weatherTempC}°C` : null,
+                      weatherSummary || null,
+                    ]
+                      .filter(Boolean)
+                      .join(" ") || null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </span>
+              ) : null}
             </div>
             <div className="relative flex shrink-0 items-center gap-1">
+              <button
+                type="button"
+                className={cn(
+                  "desk-btn font-bold tracking-[0.08em]",
+                  statsOverlayOpen && "border-sky-400/50 text-sky-100",
+                  !statistics.length && !events.length && "opacity-45"
+                )}
+                disabled={!statistics.length && !events.length}
+                onClick={() => setStatsOverlayOpen(true)}
+                title={
+                  statistics.length
+                    ? "Match statistics"
+                    : "Sync to pull match statistics"
+                }
+                aria-label="STATS"
+              >
+                <Target className="h-3 w-3" />
+                Stats
+              </button>
+              <button
+                type="button"
+                className={cn(
+                  "desk-btn font-bold tracking-[0.08em]",
+                  hooksPosterExists
+                    ? "border-teal-400/40 text-teal-100"
+                    : "opacity-45"
+                )}
+                disabled={!hooksPosterExists}
+                onClick={openHooksPoster}
+                title={
+                  hooksPosterExists
+                    ? "Hooks poster"
+                    : "Upload Hooks poster in Research"
+                }
+                aria-label="HOOKS poster"
+              >
+                <LayoutTemplate className="h-3 w-3" />
+                Hooks
+              </button>
+              <button
+                type="button"
+                className="desk-btn font-bold tracking-[0.08em]"
+                onClick={openDataVizFromNotes}
+                title="Data visuals"
+                aria-label="DATA VIZ"
+              >
+                <BarChart3 className="h-3 w-3" />
+                Data Viz
+              </button>
               <button
                 type="button"
                 className="desk-btn border-amber-400/50 text-amber-100"
@@ -2884,41 +2958,6 @@ export function MatchDesk({
                         }}
                       >
                         <Trophy className="h-3 w-3" /> LEAGUE
-                      </button>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="desk-btn w-full justify-start"
-                        disabled={!hooksPosterExists}
-                        onClick={() => {
-                          setFullMoreOpen(false);
-                          openHooksPoster();
-                        }}
-                      >
-                        <LayoutTemplate className="h-3 w-3" /> HOOKS
-                      </button>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="desk-btn w-full justify-start"
-                        onClick={() => {
-                          setFullMoreOpen(false);
-                          openDataVizFromNotes();
-                        }}
-                      >
-                        <BarChart3 className="h-3 w-3" /> DATA VIZ
-                      </button>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="desk-btn w-full justify-start"
-                        disabled={!statistics.length && !events.length}
-                        onClick={() => {
-                          setFullMoreOpen(false);
-                          setStatsOverlayOpen(true);
-                        }}
-                      >
-                        <Target className="h-3 w-3" /> STATS
                       </button>
                       {!apiFootballFixtureId ? (
                         <Link

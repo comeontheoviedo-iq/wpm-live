@@ -132,9 +132,10 @@ export async function POST(req: Request) {
       ];
       const competition = match.matchDay.competition;
       const leagueId = leagueIdForMatchDay(match.matchDay);
+      const noteUserId = match.matchDay.userId || session.id;
       const distributed = await applyPackDistribution({
         matchId: match.id,
-        userId: session.id,
+        userId: noteUserId,
         templateKey: "research",
         templateTitle: research?.title || "Research pack",
         content,

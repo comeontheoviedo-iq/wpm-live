@@ -26,6 +26,7 @@ import {
   type HeightUnit,
 } from "@/lib/field-settings";
 import { alignAgeMentions, resolvePersonAge } from "@/lib/person-age";
+import { buildOverviewCareerBlock } from "@/lib/overview-career";
 
 type DossierPayload = {
   player: {
@@ -487,6 +488,18 @@ export function PlayerDossier({
   const seasonTotalHint = intlCapsView
     ? " · international · incl. friendlies"
     : " · club · ex-friendlies";
+
+  const overviewCareer = buildOverviewCareerBlock({
+    clubs: careerClubs,
+    internationalDesk: Boolean(data?.internationalDesk),
+    playerFallback: p
+      ? {
+          appearances: p.appearances || 0,
+          goals: p.goals || 0,
+          assists: p.assists || 0,
+        }
+      : null,
+  });
 
   const bioNotes = notesList.filter(
     (n) =>
@@ -1069,6 +1082,74 @@ export function PlayerDossier({
                 </div>
               </Section>
             </div>
+
+            {overviewCareer.hasData ? (
+              <Section title="Career" dense quiet>
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  <Fact
+                    label={overviewCareer.appsLabel}
+                    value={
+                      overviewCareer.apps != null
+                        ? String(overviewCareer.apps)
+                        : "—"
+                    }
+                  />
+                  <Fact
+                    label="Goals"
+                    value={
+                      overviewCareer.goals != null
+                        ? String(overviewCareer.goals)
+                        : "—"
+                    }
+                  />
+                  <Fact
+                    label="Assists"
+                    value={
+                      overviewCareer.assists != null
+                        ? String(overviewCareer.assists)
+                        : "—"
+                    }
+                  />
+                </div>
+                <p className="mt-1.5 text-[10px] text-[#64748b]">
+                  {overviewCareer.scopeHint}
+                </p>
+                {overviewCareer.clubHistory.length > 0 ? (
+                  <div className="mt-2">
+                    <div className="player-dossier-kv-label mb-1">
+                      Club history
+                    </div>
+                    <ul className="space-y-1">
+                      {overviewCareer.clubHistory.slice(0, 8).map((c, i) => (
+                        <li
+                          key={`${c.teamId ?? c.name}-${i}`}
+                          className="flex items-center gap-2 text-xs"
+                        >
+                          {c.logo ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={c.logo}
+                              alt=""
+                              className="h-4 w-4 object-contain"
+                            />
+                          ) : (
+                            <span className="inline-block h-4 w-4 rounded-[2px] bg-[#1a2029]" />
+                          )}
+                          <span className="truncate font-semibold text-[#e2e8f0]">
+                            {c.name}
+                          </span>
+                          <span className="ml-auto whitespace-nowrap tabular-nums text-[#94a3b8]">
+                            {c.apps ? `${c.apps} apps` : "—"}
+                            {c.goals ? ` · ${c.goals}G` : ""}
+                            {c.assists ? ` · ${c.assists}A` : ""}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </Section>
+            ) : null}
 
             {/* Form chips last on overview */}
             <div className="player-dossier-overview-form">

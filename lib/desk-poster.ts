@@ -3,10 +3,16 @@
  * Prefer Netlify Blobs in prod; fall back to local data/desk-posters for Air/dev.
  * HOOKS keeps legacy blob key `match/{id}` and local `data/hooks-posters` for
  * existing uploads; LEAGUE uses `match/{id}/league`.
+ *
+ * Netlify Blobs / fs / path are loaded lazily — see lib/netlify-blobs-lazy.ts —
+ * so OpenNext Cloudflare Workers do not crash on module evaluate (CF 1101).
  */
-import { getStore } from "@netlify/blobs";
-import { mkdir, readFile, writeFile, unlink, access } from "fs/promises";
-import path from "path";
+import {
+  canUseNetlifyBlobs,
+  getBlobStore,
+  joinPath,
+  nodeFs,
+} from "./netlify-blobs-lazy";
 
 export type DeskPosterKind = "hooks" | "league";
 
@@ -17,9 +23,7 @@ export const DESK_POSTER_MIME = new Set([
   "image/webp",
 ]);
 
-const STORE_NAME = "hooks-posters"; // shared store; kind encoded in key
-const LOCAL_HOOKS_DIR = path.join(process.cwd(), "data", "hooks-posters");
-const LOCAL_DIR = path.join(process.cwd(), "data", "desk-posters");
+const STORE_NAME = "hooks-posters";
 
 export type DeskPosterMeta = {
   exists: boolean;
@@ -33,47 +37,26 @@ function blobKey(matchId: string, kind: DeskPosterKind) {
   return kind === "hooks" ? `match/${matchId}` : `match/${matchId}/${kind}`;
 }
 
-function localPaths(matchId: string, kind: DeskPosterKind) {
+async function localPaths(matchId: string, kind: DeskPosterKind) {
   const safe = matchId.replace(/[^a-zA-Z0-9_-]/g, "_");
   if (kind === "hooks") {
+    const dir = await joinPath(process.cwd(), "data", "hooks-posters");
     return {
-      bin: path.join(LOCAL_HOOKS_DIR, `${safe}.bin`),
-      meta: path.join(LOCAL_HOOKS_DIR, `${safe}.json`),
-      dir: LOCAL_HOOKS_DIR,
+      bin: await joinPath(dir, `${safe}.bin`),
+      meta: await joinPath(dir, `${safe}.json`),
+      dir,
     };
   }
+  const dir = await joinPath(process.cwd(), "data", "desk-posters");
   return {
-    bin: path.join(LOCAL_DIR, `${safe}-${kind}.bin`),
-    meta: path.join(LOCAL_DIR, `${safe}-${kind}.json`),
-    dir: LOCAL_DIR,
+    bin: await joinPath(dir, `${safe}-${kind}.bin`),
+    meta: await joinPath(dir, `${safe}-${kind}.json`),
+    dir,
   };
 }
 
-function canUseNetlifyBlobs() {
-  if (process.env.NETLIFY === "true") return true;
-  if (process.env.NETLIFY_BLOBS_CONTEXT) return true;
-  if (
-    typeof globalThis !== "undefined" &&
-    (globalThis as { netlifyBlobsContext?: unknown }).netlifyBlobsContext
-  ) {
-    return true;
-  }
-  if (process.env.NETLIFY_SITE_ID && process.env.NETLIFY_AUTH_TOKEN) return true;
-  return false;
-}
-
-function store() {
-  const siteID = process.env.NETLIFY_SITE_ID || process.env.SITE_ID;
-  const token = process.env.NETLIFY_AUTH_TOKEN || process.env.NETLIFY_BLOBS_TOKEN;
-  if (siteID && token) {
-    return getStore({
-      name: STORE_NAME,
-      siteID,
-      token,
-      consistency: "strong",
-    });
-  }
-  return getStore({ name: STORE_NAME, consistency: "strong" });
+async function store() {
+  return getBlobStore(STORE_NAME);
 }
 
 export function normalizeDeskPosterMime(
@@ -100,7 +83,7 @@ export async function getDeskPosterMeta(
 ): Promise<DeskPosterMeta> {
   if (canUseNetlifyBlobs()) {
     try {
-      const s = store();
+      const s = await store();
       const meta = await s.getMetadata(blobKey(matchId, kind));
       if (!meta) return { exists: false, kind };
       const md = (meta.metadata || {}) as Record<string, unknown>;
@@ -116,16 +99,17 @@ export async function getDeskPosterMeta(
     }
   }
 
-  const { bin, meta } = localPaths(matchId, kind);
+  const { bin, meta } = await localPaths(matchId, kind);
   try {
-    await access(bin);
-    const raw = await readFile(meta, "utf8").catch(() => "{}");
+    const fs = await nodeFs();
+    await fs.access(bin);
+    const raw = await fs.readFile(meta, "utf8").catch(() => "{}");
     const parsed = JSON.parse(raw) as {
       contentType?: string;
       updatedAt?: string;
       bytes?: number;
     };
-    const buf = await readFile(bin);
+    const buf = await fs.readFile(bin);
     return {
       exists: true,
       kind,
@@ -144,7 +128,7 @@ export async function getDeskPosterBytes(
 ): Promise<{ data: Uint8Array; contentType: string; updatedAt?: string } | null> {
   if (canUseNetlifyBlobs()) {
     try {
-      const s = store();
+      const s = await store();
       const result = await s.getWithMetadata(blobKey(matchId, kind), {
         type: "arrayBuffer",
       });
@@ -160,10 +144,11 @@ export async function getDeskPosterBytes(
     }
   }
 
-  const { bin, meta } = localPaths(matchId, kind);
+  const { bin, meta } = await localPaths(matchId, kind);
   try {
-    const data = new Uint8Array(await readFile(bin));
-    const raw = await readFile(meta, "utf8").catch(() => "{}");
+    const fs = await nodeFs();
+    const data = new Uint8Array(await fs.readFile(bin));
+    const raw = await fs.readFile(meta, "utf8").catch(() => "{}");
     const parsed = JSON.parse(raw) as {
       contentType?: string;
       updatedAt?: string;
@@ -196,7 +181,7 @@ export async function putDeskPoster(
 
   if (canUseNetlifyBlobs()) {
     try {
-      const s = store();
+      const s = await store();
       await s.set(blobKey(matchId, kind), data, { metadata });
       return { exists: true, ...metadata };
     } catch (e) {
@@ -204,10 +189,11 @@ export async function putDeskPoster(
     }
   }
 
-  const paths = localPaths(matchId, kind);
-  await mkdir(paths.dir, { recursive: true });
-  await writeFile(paths.bin, data);
-  await writeFile(paths.meta, JSON.stringify(metadata));
+  const paths = await localPaths(matchId, kind);
+  const fs = await nodeFs();
+  await fs.mkdir(paths.dir, { recursive: true });
+  await fs.writeFile(paths.bin, data);
+  await fs.writeFile(paths.meta, JSON.stringify(metadata));
   return { exists: true, ...metadata };
 }
 
@@ -217,18 +203,18 @@ export async function deleteDeskPoster(
 ): Promise<void> {
   if (canUseNetlifyBlobs()) {
     try {
-      const s = store();
+      const s = await store();
       await s.delete(blobKey(matchId, kind));
     } catch (e) {
       console.warn(`[desk-poster] blobs delete failed (${kind})`, e);
     }
   }
-  const { bin, meta } = localPaths(matchId, kind);
-  await unlink(bin).catch(() => undefined);
-  await unlink(meta).catch(() => undefined);
+  const { bin, meta } = await localPaths(matchId, kind);
+  const fs = await nodeFs();
+  await fs.unlink(bin).catch(() => undefined);
+  await fs.unlink(meta).catch(() => undefined);
 }
 
-/* ---- Back-compat aliases for HOOKS ---- */
 export const HOOKS_POSTER_MAX_BYTES = DESK_POSTER_MAX_BYTES;
 export const HOOKS_POSTER_MIME = DESK_POSTER_MIME;
 export type HooksPosterMeta = DeskPosterMeta;

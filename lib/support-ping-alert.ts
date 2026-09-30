@@ -7,37 +7,17 @@
 import { isEmailConfigured, sendEmail } from "./email";
 import { ownerAlertEmail } from "./owner-trial-alert";
 
-export const SUPPORT_PING_TYPES = [
-  "ask",
-  "bug",
-  "xi_wrong",
-  "billing",
-  "other",
-] as const;
+export {
+  SUPPORT_PING_TYPES,
+  SUPPORT_PING_TYPE_LABELS,
+  parseSupportPingType,
+  type SupportPingType,
+} from "./support-ping-types";
 
-export type SupportPingType = (typeof SUPPORT_PING_TYPES)[number];
-
-export const SUPPORT_PING_TYPE_LABELS: Record<SupportPingType, string> = {
-  ask: "Ask",
-  bug: "Bug",
-  xi_wrong: "XI wrong",
-  billing: "Billing",
-  other: "Other",
-};
-
-export function parseSupportPingType(raw: unknown): SupportPingType | null {
-  const s = String(raw || "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, "_")
-    .replace(/-/g, "_");
-  if ((SUPPORT_PING_TYPES as readonly string[]).includes(s)) {
-    return s as SupportPingType;
-  }
-  // UI may send "XI wrong"
-  if (s === "xiwrong" || s === "xi_wrong") return "xi_wrong";
-  return null;
-}
+import {
+  SUPPORT_PING_TYPE_LABELS,
+  type SupportPingType,
+} from "./support-ping-types";
 
 function escapeHtml(s: string): string {
   return s

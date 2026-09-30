@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { LifeBuoy, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { SupportPingType } from "@/lib/support-ping-alert";
+import type { SupportPingType } from "@/lib/support-ping-types";
 
 const TYPE_OPTIONS: { id: SupportPingType; label: string }[] = [
   { id: "ask", label: "Ask" },
